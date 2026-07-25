@@ -1,4 +1,5 @@
 import { CONFIG, WEAPONS } from '../config.js';
+import { pointInLayout } from '../layout.js';
 import { angleTo, clamp, distance, randomRange } from '../utils.js';
 import { frontArmorMultiplier, bossPhaseForHealth, normalizeAngle } from '../combat.js';
 
