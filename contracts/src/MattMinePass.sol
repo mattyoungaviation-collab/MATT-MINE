@@ -14,6 +14,7 @@ contract MattMinePass is IMattMinePass, AccessControl, Pausable, ReentrancyGuard
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
     uint64 public constant PASS_DURATION = 30 days;
+    uint64 public constant PRICE_UPDATE_COOLDOWN = 7 days;
     uint16 public constant OPERATIONS_BPS = 5_000;
     uint16 public constant REWARDS_BPS = 3_000;
     uint16 public constant BPS_DENOMINATOR = 10_000;
@@ -22,6 +23,7 @@ contract MattMinePass is IMattMinePass, AccessControl, Pausable, ReentrancyGuard
     uint256 public immutable maxPassPriceRon;
 
     uint256 public override passPriceRon;
+    uint64 public lastPassPriceUpdateAt;
     mapping(address player => uint64 expiresAt) public override passExpiresAt;
 
     address payable public operationsTreasury;
@@ -33,6 +35,7 @@ contract MattMinePass is IMattMinePass, AccessControl, Pausable, ReentrancyGuard
     error InvalidAddress();
     error InvalidPriceBounds();
     error PriceOutOfBounds(uint256 price);
+    error PriceUpdateCooldownActive(uint256 nextUpdateAt);
 
     event PassPriceUpdated(uint256 previousPriceRon, uint256 newPriceRon);
     event RevenueRecipientsUpdated(
@@ -110,8 +113,13 @@ contract MattMinePass is IMattMinePass, AccessControl, Pausable, ReentrancyGuard
         if (newPriceRon < minPassPriceRon || newPriceRon > maxPassPriceRon) {
             revert PriceOutOfBounds(newPriceRon);
         }
+        uint256 nextUpdateAt = uint256(lastPassPriceUpdateAt) + PRICE_UPDATE_COOLDOWN;
+        if (lastPassPriceUpdateAt != 0 && block.timestamp < nextUpdateAt) {
+            revert PriceUpdateCooldownActive(nextUpdateAt);
+        }
         uint256 previousPrice = passPriceRon;
         passPriceRon = newPriceRon;
+        lastPassPriceUpdateAt = uint64(block.timestamp);
         emit PassPriceUpdated(previousPrice, newPriceRon);
     }
 

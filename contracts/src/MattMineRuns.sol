@@ -22,6 +22,7 @@ contract MattMineRuns is IMattMineRuns, AccessControl, Pausable, ReentrancyGuard
     uint16 public constant FUTURE_REWARDS_BPS = 2_000;
     uint16 public constant BPS_DENOMINATOR = 10_000;
     uint256 public constant MAX_DEADLINE_WINDOW = 15 minutes;
+    uint256 public constant PRICE_UPDATE_COOLDOWN = 7 days;
 
     IMattMinePass public immutable passContract;
     IERC20 public immutable mattToken;
@@ -34,6 +35,7 @@ contract MattMineRuns is IMattMineRuns, AccessControl, Pausable, ReentrancyGuard
     uint256 public immutable minPaidRunPriceRon;
     uint256 public immutable maxPaidRunPriceRon;
     uint256 public override paidRunPriceRon;
+    uint64 public lastPaidRunPriceUpdateAt;
     uint256 public nextEntitlementId = 1;
 
     struct DailyRuns {
@@ -52,6 +54,7 @@ contract MattMineRuns is IMattMineRuns, AccessControl, Pausable, ReentrancyGuard
     error InvalidMinimumOutput();
     error InvalidPriceBounds();
     error PriceOutOfBounds(uint256 price);
+    error PriceUpdateCooldownActive(uint256 nextUpdateAt);
     error SwapAccountingMismatch(uint256 reportedMatt, uint256 receivedMatt);
 
     event PaidRunPriceUpdated(uint256 previousPriceRon, uint256 newPriceRon);
@@ -180,8 +183,13 @@ contract MattMineRuns is IMattMineRuns, AccessControl, Pausable, ReentrancyGuard
         if (newPriceRon < minPaidRunPriceRon || newPriceRon > maxPaidRunPriceRon) {
             revert PriceOutOfBounds(newPriceRon);
         }
+        uint256 nextUpdateAt = uint256(lastPaidRunPriceUpdateAt) + PRICE_UPDATE_COOLDOWN;
+        if (lastPaidRunPriceUpdateAt != 0 && block.timestamp < nextUpdateAt) {
+            revert PriceUpdateCooldownActive(nextUpdateAt);
+        }
         uint256 previousPrice = paidRunPriceRon;
         paidRunPriceRon = newPriceRon;
+        lastPaidRunPriceUpdateAt = uint64(block.timestamp);
         emit PaidRunPriceUpdated(previousPrice, newPriceRon);
     }
 

@@ -18,3 +18,4 @@ console.log(`Chain: ${result.chainId}`);
 console.log(`MATT: ${config.protocol.mattToken}`);
 console.log(`Katana MATT/WRON pair: ${result.pair}`);
 console.log(`Admin multisig: ${config.roles.contractAdminMultisig}`);
+console.log(`Admin Safe threshold: ${result.safeThreshold} of ${result.safeOwners.length}`);
