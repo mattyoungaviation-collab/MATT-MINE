@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b0d12" />
+    <meta name="description" content="MATT Mine — dig deep, fight hard, get out alive." />
+    <title>MATT Mine</title>
+    <link rel="stylesheet" href="./src/styles.css" />
+  </head>
+  <body>
+    <main id="app">
+      <canvas id="game" width="1280" height="720" aria-label="MATT Mine game canvas"></canvas>
+
+      <section id="menu" class="screen active" aria-labelledby="game-title">
+        <div class="brand-lockup">
+          <div class="brand-mark" aria-hidden="true">⛏</div>
+          <p class="eyebrow">A MATT TOKEN GAME</p>
+          <h1 id="game-title"><span>MATT</span> MINE</h1>
+          <p class="tagline">DIG DEEP. FIGHT HARD. GET OUT ALIVE.</p>
+        </div>
+
+        <div class="menu-card">
+          <div class="menu-stats">
+            <div><span>Banked Nuggets</span><strong id="menu-nuggets">0</strong></div>
+            <div><span>Best Depth</span><strong id="menu-depth">0</strong></div>
+            <div><span>Best Run</span><strong id="menu-score">0</strong></div>
+          </div>
+          <button id="play-button" class="primary-button">ENTER THE MINE</button>
+          <button id="upgrades-button" class="secondary-button">PERMANENT UPGRADES</button>
+          <p class="controls-copy">Move: WASD / arrows · Dash: Shift · Aim: mouse · Mine & attack: hold click or Space</p>
+        </div>
+
+        <div class="wallet-chip" title="Wallet adapter is intentionally disconnected in the standalone test build.">
+          <span class="status-dot"></span>
+          TEST PROFILE · WALLET LATER
+        </div>
+      </section>
+
+      <section id="upgrade-shop" class="screen" aria-labelledby="shop-title">
+        <div class="panel wide-panel">
+          <button class="close-button" data-close="upgrade-shop" aria-label="Close">×</button>
+          <p class="eyebrow">SPEND BANKED NUGGETS</p>
+          <h2 id="shop-title">Permanent Upgrades</h2>
+          <p class="panel-copy">These upgrades persist between runs in this browser.</p>
+          <div id="shop-grid" class="shop-grid"></div>
+        </div>
+      </section>
+
+      <section id="level-up" class="screen" aria-labelledby="level-title">
+        <div class="panel wide-panel">
+          <p class="eyebrow">LEVEL UP</p>
+          <h2 id="level-title">Choose One Upgrade</h2>
+          <div id="level-options" class="level-options"></div>
+        </div>
+      </section>
+
+      <section id="depth-choice" class="screen" aria-labelledby="depth-title">
+        <div class="panel choice-panel">
+          <p class="eyebrow">SHAFT CLEARED</p>
+          <h2 id="depth-title">Take the loot or risk it?</h2>
+          <p id="depth-summary" class="panel-copy"></p>
+          <div class="choice-buttons">
+            <button id="extract-button" class="primary-button gold-button">EXTRACT ALL LOOT</button>
+            <button id="descend-button" class="primary-button danger-button">DESCEND DEEPER</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="run-end" class="screen" aria-labelledby="end-title">
+        <div class="panel choice-panel">
+          <p id="end-kicker" class="eyebrow">RUN COMPLETE</p>
+          <h2 id="end-title">Loot Secured</h2>
+          <div id="end-stats" class="end-stats"></div>
+          <button id="play-again-button" class="primary-button">RUN IT AGAIN</button>
+          <button id="menu-button" class="secondary-button">BACK TO BASE</button>
+        </div>
+      </section>
+
+      <section id="hud" class="hud" aria-live="polite">
+        <div class="hud-top">
+          <div class="health-block">
+            <div class="label-row"><span>HEALTH</span><strong id="health-text">100 / 100</strong></div>
+            <div class="bar"><div id="health-fill" class="bar-fill health-fill"></div></div>
+          </div>
+          <div class="depth-badge">DEPTH <strong id="depth-text">1</strong></div>
+          <div class="loot-block">
+            <span>UNBANKED</span>
+            <strong><span id="loot-text">0</span> NUGGETS</strong>
+            <small>x<span id="multiplier-text">1.0</span> depth bonus</small>
+          </div>
+        </div>
+        <div class="hud-bottom">
+          <div class="xp-wrap">
+            <div class="label-row"><span>LEVEL <strong id="level-text">1</strong></span><span id="xp-text">0 / 50 XP</span></div>
+            <div class="bar"><div id="xp-fill" class="bar-fill xp-fill"></div></div>
+          </div>
+          <div class="objective"><span id="room-text">Lift Station</span><strong id="objective-text">Find MATT crystals</strong></div>
+        </div>
+        <div class="dash-meter" aria-label="Dash recharge"><span>DASH</span><div class="bar"><div id="dash-fill" class="bar-fill dash-fill"></div></div></div>
+      </section>
+
+      <div id="toast" class="toast" role="status"></div>
+
+      <div id="mobile-controls" class="mobile-controls" aria-hidden="true">
+        <div id="joystick" class="joystick"><div id="joystick-knob" class="joystick-knob"></div></div>
+        <button id="dash-button" class="dash-button" aria-label="Dash"><span>➤</span><small id="dash-mobile-text">DASH</small></button>
+        <button id="attack-button" class="attack-button" aria-label="Mine or attack">⛏</button>
+      </div>
+    </main>
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
