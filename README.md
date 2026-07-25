@@ -2,85 +2,63 @@
 
 **Dig deep. Fight hard. Get out alive.**
 
-MATT Mine is a standalone browser action roguelite built in a separate Git repository so its gameplay can be tested before merging into MATT Token Live.
+MATT Mine is a standalone browser action roguelite and daily Web3 competition prototype. It remains isolated from MATT Token Live until gameplay, economy rules, server validation, and contracts are production-ready.
 
-## v0.3 combat-depth loop
+## v0.4 playable economy
 
-- Explore a newly generated network of seven connected mine chambers every depth.
-- Enter combat rooms that seal behind the player until every enemy is defeated.
-- Unlock Pocket Dynamite by clearing a combat room and restock it through later victories.
-- Recover the Crystal Blaster from the Prospector Cache and manage its regenerating energy.
-- Switch between the MATT Pickaxe, Pocket Dynamite, and Crystal Blaster during a run.
-- Fight five enemy roles: charging slimes, diving bats, ambushing crawlers, front-armored beetles, and exploding miners.
-- Face a three-phase Mine Guardian with ground slams, crystal volleys, reinforcements, radial barrages, and an exposed final-phase weak point.
-- Hear generated cave ambience, weapon sounds, impacts, room alarms, explosions, and Guardian tension audio without external sound assets.
-- Mine stone, copper, gold, glowing rich veins, and rare MATT crystals.
-- Dash through danger with temporary invulnerability and a visible recharge meter.
-- Gain XP and build a run using twelve upgrades, including Mining Drones, Blast Boots, and Prospector Luck.
-- Defeat the Guardian, return to the entrance lift, and extract or descend for a larger multiplier.
-- Keep all projected loot when extracting, or only 35% after being knocked out.
-- Spend banked nuggets on permanent browser-saved upgrades.
+- Choose between Free Ranked, Pass Ranked, and unlimited Practice runs.
+- Receive one official Free Leaderboard attempt per wallet every UTC day.
+- Activate a simulated 30-day MATT Mine Pass priced in administrator-configured RON.
+- Purchase simulated paid-run credits at 10 RON by default, with an active pass required.
+- Enforce the daily paid-run cap and count only the best paid score each day.
+- Compete on separate weekly Free and Pass leaderboards.
+- Use deterministic daily mine seeds so official competitors receive the same mine for their tier.
+- Track the Free pool, Pass base pool, MATT purchased by run fees, future rewards, and reserve allocation.
+- Route paid-run MATT 70% to the current Pass pool, 20% to future rewards, and 10% to reserve.
+- Burn zero MATT.
+- Earn pass XP and preview the premium reward track.
+- Publish immutable local test reward epochs and record one test claim per epoch.
+- Use role-separated local admin controls with immediate pausing, price management, pool management, moderation, and audit logging.
+- Preserve the approved 2-of-3 multisig production model with no timelock.
+
+## v0.3 action loop retained
+
+- Procedural seven-room mines with mining, combat, treasure, Guardian, and Lift chambers.
+- MATT Pickaxe, Pocket Dynamite, and Crystal Blaster.
+- Sealed combat rooms and five enemy roles.
+- Three-phase Mine Guardian.
+- Extraction or deeper-descent choice.
+- Permanent browser-saved upgrades.
+- Desktop and mobile controls.
 
 ## Run locally on Windows
-
-1. Clone or download the repository.
-2. Open PowerShell inside the `MATT-MINE` folder.
-3. Run:
 
 ```powershell
 npm run dev
 ```
 
-4. Open `http://localhost:4173`.
+Open `http://localhost:4173`.
 
-No package installation is required.
+No package installation is required. Node.js 20 or newer is required.
 
-Run the automated checks with:
+Run all checks with:
 
 ```powershell
 npm test
 ```
 
-## Controls
+## Important test-mode boundary
 
-### Desktop
+v0.4 does not send real RON, swap real MATT, connect a wallet, or pay real claims. The UI deliberately labels these actions as local tests. Browser storage is not trustworthy for production balances, passes, entitlements, scores, rewards, or admin actions.
 
-- Move: `WASD` or arrow keys
-- Aim: mouse
-- Attack: hold the left mouse button or `Space`
-- Dash: `Shift`
-- MATT Pickaxe: `1`
-- Pocket Dynamite: `2`
-- Crystal Blaster: `3`
+The future production build must provide:
 
-### Mobile
+1. Ronin wallet-backed identity and session authentication.
+2. Verified pass and paid-run transactions.
+3. A verified RON-to-MATT swap executor with slippage and deadline protection.
+4. Server-issued run entitlements.
+5. Server-authoritative scoring and anti-cheat review.
+6. Immutable weekly reward publication and onchain claims.
+7. 2-of-3 multisig control for treasury and major contract administration, with no timelock.
 
-- Move: virtual joystick
-- Attack: large action button
-- Dash: blue arrow button
-- Switch weapons: three weapon buttons above the action button
-- Mobile attacks automatically aim toward the nearest target.
-
-## Standalone-to-live integration boundary
-
-The game intentionally does not connect to a wallet yet. `src/game/walletAdapter.js` remains the integration seam for MATT Token Live.
-
-The live merge should provide:
-
-1. A stable wallet-backed player ID.
-2. Existing MATT Token Live session authentication.
-3. Server-authoritative inventory, progression, purchases, and leaderboard records.
-4. Payment or ownership verification outside the real-time gameplay loop.
-5. A reward-service endpoint rather than direct client-side token transfers.
-
-Do not trust scores, purchases, rewards, or token balances sent by the browser in production. The current local-storage profile is strictly for gameplay testing.
-
-## Suggested next milestones
-
-1. Replace canvas placeholder art with original sprite sheets and mine tiles.
-2. Add controller support, volume controls, accessibility settings, and authored music.
-3. Add seeded daily challenges, quests, achievements, and a weekly leaderboard.
-4. Move persistence and score validation to a server.
-5. Add Founder access, cosmetics, seasonal progression, and payments.
-6. Add Ronin wallet ownership checks and MATT utility.
-7. Merge the stable game route into MATT Token Live.
+See [`docs/ECONOMY_V1.md`](docs/ECONOMY_V1.md) and [`contracts/README.md`](contracts/README.md).

@@ -8,33 +8,196 @@
     <title>MATT Mine</title>
     <link rel="stylesheet" href="./src/styles.css" />
     <link rel="stylesheet" href="./src/v3.css" />
+    <link rel="stylesheet" href="./src/v4.css" />
   </head>
   <body>
     <main id="app">
       <canvas id="game" width="1280" height="720" aria-label="MATT Mine game canvas"></canvas>
 
-      <section id="menu" class="screen active" aria-labelledby="game-title">
-        <div class="brand-lockup">
+      <section id="menu" class="screen active menu-v4" aria-labelledby="game-title">
+        <div class="brand-lockup compact-brand">
           <div class="brand-mark" aria-hidden="true">⛏</div>
           <p class="eyebrow">A MATT TOKEN GAME</p>
           <h1 id="game-title"><span>MATT</span> MINE</h1>
           <p class="tagline">DIG DEEP. FIGHT HARD. GET OUT ALIVE.</p>
         </div>
 
-        <div class="menu-card">
-          <div class="menu-stats">
+        <div class="menu-card economy-menu-card">
+          <div class="economy-status-grid">
+            <div class="economy-status free-status">
+              <span>FREE RUN</span>
+              <strong id="free-run-status">AVAILABLE</strong>
+              <small>Resets 00:00 UTC</small>
+            </div>
+            <div class="economy-status pass-status">
+              <span>MINE PASS</span>
+              <strong id="pass-status">FREE TIER</strong>
+              <small id="pass-days">Premium locked</small>
+            </div>
+            <div class="economy-status paid-status">
+              <span>PAID CREDITS</span>
+              <strong id="paid-credit-count">0</strong>
+              <small id="paid-daily-status">0 / 10 used today</small>
+            </div>
+          </div>
+
+          <div class="run-mode-grid" aria-label="Choose run type">
+            <button id="free-run-button" class="run-mode-card free-run-card">
+              <span class="mode-kicker">FREE TIER</span>
+              <strong>DAILY RANKED RUN</strong>
+              <small>One official attempt · Free Leaderboard · MATT rewards</small>
+              <b id="free-run-cta">PLAY FREE</b>
+            </button>
+            <button id="paid-run-button" class="run-mode-card paid-run-card">
+              <span class="mode-kicker">MINE PASS</span>
+              <strong>PREMIUM RANKED RUN</strong>
+              <small>Pass required · Best daily score · Larger MATT pool</small>
+              <b id="paid-run-cta">VIEW PASS</b>
+            </button>
+            <button id="practice-run-button" class="run-mode-card practice-run-card">
+              <span class="mode-kicker">UNLIMITED</span>
+              <strong>PRACTICE MINE</strong>
+              <small>No entry cost · No MATT rewards · Tune your build</small>
+              <b>PLAY PRACTICE</b>
+            </button>
+          </div>
+
+          <div class="menu-stats compact-stats">
             <div><span>Banked Nuggets</span><strong id="menu-nuggets">0</strong></div>
             <div><span>Best Depth</span><strong id="menu-depth">0</strong></div>
             <div><span>Best Run</span><strong id="menu-score">0</strong></div>
           </div>
-          <button id="play-button" class="primary-button">ENTER THE MINE</button>
-          <button id="upgrades-button" class="secondary-button">PERMANENT UPGRADES</button>
+
+          <div class="menu-nav-grid">
+            <button id="leaderboards-button" class="secondary-button">LEADERBOARDS</button>
+            <button id="pass-button" class="secondary-button">MINE PASS</button>
+            <button id="upgrades-button" class="secondary-button">UPGRADES</button>
+            <button id="admin-button" class="secondary-button admin-nav">ADMIN TEST</button>
+          </div>
           <p class="controls-copy">Move: WASD / arrows · Dash: Shift · Weapons: 1 / 2 / 3 · Aim: mouse · Attack: hold click or Space</p>
+          <p class="test-mode-notice">LOCAL ECONOMY TEST · NO REAL RON OR MATT MOVES IN v0.4</p>
         </div>
 
         <div class="wallet-chip" title="Wallet adapter is intentionally disconnected in the standalone test build.">
           <span class="status-dot"></span>
-          TEST PROFILE · WALLET LATER
+          <span id="wallet-label">TEST-WALLET-01</span>
+        </div>
+      </section>
+
+      <section id="mine-pass" class="screen" aria-labelledby="pass-title">
+        <div class="panel wide-panel economy-panel">
+          <button class="close-button" data-close="mine-pass" aria-label="Close">×</button>
+          <p class="eyebrow">30-DAY PREMIUM ACCESS</p>
+          <h2 id="pass-title">MATT Mine Pass</h2>
+          <div class="pass-hero-grid">
+            <div class="pass-offer">
+              <span class="pass-state-label" id="pass-state-label">FREE TIER ACTIVE</span>
+              <strong><span id="pass-price">88</span> RON</strong>
+              <small>Admin-adjusted target of roughly $5</small>
+              <button id="buy-pass-button" class="primary-button gold-button">ACTIVATE TEST PASS</button>
+              <p>No real transaction is sent in this standalone build.</p>
+            </div>
+            <div class="pass-benefits">
+              <h3>Pass unlocks</h3>
+              <ul>
+                <li>Premium Pass Leaderboard</li>
+                <li>Paid ranked runs at <b id="paid-run-price-copy">10 RON</b></li>
+                <li>2× leaderboard reward weight</li>
+                <li>Premium pass XP and rewards</li>
+                <li>Exclusive cosmetics and achievements</li>
+              </ul>
+            </div>
+          </div>
+          <div class="pass-progress-card">
+            <div class="label-row"><span>PASS LEVEL <strong id="pass-level">1</strong></span><span id="pass-xp-text">0 XP</span></div>
+            <div class="bar"><div id="pass-xp-fill" class="bar-fill pass-xp-fill"></div></div>
+            <div id="pass-track" class="pass-track"></div>
+          </div>
+          <div class="paid-run-purchase-card">
+            <div>
+              <span class="eyebrow">PREMIUM RUN CREDIT</span>
+              <h3><span id="paid-run-price">10</span> RON per run</h3>
+              <p>RON is modeled as instantly buying MATT. 70% enters the current Pass pool, 20% future rewards, 10% reserve, 0% burned.</p>
+            </div>
+            <button id="buy-paid-run-button" class="primary-button">BUY TEST RUN</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="leaderboards" class="screen" aria-labelledby="leaderboards-title">
+        <div class="panel wide-panel economy-panel">
+          <button class="close-button" data-close="leaderboards" aria-label="Close">×</button>
+          <p class="eyebrow">WEEKLY COMPETITION</p>
+          <h2 id="leaderboards-title">MATT Mine Leaderboards</h2>
+          <div class="leaderboard-tabs">
+            <button class="leaderboard-tab active" data-board="free">FREE LEADERBOARD</button>
+            <button class="leaderboard-tab" data-board="paid">PASS LEADERBOARD</button>
+          </div>
+          <div class="leaderboard-summary">
+            <div><span>Weekly Pool</span><strong id="board-pool">0 MATT</strong></div>
+            <div><span>Your Weekly Score</span><strong id="board-score">0</strong></div>
+            <div><span>Projected Reward</span><strong id="board-reward">0 MATT</strong></div>
+          </div>
+          <div id="reward-claim-card" class="reward-claim-card">
+            <div><span class="eyebrow">PUBLISHED REWARD</span><strong id="published-reward-text">No reward epoch published</strong><small id="published-reward-status">Admin test publisher has not finalized this week.</small></div>
+            <button id="claim-reward-button" class="primary-button" disabled>CLAIM TEST MATT</button>
+          </div>
+          <div class="leaderboard-table-wrap">
+            <table class="leaderboard-table">
+              <thead><tr><th>Rank</th><th>Miner</th><th>Weekly Score</th><th>Status</th></tr></thead>
+              <tbody id="leaderboard-body"></tbody>
+            </table>
+          </div>
+          <p class="preview-note">Preview rivals are local test data. Production rankings will be server-authoritative and anti-cheat verified.</p>
+        </div>
+      </section>
+
+      <section id="admin-panel" class="screen" aria-labelledby="admin-title">
+        <div class="panel admin-panel-shell">
+          <button class="close-button" data-close="admin-panel" aria-label="Close">×</button>
+          <p class="eyebrow">LOCAL CONTROL CENTER</p>
+          <h2 id="admin-title">MATT Mine Admin</h2>
+          <div class="admin-warning">TEST CONTROLS ONLY · Production treasury actions require the approved 2-of-3 multisig. No timelock.</div>
+          <div class="admin-dashboard-grid">
+            <article class="admin-card">
+              <h3>Emergency Controls</h3>
+              <label><input id="pause-ranked" type="checkbox" /> Pause ranked runs</label>
+              <label><input id="pause-pass" type="checkbox" /> Pause pass sales</label>
+              <label><input id="pause-paid" type="checkbox" /> Pause paid runs</label>
+              <label><input id="pause-claims" type="checkbox" /> Pause claims</label>
+              <button id="apply-pauses" class="secondary-button">APPLY AS PAUSER</button>
+            </article>
+            <article class="admin-card">
+              <h3>Price Manager</h3>
+              <label>Pass price RON <input id="admin-pass-price" type="number" min="1" max="500" /></label>
+              <label>Paid run RON <input id="admin-run-price" type="number" min="1" max="100" /></label>
+              <label>MATT per RON quote <input id="admin-matt-quote" type="number" min="1" /></label>
+              <button id="apply-prices" class="secondary-button">UPDATE PRICES</button>
+            </article>
+            <article class="admin-card">
+              <h3>Treasury Admin</h3>
+              <label>Free weekly pool <input id="admin-free-pool" type="number" min="0" /></label>
+              <label>Pass base pool <input id="admin-pass-pool" type="number" min="0" /></label>
+              <div class="admin-accounting" id="admin-accounting"></div>
+              <button id="apply-pools" class="secondary-button">UPDATE POOLS</button>
+            </article>
+            <article class="admin-card">
+              <h3>Reward Publisher</h3>
+              <p>Finalize the current local week. Published reward entries cannot be edited or reduced.</p>
+              <button id="publish-rewards" class="primary-button gold-button">PUBLISH TEST EPOCH</button>
+              <div id="published-epochs" class="published-epochs"></div>
+            </article>
+            <article class="admin-card">
+              <h3>Competition Moderator</h3>
+              <p>Current wallet: <b id="admin-wallet">TEST-WALLET-01</b></p>
+              <button id="toggle-ban" class="danger-button primary-button">SUSPEND WALLET</button>
+              <button id="reset-economy" class="secondary-button">RESET LOCAL ECONOMY</button>
+            </article>
+          </div>
+          <div class="audit-panel">
+            <div class="label-row"><h3>Admin & Economy Audit Log</h3><span id="audit-count">0 actions</span></div>
+            <div id="audit-log" class="audit-log"></div>
+          </div>
         </div>
       </section>
 
@@ -69,16 +232,19 @@
       </section>
 
       <section id="run-end" class="screen" aria-labelledby="end-title">
-        <div class="panel choice-panel">
+        <div class="panel choice-panel results-panel-v4">
           <p id="end-kicker" class="eyebrow">RUN COMPLETE</p>
           <h2 id="end-title">Loot Secured</h2>
+          <div id="run-mode-result" class="run-mode-result">PRACTICE RUN</div>
           <div id="end-stats" class="end-stats"></div>
-          <button id="play-again-button" class="primary-button">RUN IT AGAIN</button>
+          <div id="economy-result" class="economy-result"></div>
+          <button id="play-again-button" class="primary-button">CHOOSE NEXT RUN</button>
           <button id="menu-button" class="secondary-button">BACK TO BASE</button>
         </div>
       </section>
 
       <section id="hud" class="hud" aria-live="polite">
+        <div class="run-mode-hud" id="run-mode-hud">PRACTICE</div>
         <div class="hud-top">
           <div class="health-block">
             <div class="label-row"><span>HEALTH</span><strong id="health-text">100 / 100</strong></div>
