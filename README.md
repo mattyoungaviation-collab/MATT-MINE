@@ -4,6 +4,19 @@
 
 MATT Mine is a standalone browser action roguelite and daily Web3 competition prototype. It remains isolated from MATT Token Live until gameplay, economy rules, server validation, and contracts are production-ready.
 
+## v0.9 live Pass and paid-run integration
+
+- Connect the verified Ronin Mainnet Pass and Paid Runs contracts to Ronin Wallet.
+- Keep real transactions off by default behind an explicit server environment switch.
+- Read current Pass status, contract prices, pause state, and daily purchase count directly from Ronin.
+- Build every transaction server-side against the approved contract addresses.
+- Fetch a fresh Katana quote with 5% slippage protection and a five-minute deadline.
+- Require the server to verify the successful transaction, wallet, contract, function call, and `PaidRunPurchased` event.
+- Store each confirmed purchase as a one-time server entitlement that cannot be replayed.
+- Require an active onchain Pass when a paid ranked run starts.
+- Count only the best paid score from each UTC day on the separate Pass leaderboard.
+- Keep MATT claims disabled.
+
 ## v0.8 production contract release
 
 - Add non-upgradeable Pass, paid-run, swap, and reward contracts for Ronin Mainnet.
@@ -16,7 +29,7 @@ MATT Mine is a standalone browser action roguelite and daily Web3 competition pr
 - Validate Ronin protocol addresses onchain before deployment.
 - Store the temporary deployment key in Hardhat's encrypted keystore.
 - Checkpoint deployments, remove the temporary executor admin, and verify all source through Sourcify v2 on Ronin chain 2020.
-- Keep contracts unfunded and application transactions disabled until audit, multisig, configuration, and post-deployment checks are approved.
+- Deploy and exact-match verify all four contracts, then validate their roles, destinations, prices, limits, and empty starting balances.
 
 ## v0.7 Ronin Mainnet readiness
 
@@ -96,19 +109,19 @@ Run all checks with:
 npm test
 ```
 
-## Important deployment boundary
+## Important live-payment boundary
 
-v0.8 adds production contract code and a guarded deployment workflow. It does not deploy or fund the contracts, send RON, activate paid passes, swap MATT, or pay claims by itself. Ranked validation remains a hardened product foundation, not yet a sufficient anti-cheat system for public token payouts.
+v0.9 can prepare real Pass and paid-run transactions only when the server operator explicitly enables the Mainnet transaction switch. Every purchase still requires the player to click the purchase button and approve the exact transaction in Ronin Wallet. MATT claims remain disabled. Ranked validation remains a hardened product foundation, not yet a sufficient anti-cheat system for public token payouts.
 
 Before real value is enabled, the production build still requires:
 
 1. Server-authoritative gameplay simulation or equivalent signed event validation.
-2. Independent review of the pass, paid-run, reward, and swap contracts.
-3. A completed multisig-controlled deployment with verified source and post-deployment role checks.
+2. Ongoing monitoring and incident response for the deployed contracts and payment server.
+3. A controlled purchase smoke test with complete treasury and token reconciliation.
 4. Production database hosting, backups, observability, and distributed rate limiting.
 5. Anti-cheat review and payout moderation.
-6. Audited reward, pass, run, and swap contracts.
+6. Formal security review before materially increasing contract balances or public reward pools.
 7. Immutable weekly reward publication and onchain claims.
 8. 2-of-3 multisig control for treasury and major contract administration, with no timelock.
 
-See [`docs/CONTRACT_DEPLOYMENT_V08.md`](docs/CONTRACT_DEPLOYMENT_V08.md), [`docs/SECURITY_V07.md`](docs/SECURITY_V07.md), [`docs/ECONOMY_V1.md`](docs/ECONOMY_V1.md), and [`contracts/README.md`](contracts/README.md).
+See [`docs/LIVE_PAYMENTS_V09.md`](docs/LIVE_PAYMENTS_V09.md), [`docs/CONTRACT_DEPLOYMENT_V08.md`](docs/CONTRACT_DEPLOYMENT_V08.md), [`docs/SECURITY_V07.md`](docs/SECURITY_V07.md), [`docs/ECONOMY_V1.md`](docs/ECONOMY_V1.md), and [`contracts/README.md`](contracts/README.md).

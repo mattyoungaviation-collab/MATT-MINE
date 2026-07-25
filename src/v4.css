@@ -150,6 +150,11 @@
   font-weight: 900;
 }
 
+.test-mode-notice.live-payments {
+  color: #ffcb55;
+  text-shadow: 0 0 14px rgba(255, 176, 46, 0.45);
+}
+
 .economy-panel {
   width: min(1020px, calc(100vw - 40px));
   max-height: calc(100vh - 40px);

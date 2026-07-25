@@ -1,12 +1,12 @@
 {
   "name": "matt-mine",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "private": true,
   "type": "module",
   "workspaces": [
     "contracts"
   ],
-  "description": "MATT Mine action roguelite with Ronin Mainnet authentication, verified competition, and production contract foundations.",
+  "description": "MATT Mine action roguelite with Ronin Mainnet authentication, verified competition, and receipt-backed Pass and paid-run purchases.",
   "scripts": {
     "dev": "node scripts/dev-server.mjs",
     "start": "node scripts/dev-server.mjs",
@@ -15,6 +15,7 @@
     "test:contracts": "npm --workspace contracts test",
     "contracts:compile": "npm --workspace contracts run compile",
     "contracts:validate:ronin": "npm --workspace contracts run validate:ronin",
+    "contracts:check-deployment:ronin": "npm --workspace contracts run check-deployment:ronin",
     "contracts:check-deployer:ronin": "npm --workspace contracts run check-deployer:ronin",
     "contracts:deploy:ronin": "npm --workspace contracts run deploy:ronin",
     "contracts:verify:ronin": "npm --workspace contracts run verify:ronin"

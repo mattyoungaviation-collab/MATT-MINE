@@ -58,7 +58,7 @@ async function handleApiRequest({
   const method = request.method || 'GET';
   const path = requestUrl.pathname;
   if (method === 'GET' && path === '/api/health') {
-    sendJson(response, 200, { ok: true, service: 'matt-mine', version: 7 });
+    sendJson(response, 200, { ok: true, service: 'matt-mine', version: 9 });
     return;
   }
   if (method === 'GET' && path === '/api/config') {
@@ -91,6 +91,23 @@ async function handleApiRequest({
   if (method === 'GET' && path === '/api/me') {
     const player = await service.me(bearerToken(request));
     sendJson(response, 200, { ok: true, player });
+    return;
+  }
+  if (method === 'GET' && path === '/api/payments/status') {
+    const status = await service.paymentStatus(bearerToken(request));
+    sendJson(response, 200, { ok: true, status });
+    return;
+  }
+  if (method === 'POST' && path === '/api/payments/paid-run/quote') {
+    await readJson(request, maxRequestBytes);
+    const quote = await service.quotePaidRun(bearerToken(request));
+    sendJson(response, 200, { ok: true, quote });
+    return;
+  }
+  if (method === 'POST' && path === '/api/payments/paid-run/confirm') {
+    const body = await readJson(request, maxRequestBytes);
+    const result = await service.confirmPaidRunPurchase(bearerToken(request), body.transactionHash);
+    sendJson(response, 200, { ok: true, ...result });
     return;
   }
   if (method === 'POST' && path === '/api/runs/start') {

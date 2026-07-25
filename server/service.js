@@ -20,6 +20,9 @@ export class MattMineService {
     this.now = options.now || Date.now;
     this.randomHex = options.randomHex || ((bytes) => randomBytes(bytes).toString('hex'));
     this.verifySignature = options.verifySignature || verifyMessage;
+    this.paymentVerifier = options.paymentVerifier || null;
+    this.mainnetTransactionsEnabled =
+      options.mainnetTransactionsEnabled === true && Boolean(this.paymentVerifier);
     const configuredChainId = Number(options.chainId ?? RONIN_CHAINS.MAINNET);
     this.publicOrigin = options.publicOrigin ? normalizeOrigin(options.publicOrigin) : null;
     this.adminKey = options.adminKey || '';
@@ -27,7 +30,7 @@ export class MattMineService {
       configuredChainId === RONIN_CHAINS.MAINNET,
       500,
       'invalid_server_chain',
-      'MATT Mine v0.7 only supports Ronin Mainnet (chain 2020).'
+      'MATT Mine only supports Ronin Mainnet (chain 2020).'
     );
     this.chainId = RONIN_CHAINS.MAINNET;
   }
@@ -38,10 +41,13 @@ export class MattMineService {
       chainName: 'Ronin Mainnet',
       walletMode: 'ronin-injected-provider',
       rankedServerEnabled: true,
-      paidRunsEnabled: false,
-      realPaymentsEnabled: false,
+      paidRunsEnabled: this.mainnetTransactionsEnabled,
+      realPaymentsEnabled: this.mainnetTransactionsEnabled,
       mattClaimsEnabled: false,
-      mainnetTransactionsEnabled: false
+      mainnetTransactionsEnabled: this.mainnetTransactionsEnabled,
+      ...(this.mainnetTransactionsEnabled
+        ? { payments: this.paymentVerifier.publicConfig() }
+        : {})
     };
   }
 
@@ -125,6 +131,7 @@ export class MattMineService {
       return publicWalletSnapshot(state, normalizedAddress, timestamp);
     });
 
+    result.entitlements.paidRunsEnabled = this.mainnetTransactionsEnabled;
     return { token, expiresAt, ...result };
   }
 
@@ -139,14 +146,90 @@ export class MattMineService {
   async me(token) {
     const session = await this.authenticate(token);
     const state = await this.database.read();
-    return publicWalletSnapshot(state, session.address, this.now());
+    const player = publicWalletSnapshot(state, session.address, this.now());
+    player.entitlements.paidRunsEnabled = this.mainnetTransactionsEnabled;
+    return player;
+  }
+
+  async paymentStatus(token) {
+    const session = await this.authenticate(token);
+    this.assertPaymentsEnabled();
+    const state = await this.database.read();
+    const wallet = requireWallet(state, session.address);
+    const chain = await this.paymentVerifier.status(session.address);
+    return {
+      address: session.address,
+      suspended: wallet.suspended,
+      confirmedCredits: unusedPaidEntitlements(state, session.address).length,
+      ...chain
+    };
+  }
+
+  async quotePaidRun(token) {
+    const session = await this.authenticate(token);
+    this.assertPaymentsEnabled();
+    const state = await this.database.read();
+    const wallet = requireWallet(state, session.address);
+    assertApi(!wallet.suspended, 403, 'wallet_suspended', 'This wallet is suspended from paid-run purchases.');
+    return this.paymentVerifier.quotePaidRun(session.address);
+  }
+
+  async confirmPaidRunPurchase(token, transactionHash) {
+    const session = await this.authenticate(token);
+    this.assertPaymentsEnabled();
+    const before = await this.database.read();
+    const wallet = requireWallet(before, session.address);
+    assertApi(!wallet.suspended, 403, 'wallet_suspended', 'This wallet is suspended from paid-run purchases.');
+    const verified = await this.paymentVerifier.verifyPaidRunPurchase(transactionHash, session.address);
+    const timestamp = this.now();
+    return this.database.transact((state) => {
+      const currentWallet = requireWallet(state, session.address);
+      assertApi(!currentWallet.suspended, 403, 'wallet_suspended', 'This wallet is suspended from paid-run purchases.');
+      const existing = state.paidEntitlements[verified.key];
+      if (existing) {
+        assertApi(existing.address === session.address, 409, 'payment_already_owned', 'This payment is already registered to another wallet.');
+        return {
+          entitlement: structuredClone(existing),
+          confirmedCredits: unusedPaidEntitlements(state, session.address).length,
+          alreadyConfirmed: true
+        };
+      }
+      state.paidEntitlements[verified.key] = {
+        ...verified,
+        confirmedAt: timestamp,
+        consumedAt: 0,
+        usedRunId: ''
+      };
+      addAudit(
+        state,
+        session.address,
+        'PAID_RUN_PAYMENT_CONFIRMED',
+        `${verified.transactionHash} entitlement ${verified.entitlementId}`,
+        timestamp
+      );
+      return {
+        entitlement: structuredClone(state.paidEntitlements[verified.key]),
+        confirmedCredits: unusedPaidEntitlements(state, session.address).length,
+        alreadyConfirmed: false
+      };
+    });
   }
 
   async startRun(token, mode) {
     const session = await this.authenticate(token);
     const normalizedMode = String(mode || '');
     assertApi(Object.values(SERVER_RUN_MODES).includes(normalizedMode), 400, 'invalid_run_mode', 'Unknown run mode.');
-    assertApi(normalizedMode !== SERVER_RUN_MODES.PAID, 403, 'paid_runs_disabled', 'Paid ranked runs remain disabled until contracts and payment verification are ready.');
+    if (normalizedMode === SERVER_RUN_MODES.PAID) {
+      assertApi(
+        this.mainnetTransactionsEnabled,
+        403,
+        'paid_runs_disabled',
+        'Paid ranked runs remain disabled until live payment verification is enabled.'
+      );
+      const paymentStatus = await this.paymentVerifier.status(session.address);
+      assertApi(paymentStatus.pass.active, 403, 'active_pass_required', 'An active MATT Mine Pass is required.');
+      assertApi(!paymentStatus.paidRuns.paused, 503, 'paid_runs_paused', 'Paid ranked runs are currently paused.');
+    }
     const timestamp = this.now();
     const runId = `run_${this.randomHex(12)}`;
     const runToken = this.randomHex(24);
@@ -172,10 +255,18 @@ export class MattMineService {
         assertApi(!daily.freeRunUsed, 409, 'free_run_used', 'Today’s free ranked run has already been used.');
         wallet.daily[day] = { freeRunUsed: true, freeRunId: runId };
       }
+      if (normalizedMode === SERVER_RUN_MODES.PAID) {
+        const entitlement = unusedPaidEntitlements(state, session.address)[0];
+        assertApi(entitlement, 409, 'paid_run_credit_required', 'Purchase and confirm a paid-run credit first.');
+        entitlement.consumedAt = timestamp;
+        entitlement.usedRunId = runId;
+      }
 
       const seed = normalizedMode === SERVER_RUN_MODES.FREE
         ? `MATT-MINE-${day}-FREE`
-        : `MATT-PRACTICE-${day}-${this.randomHex(10)}`;
+        : normalizedMode === SERVER_RUN_MODES.PAID
+          ? `MATT-MINE-${day}-PAID`
+          : `MATT-PRACTICE-${day}-${this.randomHex(10)}`;
       state.runs[runId] = {
         id: runId,
         tokenHash: runTokenHash,
@@ -199,7 +290,11 @@ export class MattMineService {
         seed,
         day,
         week,
-        rewardWeight: normalizedMode === SERVER_RUN_MODES.FREE ? 1 : 0,
+        rewardWeight: normalizedMode === SERVER_RUN_MODES.FREE
+          ? 1
+          : normalizedMode === SERVER_RUN_MODES.PAID
+            ? 2
+            : 0,
         expiresAt: timestamp + RUN_TTL_MS
       };
     });
@@ -305,6 +400,15 @@ export class MattMineService {
   assertAdminKey(candidate) {
     assertApi(this.adminKey, 503, 'admin_api_disabled', 'Server admin access is not configured.');
     assertApi(typeof candidate === 'string' && safeTokenEqual(hashToken(candidate), hashToken(this.adminKey)), 401, 'admin_key_rejected', 'The server admin key is invalid.');
+  }
+
+  assertPaymentsEnabled() {
+    assertApi(
+      this.mainnetTransactionsEnabled,
+      503,
+      'payments_disabled',
+      'Live Ronin payments are disabled on this MATT Mine server.'
+    );
   }
 }
 
@@ -413,6 +517,21 @@ function walletWeeklyScore(state, address, mode, week) {
     dailyBest.set(run.day, Math.max(dailyBest.get(run.day) || 0, run.result.score));
   }
   return [...dailyBest.values()].reduce((sum, score) => sum + score, 0);
+}
+
+function unusedPaidEntitlements(state, address) {
+  return Object.values(state.paidEntitlements || {})
+    .filter((entitlement) =>
+      entitlement.address === address &&
+      !entitlement.consumedAt &&
+      !entitlement.usedRunId
+    )
+    .sort((left, right) => {
+      if (left.confirmedAt !== right.confirmedAt) return left.confirmedAt - right.confirmedAt;
+      const leftId = BigInt(left.entitlementId || '0');
+      const rightId = BigInt(right.entitlementId || '0');
+      return leftId < rightId ? -1 : leftId > rightId ? 1 : 0;
+    });
 }
 
 function publicRun(run) {

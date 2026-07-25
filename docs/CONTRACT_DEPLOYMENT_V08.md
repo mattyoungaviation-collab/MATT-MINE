@@ -48,10 +48,15 @@ Version 0.8 prepares production contracts and a guarded Ronin Mainnet deployment
 6. Grant executor administration to the 2-of-3 multisig.
 7. Renounce the temporary deployer's executor admin role.
 8. Re-read every role, fixed address, price bound, and destination from chain.
-9. Submit all four contracts to Sourcify v2 on Ronin chain 2020.
-10. Back up the deployment manifest and verification links.
+9. Publish all four exact-match sources through Ronin Explorer/Blockscout.
+10. Run `npm run contracts:check-deployment:ronin`.
+11. Back up the deployment manifest and verification links.
 
-The script checkpoints each step and validates the final executor roles before marking the deployment complete.
+The deployment script checkpoints each step and validates the final executor
+roles before marking the deployment complete. The post-deployment readiness
+check is read-only: it validates the deployed addresses, roles, treasuries,
+prices, limits, pause state, empty pre-funding balances, and removal of the
+temporary deployer administrator without broadcasting a transaction.
 
 ## Funding sequence
 
