@@ -20,26 +20,28 @@ export class MattMineService {
     this.now = options.now || Date.now;
     this.randomHex = options.randomHex || ((bytes) => randomBytes(bytes).toString('hex'));
     this.verifySignature = options.verifySignature || verifyMessage;
-    this.chainId = Number(options.chainId || RONIN_CHAINS.SAIGON);
+    const configuredChainId = Number(options.chainId ?? RONIN_CHAINS.MAINNET);
     this.publicOrigin = options.publicOrigin ? normalizeOrigin(options.publicOrigin) : null;
     this.adminKey = options.adminKey || '';
     assertApi(
-      [RONIN_CHAINS.MAINNET, RONIN_CHAINS.SAIGON].includes(this.chainId),
+      configuredChainId === RONIN_CHAINS.MAINNET,
       500,
       'invalid_server_chain',
-      'MATT_MINE_CHAIN_ID must be Ronin mainnet (2020) or Saigon (202601).'
+      'MATT Mine v0.7 only supports Ronin Mainnet (chain 2020).'
     );
+    this.chainId = RONIN_CHAINS.MAINNET;
   }
 
   config() {
     return {
       chainId: this.chainId,
-      chainName: this.chainId === RONIN_CHAINS.MAINNET ? 'Ronin Mainnet' : 'Saigon Testnet',
+      chainName: 'Ronin Mainnet',
       walletMode: 'ronin-injected-provider',
       rankedServerEnabled: true,
       paidRunsEnabled: false,
       realPaymentsEnabled: false,
-      mattClaimsEnabled: false
+      mattClaimsEnabled: false,
+      mainnetTransactionsEnabled: false
     };
   }
 

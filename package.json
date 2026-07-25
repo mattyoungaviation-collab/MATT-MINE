@@ -1,9 +1,9 @@
 {
   "name": "matt-mine",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
-  "description": "MATT Mine action roguelite with Ronin authentication and server-verified competition foundations.",
+  "description": "MATT Mine action roguelite with Ronin Mainnet authentication and server-verified competition foundations.",
   "scripts": {
     "dev": "node scripts/dev-server.mjs",
     "start": "node scripts/dev-server.mjs",

@@ -4,9 +4,18 @@
 
 MATT Mine is a standalone browser action roguelite and daily Web3 competition prototype. It remains isolated from MATT Token Live until gameplay, economy rules, server validation, and contracts are production-ready.
 
+## v0.7 Ronin Mainnet readiness
+
+- Lock wallet authentication to Ronin Mainnet chain `2020`.
+- Remove the testnet runtime path and network configuration.
+- Automatically request a switch to Ronin Mainnet before requesting the login signature.
+- Keep the login message non-transactional: signing does not spend RON or MATT.
+- Expose an explicit server safety flag showing that Mainnet transactions remain disabled.
+- Keep paid runs, Pass purchases, RON-to-MATT swaps, and MATT claims disabled.
+
 ## v0.6 Ronin identity and verified competition
 
-- Connect through the injected Ronin Wallet provider on Saigon Testnet by default.
+- Connect through the injected Ronin Wallet provider.
 - Authenticate with a short-lived, one-use sign-in challenge bound to the wallet, chain, and website origin.
 - Keep raw session tokens in session storage only and persist only their server-side hashes.
 - Store profiles, entitlements, runs, suspensions, scores, and audit events on the server.
@@ -75,7 +84,7 @@ npm test
 
 ## Important test-mode boundary
 
-v0.6 provides real wallet authentication and server-enforced Free-run entitlements, profiles, submissions, and leaderboard storage. It does not send RON, swap MATT, activate paid passes, or pay claims. Ranked validation is a hardened product foundation, not yet a sufficient anti-cheat system for public token payouts.
+v0.7 provides Ronin Mainnet wallet authentication and server-enforced Free-run entitlements, profiles, submissions, and leaderboard storage. It does not send RON, swap MATT, activate paid passes, or pay claims. Ranked validation is a hardened product foundation, not yet a sufficient anti-cheat system for public token payouts.
 
 Before real value is enabled, the production build still requires:
 
@@ -88,4 +97,4 @@ Before real value is enabled, the production build still requires:
 7. Immutable weekly reward publication and onchain claims.
 8. 2-of-3 multisig control for treasury and major contract administration, with no timelock.
 
-See [`docs/SECURITY_V06.md`](docs/SECURITY_V06.md), [`docs/ECONOMY_V1.md`](docs/ECONOMY_V1.md), and [`contracts/README.md`](contracts/README.md).
+See [`docs/SECURITY_V07.md`](docs/SECURITY_V07.md), [`docs/SECURITY_V06.md`](docs/SECURITY_V06.md), [`docs/ECONOMY_V1.md`](docs/ECONOMY_V1.md), and [`contracts/README.md`](contracts/README.md).

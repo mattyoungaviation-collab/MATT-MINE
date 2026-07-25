@@ -58,7 +58,7 @@ async function handleApiRequest({
   const method = request.method || 'GET';
   const path = requestUrl.pathname;
   if (method === 'GET' && path === '/api/health') {
-    sendJson(response, 200, { ok: true, service: 'matt-mine', version: 6 });
+    sendJson(response, 200, { ok: true, service: 'matt-mine', version: 7 });
     return;
   }
   if (method === 'GET' && path === '/api/config') {

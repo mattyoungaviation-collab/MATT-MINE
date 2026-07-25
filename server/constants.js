@@ -1,6 +1,5 @@
 export const RONIN_CHAINS = Object.freeze({
-  MAINNET: 2020,
-  SAIGON: 202601
+  MAINNET: 2020
 });
 
 export const AUTH_CHALLENGE_TTL_MS = 5 * 60 * 1000;

@@ -100,7 +100,7 @@ function updateMenu() {
   $('#wallet-label').textContent = connected ? abbreviateAddress(serverPlayer.address) : walletBusy ? 'CONNECTING…' : 'CONNECT RONIN';
   $('#wallet-network').textContent = connected
     ? `${serverConfig?.chainName || 'RONIN'} · SERVER VERIFIED`
-    : `${serverConfig?.chainName || 'SAIGON TESTNET'} · SIGN TO PLAY RANKED`;
+    : `${serverConfig?.chainName || 'RONIN MAINNET'} · SIGN TO PLAY RANKED`;
   $('#wallet-button').classList.toggle('connected', connected);
   $('#wallet-button').disabled = walletBusy;
   $('#free-run-status').textContent = connected
