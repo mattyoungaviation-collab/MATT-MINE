@@ -8,6 +8,7 @@
     "compile": "hardhat compile --build-profile production",
     "test": "hardhat test",
     "validate:ronin": "hardhat run scripts/validate-mainnet-config.js --network roninReadOnly",
+    "check-deployer:ronin": "hardhat run scripts/check-deployer.js --network ronin",
     "deploy:ronin": "hardhat run --build-profile production scripts/deploy-mainnet.js --network ronin",
     "verify:ronin": "hardhat run --build-profile production scripts/verify-mainnet.js --network roninReadOnly"
   },
