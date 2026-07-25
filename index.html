@@ -76,13 +76,16 @@
             <button id="admin-button" class="secondary-button admin-nav">ADMIN TEST</button>
           </div>
           <p class="controls-copy">Move: WASD / arrows · Dash: Shift · Weapons: 1 / 2 / 3 · Aim: mouse · Attack: hold click or Space</p>
-          <p class="test-mode-notice">LOCAL ECONOMY TEST · NO REAL RON OR MATT MOVES IN v0.4</p>
+          <p class="test-mode-notice">SERVER-VERIFIED FREE RANKED · PRACTICE OPEN · REAL RON AND MATT DISABLED IN v0.6</p>
         </div>
 
-        <div class="wallet-chip" title="Wallet adapter is intentionally disconnected in the standalone test build.">
+        <button id="wallet-button" class="wallet-chip" title="Sign a one-time message with Ronin Wallet. No transaction is sent.">
           <span class="status-dot"></span>
-          <span id="wallet-label">TEST-WALLET-01</span>
-        </div>
+          <span class="wallet-copy">
+            <strong id="wallet-label">CONNECT RONIN</strong>
+            <small id="wallet-network">SAIGON TESTNET · SIGN TO PLAY RANKED</small>
+          </span>
+        </button>
       </section>
 
       <section id="mine-pass" class="screen" aria-labelledby="pass-title">
@@ -149,7 +152,7 @@
               <tbody id="leaderboard-body"></tbody>
             </table>
           </div>
-          <p class="preview-note">Preview rivals are local test data. Production rankings will be server-authoritative and anti-cheat verified.</p>
+          <p id="leaderboard-note" class="preview-note">Connect Ronin Wallet to load server-verified Free rankings. Pass rankings remain a local economy preview.</p>
         </div>
       </section>
 
@@ -207,7 +210,7 @@
           <button class="close-button" data-close="upgrade-shop" aria-label="Close">×</button>
           <p class="eyebrow">SPEND BANKED NUGGETS</p>
           <h2 id="shop-title">Permanent Upgrades</h2>
-          <p class="panel-copy">These upgrades persist between runs in this browser.</p>
+          <p class="panel-copy">Signed-in upgrades are saved by the server. Offline Practice upgrades remain in this browser.</p>
           <div id="shop-grid" class="shop-grid"></div>
         </div>
       </section>
