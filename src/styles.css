@@ -124,8 +124,17 @@ h1 span { color: var(--yellow); }
   font-size: 10px;
   font-weight: 850;
   letter-spacing: 0.08em;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
 }
 .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #f5d142; box-shadow: 0 0 12px #f5d142; }
+.wallet-chip.connected { border-color: rgba(80,227,194,0.45); }
+.wallet-chip.connected .status-dot { background: #50e3c2; box-shadow: 0 0 12px #50e3c2; }
+.wallet-chip:disabled { opacity: 0.65; cursor: wait; }
+.wallet-copy { display: flex; flex-direction: column; gap: 2px; }
+.wallet-copy strong { color: #f4f4f0; font-size: 10px; }
+.wallet-copy small { color: #7f8998; font-size: 7px; letter-spacing: 0.06em; }
 
 .panel { position: relative; text-align: center; }
 .wide-panel { width: min(94vw, 850px); }

@@ -1,4 +1,5 @@
 import { MattMineGame } from './game/GameV4.js';
+import { apiClient } from './game/apiClient.js';
 import { META_UPGRADES } from './game/config.js';
 import {
   ADMIN_ROLES,
@@ -26,6 +27,7 @@ import {
 } from './game/economy.js';
 import { formatNumber } from './game/utils.js';
 import { loadProfile, saveProfile } from './game/storage.js';
+import { RoninWalletAdapter } from './game/walletAdapter.js';
 
 const $ = (selector) => document.querySelector(selector);
 const canvas = $('#game');
@@ -36,6 +38,21 @@ const economy = new LocalEconomyStore();
 let profile = loadProfile();
 let toastTimer;
 let activeBoard = RUN_MODES.FREE;
+let serverConfig = null;
+let serverPlayer = null;
+let activeServerRun = null;
+let walletBusy = false;
+const wallet = new RoninWalletAdapter({
+  api: apiClient,
+  onInvalidated(reason) {
+    serverPlayer = null;
+    activeServerRun = null;
+    profile = loadProfile();
+    game?.setProfile(profile);
+    updateMenu();
+    toast(reason);
+  }
+});
 
 const ui = {
   healthText: $('#health-text'),
@@ -69,16 +86,29 @@ function updateMenu() {
   const state = economy.state;
   const daily = dailyRecord(state);
   const passActive = passIsActive(state);
-  const freeAccess = runAccess(state, RUN_MODES.FREE);
+  const connected = Boolean(serverPlayer);
+  const freeAccess = connected
+    ? {
+        allowed: Boolean(serverPlayer.entitlements?.freeRunAvailable),
+        reason: serverPlayer.suspended ? 'Wallet suspended' : 'Used today'
+      }
+    : { allowed: true, reason: 'Ronin sign-in required' };
   const paidAccess = runAccess(state, RUN_MODES.PAID);
   $('#menu-nuggets').textContent = formatNumber(profile.bankedNuggets);
   $('#menu-depth').textContent = String(profile.bestDepth);
   $('#menu-score').textContent = formatNumber(profile.bestScore);
-  $('#wallet-label').textContent = state.walletId;
-  $('#free-run-status').textContent = freeAccess.allowed ? 'AVAILABLE' : 'USED TODAY';
+  $('#wallet-label').textContent = connected ? abbreviateAddress(serverPlayer.address) : walletBusy ? 'CONNECTING…' : 'CONNECT RONIN';
+  $('#wallet-network').textContent = connected
+    ? `${serverConfig?.chainName || 'RONIN'} · SERVER VERIFIED`
+    : `${serverConfig?.chainName || 'SAIGON TESTNET'} · SIGN TO PLAY RANKED`;
+  $('#wallet-button').classList.toggle('connected', connected);
+  $('#wallet-button').disabled = walletBusy;
+  $('#free-run-status').textContent = connected
+    ? serverPlayer.suspended ? 'SUSPENDED' : freeAccess.allowed ? 'AVAILABLE' : 'USED TODAY'
+    : 'WALLET REQUIRED';
   $('#free-run-status').classList.toggle('unavailable', !freeAccess.allowed);
-  $('#free-run-cta').textContent = freeAccess.allowed ? 'PLAY FREE' : 'COME BACK TOMORROW';
-  $('#free-run-button').disabled = !freeAccess.allowed;
+  $('#free-run-cta').textContent = !connected ? 'SIGN IN WITH RONIN' : freeAccess.allowed ? 'PLAY FREE' : 'COME BACK TOMORROW';
+  $('#free-run-button').disabled = connected && !freeAccess.allowed;
   $('#pass-status').textContent = passActive ? 'PASS ACTIVE' : 'FREE TIER';
   $('#pass-days').textContent = passActive ? `${passDaysRemaining(state)} days remaining` : 'Premium locked';
   $('#paid-credit-count').textContent = String(state.player.paidRunCredits);
@@ -103,7 +133,112 @@ function toast(message) {
   toastTimer = setTimeout(() => element.classList.remove('active'), 2600);
 }
 
-function startRunMode(mode) {
+async function connectWallet() {
+  if (walletBusy) return false;
+  walletBusy = true;
+  updateMenu();
+  try {
+    serverPlayer = await wallet.connect();
+    profile = serverPlayer.profile;
+    saveProfile(profile);
+    game.setProfile(profile);
+    toast(`Signed in · ${abbreviateAddress(serverPlayer.address)}`);
+    return true;
+  } catch (error) {
+    toast(error?.message || 'Ronin Wallet sign-in failed.');
+    return false;
+  } finally {
+    walletBusy = false;
+    updateMenu();
+  }
+}
+
+async function refreshServerPlayer() {
+  if (!apiClient.hasSession()) {
+    serverPlayer = null;
+    updateMenu();
+    return null;
+  }
+  try {
+    serverPlayer = await wallet.refresh();
+    profile = serverPlayer.profile;
+    saveProfile(profile);
+    game.setProfile(profile);
+    updateMenu();
+    return serverPlayer;
+  } catch (error) {
+    serverPlayer = null;
+    updateMenu();
+    if (error?.code !== 'session_missing') toast(error.message);
+    return null;
+  }
+}
+
+async function submitServerRun(serverRun, result) {
+  activeServerRun = null;
+  $('#economy-result').innerHTML = '<strong>SERVER VERIFYING</strong><span>Checking entitlement, run token, score rules, and replay protection…</span>';
+  try {
+    const accepted = await apiClient.finishRun(serverRun.runId, serverRun.runToken, {
+      extracted: Boolean(result.extracted),
+      projected: Math.max(0, Math.floor(result.projected || 0)),
+      banked: Math.max(0, Math.floor(result.banked || 0)),
+      depth: Math.max(1, Math.floor(result.depth || 1)),
+      kills: Math.max(0, Math.floor(result.kills || 0)),
+      oreBroken: Math.max(0, Math.floor(result.oreBroken || 0)),
+      elapsed: Math.max(0, Number(result.elapsed || 0))
+    });
+    profile = accepted.profile;
+    saveProfile(profile);
+    game.setProfile(profile);
+    const leaderboard = accepted.leaderboard;
+    if (serverPlayer) {
+      serverPlayer.profile = accepted.profile;
+      serverPlayer.scores[serverRun.mode] = leaderboard.playerScore;
+    }
+    $('#economy-result').innerHTML = `
+      <strong>SERVER VERIFIED${leaderboard.playerRank ? ` · #${leaderboard.playerRank}` : ''}</strong>
+      <span>Weekly ${serverRun.mode === RUN_MODES.FREE ? 'Free' : 'Practice'} score: ${formatNumber(leaderboard.playerScore)}</span>
+      <small>Entitlement, one-time run token, telemetry limits, secured-loot rule, and duplicate submission checks passed.</small>
+    `;
+    toast('Run accepted by the MATT Mine server');
+    await refreshServerPlayer();
+  } catch (error) {
+    $('#economy-result').innerHTML = `
+      <strong>SERVER REJECTED RUN</strong>
+      <span>${escapeHtml(error.message)}</span>
+      <small>No leaderboard score was recorded. The server profile remains authoritative.</small>
+    `;
+    toast(error.message);
+    await refreshServerPlayer();
+  }
+}
+
+async function startRunMode(mode) {
+  const useServer = mode === RUN_MODES.FREE || (mode === RUN_MODES.PRACTICE && serverPlayer);
+  if (useServer) {
+    if (!serverPlayer) {
+      const connected = await connectWallet();
+      if (!connected) return;
+    }
+    try {
+      const run = await apiClient.startRun(mode);
+      activeServerRun = run;
+      if (mode === RUN_MODES.FREE) serverPlayer.entitlements.freeRunAvailable = false;
+      game.startRun({
+        mode: run.mode,
+        seed: run.seed,
+        day: run.day,
+        week: run.week,
+        rewardWeight: run.rewardWeight
+      });
+      updateMenu();
+    } catch (error) {
+      toast(error.message);
+      await refreshServerPlayer();
+    }
+    return;
+  }
+
   const result = economy.apply(consumeRun(economy.state, mode));
   if (!result.ok) {
     toast(result.error);
@@ -188,8 +323,11 @@ const game = new MattMineGame(canvas, profile, {
     setGameplayUi(true);
   },
   onRunEnd(result) {
-    const recorded = economy.apply(recordRun(economy.state, result));
     const mode = result.mode || RUN_MODES.PRACTICE;
+    const serverRun = activeServerRun && activeServerRun.mode === mode ? activeServerRun : null;
+    const recorded = serverRun
+      ? { ok: true, serverPending: true }
+      : economy.apply(recordRun(economy.state, result));
     $('#end-kicker').textContent = result.extracted ? 'EXTRACTION SUCCESSFUL' : 'THE MINE TOOK ITS CUT';
     $('#end-title').textContent = result.extracted ? 'Loot Secured' : 'You Were Knocked Out';
     $('#run-mode-result').textContent = modeLabel(mode, result.rewardWeight);
@@ -206,6 +344,7 @@ const game = new MattMineGame(canvas, profile, {
     showScreen('run-end');
     setGameplayUi(false);
     updateMenu();
+    if (serverRun) void submitServerRun(serverRun, result);
   },
   onProfileChanged(nextProfile) {
     profile = nextProfile;
@@ -228,13 +367,21 @@ const game = new MattMineGame(canvas, profile, {
 
 window.__MATT_MINE_GAME__ = game;
 window.__MATT_MINE_ECONOMY__ = economy;
+window.__MATT_MINE_API__ = apiClient;
 
-$('#free-run-button').addEventListener('click', () => startRunMode(RUN_MODES.FREE));
-$('#practice-run-button').addEventListener('click', () => startRunMode(RUN_MODES.PRACTICE));
+$('#free-run-button').addEventListener('click', () => void startRunMode(RUN_MODES.FREE));
+$('#practice-run-button').addEventListener('click', () => void startRunMode(RUN_MODES.PRACTICE));
 $('#paid-run-button').addEventListener('click', () => {
   const access = runAccess(economy.state, RUN_MODES.PAID);
-  if (access.allowed) startRunMode(RUN_MODES.PAID);
+  if (access.allowed) void startRunMode(RUN_MODES.PAID);
   else openPass();
+});
+$('#wallet-button').addEventListener('click', () => {
+  if (serverPlayer) {
+    void refreshServerPlayer().then(() => toast('Server wallet session refreshed'));
+  } else {
+    void connectWallet();
+  }
 });
 $('#play-again-button').addEventListener('click', () => game.backToMenu());
 $('#menu-button').addEventListener('click', () => game.backToMenu());
@@ -380,6 +527,30 @@ function openLeaderboards(mode) {
     </tr>
   `).join('');
   showScreen('leaderboards');
+  if (serverPlayer && mode === RUN_MODES.FREE) void renderServerLeaderboard(mode);
+}
+
+async function renderServerLeaderboard(mode) {
+  const note = $('#leaderboard-note');
+  if (note) note.textContent = 'Loading server-verified rankings…';
+  try {
+    const leaderboard = await apiClient.leaderboard(mode);
+    $('#board-score').textContent = formatNumber(leaderboard.playerScore);
+    const rows = leaderboard.rows;
+    $('#leaderboard-body').innerHTML = rows.length
+      ? rows.map((row) => `
+          <tr class="${row.isPlayer ? 'player-row' : ''}">
+            <td>#${row.rank}</td>
+            <td>${escapeHtml(row.walletId)}${row.isPlayer ? ' · YOU' : ''}</td>
+            <td>${formatNumber(row.score)}</td>
+            <td>SERVER VERIFIED</td>
+          </tr>
+        `).join('')
+      : '<tr><td colspan="4">No verified Free scores yet this week.</td></tr>';
+    if (note) note.textContent = `Server-authoritative daily-best rankings · Week ${leaderboard.week}`;
+  } catch (error) {
+    if (note) note.textContent = `Server leaderboard unavailable: ${error.message}`;
+  }
 }
 
 function openAdmin() {
@@ -417,6 +588,9 @@ function openAdmin() {
 }
 
 function economyResultMarkup(mode, result, recorded) {
+  if (recorded.serverPending) {
+    return '<strong>SERVER VERIFICATION PENDING</strong><span>The local result will not enter the leaderboard unless the server accepts it.</span>';
+  }
   if (mode === RUN_MODES.PRACTICE) {
     return '<strong>Practice complete</strong><span>No MATT reward and no leaderboard score. Practice remains unlimited.</span>';
   }
@@ -454,8 +628,26 @@ function renderShop() {
       </button>
     `;
     const button = card.querySelector('button');
-    button.addEventListener('click', () => {
+    button.addEventListener('click', async () => {
       if (maxed || profile.bankedNuggets < cost) return;
+      if (serverPlayer) {
+        button.disabled = true;
+        try {
+          const result = await apiClient.purchaseUpgrade(upgrade.id);
+          profile = result.profile;
+          serverPlayer.profile = result.profile;
+          saveProfile(profile);
+          game.setProfile(profile);
+          updateMenu();
+          renderShop();
+          toast(`${upgrade.name} upgraded · server saved`);
+        } catch (error) {
+          toast(error.message);
+          await refreshServerPlayer();
+          renderShop();
+        }
+        return;
+      }
       profile.bankedNuggets -= cost;
       profile.meta[upgrade.id] = rank + 1;
       saveProfile(profile);
@@ -505,5 +697,28 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
+function abbreviateAddress(address) {
+  return typeof address === 'string' && address.length >= 12
+    ? `${address.slice(0, 6)}…${address.slice(-4)}`
+    : String(address || '');
+}
+
+async function bootstrapServer() {
+  try {
+    serverConfig = await apiClient.config();
+    const restored = await wallet.restore();
+    if (restored) {
+      serverPlayer = restored;
+      profile = restored.profile;
+      saveProfile(profile);
+      game.setProfile(profile);
+    }
+  } catch (error) {
+    console.warn('[MATT Mine] Server bootstrap unavailable.', error);
+  }
+  updateMenu();
+}
+
 updateMenu();
 showScreen('menu');
+void bootstrapServer();

@@ -4,6 +4,20 @@
 
 MATT Mine is a standalone browser action roguelite and daily Web3 competition prototype. It remains isolated from MATT Token Live until gameplay, economy rules, server validation, and contracts are production-ready.
 
+## v0.6 Ronin identity and verified competition
+
+- Connect through the injected Ronin Wallet provider on Saigon Testnet by default.
+- Authenticate with a short-lived, one-use sign-in challenge bound to the wallet, chain, and website origin.
+- Keep raw session tokens in session storage only and persist only their server-side hashes.
+- Store profiles, entitlements, runs, suspensions, scores, and audit events on the server.
+- Issue opaque, one-use run tokens for ranked Free and connected Practice runs.
+- Enforce one Free ranked run per wallet per UTC day on the server.
+- Reject reused, expired, mismatched, malformed, and structurally impossible run submissions.
+- Keep Free leaderboard totals server-backed and separated from local sandbox Pass data.
+- Recover safely from a corrupt server data file by quarantining it and creating a validated store.
+- Preserve Practice access for suspended wallets while blocking their ranked access.
+- Keep paid runs, RON swaps, and real MATT claims deliberately disabled.
+
 ## v0.5 resilience and stress testing
 
 - Keep the animation loop alive after an unexpected update or render error and return the player to a safe menu state.
@@ -45,12 +59,13 @@ MATT Mine is a standalone browser action roguelite and daily Web3 competition pr
 ## Run locally on Windows
 
 ```powershell
+npm install
 npm run dev
 ```
 
 Open `http://localhost:4173`.
 
-No package installation is required. Node.js 20 or newer is required.
+Node.js 20 or newer is required.
 
 Run all checks with:
 
@@ -60,16 +75,17 @@ npm test
 
 ## Important test-mode boundary
 
-v0.5 does not send real RON, swap real MATT, connect a wallet, or pay real claims. The UI deliberately labels these actions as local tests. Browser storage is not trustworthy for production balances, passes, entitlements, scores, rewards, or admin actions.
+v0.6 provides real wallet authentication and server-enforced Free-run entitlements, profiles, submissions, and leaderboard storage. It does not send RON, swap MATT, activate paid passes, or pay claims. Ranked validation is a hardened product foundation, not yet a sufficient anti-cheat system for public token payouts.
 
-The future production build must provide:
+Before real value is enabled, the production build still requires:
 
-1. Ronin wallet-backed identity and session authentication.
+1. Server-authoritative gameplay simulation or equivalent signed event validation.
 2. Verified pass and paid-run transactions.
-3. A verified RON-to-MATT swap executor with slippage and deadline protection.
-4. Server-issued run entitlements.
-5. Server-authoritative scoring and anti-cheat review.
-6. Immutable weekly reward publication and onchain claims.
-7. 2-of-3 multisig control for treasury and major contract administration, with no timelock.
+3. A reviewed RON-to-MATT swap executor with slippage and deadline protection.
+4. Production database hosting, backups, observability, and distributed rate limiting.
+5. Anti-cheat review and payout moderation.
+6. Audited reward, pass, run, and store contracts.
+7. Immutable weekly reward publication and onchain claims.
+8. 2-of-3 multisig control for treasury and major contract administration, with no timelock.
 
-See [`docs/ECONOMY_V1.md`](docs/ECONOMY_V1.md) and [`contracts/README.md`](contracts/README.md).
+See [`docs/SECURITY_V06.md`](docs/SECURITY_V06.md), [`docs/ECONOMY_V1.md`](docs/ECONOMY_V1.md), and [`contracts/README.md`](contracts/README.md).
