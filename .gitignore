@@ -4,3 +4,8 @@ data/
 .env.*
 !.env.example
 coverage/
+contracts/artifacts/
+contracts/cache/
+contracts/coverage/
+contracts/deployments/
+contracts/config/ronin.json
