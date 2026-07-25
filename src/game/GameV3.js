@@ -1,6 +1,7 @@
 import { MattMineGame as BaseMattMineGame } from './Game.js';
 import { GameAudio } from './audio.js';
 import { stateMethods } from './v3/state.js';
+import { pickupMethods } from './v3/pickups.js';
 import { weaponsMethods } from './v3/weapons.js';
 import { roomsMethods } from './v3/rooms.js';
 import { enemiesMethods } from './v3/enemies.js';
@@ -16,6 +17,7 @@ export class MattMineGame extends BaseMattMineGame {
 Object.assign(
   MattMineGame.prototype,
   stateMethods,
+  pickupMethods,
   weaponsMethods,
   roomsMethods,
   enemiesMethods,
