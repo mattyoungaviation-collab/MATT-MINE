@@ -4,6 +4,20 @@
 
 MATT Mine is a standalone browser action roguelite and daily Web3 competition prototype. It remains isolated from MATT Token Live until gameplay, economy rules, server validation, and contracts are production-ready.
 
+## v0.8 production contract release
+
+- Add non-upgradeable Pass, paid-run, swap, and reward contracts for Ronin Mainnet.
+- Use the existing fixed-supply MATT token; no replacement token and no burn.
+- Fix paid-run swaps to the approved Katana WRON → MATT route with minimum-output and deadline protection.
+- Route pass RON 50/30/20 and paid-run MATT 70/20/10.
+- Publish separate Free and Pass reward epochs with duplicate-claim and active-allocation protection.
+- Require a deployed contract-admin multisig and separate routine roles.
+- Deploy conventionally with no CREATE2 vanity salt, proxy, or timelock.
+- Validate Ronin protocol addresses onchain before deployment.
+- Store the temporary deployment key in Hardhat's encrypted keystore.
+- Checkpoint deployments, remove the temporary executor admin, and verify all source through Sourcify v2 on Ronin chain 2020.
+- Keep contracts unfunded and application transactions disabled until audit, multisig, configuration, and post-deployment checks are approved.
+
 ## v0.7 Ronin Mainnet readiness
 
 - Lock wallet authentication to Ronin Mainnet chain `2020`.
@@ -82,19 +96,19 @@ Run all checks with:
 npm test
 ```
 
-## Important test-mode boundary
+## Important deployment boundary
 
-v0.7 provides Ronin Mainnet wallet authentication and server-enforced Free-run entitlements, profiles, submissions, and leaderboard storage. It does not send RON, swap MATT, activate paid passes, or pay claims. Ranked validation is a hardened product foundation, not yet a sufficient anti-cheat system for public token payouts.
+v0.8 adds production contract code and a guarded deployment workflow. It does not deploy or fund the contracts, send RON, activate paid passes, swap MATT, or pay claims by itself. Ranked validation remains a hardened product foundation, not yet a sufficient anti-cheat system for public token payouts.
 
 Before real value is enabled, the production build still requires:
 
 1. Server-authoritative gameplay simulation or equivalent signed event validation.
-2. Verified pass and paid-run transactions.
-3. A reviewed RON-to-MATT swap executor with slippage and deadline protection.
+2. Independent review of the pass, paid-run, reward, and swap contracts.
+3. A completed multisig-controlled deployment with verified source and post-deployment role checks.
 4. Production database hosting, backups, observability, and distributed rate limiting.
 5. Anti-cheat review and payout moderation.
-6. Audited reward, pass, run, and store contracts.
+6. Audited reward, pass, run, and swap contracts.
 7. Immutable weekly reward publication and onchain claims.
 8. 2-of-3 multisig control for treasury and major contract administration, with no timelock.
 
-See [`docs/SECURITY_V07.md`](docs/SECURITY_V07.md), [`docs/SECURITY_V06.md`](docs/SECURITY_V06.md), [`docs/ECONOMY_V1.md`](docs/ECONOMY_V1.md), and [`contracts/README.md`](contracts/README.md).
+See [`docs/CONTRACT_DEPLOYMENT_V08.md`](docs/CONTRACT_DEPLOYMENT_V08.md), [`docs/SECURITY_V07.md`](docs/SECURITY_V07.md), [`docs/ECONOMY_V1.md`](docs/ECONOMY_V1.md), and [`contracts/README.md`](contracts/README.md).
