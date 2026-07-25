@@ -68,6 +68,37 @@ export class RoninWalletAdapter {
     return this.player;
   }
 
+  async purchasePass(transaction) {
+    return this.sendPreparedTransaction(transaction);
+  }
+
+  async purchasePaidRun(transaction) {
+    return this.sendPreparedTransaction(transaction);
+  }
+
+  async sendPreparedTransaction(transaction) {
+    if (!this.player || !this.provider?.request) {
+      throw new Error('Sign in with Ronin Wallet before making a purchase.');
+    }
+    validatePreparedTransaction(transaction);
+    const chainId = parseChainId(await this.provider.request({ method: 'eth_chainId' }));
+    if (chainId !== 2020) throw new Error('Switch Ronin Wallet to Ronin Mainnet.');
+    const transactionHash = await this.provider.request({
+      method: 'eth_sendTransaction',
+      params: [{
+        from: this.player.address,
+        to: transaction.to,
+        value: transaction.value,
+        data: transaction.data
+      }]
+    });
+    if (!/^0x[a-fA-F0-9]{64}$/.test(transactionHash || '')) {
+      throw new Error('Ronin Wallet did not return a valid transaction hash.');
+    }
+    await waitForWalletReceipt(this.provider, transactionHash);
+    return transactionHash;
+  }
+
   isConnected() {
     return Boolean(this.player && this.api.hasSession());
   }
@@ -103,6 +134,36 @@ export function parseChainId(value) {
   if (typeof value === 'string' && /^0x[a-fA-F0-9]+$/.test(value)) return Number.parseInt(value, 16);
   if (typeof value === 'string' && /^\d+$/.test(value)) return Number(value);
   return Number.NaN;
+}
+
+function validatePreparedTransaction(transaction) {
+  if (
+    !transaction ||
+    !/^0x[a-fA-F0-9]{40}$/.test(transaction.to || '') ||
+    !/^0x[a-fA-F0-9]+$/.test(transaction.value || '') ||
+    !/^0x[a-fA-F0-9]*$/.test(transaction.data || '')
+  ) {
+    throw new Error('The server did not provide a valid MATT Mine transaction.');
+  }
+  if (BigInt(transaction.value) <= 0n) throw new Error('The transaction value must be greater than zero.');
+}
+
+async function waitForWalletReceipt(provider, transactionHash, options = {}) {
+  const timeoutMs = options.timeoutMs || 120_000;
+  const pollMs = options.pollMs || 1_000;
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    const receipt = await provider.request({
+      method: 'eth_getTransactionReceipt',
+      params: [transactionHash]
+    });
+    if (receipt) {
+      if (receipt.status !== '0x1') throw new Error('The Ronin transaction reverted.');
+      return receipt;
+    }
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+  }
+  throw new Error('The transaction is still pending. Check Ronin Wallet and refresh shortly.');
 }
 
 export const walletAdapter = new RoninWalletAdapter();

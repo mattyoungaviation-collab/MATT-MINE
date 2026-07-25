@@ -5,11 +5,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { privateKeyToAccount } from 'viem/accounts';
+import { decodeFunctionData, encodeAbiParameters, encodeEventTopics, encodeFunctionData } from 'viem';
 
 import { MattMineApiClient, SESSION_STORAGE_KEY } from '../src/game/apiClient.js';
 import { RoninWalletAdapter, parseChainId } from '../src/game/walletAdapter.js';
 import { MemoryDatabase, JsonFileDatabase } from '../server/database.js';
 import { createMattMineHttpServer } from '../server/http.js';
+import {
+  MATT_MINE_RUNS_ABI,
+  RONIN_PAYMENT_CONTRACTS,
+  RoninPaymentVerifier
+} from '../server/payment-verifier.js';
 import { MattMineService } from '../server/service.js';
 import { AUTH_CHALLENGE_TTL_MS, RONIN_CHAINS, SERVER_RUN_MODES } from '../server/constants.js';
 
@@ -30,6 +36,8 @@ function createHarness(options = {}) {
     chainId: RONIN_CHAINS.MAINNET,
     publicOrigin: ORIGIN,
     adminKey: options.adminKey || 'test-admin-key',
+    mainnetTransactionsEnabled: options.mainnetTransactionsEnabled === true,
+    paymentVerifier: options.paymentVerifier,
     randomHex(bytes) {
       randomCounter += 1;
       return randomCounter.toString(16).padStart(bytes * 2, '0').slice(-bytes * 2);
@@ -80,6 +88,78 @@ async function finish(service, session, run, result) {
     runToken: run.runToken,
     result
   });
+}
+
+function createFakePaymentVerifier(options = {}) {
+  let counter = 0;
+  const active = options.active !== false;
+  return {
+    publicConfig() {
+      return {
+        contracts: {
+          pass: RONIN_PAYMENT_CONTRACTS.pass,
+          runs: RONIN_PAYMENT_CONTRACTS.runs,
+          matt: RONIN_PAYMENT_CONTRACTS.matt
+        },
+        confirmations: 3
+      };
+    },
+    async status() {
+      return {
+        pass: {
+          active,
+          expiresAt: START + 30 * 86_400_000,
+          priceRonWei: '95000000000000000000',
+          paused: false,
+          transaction: {
+            to: RONIN_PAYMENT_CONTRACTS.pass,
+            value: '0x5265c00a7b1c2d0000',
+            data: '0xdeadbeef'
+          }
+        },
+        paidRuns: {
+          priceRonWei: '10000000000000000000',
+          purchasedToday: 0,
+          dailyLimit: 10,
+          paused: options.paused === true
+        }
+      };
+    },
+    async quotePaidRun() {
+      if (options.paused === true) {
+        const error = new Error('Paid-run purchases are currently paused.');
+        error.code = 'paid_runs_paused';
+        throw error;
+      }
+      return {
+        quotedMattOut: '1000000000000000000000',
+        minMattOut: '950000000000000000000',
+        slippageBps: 500,
+        deadline: Math.floor(START / 1000) + 300,
+        transaction: {
+          to: RONIN_PAYMENT_CONTRACTS.runs,
+          value: '0x8ac7230489e80000',
+          data: '0x12345678'
+        }
+      };
+    },
+    async verifyPaidRunPurchase(transactionHash, address) {
+      counter += 1;
+      return {
+        key: `${transactionHash.toLowerCase()}:0`,
+        transactionHash: transactionHash.toLowerCase(),
+        logIndex: 0,
+        blockNumber: '58780000',
+        address: address.toLowerCase(),
+        entitlementId: String(counter),
+        ronPaid: '10000000000000000000',
+        mattBought: '1000000000000000000000',
+        currentPoolMatt: '700000000000000000000',
+        futureRewardsMatt: '200000000000000000000',
+        reserveMatt: '100000000000000000000'
+      };
+    }
+  };
 }
 
 test('Ronin SIWE-style challenges bind origin, chain, address, expiry, and one-time use', async () => {
@@ -194,6 +274,198 @@ test('paid server runs stay disabled while authenticated Practice remains unlimi
   const first = await harness.service.startRun(session.token, SERVER_RUN_MODES.PRACTICE);
   const second = await harness.service.startRun(session.token, SERVER_RUN_MODES.PRACTICE);
   assert.notEqual(first.runId, second.runId);
+});
+
+test('confirmed Ronin purchases create one-time paid-run entitlements and daily-best Pass scores', async () => {
+  const paymentVerifier = createFakePaymentVerifier();
+  const harness = createHarness({
+    mainnetTransactionsEnabled: true,
+    paymentVerifier
+  });
+  const { session } = await signIn(harness);
+  assert.equal(harness.service.config().realPaymentsEnabled, true);
+
+  const status = await harness.service.paymentStatus(session.token);
+  assert.equal(status.pass.active, true);
+  assert.equal(status.confirmedCredits, 0);
+  const quote = await harness.service.quotePaidRun(session.token);
+  assert.equal(quote.minMattOut, '950000000000000000000');
+
+  const firstHash = `0x${'1'.repeat(64)}`;
+  const firstConfirmation = await harness.service.confirmPaidRunPurchase(session.token, firstHash);
+  assert.equal(firstConfirmation.confirmedCredits, 1);
+  assert.equal(firstConfirmation.alreadyConfirmed, false);
+  const duplicate = await harness.service.confirmPaidRunPurchase(session.token, firstHash);
+  assert.equal(duplicate.confirmedCredits, 1);
+  assert.equal(duplicate.alreadyConfirmed, true);
+
+  const firstRun = await harness.service.startRun(session.token, SERVER_RUN_MODES.PAID);
+  assert.equal(firstRun.seed, 'MATT-MINE-2026-07-25-PAID');
+  assert.equal(firstRun.rewardWeight, 2);
+  harness.advance(60_000);
+  await finish(harness.service, session, firstRun, extractedResult({ projected: 1_000, banked: 1_000 }));
+  await assert.rejects(
+    () => harness.service.startRun(session.token, SERVER_RUN_MODES.PAID),
+    (error) => error.code === 'paid_run_credit_required'
+  );
+
+  const secondHash = `0x${'2'.repeat(64)}`;
+  await harness.service.confirmPaidRunPurchase(session.token, secondHash);
+  const secondRun = await harness.service.startRun(session.token, SERVER_RUN_MODES.PAID);
+  harness.advance(60_000);
+  const accepted = await finish(
+    harness.service,
+    session,
+    secondRun,
+    extractedResult({ projected: 1_500, banked: 1_500 })
+  );
+  assert.equal(accepted.leaderboard.playerScore, 1_500);
+  const finalStatus = await harness.service.paymentStatus(session.token);
+  assert.equal(finalStatus.confirmedCredits, 0);
+});
+
+test('pass state, contract pause, and server suspension block paid access safely', async () => {
+  const noPassHarness = createHarness({
+    mainnetTransactionsEnabled: true,
+    paymentVerifier: createFakePaymentVerifier({ active: false })
+  });
+  const { session: noPassSession } = await signIn(noPassHarness);
+  await assert.rejects(
+    () => noPassHarness.service.startRun(noPassSession.token, SERVER_RUN_MODES.PAID),
+    (error) => error.code === 'active_pass_required'
+  );
+
+  const pausedHarness = createHarness({
+    mainnetTransactionsEnabled: true,
+    paymentVerifier: createFakePaymentVerifier({ paused: true })
+  });
+  const { session: pausedSession } = await signIn(pausedHarness);
+  await assert.rejects(
+    () => pausedHarness.service.quotePaidRun(pausedSession.token),
+    (error) => error.code === 'paid_runs_paused'
+  );
+
+  const suspendedHarness = createHarness({
+    mainnetTransactionsEnabled: true,
+    paymentVerifier: createFakePaymentVerifier()
+  });
+  const { session: suspendedSession } = await signIn(suspendedHarness);
+  await suspendedHarness.service.setWalletSuspension('test-admin-key', account.address, true);
+  await assert.rejects(
+    () => suspendedHarness.service.confirmPaidRunPurchase(suspendedSession.token, `0x${'3'.repeat(64)}`),
+    (error) => error.code === 'wallet_suspended'
+  );
+});
+
+test('receipt verifier accepts only the approved Runs call and matching PaidRunPurchased event', async () => {
+  const transactionHash = `0x${'4'.repeat(64)}`;
+  const ronPaid = 10n * 10n ** 18n;
+  const minMattOut = 900n * 10n ** 18n;
+  const deadline = BigInt(Math.floor(START / 1000) + 300);
+  const topics = encodeEventTopics({
+    abi: MATT_MINE_RUNS_ABI,
+    eventName: 'PaidRunPurchased',
+    args: { player: account.address, entitlementId: 7n }
+  });
+  const data = encodeAbiParameters(
+    [
+      { type: 'uint256' },
+      { type: 'uint256' },
+      { type: 'uint256' },
+      { type: 'uint256' },
+      { type: 'uint256' }
+    ],
+    [
+      ronPaid,
+      1_000n * 10n ** 18n,
+      700n * 10n ** 18n,
+      200n * 10n ** 18n,
+      100n * 10n ** 18n
+    ]
+  );
+  const receipt = {
+    status: 'success',
+    to: RONIN_PAYMENT_CONTRACTS.runs,
+    blockNumber: 58_780_000n,
+    logs: [{
+      address: RONIN_PAYMENT_CONTRACTS.runs,
+      topics,
+      data,
+      logIndex: 4
+    }]
+  };
+  const transaction = {
+    from: account.address,
+    to: RONIN_PAYMENT_CONTRACTS.runs,
+    value: ronPaid,
+    input: encodeFunctionData({
+      abi: MATT_MINE_RUNS_ABI,
+      functionName: 'purchasePaidRun',
+      args: [minMattOut, deadline]
+    })
+  };
+  const verifier = new RoninPaymentVerifier({
+    confirmations: 1,
+    client: {
+      waitForTransactionReceipt: async () => receipt,
+      getTransaction: async () => transaction
+    }
+  });
+  const verified = await verifier.verifyPaidRunPurchase(transactionHash, account.address);
+  assert.equal(verified.key, `${transactionHash}:4`);
+  assert.equal(verified.entitlementId, '7');
+  assert.equal(verified.ronPaid, String(ronPaid));
+  assert.equal(verified.currentPoolMatt, String(700n * 10n ** 18n));
+
+  const wrongWalletVerifier = new RoninPaymentVerifier({
+    confirmations: 1,
+    client: {
+      waitForTransactionReceipt: async () => receipt,
+      getTransaction: async () => ({ ...transaction, from: otherAccount.address })
+    }
+  });
+  await assert.rejects(
+    () => wrongWalletVerifier.verifyPaidRunPurchase(transactionHash, account.address),
+    (error) => error.code === 'payment_wallet_mismatch'
+  );
+});
+
+test('live quote uses current contract prices, Katana output, slippage protection, and a short deadline', async () => {
+  const paidRunPrice = 10n * 10n ** 18n;
+  const quotedMatt = 2_000n * 10n ** 18n;
+  const blockTimestamp = BigInt(Math.floor(START / 1000));
+  const client = {
+    async readContract({ functionName }) {
+      if (functionName === 'hasActivePass') return true;
+      if (functionName === 'passExpiresAt') return blockTimestamp + 86_400n;
+      if (functionName === 'passPriceRon') return 95n * 10n ** 18n;
+      if (functionName === 'paidRunPriceRon') return paidRunPrice;
+      if (functionName === 'paidRunsToday') return 2;
+      if (functionName === 'paused') return false;
+      if (functionName === 'getAmountsOut') return [paidRunPrice, quotedMatt];
+      throw new Error(`Unexpected read ${functionName}`);
+    },
+    async getBlock() {
+      return { timestamp: blockTimestamp };
+    }
+  };
+  const verifier = new RoninPaymentVerifier({
+    client,
+    slippageBps: 500,
+    quoteLifetimeSeconds: 300
+  });
+  const quote = await verifier.quotePaidRun(account.address);
+  assert.equal(quote.quotedMattOut, String(quotedMatt));
+  assert.equal(quote.minMattOut, String((quotedMatt * 9_500n) / 10_000n));
+  assert.equal(quote.deadline, Number(blockTimestamp + 300n));
+  assert.equal(BigInt(quote.transaction.value), paidRunPrice);
+  const decoded = decodeFunctionData({
+    abi: MATT_MINE_RUNS_ABI,
+    data: quote.transaction.data
+  });
+  assert.equal(decoded.functionName, 'purchasePaidRun');
+  assert.equal(decoded.args[0], (quotedMatt * 9_500n) / 10_000n);
+  assert.equal(decoded.args[1], blockTimestamp + 300n);
 });
 
 test('impossible telemetry is rejected without consuming the active run submission', async () => {
@@ -360,6 +632,8 @@ test('the Ronin adapter switches to Mainnet, signs the server message, and inval
       }
       if (payload.method === 'wallet_switchEthereumChain') return null;
       if (payload.method === 'personal_sign') return `0x${'1'.repeat(130)}`;
+      if (payload.method === 'eth_sendTransaction') return `0x${'5'.repeat(64)}`;
+      if (payload.method === 'eth_getTransactionReceipt') return { status: '0x1' };
       throw new Error(`Unexpected method ${payload.method}`);
     },
     on(event, listener) {
@@ -391,6 +665,16 @@ test('the Ronin adapter switches to Mainnet, signs the server message, and inval
   assert.equal(player.address, account.address.toLowerCase());
   assert.equal(calls.some((entry) => entry.method === 'wallet_switchEthereumChain'), true);
   assert.equal(calls.some((entry) => entry.method === 'personal_sign'), true);
+  const paymentHash = await adapter.purchasePass({
+    to: RONIN_PAYMENT_CONTRACTS.pass,
+    value: '0x5265c00a7b1c2d0000',
+    data: '0x12345678'
+  });
+  assert.equal(paymentHash, `0x${'5'.repeat(64)}`);
+  const sent = calls.find((entry) => entry.method === 'eth_sendTransaction');
+  assert.equal(sent.params[0].to, RONIN_PAYMENT_CONTRACTS.pass);
+  assert.equal(sent.params[0].from, account.address.toLowerCase());
+  assert.equal(sent.params[0].value, '0x5265c00a7b1c2d0000');
   listeners.get('accountsChanged')?.([otherAccount.address]);
   assert.equal(cleared, true);
   assert.match(invalidated, /account changed/i);

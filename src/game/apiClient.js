@@ -44,6 +44,28 @@ export class MattMineApiClient {
     return response.player;
   }
 
+  async paymentStatus() {
+    const response = await this.request('/api/payments/status', { authenticated: true });
+    return response.status;
+  }
+
+  async paidRunQuote() {
+    const response = await this.request('/api/payments/paid-run/quote', {
+      method: 'POST',
+      authenticated: true,
+      body: {}
+    });
+    return response.quote;
+  }
+
+  async confirmPaidRunPurchase(transactionHash) {
+    return this.request('/api/payments/paid-run/confirm', {
+      method: 'POST',
+      authenticated: true,
+      body: { transactionHash }
+    });
+  }
+
   async startRun(mode) {
     const response = await this.request('/api/runs/start', {
       method: 'POST',

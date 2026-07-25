@@ -8,6 +8,7 @@ export function defaultServerState() {
     challenges: {},
     sessions: {},
     runs: {},
+    paidEntitlements: {},
     audit: []
   };
 }
@@ -31,10 +32,40 @@ export function normalizeServerState(input = {}) {
     challenges: normalizeRecords(source.challenges, 2_000),
     sessions: normalizeRecords(source.sessions, 10_000),
     runs: normalizeRecords(source.runs, 25_000),
+    paidEntitlements: normalizePaidEntitlements(source.paidEntitlements),
     audit: Array.isArray(source.audit)
       ? source.audit.filter(isRecord).slice(-2_000).map((entry) => ({ ...entry }))
       : []
   };
+}
+
+function normalizePaidEntitlements(input) {
+  if (!isRecord(input)) return {};
+  return Object.fromEntries(Object.entries(input)
+    .filter(([, value]) =>
+      isRecord(value) &&
+      /^0x[a-fA-F0-9]{64}$/.test(value.transactionHash || '') &&
+      isHexAddress(value.address) &&
+      Number.isSafeInteger(value.logIndex) &&
+      value.logIndex >= 0
+    )
+    .slice(-25_000)
+    .map(([key, value]) => [String(key).slice(0, 200).toLowerCase(), {
+      key: String(value.key || key).slice(0, 200).toLowerCase(),
+      transactionHash: value.transactionHash.toLowerCase(),
+      logIndex: value.logIndex,
+      blockNumber: safeUnsignedString(value.blockNumber),
+      address: value.address.toLowerCase(),
+      entitlementId: safeUnsignedString(value.entitlementId),
+      ronPaid: safeUnsignedString(value.ronPaid),
+      mattBought: safeUnsignedString(value.mattBought),
+      currentPoolMatt: safeUnsignedString(value.currentPoolMatt),
+      futureRewardsMatt: safeUnsignedString(value.futureRewardsMatt),
+      reserveMatt: safeUnsignedString(value.reserveMatt),
+      confirmedAt: safeTimestamp(value.confirmedAt),
+      consumedAt: safeTimestamp(value.consumedAt),
+      usedRunId: typeof value.usedRunId === 'string' ? value.usedRunId.slice(0, 120) : ''
+    }]));
 }
 
 function normalizeWallets(input) {
@@ -77,6 +108,10 @@ function normalizeRecords(input, limit) {
 
 function safeTimestamp(value) {
   return Number.isSafeInteger(value) && value >= 0 ? value : 0;
+}
+
+function safeUnsignedString(value) {
+  return typeof value === 'string' && /^\d+$/.test(value) ? value : '0';
 }
 
 function isHexAddress(value) {

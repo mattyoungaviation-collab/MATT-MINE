@@ -41,7 +41,9 @@ let activeBoard = RUN_MODES.FREE;
 let serverConfig = null;
 let serverPlayer = null;
 let activeServerRun = null;
+let paymentStatus = null;
 let walletBusy = false;
+let paymentBusy = false;
 const wallet = new RoninWalletAdapter({
   api: apiClient,
   onInvalidated(reason) {
@@ -85,7 +87,8 @@ function setGameplayUi(active) {
 function updateMenu() {
   const state = economy.state;
   const daily = dailyRecord(state);
-  const passActive = passIsActive(state);
+  const livePayments = serverConfig?.realPaymentsEnabled === true;
+  const passActive = livePayments ? paymentStatus?.pass?.active === true : passIsActive(state);
   const connected = Boolean(serverPlayer);
   const freeAccess = connected
     ? {
@@ -93,7 +96,29 @@ function updateMenu() {
         reason: serverPlayer.suspended ? 'Wallet suspended' : 'Used today'
       }
     : { allowed: true, reason: 'Ronin sign-in required' };
-  const paidAccess = runAccess(state, RUN_MODES.PAID);
+  const paidCredits = livePayments ? paymentStatus?.confirmedCredits || 0 : state.player.paidRunCredits;
+  const paidRunsToday = livePayments ? paymentStatus?.paidRuns?.purchasedToday || 0 : daily.paidRunsUsed;
+  const paidAccess = livePayments
+    ? {
+        allowed:
+          connected &&
+          !serverPlayer?.suspended &&
+          passActive &&
+          paidCredits > 0 &&
+          paymentStatus?.paidRuns?.paused !== true,
+        reason: !connected
+          ? 'Ronin sign-in required'
+          : serverPlayer?.suspended
+            ? 'Wallet suspended'
+            : !passActive
+              ? 'Pass required'
+              : paymentStatus?.paidRuns?.paused
+                ? 'Paid runs paused'
+                : paidCredits > 0
+                  ? ''
+                  : 'Buy a run credit'
+      }
+    : runAccess(state, RUN_MODES.PAID);
   $('#menu-nuggets').textContent = formatNumber(profile.bankedNuggets);
   $('#menu-depth').textContent = String(profile.bestDepth);
   $('#menu-score').textContent = formatNumber(profile.bestScore);
@@ -110,18 +135,34 @@ function updateMenu() {
   $('#free-run-cta').textContent = !connected ? 'SIGN IN WITH RONIN' : freeAccess.allowed ? 'PLAY FREE' : 'COME BACK TOMORROW';
   $('#free-run-button').disabled = connected && !freeAccess.allowed;
   $('#pass-status').textContent = passActive ? 'PASS ACTIVE' : 'FREE TIER';
-  $('#pass-days').textContent = passActive ? `${passDaysRemaining(state)} days remaining` : 'Premium locked';
-  $('#paid-credit-count').textContent = String(state.player.paidRunCredits);
-  $('#paid-daily-status').textContent = `${daily.paidRunsUsed} / ${state.settings.maxPaidRunsPerDay} used today`;
+  const remainingPassDays = livePayments && paymentStatus
+    ? Math.max(0, Math.ceil((paymentStatus.pass.expiresAt - Date.now()) / 86_400_000))
+    : passDaysRemaining(state);
+  $('#pass-days').textContent = passActive ? `${remainingPassDays} days remaining` : 'Premium locked';
+  $('#paid-credit-count').textContent = String(paidCredits);
+  $('#paid-daily-status').textContent = `${paidRunsToday} / ${livePayments ? paymentStatus?.paidRuns?.dailyLimit || 10 : state.settings.maxPaidRunsPerDay} purchased today`;
   $('#paid-run-cta').textContent = paidAccess.allowed
     ? 'START PAID RUN'
     : passActive
-      ? state.player.paidRunCredits > 0 ? paidAccess.reason.toUpperCase() : 'BUY A RUN CREDIT'
+      ? paidCredits > 0 ? paidAccess.reason.toUpperCase() : 'BUY A RUN CREDIT'
       : 'VIEW PASS';
   $('#paid-run-button').classList.toggle('ready', paidAccess.allowed);
-  $('#pass-price').textContent = trimNumber(state.settings.passPriceRon);
-  $('#paid-run-price').textContent = trimNumber(state.settings.paidRunPriceRon);
-  $('#paid-run-price-copy').textContent = `${trimNumber(state.settings.paidRunPriceRon)} RON`;
+  const passPrice = livePayments
+    ? paymentStatus ? weiToRon(paymentStatus.pass.priceRonWei) : null
+    : state.settings.passPriceRon;
+  const paidRunPrice = livePayments
+    ? paymentStatus ? weiToRon(paymentStatus.paidRuns.priceRonWei) : null
+    : state.settings.paidRunPriceRon;
+  $('#pass-price').textContent = passPrice === null ? '—' : trimNumber(passPrice);
+  $('#paid-run-price').textContent = paidRunPrice === null ? '—' : trimNumber(paidRunPrice);
+  $('#paid-run-price-copy').textContent = paidRunPrice === null ? 'Connect wallet to load price' : `${trimNumber(paidRunPrice)} RON`;
+  const transactionNotice = $('#transaction-mode-notice');
+  if (transactionNotice) {
+    transactionNotice.textContent = livePayments
+      ? 'LIVE RONIN MAINNET · WALLET APPROVAL REQUIRED FOR EVERY PURCHASE'
+      : 'SAFE TEST MODE · REAL RON TRANSACTIONS DISABLED';
+    transactionNotice.classList.toggle('live-payments', livePayments);
+  }
   renderPassProgress();
 }
 
@@ -142,6 +183,7 @@ async function connectWallet() {
     profile = serverPlayer.profile;
     saveProfile(profile);
     game.setProfile(profile);
+    await refreshPaymentStatus(true);
     toast(`Signed in · ${abbreviateAddress(serverPlayer.address)}`);
     return true;
   } catch (error) {
@@ -164,12 +206,31 @@ async function refreshServerPlayer() {
     profile = serverPlayer.profile;
     saveProfile(profile);
     game.setProfile(profile);
+    await refreshPaymentStatus(true);
     updateMenu();
     return serverPlayer;
   } catch (error) {
     serverPlayer = null;
     updateMenu();
     if (error?.code !== 'session_missing') toast(error.message);
+    return null;
+  }
+}
+
+async function refreshPaymentStatus(silent = false) {
+  if (!serverPlayer || serverConfig?.realPaymentsEnabled !== true) {
+    paymentStatus = null;
+    updateMenu();
+    return null;
+  }
+  try {
+    paymentStatus = await apiClient.paymentStatus();
+    updateMenu();
+    return paymentStatus;
+  } catch (error) {
+    paymentStatus = null;
+    updateMenu();
+    if (!silent) toast(error.message);
     return null;
   }
 }
@@ -214,7 +275,10 @@ async function submitServerRun(serverRun, result) {
 }
 
 async function startRunMode(mode) {
-  const useServer = mode === RUN_MODES.FREE || (mode === RUN_MODES.PRACTICE && serverPlayer);
+  const useServer =
+    mode === RUN_MODES.FREE ||
+    (mode === RUN_MODES.PAID && serverConfig?.paidRunsEnabled === true) ||
+    (mode === RUN_MODES.PRACTICE && serverPlayer);
   if (useServer) {
     if (!serverPlayer) {
       const connected = await connectWallet();
@@ -224,6 +288,9 @@ async function startRunMode(mode) {
       const run = await apiClient.startRun(mode);
       activeServerRun = run;
       if (mode === RUN_MODES.FREE) serverPlayer.entitlements.freeRunAvailable = false;
+      if (mode === RUN_MODES.PAID && paymentStatus) {
+        paymentStatus.confirmedCredits = Math.max(0, paymentStatus.confirmedCredits - 1);
+      }
       game.startRun({
         mode: run.mode,
         seed: run.seed,
@@ -372,6 +439,14 @@ window.__MATT_MINE_API__ = apiClient;
 $('#free-run-button').addEventListener('click', () => void startRunMode(RUN_MODES.FREE));
 $('#practice-run-button').addEventListener('click', () => void startRunMode(RUN_MODES.PRACTICE));
 $('#paid-run-button').addEventListener('click', () => {
+  if (serverConfig?.paidRunsEnabled === true) {
+    if ((paymentStatus?.confirmedCredits || 0) > 0 && paymentStatus?.pass?.active) {
+      void startRunMode(RUN_MODES.PAID);
+    } else {
+      openPass();
+    }
+    return;
+  }
   const access = runAccess(economy.state, RUN_MODES.PAID);
   if (access.allowed) void startRunMode(RUN_MODES.PAID);
   else openPass();
@@ -403,12 +478,20 @@ for (const button of document.querySelectorAll('[data-close]')) {
 }
 
 $('#buy-pass-button').addEventListener('click', () => {
+  if (serverConfig?.realPaymentsEnabled === true) {
+    void purchaseLivePass();
+    return;
+  }
   const result = economy.apply(purchasePass(economy.state));
   toast(result.ok ? `Test pass active for 30 days · ${result.priceRon} RON modeled` : result.error);
   openPass();
 });
 
 $('#buy-paid-run-button').addEventListener('click', () => {
+  if (serverConfig?.realPaymentsEnabled === true) {
+    void purchaseLivePaidRun();
+    return;
+  }
   const result = economy.apply(purchasePaidRun(economy.state));
   toast(result.ok
     ? `${result.priceRon} RON modeled → ${formatNumber(result.mattBought)} MATT · 0 burned`
@@ -475,8 +558,101 @@ $('#reset-economy').addEventListener('click', () => {
   openAdmin();
 });
 
+async function purchaseLivePass() {
+  if (paymentBusy) return;
+  if (!serverPlayer) {
+    const connected = await connectWallet();
+    if (!connected) return;
+  }
+  if (!paymentStatus) await refreshPaymentStatus();
+  if (!paymentStatus) return;
+  const price = weiToRon(paymentStatus.pass.priceRonWei);
+  if (!window.confirm(`Activate the MATT Mine Pass for ${trimNumber(price)} RON on Ronin Mainnet? Ronin Wallet will ask you to approve the transaction.`)) return;
+  paymentBusy = true;
+  openPass();
+  try {
+    const transactionHash = await wallet.purchasePass(paymentStatus.pass.transaction);
+    toast(`Pass transaction confirmed · ${abbreviateHash(transactionHash)}`);
+    await refreshPaymentStatus();
+  } catch (error) {
+    toast(error?.message || 'Pass purchase failed.');
+  } finally {
+    paymentBusy = false;
+    openPass();
+  }
+}
+
+async function purchaseLivePaidRun() {
+  if (paymentBusy) return;
+  if (!serverPlayer) {
+    const connected = await connectWallet();
+    if (!connected) return;
+  }
+  if (!paymentStatus) await refreshPaymentStatus();
+  if (!paymentStatus?.pass?.active) {
+    toast('Activate the MATT Mine Pass first.');
+    openPass();
+    return;
+  }
+  paymentBusy = true;
+  openPass();
+  try {
+    const quote = await apiClient.paidRunQuote();
+    const price = weiToRon(paymentStatus.paidRuns.priceRonWei);
+    const protectedMatt = weiToToken(quote.minMattOut);
+    const approved = window.confirm(
+      `Buy one paid ranked run for ${trimNumber(price)} RON? The contract will buy at least ${formatNumber(Math.floor(protectedMatt))} MATT at this quote. Ronin Wallet will ask you to approve.`
+    );
+    if (!approved) return;
+    const transactionHash = await wallet.purchasePaidRun(quote.transaction);
+    toast('Transaction mined · server confirming entitlement');
+    await apiClient.confirmPaidRunPurchase(transactionHash);
+    await refreshPaymentStatus();
+    toast(`Paid run ready · ${abbreviateHash(transactionHash)}`);
+  } catch (error) {
+    toast(error?.message || 'Paid-run purchase failed.');
+  } finally {
+    paymentBusy = false;
+    openPass();
+  }
+}
+
 function openPass() {
   const state = economy.state;
+  if (serverConfig?.realPaymentsEnabled === true) {
+    const active = paymentStatus?.pass?.active === true;
+    const days = paymentStatus
+      ? Math.max(0, Math.ceil((paymentStatus.pass.expiresAt - Date.now()) / 86_400_000))
+      : 0;
+    const passPrice = paymentStatus ? weiToRon(paymentStatus.pass.priceRonWei) : null;
+    const runPrice = paymentStatus ? weiToRon(paymentStatus.paidRuns.priceRonWei) : null;
+    $('#pass-state-label').textContent = active ? `PASS ACTIVE · ${days} DAYS LEFT` : 'FREE TIER ACTIVE';
+    $('#buy-pass-button').disabled = paymentBusy || paymentStatus?.pass?.paused === true;
+    $('#buy-pass-button').textContent = paymentBusy
+      ? 'WAITING FOR RONIN WALLET...'
+      : !paymentStatus
+        ? 'CONNECT RONIN TO LOAD LIVE PRICE'
+      : active
+        ? `EXTEND 30 DAYS · ${trimNumber(passPrice)} RON`
+        : `ACTIVATE LIVE PASS · ${trimNumber(passPrice)} RON`;
+    $('#buy-paid-run-button').disabled =
+      paymentBusy ||
+      !active ||
+      !paymentStatus ||
+      paymentStatus.paidRuns.paused;
+    $('#buy-paid-run-button').textContent = paymentBusy
+      ? 'TRANSACTION PENDING...'
+      : active
+        ? `BUY LIVE RUN · ${trimNumber(runPrice)} RON`
+        : 'PASS REQUIRED';
+    const passNote = $('#pass-purchase-note');
+    if (passNote) {
+      passNote.textContent = 'This sends real RON on Ronin Mainnet only after you approve it in Ronin Wallet.';
+    }
+    updateMenu();
+    showScreen('mine-pass');
+    return;
+  }
   const active = passIsActive(state);
   $('#pass-state-label').textContent = active ? `PASS ACTIVE · ${passDaysRemaining(state)} DAYS LEFT` : 'FREE TIER ACTIVE';
   $('#buy-pass-button').textContent = active ? `EXTEND 30 DAYS · ${trimNumber(state.settings.passPriceRon)} RON` : `ACTIVATE TEST PASS · ${trimNumber(state.settings.passPriceRon)} RON`;
@@ -527,7 +703,9 @@ function openLeaderboards(mode) {
     </tr>
   `).join('');
   showScreen('leaderboards');
-  if (serverPlayer && mode === RUN_MODES.FREE) void renderServerLeaderboard(mode);
+  if (serverPlayer && (mode === RUN_MODES.FREE || serverConfig?.paidRunsEnabled === true)) {
+    void renderServerLeaderboard(mode);
+  }
 }
 
 async function renderServerLeaderboard(mode) {
@@ -546,7 +724,7 @@ async function renderServerLeaderboard(mode) {
             <td>SERVER VERIFIED</td>
           </tr>
         `).join('')
-      : '<tr><td colspan="4">No verified Free scores yet this week.</td></tr>';
+      : `<tr><td colspan="4">No verified ${mode === RUN_MODES.PAID ? 'Pass' : 'Free'} scores yet this week.</td></tr>`;
     if (note) note.textContent = `Server-authoritative daily-best rankings · Week ${leaderboard.week}`;
   } catch (error) {
     if (note) note.textContent = `Server leaderboard unavailable: ${error.message}`;
@@ -684,6 +862,20 @@ function trimNumber(value) {
   return Number(value).toLocaleString('en-US', { maximumFractionDigits: 2 });
 }
 
+function weiToRon(value) {
+  return Number(BigInt(value || '0')) / 1e18;
+}
+
+function weiToToken(value) {
+  return Number(BigInt(value || '0')) / 1e18;
+}
+
+function abbreviateHash(value) {
+  return typeof value === 'string' && value.length >= 14
+    ? `${value.slice(0, 8)}…${value.slice(-6)}`
+    : String(value || '');
+}
+
 function numberValue(selector) {
   return Number($(selector).value);
 }
@@ -712,6 +904,7 @@ async function bootstrapServer() {
       profile = restored.profile;
       saveProfile(profile);
       game.setProfile(profile);
+      await refreshPaymentStatus(true);
     }
   } catch (error) {
     console.warn('[MATT Mine] Server bootstrap unavailable.', error);
