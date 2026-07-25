@@ -9,15 +9,15 @@ const port = Number(process.env.PORT || 4173);
 const dataFile = resolve(root, process.env.MATT_MINE_DATA_FILE || 'data/matt-mine-store.json');
 const database = await new JsonFileDatabase(dataFile).init();
 const service = new MattMineService(database, {
-  chainId: Number(process.env.MATT_MINE_CHAIN_ID || 202601),
   publicOrigin: process.env.MATT_MINE_PUBLIC_ORIGIN || null,
   adminKey: process.env.MATT_MINE_ADMIN_KEY || ''
 });
 const server = createMattMineHttpServer({ root, service });
 
 server.listen(port, '0.0.0.0', () => {
-  console.log(`MATT Mine v0.6 running at http://localhost:${port}`);
+  console.log(`MATT Mine v0.7 running at http://localhost:${port}`);
   console.log(`Ranked wallet network: ${service.config().chainName} (${service.config().chainId})`);
+  console.log('Mainnet transaction mode: disabled');
   console.log(`Server data: ${dataFile}`);
 });
 

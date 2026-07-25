@@ -1,6 +1,6 @@
 # MATT Mine v0.6 Security Boundary
 
-v0.6 moves ranked identity, entitlements, profiles, scores, and suspensions out of browser storage and into a same-origin server. The default ranked network is Saigon Testnet (`202601`); Ronin Mainnet (`2020`) can be selected through configuration.
+v0.6 moved ranked identity, entitlements, profiles, scores, and suspensions out of browser storage and into a same-origin server.
 
 ## Authentication
 

@@ -19,6 +19,7 @@ const account = privateKeyToAccount(PRIVATE_KEY);
 const otherAccount = privateKeyToAccount(OTHER_PRIVATE_KEY);
 const START = Date.UTC(2026, 6, 25, 12, 0, 0);
 const ORIGIN = 'http://localhost:4173';
+const UNSUPPORTED_CHAIN_ID = 1;
 
 function createHarness(options = {}) {
   let timestamp = options.timestamp ?? START;
@@ -26,7 +27,7 @@ function createHarness(options = {}) {
   const database = options.database || new MemoryDatabase();
   const service = new MattMineService(database, {
     now: () => timestamp,
-    chainId: RONIN_CHAINS.SAIGON,
+    chainId: RONIN_CHAINS.MAINNET,
     publicOrigin: ORIGIN,
     adminKey: options.adminKey || 'test-admin-key',
     randomHex(bytes) {
@@ -48,7 +49,7 @@ function createHarness(options = {}) {
 async function signIn(harness, signer = account) {
   const challenge = await harness.service.createChallenge({
     address: signer.address,
-    chainId: RONIN_CHAINS.SAIGON,
+    chainId: RONIN_CHAINS.MAINNET,
     origin: ORIGIN
   });
   const signature = await signer.signMessage({ message: challenge.message });
@@ -82,10 +83,14 @@ async function finish(service, session, run, result) {
 }
 
 test('Ronin SIWE-style challenges bind origin, chain, address, expiry, and one-time use', async () => {
+  assert.throws(
+    () => new MattMineService(new MemoryDatabase(), { chainId: UNSUPPORTED_CHAIN_ID }),
+    (error) => error.code === 'invalid_server_chain'
+  );
   const harness = createHarness();
   const { challenge, signature, session } = await signIn(harness);
   assert.match(challenge.message, /wants you to sign in with your Ronin account/);
-  assert.match(challenge.message, new RegExp(`Chain ID: ${RONIN_CHAINS.SAIGON}`));
+  assert.match(challenge.message, new RegExp(`Chain ID: ${RONIN_CHAINS.MAINNET}`));
   assert.match(challenge.message, /does not initiate a transaction or spend RON or MATT/);
   assert.equal(session.address, account.address.toLowerCase());
   assert.equal(session.entitlements.freeRunAvailable, true);
@@ -103,7 +108,7 @@ test('Ronin SIWE-style challenges bind origin, chain, address, expiry, and one-t
   await assert.rejects(
     () => harness.service.createChallenge({
       address: account.address,
-      chainId: RONIN_CHAINS.MAINNET,
+      chainId: UNSUPPORTED_CHAIN_ID,
       origin: ORIGIN
     }),
     (error) => error.code === 'wrong_chain'
@@ -111,7 +116,7 @@ test('Ronin SIWE-style challenges bind origin, chain, address, expiry, and one-t
   await assert.rejects(
     () => harness.service.createChallenge({
       address: account.address,
-      chainId: RONIN_CHAINS.SAIGON,
+      chainId: RONIN_CHAINS.MAINNET,
       origin: 'https://evil.example'
     }),
     (error) => error.code === 'origin_mismatch'
@@ -122,7 +127,7 @@ test('wrong-wallet and expired signatures cannot create sessions', async () => {
   const harness = createHarness();
   const challenge = await harness.service.createChallenge({
     address: account.address,
-    chainId: RONIN_CHAINS.SAIGON,
+    chainId: RONIN_CHAINS.MAINNET,
     origin: ORIGIN
   });
   const wrongSignature = await otherAccount.signMessage({ message: challenge.message });
@@ -137,7 +142,7 @@ test('wrong-wallet and expired signatures cannot create sessions', async () => {
 
   const expiring = await harness.service.createChallenge({
     address: account.address,
-    chainId: RONIN_CHAINS.SAIGON,
+    chainId: RONIN_CHAINS.MAINNET,
     origin: ORIGIN
   });
   const signature = await account.signMessage({ message: expiring.message });
@@ -299,14 +304,20 @@ test('the HTTP server exposes same-origin APIs, security headers, and authentica
   const configResponse = await fetch(`${baseUrl}/api/config`);
   assert.equal(configResponse.status, 200);
   assert.equal(configResponse.headers.get('x-frame-options'), 'DENY');
-  assert.equal((await configResponse.json()).config.paidRunsEnabled, false);
+  const configPayload = await configResponse.json();
+  assert.equal(configPayload.config.chainId, RONIN_CHAINS.MAINNET);
+  assert.equal(configPayload.config.chainName, 'Ronin Mainnet');
+  assert.equal(configPayload.config.paidRunsEnabled, false);
+  assert.equal(configPayload.config.realPaymentsEnabled, false);
+  assert.equal(configPayload.config.mattClaimsEnabled, false);
+  assert.equal(configPayload.config.mainnetTransactionsEnabled, false);
 
   const crossOrigin = await fetch(`${baseUrl}/api/auth/challenge`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', origin: 'https://evil.example' },
     body: JSON.stringify({
       address: account.address,
-      chainId: RONIN_CHAINS.SAIGON,
+      chainId: RONIN_CHAINS.MAINNET,
       origin: 'https://evil.example'
     })
   });
@@ -336,7 +347,7 @@ test('the browser API client stores sessions only in session storage and clears 
   assert.equal(values.has(SESSION_STORAGE_KEY), false);
 });
 
-test('the Ronin adapter switches to Saigon, signs the server message, and invalidates on account change', async () => {
+test('the Ronin adapter switches to Mainnet, signs the server message, and invalidates on account change', async () => {
   const calls = [];
   const listeners = new Map();
   const provider = {
@@ -345,7 +356,7 @@ test('the Ronin adapter switches to Saigon, signs the server message, and invali
       if (payload.method === 'eth_requestAccounts') return [account.address];
       if (payload.method === 'eth_chainId') {
         const switched = calls.some((entry) => entry.method === 'wallet_switchEthereumChain');
-        return switched ? `0x${RONIN_CHAINS.SAIGON.toString(16)}` : `0x${RONIN_CHAINS.MAINNET.toString(16)}`;
+        return switched ? `0x${RONIN_CHAINS.MAINNET.toString(16)}` : `0x${UNSUPPORTED_CHAIN_ID.toString(16)}`;
       }
       if (payload.method === 'wallet_switchEthereumChain') return null;
       if (payload.method === 'personal_sign') return `0x${'1'.repeat(130)}`;
@@ -362,7 +373,7 @@ test('the Ronin adapter switches to Saigon, signs the server message, and invali
   let invalidated = '';
   const api = {
     hasSession: () => false,
-    config: async () => ({ chainId: RONIN_CHAINS.SAIGON, chainName: 'Saigon Testnet' }),
+    config: async () => ({ chainId: RONIN_CHAINS.MAINNET, chainName: 'Ronin Mainnet' }),
     createChallenge: async () => ({ nonce: 'a'.repeat(24), message: 'Sign in safely' }),
     verifyChallenge: async () => ({ address: account.address.toLowerCase(), profile: {}, entitlements: {} }),
     clearSession() {
@@ -383,5 +394,5 @@ test('the Ronin adapter switches to Saigon, signs the server message, and invali
   listeners.get('accountsChanged')?.([otherAccount.address]);
   assert.equal(cleared, true);
   assert.match(invalidated, /account changed/i);
-  assert.equal(parseChainId('0x31769'), RONIN_CHAINS.SAIGON);
+  assert.equal(parseChainId('0x7e4'), RONIN_CHAINS.MAINNET);
 });
