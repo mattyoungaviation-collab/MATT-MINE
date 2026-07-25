@@ -7,9 +7,11 @@ Version 0.8 prepares production contracts and a guarded Ronin Mainnet deployment
 ## Required approvals
 
 - Independent smart-contract review completed with no unresolved critical or high-severity findings.
-- 2-of-3 contract-admin multisig deployed, tested, and backed up.
+- 2-of-3 contract-admin Safe deployed, tested with two independent signers, and backed up.
 - Treasury destinations confirmed by at least two owners.
-- Price, configuration, pauser, publisher, and treasury roles assigned to the intended separate addresses.
+- Price and configuration roles assigned to the bounded operational wallet.
+- Pauser assigned to a separate emergency wallet.
+- Reward publisher and treasury manager assigned to the 2-of-3 Safe unless a separately reviewed multisig is used.
 - Pass price recalculated against the current RON market price.
 - Operations and legal review completed for paid skill competition and token rewards in supported jurisdictions.
 - Final commit hash recorded before compiling and deploying.
@@ -23,6 +25,13 @@ Version 0.8 prepares production contracts and a guarded Ronin Mainnet deployment
 - Dependency audit reviewed and production-relevant findings resolved or documented.
 - Compiler fixed to Solidity 0.8.28, optimizer enabled, IR pipeline enabled, London EVM target.
 - MATT, WRON, Katana router, Katana factory, and MATT/WRON pair validated on Ronin Mainnet.
+
+## Recommended minimum role map
+
+- Admin Safe: contract admin, reward publisher, treasury manager, and initial treasury destinations.
+- Operational wallet: price manager and configuration manager only.
+- Emergency wallet: pauser only.
+- Temporary deployer: low-balance signer whose executor administration is removed before deployment completes.
 
 ## Deployment sequence
 

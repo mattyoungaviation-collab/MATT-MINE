@@ -159,15 +159,32 @@ export function normalizeMainnetConfig(rawConfig) {
       "roles.treasuryManager"
     )
   };
-  for (const [key, address] of Object.entries(normalizedRoles)) {
-    if (
-      key !== "contractAdminMultisig"
-      && address === normalizedRoles.contractAdminMultisig
-    ) {
+  for (const key of ["priceManager", "configManager", "pauser"]) {
+    if (normalizedRoles[key] === normalizedRoles.contractAdminMultisig) {
       throw new Error(
         `roles.${key} must be separate from the contract admin multisig`
       );
     }
+  }
+  if (
+    normalizedRoles.pauser === normalizedRoles.priceManager
+    || normalizedRoles.pauser === normalizedRoles.configManager
+  ) {
+    throw new Error(
+      "roles.pauser must be separate from routine price and configuration management"
+    );
+  }
+  if (
+    normalizedRoles.rewardPublisher !== normalizedRoles.contractAdminMultisig
+    && (
+      normalizedRoles.rewardPublisher === normalizedRoles.priceManager
+      || normalizedRoles.rewardPublisher === normalizedRoles.configManager
+      || normalizedRoles.rewardPublisher === normalizedRoles.pauser
+    )
+  ) {
+    throw new Error(
+      "roles.rewardPublisher must use the admin multisig or a separate publisher address"
+    );
   }
 
   const treasuries = requiredObject(raw.treasuries, "treasuries");
