@@ -217,6 +217,12 @@ const game = new MattMineGame(canvas, profile, {
     setGameplayUi(false);
     updateMenu();
   },
+  onFatalError(error) {
+    showScreen('menu');
+    setGameplayUi(false);
+    updateMenu();
+    toast(`Run stopped safely: ${error.message}`);
+  },
   onToast: toast
 });
 
@@ -414,14 +420,20 @@ function economyResultMarkup(mode, result, recorded) {
   if (mode === RUN_MODES.PRACTICE) {
     return '<strong>Practice complete</strong><span>No MATT reward and no leaderboard score. Practice remains unlimited.</span>';
   }
+  if (!recorded.ok) {
+    return `<strong>Ranked score rejected</strong><span>${escapeHtml(recorded.error)}</span>`;
+  }
   const rows = previewLeaderboard(economy.state, mode);
   const player = rows.find((row) => row.isPlayer);
   const reward = estimatedLeaderboardReward(economy.state, mode, player?.rank || 0);
   const weekly = weeklyUserScore(economy.state, mode);
+  const scoreNote = result.extracted
+    ? 'Successful extraction counted at full run score'
+    : `Knockout counted only ${formatNumber(result.banked)} secured nuggets`;
   return `
     <strong>${mode === RUN_MODES.PAID ? 'PASS LEADERBOARD' : 'FREE LEADERBOARD'} · #${player?.rank || '—'}</strong>
     <span>Weekly score: ${formatNumber(weekly)} · Projected leaderboard share: ${formatNumber(reward)} MATT</span>
-    <small>${mode === RUN_MODES.PAID ? `2× reward weight · Pass XP ${formatNumber(recorded.passXp || economy.state.player.passXp)}` : 'One free ranked run consumed for today'} · Rewards remain estimates until verified and published.</small>
+    <small>${scoreNote} · ${mode === RUN_MODES.PAID ? `2× reward weight · Pass XP ${formatNumber(recorded.passXp || economy.state.player.passXp)}` : 'One free ranked run consumed for today'} · Rewards remain estimates until verified and published.</small>
   `;
 }
 

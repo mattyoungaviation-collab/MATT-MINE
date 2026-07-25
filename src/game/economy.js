@@ -1,6 +1,7 @@
-const STORAGE_KEY = 'matt-mine-economy-v1';
+export const ECONOMY_STORAGE_KEY = 'matt-mine-economy-v1';
 const DAY_MS = 86_400_000;
 const WEEK_MS = DAY_MS * 7;
+const MAX_SAFE_VALUE = Number.MAX_SAFE_INTEGER;
 
 export const RUN_MODES = Object.freeze({
   FREE: 'free',
@@ -84,21 +85,61 @@ export function defaultEconomyState() {
 
 export function normalizeEconomyState(input = {}) {
   const base = defaultEconomyState();
+  const source = isRecord(input) ? input : {};
+  const player = isRecord(source.player) ? source.player : {};
+  const settings = isRecord(source.settings) ? source.settings : {};
+  const accounting = isRecord(source.accounting) ? source.accounting : {};
+  const split = [
+    safeInteger(settings.paidSplitCurrentPercent, base.settings.paidSplitCurrentPercent, 100),
+    safeInteger(settings.paidSplitFuturePercent, base.settings.paidSplitFuturePercent, 100),
+    safeInteger(settings.paidSplitReservePercent, base.settings.paidSplitReservePercent, 100)
+  ];
+  const validSplit = split.reduce((sum, value) => sum + value, 0) === 100;
   return {
-    ...base,
-    ...input,
-    player: { ...base.player, ...(input.player || {}) },
-    settings: { ...base.settings, ...(input.settings || {}) },
-    accounting: { ...base.accounting, ...(input.accounting || {}) },
-    daily: { ...(input.daily || {}) },
-    runs: Array.isArray(input.runs) ? input.runs.slice(-1000) : [],
-    publishedRewards: Array.isArray(input.publishedRewards) ? input.publishedRewards.slice(-100) : [],
-    audit: Array.isArray(input.audit) ? input.audit.slice(-300) : []
+    version: 1,
+    walletId: safeString(source.walletId, base.walletId, 80),
+    player: {
+      passPurchasedAt: safeInteger(player.passPurchasedAt, base.player.passPurchasedAt),
+      passExpiresAt: safeInteger(player.passExpiresAt, base.player.passExpiresAt),
+      paidRunCredits: safeInteger(player.paidRunCredits, base.player.paidRunCredits, 10_000),
+      passXp: safeInteger(player.passXp, base.player.passXp),
+      banned: safeBoolean(player.banned, base.player.banned)
+    },
+    settings: {
+      passPriceRon: safeNumber(settings.passPriceRon, base.settings.passPriceRon, 1, 500),
+      paidRunPriceRon: safeNumber(settings.paidRunPriceRon, base.settings.paidRunPriceRon, 1, 100),
+      maxPaidRunsPerDay: safeInteger(settings.maxPaidRunsPerDay, base.settings.maxPaidRunsPerDay, 50, 1),
+      mattPerRonQuote: safeNumber(settings.mattPerRonQuote, base.settings.mattPerRonQuote, 1),
+      freeWeeklyPoolMatt: safeInteger(settings.freeWeeklyPoolMatt, base.settings.freeWeeklyPoolMatt),
+      passBaseWeeklyPoolMatt: safeInteger(settings.passBaseWeeklyPoolMatt, base.settings.passBaseWeeklyPoolMatt),
+      paidSplitCurrentPercent: validSplit ? split[0] : base.settings.paidSplitCurrentPercent,
+      paidSplitFuturePercent: validSplit ? split[1] : base.settings.paidSplitFuturePercent,
+      paidSplitReservePercent: validSplit ? split[2] : base.settings.paidSplitReservePercent,
+      rankedPaused: safeBoolean(settings.rankedPaused, base.settings.rankedPaused),
+      passSalesPaused: safeBoolean(settings.passSalesPaused, base.settings.passSalesPaused),
+      paidRunsPaused: safeBoolean(settings.paidRunsPaused, base.settings.paidRunsPaused),
+      claimsPaused: safeBoolean(settings.claimsPaused, base.settings.claimsPaused)
+    },
+    accounting: {
+      ronFromPasses: safeNumber(accounting.ronFromPasses, base.accounting.ronFromPasses, 0),
+      ronFromPaidRuns: safeNumber(accounting.ronFromPaidRuns, base.accounting.ronFromPaidRuns, 0),
+      developmentRon: safeNumber(accounting.developmentRon, base.accounting.developmentRon, 0),
+      marketingRon: safeNumber(accounting.marketingRon, base.accounting.marketingRon, 0),
+      mattBoughtTotal: safeInteger(accounting.mattBoughtTotal, base.accounting.mattBoughtTotal),
+      currentPassPoolMatt: safeInteger(accounting.currentPassPoolMatt, base.accounting.currentPassPoolMatt),
+      futureRewardsMatt: safeInteger(accounting.futureRewardsMatt, base.accounting.futureRewardsMatt),
+      reserveMatt: safeInteger(accounting.reserveMatt, base.accounting.reserveMatt),
+      passRewardMatt: safeInteger(accounting.passRewardMatt, base.accounting.passRewardMatt)
+    },
+    daily: normalizeDaily(source.daily),
+    runs: normalizeRuns(source.runs),
+    publishedRewards: normalizePublishedRewards(source.publishedRewards),
+    audit: normalizeAudit(source.audit)
   };
 }
 
 export function passIsActive(state, timestamp = Date.now()) {
-  return Number(state.player.passExpiresAt || 0) > timestamp;
+  return safeInteger(state?.player?.passExpiresAt, 0) > timestamp;
 }
 
 export function passDaysRemaining(state, timestamp = Date.now()) {
@@ -108,7 +149,8 @@ export function passDaysRemaining(state, timestamp = Date.now()) {
 
 export function dailyRecord(state, timestamp = Date.now()) {
   const key = utcDayKey(timestamp);
-  return state.daily[key] || {
+  const record = isRecord(state?.daily?.[key]) ? state.daily[key] : null;
+  return record || {
     freeRunUsed: false,
     paidRunsPurchased: 0,
     paidRunsUsed: 0
@@ -168,6 +210,7 @@ export function purchasePaidRun(state, timestamp = Date.now(), actor = 'PLAYER')
   const next = normalizeEconomyState(state);
   const day = utcDayKey(timestamp);
   const daily = dailyRecord(next, timestamp);
+  if (next.player.banned) return fail(next, 'Suspended wallets cannot purchase paid runs.');
   if (!passIsActive(next, timestamp)) return fail(next, 'An active MATT Mine Pass is required.');
   if (next.settings.paidRunsPaused) return fail(next, 'Paid-run purchases are paused.');
   if (daily.paidRunsPurchased >= next.settings.maxPaidRunsPerDay) {
@@ -215,22 +258,29 @@ export function consumeRun(state, mode, timestamp = Date.now()) {
 
 export function recordRun(state, result, timestamp = Date.now()) {
   const next = normalizeEconomyState(state);
-  const mode = result.mode || RUN_MODES.PRACTICE;
-  const score = Math.max(0, Math.floor(result.projected || 0));
+  const source = isRecord(result) ? result : {};
+  const mode = Object.values(RUN_MODES).includes(source.mode) ? source.mode : RUN_MODES.PRACTICE;
+  if (next.player.banned && mode !== RUN_MODES.PRACTICE) {
+    return fail(next, 'Suspended wallets cannot submit ranked scores.');
+  }
+  const extracted = Boolean(source.extracted);
+  const projected = safeInteger(source.projected, 0);
+  const banked = safeInteger(source.banked, extracted ? projected : 0);
+  const score = mode === RUN_MODES.PRACTICE ? projected : extracted ? projected : Math.min(projected, banked);
   const entry = {
     id: `${timestamp}-${next.runs.length + 1}`,
     walletId: next.walletId,
     mode,
-    day: result.day || utcDayKey(timestamp),
-    week: result.week || utcWeekKey(timestamp),
-    seed: result.seed || runSeed(mode, timestamp),
+    day: safeDateKey(source.day, utcDayKey(timestamp)),
+    week: safeDateKey(source.week, utcWeekKey(timestamp)),
+    seed: safeString(source.seed, runSeed(mode, timestamp), 200),
     score,
-    extracted: Boolean(result.extracted),
-    depth: Number(result.depth || 1),
-    kills: Number(result.kills || 0),
-    oreBroken: Number(result.oreBroken || 0),
-    elapsed: Number(result.elapsed || 0),
-    rewardWeight: Number(result.rewardWeight || (mode === RUN_MODES.PAID ? 2 : mode === RUN_MODES.FREE ? 1 : 0)),
+    extracted,
+    depth: safeInteger(source.depth, 1, 100, 1),
+    kills: safeInteger(source.kills, 0),
+    oreBroken: safeInteger(source.oreBroken, 0),
+    elapsed: safeNumber(source.elapsed, 0, 0, DAY_MS / 1000),
+    rewardWeight: mode === RUN_MODES.PAID ? 2 : mode === RUN_MODES.FREE ? 1 : 0,
     createdAt: timestamp
   };
   next.runs.push(entry);
@@ -241,8 +291,10 @@ export function recordRun(state, result, timestamp = Date.now()) {
 }
 
 export function weeklyUserScore(state, mode, timestamp = Date.now()) {
+  if (![RUN_MODES.FREE, RUN_MODES.PAID].includes(mode)) return 0;
+  const safeState = normalizeEconomyState(state);
   const week = utcWeekKey(timestamp);
-  const runs = state.runs.filter((run) => run.week === week && run.mode === mode);
+  const runs = safeState.runs.filter((run) => run.week === week && run.mode === mode);
   const dailyBest = new Map();
   for (const run of runs) dailyBest.set(run.day, Math.max(dailyBest.get(run.day) || 0, run.score));
   return [...dailyBest.values()].reduce((sum, score) => sum + score, 0);
@@ -298,19 +350,33 @@ export function passLevel(passXp) {
 
 export function updateAdminSettings(state, patch, role, timestamp = Date.now()) {
   const next = normalizeEconomyState(state);
+  if (!isRecord(patch)) return fail(next, 'Settings patch must be an object.');
   const keys = Object.keys(patch);
   const priceKeys = ['passPriceRon', 'paidRunPriceRon', 'mattPerRonQuote'];
   const treasuryKeys = ['freeWeeklyPoolMatt', 'passBaseWeeklyPoolMatt'];
   const pauseKeys = ['rankedPaused', 'passSalesPaused', 'paidRunsPaused', 'claimsPaused'];
+  const gameKeys = ['maxPaidRunsPerDay'];
+  const allowedKeys = [...priceKeys, ...treasuryKeys, ...pauseKeys, ...gameKeys];
+  if (keys.some((key) => !allowedKeys.includes(key))) return fail(next, 'Unknown or locked setting.');
   if (keys.some((key) => priceKeys.includes(key)) && role !== ADMIN_ROLES.PRICE) return fail(next, 'PRICE_MANAGER role required.');
   if (keys.some((key) => treasuryKeys.includes(key)) && role !== ADMIN_ROLES.TREASURY) return fail(next, 'TREASURY_ADMIN role required.');
   if (keys.some((key) => pauseKeys.includes(key)) && ![ADMIN_ROLES.PAUSER, ADMIN_ROLES.GAME].includes(role)) {
     return fail(next, 'EMERGENCY_PAUSER or GAME_ADMIN role required.');
   }
-  if ('passPriceRon' in patch && (patch.passPriceRon < 1 || patch.passPriceRon > 500)) return fail(next, 'Pass price must be 1–500 RON.');
-  if ('paidRunPriceRon' in patch && (patch.paidRunPriceRon < 1 || patch.paidRunPriceRon > 100)) return fail(next, 'Paid-run price must be 1–100 RON.');
-  if ('mattPerRonQuote' in patch && patch.mattPerRonQuote < 1) return fail(next, 'MATT quote must be positive.');
-  if ('maxPaidRunsPerDay' in patch && (patch.maxPaidRunsPerDay < 1 || patch.maxPaidRunsPerDay > 50)) return fail(next, 'Daily paid-run cap must be 1–50.');
+  if (keys.some((key) => gameKeys.includes(key)) && role !== ADMIN_ROLES.GAME) return fail(next, 'GAME_ADMIN role required.');
+  if ('passPriceRon' in patch && safeNumber(patch.passPriceRon, null, 1, 500) === null) return fail(next, 'Pass price must be 1-500 RON.');
+  if ('paidRunPriceRon' in patch && safeNumber(patch.paidRunPriceRon, null, 1, 100) === null) return fail(next, 'Paid-run price must be 1-100 RON.');
+  if ('mattPerRonQuote' in patch && safeNumber(patch.mattPerRonQuote, null, 1) === null) return fail(next, 'MATT quote must be positive.');
+  if ('maxPaidRunsPerDay' in patch && (!Number.isSafeInteger(patch.maxPaidRunsPerDay) || patch.maxPaidRunsPerDay < 1 || patch.maxPaidRunsPerDay > 50)) {
+    return fail(next, 'Daily paid-run cap must be an integer from 1-50.');
+  }
+  if ('freeWeeklyPoolMatt' in patch && (!Number.isSafeInteger(patch.freeWeeklyPoolMatt) || patch.freeWeeklyPoolMatt < 0)) {
+    return fail(next, 'Free reward pool must be a non-negative integer.');
+  }
+  if ('passBaseWeeklyPoolMatt' in patch && (!Number.isSafeInteger(patch.passBaseWeeklyPoolMatt) || patch.passBaseWeeklyPoolMatt < 0)) {
+    return fail(next, 'Pass reward pool must be a non-negative integer.');
+  }
+  if (keys.some((key) => pauseKeys.includes(key) && typeof patch[key] !== 'boolean')) return fail(next, 'Pause settings must be true or false.');
   Object.assign(next.settings, patch);
   addAudit(next, role, 'ADMIN_SETTINGS_UPDATED', JSON.stringify(patch), timestamp);
   return success(next, { patch });
@@ -379,16 +445,20 @@ export class LocalEconomyStore {
 
   load() {
     try {
-      const raw = this.storage?.getItem(STORAGE_KEY);
-      return raw ? normalizeEconomyState(JSON.parse(raw)) : defaultEconomyState();
+      const raw = this.storage?.getItem(ECONOMY_STORAGE_KEY);
+      const normalized = raw ? normalizeEconomyState(JSON.parse(raw)) : defaultEconomyState();
+      this.persist(normalized);
+      return normalized;
     } catch {
-      return defaultEconomyState();
+      const recovered = defaultEconomyState();
+      this.persist(recovered);
+      return recovered;
     }
   }
 
   save(nextState) {
     this.state = normalizeEconomyState(nextState);
-    try { this.storage?.setItem(STORAGE_KEY, JSON.stringify(this.state)); } catch {}
+    this.persist(this.state);
     return this.state;
   }
 
@@ -399,8 +469,17 @@ export class LocalEconomyStore {
 
   reset() {
     this.state = defaultEconomyState();
-    try { this.storage?.setItem(STORAGE_KEY, JSON.stringify(this.state)); } catch {}
+    this.persist(this.state);
     return this.state;
+  }
+
+  persist(state) {
+    try {
+      this.storage?.setItem(ECONOMY_STORAGE_KEY, JSON.stringify(state));
+      return true;
+    } catch {
+      return false;
+    }
   }
 }
 
@@ -419,3 +498,107 @@ function fail(state, error) {
 
 export const ECONOMY_DAY_MS = DAY_MS;
 export const ECONOMY_WEEK_MS = WEEK_MS;
+
+function normalizeDaily(input) {
+  if (!isRecord(input)) return {};
+  return Object.fromEntries(Object.entries(input)
+    .filter(([key, value]) => isDateKey(key) && isRecord(value))
+    .sort(([left], [right]) => left.localeCompare(right))
+    .slice(-45)
+    .map(([key, value]) => [key, {
+      freeRunUsed: safeBoolean(value.freeRunUsed, false),
+      paidRunsPurchased: safeInteger(value.paidRunsPurchased, 0, 50),
+      paidRunsUsed: safeInteger(value.paidRunsUsed, 0, 50)
+    }]));
+}
+
+function normalizeRuns(input) {
+  if (!Array.isArray(input)) return [];
+  return input
+    .filter(isRecord)
+    .slice(-1000)
+    .map((run, index) => {
+      const mode = Object.values(RUN_MODES).includes(run.mode) ? run.mode : RUN_MODES.PRACTICE;
+      return {
+        id: safeString(run.id, `RECOVERED-RUN-${index + 1}`, 120),
+        walletId: safeString(run.walletId, 'UNKNOWN-WALLET', 80),
+        mode,
+        day: safeDateKey(run.day, '1970-01-01'),
+        week: safeDateKey(run.week, '1970-01-01'),
+        seed: safeString(run.seed, 'RECOVERED-SEED', 200),
+        score: safeInteger(run.score, 0),
+        extracted: safeBoolean(run.extracted, false),
+        depth: safeInteger(run.depth, 1, 100, 1),
+        kills: safeInteger(run.kills, 0),
+        oreBroken: safeInteger(run.oreBroken, 0),
+        elapsed: safeNumber(run.elapsed, 0, 0, DAY_MS / 1000),
+        rewardWeight: mode === RUN_MODES.PAID ? 2 : mode === RUN_MODES.FREE ? 1 : 0,
+        createdAt: safeInteger(run.createdAt, 0)
+      };
+    });
+}
+
+function normalizePublishedRewards(input) {
+  if (!Array.isArray(input)) return [];
+  return input
+    .filter(isRecord)
+    .slice(-100)
+    .map((epoch, index) => ({
+      id: safeString(epoch.id, `RECOVERED-EPOCH-${index + 1}`, 120),
+      week: safeDateKey(epoch.week, '1970-01-01'),
+      walletId: safeString(epoch.walletId, 'UNKNOWN-WALLET', 80),
+      freeRank: safeInteger(epoch.freeRank, 0),
+      paidRank: safeInteger(epoch.paidRank, 0),
+      freeRewardMatt: safeInteger(epoch.freeRewardMatt, 0),
+      paidRewardMatt: safeInteger(epoch.paidRewardMatt, 0),
+      totalRewardMatt: safeInteger(epoch.totalRewardMatt, 0),
+      publishedAt: safeInteger(epoch.publishedAt, 0),
+      claimedAt: safeInteger(epoch.claimedAt, 0)
+    }));
+}
+
+function normalizeAudit(input) {
+  if (!Array.isArray(input)) return [];
+  return input
+    .filter(isRecord)
+    .slice(-300)
+    .map((entry, index) => ({
+      id: safeString(entry.id, `RECOVERED-AUDIT-${index + 1}`, 120),
+      actor: safeString(entry.actor, 'UNKNOWN', 80),
+      action: safeString(entry.action, 'RECOVERED_ENTRY', 100),
+      details: safeString(entry.details, '', 500),
+      timestamp: safeInteger(entry.timestamp, 0)
+    }));
+}
+
+function isRecord(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function safeBoolean(value, fallback) {
+  return typeof value === 'boolean' ? value : fallback;
+}
+
+function safeNumber(value, fallback, min = 0, max = MAX_SAFE_VALUE) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max) return fallback;
+  return value;
+}
+
+function safeInteger(value, fallback, max = MAX_SAFE_VALUE, min = 0) {
+  const number = safeNumber(value, Number.NaN, min, max);
+  return Number.isFinite(number) ? Math.floor(number) : fallback;
+}
+
+function safeString(value, fallback, maxLength) {
+  if (typeof value !== 'string') return fallback;
+  const trimmed = value.trim();
+  return trimmed ? trimmed.slice(0, maxLength) : fallback;
+}
+
+function isDateKey(value) {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function safeDateKey(value, fallback) {
+  return isDateKey(value) ? value : fallback;
+}

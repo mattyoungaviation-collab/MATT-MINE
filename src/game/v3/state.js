@@ -5,6 +5,7 @@ import { bossPhaseForHealth, roomRequiresLock } from '../combat.js';
 
 export const stateMethods = {
   startRun() {
+    this.runtimeError = null;
     const meta = this.profile.meta;
     const maxHealth = CONFIG.basePlayerHealth + meta.health * 8;
     this.run = {
@@ -310,6 +311,7 @@ export const stateMethods = {
     });
   },
   backToMenu() {
+    this.runtimeError = null;
     this.state = 'menu';
     this.hooks.onMenu?.();
   },
