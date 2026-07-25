@@ -23,9 +23,9 @@ async function expectRevert(promise, expectedText) {
 
 async function deployPass(signers, overrides = {}) {
   const [admin, priceManager, pauser, operations, rewards, growth] = signers;
-  const initialPrice = overrides.initialPrice || ethers.parseEther("50");
-  const minimumPrice = overrides.minimumPrice || ethers.parseEther("1");
-  const maximumPrice = overrides.maximumPrice || ethers.parseEther("500");
+  const initialPrice = overrides.initialPrice || ethers.parseEther("95");
+  const minimumPrice = overrides.minimumPrice || ethers.parseEther("55");
+  const maximumPrice = overrides.maximumPrice || ethers.parseEther("155");
   const factory = await ethers.getContractFactory("MattMinePass");
   const pass = await factory.deploy(
     admin.address,
@@ -109,8 +109,8 @@ async function deploySystem() {
     futureRewards.address,
     reserve.address,
     paidRunPrice,
-    ethers.parseEther("1"),
-    ethers.parseEther("100")
+    ethers.parseEther("5"),
+    ethers.parseEther("20")
   );
   await runs.waitForDeployment();
 
@@ -219,6 +219,38 @@ describe("MattMinePass", function () {
     )).wait();
     assert.equal(await pass.operationsTreasury(), replacement.address);
     await (await pass.connect(pauser).unpause()).wait();
+  });
+
+  it("limits pass and paid-run price changes to once every seven days", async function () {
+    const system = await deploySystem();
+    const { priceManager, pass, runs } = system;
+
+    await (await pass.connect(priceManager).setPassPriceRon(
+      ethers.parseEther("96")
+    )).wait();
+    await (await runs.connect(priceManager).setPaidRunPriceRon(
+      ethers.parseEther("11")
+    )).wait();
+
+    await expectRevert(
+      pass.connect(priceManager).setPassPriceRon(ethers.parseEther("97")),
+      "PriceUpdateCooldownActive"
+    );
+    await expectRevert(
+      runs.connect(priceManager).setPaidRunPriceRon(ethers.parseEther("12")),
+      "PriceUpdateCooldownActive"
+    );
+
+    await networkHelpers.time.increase(7 * DAY);
+    await (await pass.connect(priceManager).setPassPriceRon(
+      ethers.parseEther("97")
+    )).wait();
+    await (await runs.connect(priceManager).setPaidRunPriceRon(
+      ethers.parseEther("12")
+    )).wait();
+
+    assert.equal(await pass.passPriceRon(), ethers.parseEther("97"));
+    assert.equal(await runs.paidRunPriceRon(), ethers.parseEther("12"));
   });
 });
 

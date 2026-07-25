@@ -29,6 +29,9 @@ The preflight script checks all five addresses and the pair composition directly
 - The same Safe may protect contract administration, reward publishing, treasury management, and the initial treasury destinations.
 - A bounded operational wallet may share price and configuration management.
 - Emergency pause authority must remain separate from the operational wallet and the admin Safe.
+- Mainnet preflight verifies the configured Safe's exact owner set and 2-of-3 threshold directly on Ronin.
+- Pass pricing launches at 95 RON within immutable 55-155 RON bounds; paid runs launch at 10 RON within immutable 5-20 RON bounds.
+- Each price can change at most once every seven days.
 - There is no timelock, per the approved MATT Mine control model.
 - Treasury destinations can only change while the affected contract is paused.
 - The temporary deployer is removed from `MattMineSwapExecutor` immediately after `MattMineRuns` is authorized.

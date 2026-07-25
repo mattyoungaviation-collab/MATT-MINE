@@ -94,6 +94,26 @@ function priceConfig(value, label) {
   };
 }
 
+function adminSafeConfig(value) {
+  const object = requiredObject(value, "adminSafe");
+  if (!Array.isArray(object.owners) || object.owners.length !== 3) {
+    throw new Error("adminSafe.owners must contain exactly three addresses");
+  }
+  const owners = object.owners
+    .map((owner, index) => requiredAddress(owner, `adminSafe.owners[${index}]`))
+    .sort((left, right) => left.toLowerCase().localeCompare(right.toLowerCase()));
+  if (new Set(owners.map((owner) => owner.toLowerCase())).size !== owners.length) {
+    throw new Error("adminSafe.owners must be unique");
+  }
+  if (object.threshold !== 2) {
+    throw new Error("adminSafe.threshold must be 2");
+  }
+  return {
+    threshold: 2,
+    owners
+  };
+}
+
 function stableValue(value) {
   if (typeof value === "bigint") {
     return value.toString();
@@ -201,12 +221,21 @@ export function normalizeMainnetConfig(rawConfig) {
     ),
     reserve: requiredAddress(treasuries.reserve, "treasuries.reserve")
   };
+  const normalizedAdminSafe = adminSafeConfig(raw.adminSafe);
+  if (
+    normalizedAdminSafe.owners.includes(
+      normalizedRoles.contractAdminMultisig
+    )
+  ) {
+    throw new Error("The admin Safe cannot be one of its own owners");
+  }
 
   return {
     releaseId: raw.releaseId.trim(),
     chainId: Number(RONIN_CHAIN_ID),
     protocol: normalizedProtocol,
     roles: normalizedRoles,
+    adminSafe: normalizedAdminSafe,
     treasuries: normalizedTreasuries,
     pass: priceConfig(raw.pass, "pass"),
     paidRuns: priceConfig(raw.paidRuns, "paidRuns")
@@ -272,6 +301,35 @@ export async function validateOnchainConfig(ethers, config) {
     await requireCode(provider, address, label);
   }
 
+  const adminSafe = new Contract(
+    config.roles.contractAdminMultisig,
+    [
+      "function getOwners() view returns (address[])",
+      "function getThreshold() view returns (uint256)"
+    ],
+    provider
+  );
+  const [safeOwnersRaw, safeThreshold] = await Promise.all([
+    adminSafe.getOwners(),
+    adminSafe.getThreshold()
+  ]);
+  const safeOwners = safeOwnersRaw
+    .map(getAddress)
+    .sort((left, right) => left.toLowerCase().localeCompare(right.toLowerCase()));
+  if (safeThreshold !== BigInt(config.adminSafe.threshold)) {
+    throw new Error(
+      `Admin Safe threshold is ${safeThreshold}; expected ${config.adminSafe.threshold}`
+    );
+  }
+  if (
+    safeOwners.length !== config.adminSafe.owners.length
+    || safeOwners.some(
+      (owner, index) => owner !== config.adminSafe.owners[index]
+    )
+  ) {
+    throw new Error("Admin Safe owners do not match the approved configuration");
+  }
+
   const token = new Contract(
     config.protocol.mattToken,
     [
@@ -332,6 +390,8 @@ export async function validateOnchainConfig(ethers, config) {
     chainId: network.chainId.toString(),
     mattSymbol: symbol,
     mattDecimals: decimals.toString(),
+    safeOwners,
+    safeThreshold: safeThreshold.toString(),
     pair: discoveredPair
   };
 }

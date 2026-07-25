@@ -12,7 +12,9 @@ Version 0.8 prepares production contracts and a guarded Ronin Mainnet deployment
 - Price and configuration roles assigned to the bounded operational wallet.
 - Pauser assigned to a separate emergency wallet.
 - Reward publisher and treasury manager assigned to the 2-of-3 Safe unless a separately reviewed multisig is used.
-- Pass price recalculated against the current RON market price.
+- Launch pass price confirmed at 95 RON with immutable 55-155 RON bounds.
+- Paid-run price confirmed at 10 RON with immutable 5-20 RON bounds.
+- Both price managers are contract-limited to one update every seven days.
 - Operations and legal review completed for paid skill competition and token rewards in supported jurisdictions.
 - Final commit hash recorded before compiling and deploying.
 
@@ -25,6 +27,7 @@ Version 0.8 prepares production contracts and a guarded Ronin Mainnet deployment
 - Dependency audit reviewed and production-relevant findings resolved or documented.
 - Compiler fixed to Solidity 0.8.28, optimizer enabled, IR pipeline enabled, London EVM target.
 - MATT, WRON, Katana router, Katana factory, and MATT/WRON pair validated on Ronin Mainnet.
+- Admin Safe code, exact three-owner set, and 2-of-3 threshold validated on Ronin Mainnet.
 
 ## Recommended minimum role map
 

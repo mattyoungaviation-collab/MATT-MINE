@@ -19,6 +19,14 @@ function validConfig() {
       rewardPublisher: "0x0000000000000000000000000000000000000015",
       treasuryManager: "0x0000000000000000000000000000000000000016"
     },
+    adminSafe: {
+      threshold: 2,
+      owners: [
+        "0x0000000000000000000000000000000000000031",
+        "0x0000000000000000000000000000000000000032",
+        "0x0000000000000000000000000000000000000033"
+      ]
+    },
     treasuries: {
       operations: "0x0000000000000000000000000000000000000021",
       passRewards: "0x0000000000000000000000000000000000000022",
@@ -114,6 +122,22 @@ describe("Ronin Mainnet configuration guards", function () {
     assert.throws(
       () => normalizeMainnetConfig(sharedPublisher),
       /admin multisig or a separate publisher/
+    );
+  });
+
+  it("requires exactly three unique Safe owners and a 2-of-3 threshold", function () {
+    const badThreshold = validConfig();
+    badThreshold.adminSafe.threshold = 1;
+    assert.throws(
+      () => normalizeMainnetConfig(badThreshold),
+      /threshold must be 2/
+    );
+
+    const duplicateOwner = validConfig();
+    duplicateOwner.adminSafe.owners[2] = duplicateOwner.adminSafe.owners[0];
+    assert.throws(
+      () => normalizeMainnetConfig(duplicateOwner),
+      /owners must be unique/
     );
   });
 });
