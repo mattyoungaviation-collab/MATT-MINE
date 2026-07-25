@@ -137,6 +137,17 @@ export class InputController {
     return this.pointer.down || this.mobileAttack || this.keys.has('Space');
   }
 
+  reset() {
+    this.keys.clear();
+    this.pressed.clear();
+    this.pointer.down = false;
+    this.mobileMove.x = 0;
+    this.mobileMove.y = 0;
+    this.mobileAttack = false;
+    this.mobileDashQueued = false;
+    this.mobileWeaponQueued = null;
+    this.joystickPointerId = null;
+  }
 
   consumeWeaponSelection() {
     let selected = this.mobileWeaponQueued;

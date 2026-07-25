@@ -122,6 +122,10 @@ export const weaponsMethods = {
   updateProjectiles(dt) {
     for (const projectile of this.projectiles) {
       projectile.life -= dt;
+      if (projectile.life <= 0 && projectile.kind !== 'dynamite') {
+        projectile.dead = true;
+        continue;
+      }
       projectile.x += projectile.vx * dt;
       projectile.y += projectile.vy * dt;
       if (projectile.kind === 'dynamite') {

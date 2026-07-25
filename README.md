@@ -4,6 +4,17 @@
 
 MATT Mine is a standalone browser action roguelite and daily Web3 competition prototype. It remains isolated from MATT Token Live until gameplay, economy rules, server validation, and contracts are production-ready.
 
+## v0.5 resilience and stress testing
+
+- Keep the animation loop alive after an unexpected update or render error and return the player to a safe menu state.
+- Clear held keyboard, pointer, and mobile inputs when a run stops unexpectedly.
+- Repair corrupt or malformed profile and economy saves with validated defaults.
+- Cover the Pickaxe, Pocket Dynamite, Crystal Blaster, enemy projectile, wall collision, and expired-projectile paths with regression tests.
+- Keep Free and Pass leaderboard totals separate and count only the best score from each day.
+- Credit knocked-out ranked runs only for secured, banked nuggets rather than projected extraction loot.
+- Block suspended wallets from ranked access, paid-run purchases, and ranked score submission while preserving Practice mode.
+- Reject unknown settings, malformed values, and cross-role changes in the local admin controls.
+
 ## v0.4 playable economy
 
 - Choose between Free Ranked, Pass Ranked, and unlimited Practice runs.
@@ -49,7 +60,7 @@ npm test
 
 ## Important test-mode boundary
 
-v0.4 does not send real RON, swap real MATT, connect a wallet, or pay real claims. The UI deliberately labels these actions as local tests. Browser storage is not trustworthy for production balances, passes, entitlements, scores, rewards, or admin actions.
+v0.5 does not send real RON, swap real MATT, connect a wallet, or pay real claims. The UI deliberately labels these actions as local tests. Browser storage is not trustworthy for production balances, passes, entitlements, scores, rewards, or admin actions.
 
 The future production build must provide:
 
