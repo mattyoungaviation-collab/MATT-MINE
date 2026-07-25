@@ -7,6 +7,7 @@
     <meta name="description" content="MATT Mine — dig deep, fight hard, get out alive." />
     <title>MATT Mine</title>
     <link rel="stylesheet" href="./src/styles.css" />
+    <link rel="stylesheet" href="./src/v3.css" />
   </head>
   <body>
     <main id="app">
@@ -28,7 +29,7 @@
           </div>
           <button id="play-button" class="primary-button">ENTER THE MINE</button>
           <button id="upgrades-button" class="secondary-button">PERMANENT UPGRADES</button>
-          <p class="controls-copy">Move: WASD / arrows · Dash: Shift · Aim: mouse · Mine & attack: hold click or Space</p>
+          <p class="controls-copy">Move: WASD / arrows · Dash: Shift · Weapons: 1 / 2 / 3 · Aim: mouse · Attack: hold click or Space</p>
         </div>
 
         <div class="wallet-chip" title="Wallet adapter is intentionally disconnected in the standalone test build.">
@@ -98,6 +99,11 @@
           <div class="objective"><span id="room-text">Lift Station</span><strong id="objective-text">Find MATT crystals</strong></div>
         </div>
         <div class="dash-meter" aria-label="Dash recharge"><span>DASH</span><div class="bar"><div id="dash-fill" class="bar-fill dash-fill"></div></div></div>
+        <div id="weapon-rack" class="weapon-rack" aria-label="Weapons">
+          <div class="weapon-slot active" data-weapon="pickaxe"><kbd>1</kbd><span>⛏</span><strong>PICKAXE</strong><small data-weapon-value="pickaxe">READY</small></div>
+          <div class="weapon-slot locked" data-weapon="dynamite"><kbd>2</kbd><span>🧨</span><strong>DYNAMITE</strong><small data-weapon-value="dynamite">LOCKED</small></div>
+          <div class="weapon-slot locked" data-weapon="blaster"><kbd>3</kbd><span>✦</span><strong>BLASTER</strong><small data-weapon-value="blaster">LOCKED</small></div>
+        </div>
       </section>
 
       <div id="toast" class="toast" role="status"></div>
@@ -105,6 +111,11 @@
       <div id="mobile-controls" class="mobile-controls" aria-hidden="true">
         <div id="joystick" class="joystick"><div id="joystick-knob" class="joystick-knob"></div></div>
         <button id="dash-button" class="dash-button" aria-label="Dash"><span>➤</span><small id="dash-mobile-text">DASH</small></button>
+        <div class="mobile-weapon-buttons" aria-label="Choose weapon">
+          <button class="weapon-button active" data-weapon="pickaxe" aria-label="Pickaxe">⛏</button>
+          <button class="weapon-button locked" data-weapon="dynamite" aria-label="Dynamite">🧨</button>
+          <button class="weapon-button locked" data-weapon="blaster" aria-label="Crystal Blaster">✦</button>
+        </div>
         <button id="attack-button" class="attack-button" aria-label="Mine or attack">⛏</button>
       </div>
     </main>

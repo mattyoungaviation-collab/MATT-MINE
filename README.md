@@ -4,26 +4,27 @@
 
 MATT Mine is a standalone browser action roguelite built in a separate Git repository so its gameplay can be tested before merging into MATT Token Live.
 
-## v0.2 playable loop
+## v0.3 combat-depth loop
 
 - Explore a newly generated network of seven connected mine chambers every depth.
-- Discover dedicated mining rooms, combat rooms, a treasure cache, the Guardian Vault, and the Lift Station.
+- Enter combat rooms that seal behind the player until every enemy is defeated.
+- Unlock Pocket Dynamite by clearing a combat room and restock it through later victories.
+- Recover the Crystal Blaster from the Prospector Cache and manage its regenerating energy.
+- Switch between the MATT Pickaxe, Pocket Dynamite, and Crystal Blaster during a run.
+- Fight five enemy roles: charging slimes, diving bats, ambushing crawlers, front-armored beetles, and exploding miners.
+- Face a three-phase Mine Guardian with ground slams, crystal volleys, reinforcements, radial barrages, and an exposed final-phase weak point.
+- Hear generated cave ambience, weapon sounds, impacts, room alarms, explosions, and Guardian tension audio without external sound assets.
 - Mine stone, copper, gold, glowing rich veins, and rare MATT crystals.
-- Fight slimes, bats, crawlers, and the Mine Guardian.
-- Move with acceleration and momentum instead of instant start and stop movement.
 - Dash through danger with temporary invulnerability and a visible recharge meter.
-- Knock enemies backward and see damage numbers, health bars, hit flashes, debris, and screen shake.
-- Watch ore deposits visibly crack as they take damage.
-- Gain XP and build a run using twelve upgrades, including Pocket Dynamite, Mining Drones, Blast Boots, and Prospector Luck.
-- Collect the required MATT crystals to awaken the Guardian in the far-side vault.
+- Gain XP and build a run using twelve upgrades, including Mining Drones, Blast Boots, and Prospector Luck.
 - Defeat the Guardian, return to the entrance lift, and extract or descend for a larger multiplier.
 - Keep all projected loot when extracting, or only 35% after being knocked out.
 - Spend banked nuggets on permanent browser-saved upgrades.
 
 ## Run locally on Windows
 
-1. Extract the ZIP.
-2. Open PowerShell inside the extracted `matt-mine` folder.
+1. Clone or download the repository.
+2. Open PowerShell inside the `MATT-MINE` folder.
 3. Run:
 
 ```powershell
@@ -46,14 +47,18 @@ npm test
 
 - Move: `WASD` or arrow keys
 - Aim: mouse
-- Mine or attack: hold the left mouse button or `Space`
+- Attack: hold the left mouse button or `Space`
 - Dash: `Shift`
+- MATT Pickaxe: `1`
+- Pocket Dynamite: `2`
+- Crystal Blaster: `3`
 
 ### Mobile
 
 - Move: virtual joystick
-- Mine or attack: pickaxe button
+- Attack: large action button
 - Dash: blue arrow button
+- Switch weapons: three weapon buttons above the action button
 - Mobile attacks automatically aim toward the nearest target.
 
 ## Standalone-to-live integration boundary
@@ -72,10 +77,10 @@ Do not trust scores, purchases, rewards, or token balances sent by the browser i
 
 ## Suggested next milestones
 
-1. Add original animated MATT character, enemy, ore, and mine-tile artwork.
-2. Add sound effects, music, controller support, and accessibility settings.
-3. Add ranged weapons, boss attack patterns, room gates, and more enemy behaviors.
-4. Add seeded daily challenges, quests, achievements, and a weekly leaderboard.
-5. Move persistence and score validation to a server.
-6. Add Founder access, cosmetics, seasonal progression, and wallet integration.
+1. Replace canvas placeholder art with original sprite sheets and mine tiles.
+2. Add controller support, volume controls, accessibility settings, and authored music.
+3. Add seeded daily challenges, quests, achievements, and a weekly leaderboard.
+4. Move persistence and score validation to a server.
+5. Add Founder access, cosmetics, seasonal progression, and payments.
+6. Add Ronin wallet ownership checks and MATT utility.
 7. Merge the stable game route into MATT Token Live.

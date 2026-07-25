@@ -1,4 +1,4 @@
-import { MattMineGame } from './game/Game.js';
+import { MattMineGame } from './game/GameV3.js';
 import { META_UPGRADES } from './game/config.js';
 import { formatNumber } from './game/utils.js';
 import { loadProfile, saveProfile } from './game/storage.js';
@@ -23,7 +23,10 @@ const ui = {
   objectiveText: $('#objective-text'),
   roomText: $('#room-text'),
   dashFill: $('#dash-fill'),
-  dashMobileText: $('#dash-mobile-text')
+  dashMobileText: $('#dash-mobile-text'),
+  weaponSlots: [...document.querySelectorAll('.weapon-slot')],
+  weaponButtons: [...document.querySelectorAll('.weapon-button')],
+  attackButton: $('#attack-button')
 };
 
 function showScreen(id = null) {
@@ -66,6 +69,21 @@ const game = new MattMineGame(canvas, profile, {
     ui.roomText.textContent = stats.room;
     ui.dashFill.style.width = `${Math.round(stats.dashReady * 100)}%`;
     if (ui.dashMobileText) ui.dashMobileText.textContent = stats.dashReady >= 0.999 ? 'DASH' : `${Math.ceil((1 - stats.dashReady) * 3)}s`;
+    for (const slot of ui.weaponSlots) {
+      const id = slot.dataset.weapon;
+      const weapon = stats.weapons[id];
+      slot.classList.toggle('active', stats.weapon === id);
+      slot.classList.toggle('locked', !weapon.unlocked);
+      const value = slot.querySelector(`[data-weapon-value="${id}"]`);
+      if (value) value.textContent = weapon.unlocked ? weapon.value : 'LOCKED';
+    }
+    for (const button of ui.weaponButtons) {
+      const id = button.dataset.weapon;
+      const weapon = stats.weapons[id];
+      button.classList.toggle('active', stats.weapon === id);
+      button.classList.toggle('locked', !weapon.unlocked);
+    }
+    if (ui.attackButton) ui.attackButton.textContent = stats.weapon === 'dynamite' ? '🧨' : stats.weapon === 'blaster' ? '✦' : '⛏';
   },
   onObjective(text) {
     ui.objectiveText.textContent = text;
