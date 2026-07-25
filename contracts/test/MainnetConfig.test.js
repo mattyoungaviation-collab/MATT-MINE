@@ -78,12 +78,42 @@ describe("Ronin Mainnet configuration guards", function () {
     );
   });
 
-  it("rejects a single address controlling admin and routine roles", function () {
+  it("allows one Safe to protect administration, rewards, and treasuries", function () {
+    const config = validConfig();
+    const safe = config.roles.contractAdminMultisig;
+    config.roles.configManager = config.roles.priceManager;
+    config.roles.rewardPublisher = safe;
+    config.roles.treasuryManager = safe;
+    for (const key of Object.keys(config.treasuries)) {
+      config.treasuries[key] = safe;
+    }
+
+    const normalized = normalizeMainnetConfig(config);
+    assert.equal(normalized.roles.rewardPublisher, safe);
+    assert.equal(normalized.roles.treasuryManager, safe);
+    assert.deepEqual(new Set(Object.values(normalized.treasuries)), new Set([safe]));
+  });
+
+  it("keeps routine and emergency control outside the admin Safe", function () {
     const config = validConfig();
     config.roles.priceManager = config.roles.contractAdminMultisig;
     assert.throws(
       () => normalizeMainnetConfig(config),
       /must be separate from the contract admin multisig/
+    );
+
+    const sharedPauser = validConfig();
+    sharedPauser.roles.pauser = sharedPauser.roles.priceManager;
+    assert.throws(
+      () => normalizeMainnetConfig(sharedPauser),
+      /pauser must be separate/
+    );
+
+    const sharedPublisher = validConfig();
+    sharedPublisher.roles.rewardPublisher = sharedPublisher.roles.configManager;
+    assert.throws(
+      () => normalizeMainnetConfig(sharedPublisher),
+      /admin multisig or a separate publisher/
     );
   });
 });
