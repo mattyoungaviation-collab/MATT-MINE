@@ -24,10 +24,12 @@ Version 0.8 prepares production contracts and a guarded Ronin Mainnet deployment
 - `npm test`
 - `npm run contracts:compile`
 - `npm run contracts:validate:ronin`
+- `MATT_MINE_EXPECTED_DEPLOYER_ADDRESS=0x... npm run contracts:check-deployer:ronin`
 - Dependency audit reviewed and production-relevant findings resolved or documented.
 - Compiler fixed to Solidity 0.8.28, optimizer enabled, IR pipeline enabled, London EVM target.
 - MATT, WRON, Katana router, Katana factory, and MATT/WRON pair validated on Ronin Mainnet.
 - Admin Safe code, exact three-owner set, and 2-of-3 threshold validated on Ronin Mainnet.
+- Encrypted deployment key resolves to the approved public address, is not a configured role or treasury, and holds at least a 3x gas buffer.
 
 ## Recommended minimum role map
 
