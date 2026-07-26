@@ -1,0 +1,634 @@
+:root {
+  --type-tight: -0.04em;
+  --type-title: -0.025em;
+  --type-label: 0.07em;
+  --type-button: 0.035em;
+}
+
+body,
+button,
+input {
+  letter-spacing: 0;
+}
+
+p,
+li,
+small {
+  letter-spacing: 0;
+}
+
+h1 {
+  letter-spacing: var(--type-tight);
+}
+
+h2,
+h3 {
+  letter-spacing: var(--type-title);
+}
+
+button,
+.primary-button,
+.secondary-button,
+.buy-button {
+  letter-spacing: var(--type-button);
+}
+
+.eyebrow,
+.mode-kicker,
+.launch-kicker,
+.launch-section-heading > p,
+.launch-roadmap-copy > p,
+.launch-links button,
+.launch-footer button,
+.launch-footer a,
+.launch-live-pill,
+.tier-topline span,
+.tier-topline b,
+.launch-daily-heading span,
+.launch-daily-heading b,
+.launch-daily-stats span,
+.launch-proof-rail span,
+.arsenal-cards small,
+.launch-contract-grid span,
+.launch-contract-grid small,
+.launch-final-cta > button small,
+.matchmaking-day small,
+.menu-map-heading em,
+.lobby-status small,
+.quick-play-guide strong {
+  letter-spacing: var(--type-label);
+}
+
+.ronin-lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #f3f6ff;
+}
+
+.ronin-lockup img {
+  width: 18px;
+  height: 24px;
+  object-fit: contain;
+}
+
+.ronin-lockup strong {
+  font-size: 9px;
+  letter-spacing: 0.055em;
+}
+
+.mine-route-map {
+  position: relative;
+  min-height: 152px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 73% 49%, rgba(158, 91, 255, 0.24), transparent 23%),
+    radial-gradient(circle at 42% 54%, rgba(62, 188, 228, 0.1), transparent 25%),
+    linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px),
+    linear-gradient(155deg, #0d121a, #070a10);
+  background-size: auto, auto, 22px 22px, 22px 22px, auto;
+  box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.55);
+}
+
+.mine-route-map::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(115deg, transparent 45%, rgba(255,255,255,0.025) 50%, transparent 55%),
+    radial-gradient(ellipse at center, transparent 50%, rgba(1, 3, 7, 0.62) 100%);
+}
+
+.mine-route-map svg {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  min-height: inherit;
+  display: block;
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.5));
+}
+
+.mine-route-shadow,
+.mine-route-main,
+.mine-route-branch {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.mine-route-shadow {
+  stroke: rgba(0, 0, 0, 0.72);
+  stroke-width: 12;
+}
+
+.mine-route-main {
+  stroke: rgba(244, 197, 66, 0.62);
+  stroke-width: 4;
+}
+
+.mine-route-branch {
+  stroke: rgba(124, 205, 238, 0.38);
+  stroke-width: 3;
+  stroke-dasharray: 7 7;
+}
+
+.mine-room rect {
+  fill: #171d27;
+  stroke: rgba(255, 255, 255, 0.22);
+  stroke-width: 2;
+}
+
+.mine-room text {
+  fill: #c4cad4;
+  font: 900 11px/1 Inter, ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0.055em;
+  text-anchor: middle;
+}
+
+.mine-room.lift-room rect,
+.mine-room.exit-room rect {
+  fill: #2c2512;
+  stroke: #f4c542;
+}
+
+.mine-room.lift-room text,
+.mine-room.exit-room text {
+  fill: #ffe784;
+}
+
+.mine-room.ore-room rect {
+  fill: #102832;
+  stroke: #62cfe9;
+}
+
+.mine-room.ore-room text {
+  fill: #91e7fa;
+}
+
+.mine-room.cache-room rect {
+  fill: #2d2111;
+  stroke: #d99132;
+}
+
+.mine-room.cache-room text {
+  fill: #f5bd69;
+}
+
+.mine-room.deep-room rect {
+  fill: #14231c;
+  stroke: #66be88;
+}
+
+.mine-room.deep-room text {
+  fill: #93e1ab;
+}
+
+.mine-room.boss-room rect {
+  fill: #25163b;
+  stroke: #a86cff;
+  filter: drop-shadow(0 0 12px rgba(157, 91, 255, 0.55));
+}
+
+.mine-room.boss-room text {
+  fill: #d8bcff;
+}
+
+.compact-map {
+  min-height: 112px;
+  margin: 16px 0;
+  border-radius: 13px;
+}
+
+#menu.menu-v4 {
+  grid-template-columns: minmax(180px, 240px) minmax(720px, 1120px);
+  grid-template-rows: minmax(0, 1fr);
+  justify-content: center;
+  align-items: center;
+  gap: clamp(22px, 3vw, 52px);
+  padding: 28px clamp(20px, 3vw, 48px);
+}
+
+.compact-brand {
+  min-width: 0;
+  width: 100%;
+}
+
+.compact-brand h1 {
+  font-size: clamp(54px, 6vw, 94px);
+}
+
+.economy-menu-card {
+  width: 100%;
+  max-width: 1120px;
+  max-height: calc(100dvh - 56px);
+  padding: 18px;
+  border-radius: 22px;
+  scrollbar-width: thin;
+}
+
+.matchmaking-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 14px;
+  text-align: left;
+}
+
+.matchmaking-heading .eyebrow {
+  margin-bottom: 3px;
+  font-size: 9px;
+}
+
+.matchmaking-heading h2 {
+  margin: 0;
+  color: #fff;
+  font-size: clamp(28px, 3vw, 42px);
+  line-height: 1;
+}
+
+.matchmaking-heading p:last-child {
+  margin: 6px 0 0;
+  color: #929ba8;
+  font-size: 12px;
+}
+
+.matchmaking-day {
+  min-width: 86px;
+  padding: 10px 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  border: 1px solid rgba(244, 197, 66, 0.28);
+  border-radius: 12px;
+  background: rgba(244, 197, 66, 0.07);
+  text-align: center;
+}
+
+.matchmaking-day small {
+  color: #9b8c61;
+  font-size: 7px;
+  font-weight: 900;
+}
+
+.matchmaking-day strong {
+  color: #ffe784;
+  font-size: 16px;
+}
+
+.menu-mine-overview {
+  margin-bottom: 10px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 17px;
+  background: rgba(7, 10, 15, 0.58);
+}
+
+.menu-mine-overview .mine-route-map {
+  height: 176px;
+  min-height: 176px;
+}
+
+.menu-map-heading {
+  min-height: 34px;
+  padding: 0 4px 9px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  text-align: left;
+}
+
+.menu-map-heading > span {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.menu-map-heading b {
+  color: #f4d75e;
+  font-size: 10px;
+  letter-spacing: 0.055em;
+}
+
+.menu-map-heading small {
+  color: #8e98a7;
+  font-size: 10px;
+}
+
+.menu-map-heading em {
+  color: #6e7b8e;
+  font-size: 7px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.run-mode-grid.four-lobbies {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.four-lobbies .run-mode-card {
+  position: relative;
+  min-height: 184px;
+  padding: 13px;
+  gap: 6px;
+  overflow: hidden;
+  border-radius: 15px;
+  text-transform: none;
+}
+
+.four-lobbies .run-mode-card > strong {
+  max-width: calc(100% - 34px);
+  color: #fff;
+  font-size: 16px;
+  line-height: 1.18;
+  letter-spacing: -0.015em;
+}
+
+.four-lobbies .run-mode-card > small {
+  min-height: 34px;
+  color: #a5adba;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.four-lobbies .run-mode-card > b {
+  min-height: 34px;
+  margin-top: auto;
+  padding: 0 9px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(244, 215, 94, 0.26);
+  border-radius: 9px;
+  background: rgba(244, 215, 94, 0.08);
+  color: #ffe77d;
+  font-size: 10px;
+  letter-spacing: 0.045em;
+}
+
+.lobby-number {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 27px;
+  height: 27px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.045);
+  color: #8b95a4;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.four-lobbies .mode-kicker {
+  padding-right: 30px;
+  color: #f4d75e;
+  font-size: 8px;
+  letter-spacing: var(--type-label);
+}
+
+.lobby-status {
+  margin-top: 2px;
+  padding: 8px 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  border-radius: 9px;
+  background: rgba(255,255,255,0.04);
+}
+
+.lobby-status strong {
+  color: #fff;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.lobby-status small {
+  color: #7f8997;
+  font-size: 7px;
+  font-weight: 800;
+}
+
+.lobby-credit {
+  color: #9ba5b5;
+  font-size: 8px;
+}
+
+.lobby-credit b {
+  color: #d9c1ff;
+  font-size: 11px;
+}
+
+.lobby-credit small {
+  color: inherit;
+  font-size: inherit;
+}
+
+.arena-run-card {
+  border-top: 3px solid #f0b94b;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(157, 91, 255, 0.18), transparent 45%),
+    linear-gradient(155deg, rgba(42, 30, 18, 0.98), rgba(10,13,19,0.98));
+}
+
+.arena-run-card .mode-kicker,
+.arena-run-card .lobby-status strong {
+  color: #ffd568;
+}
+
+.quick-play-guide {
+  margin-top: 9px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.quick-play-guide > span {
+  min-height: 48px;
+  padding: 7px 9px;
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  align-items: center;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 11px;
+  background: rgba(255,255,255,0.025);
+  text-align: left;
+}
+
+.quick-play-guide b {
+  grid-row: 1 / 3;
+  width: 27px;
+  height: 27px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: rgba(244, 197, 66, 0.12);
+  color: #ffe784;
+  font-size: 11px;
+}
+
+.quick-play-guide strong {
+  color: #edf0f5;
+  font-size: 8px;
+}
+
+.quick-play-guide small {
+  color: #7d8796;
+  font-size: 8px;
+}
+
+.compact-stats {
+  margin: 12px 0;
+}
+
+.menu-nav-grid .secondary-button {
+  min-height: 38px;
+  letter-spacing: 0.035em;
+}
+
+@media (max-width: 1180px) {
+  #menu.menu-v4 {
+    display: block;
+    overflow: auto;
+    padding: 14px;
+  }
+
+  .compact-brand {
+    margin: 0 auto 10px;
+    text-align: center;
+  }
+
+  .compact-brand .brand-mark,
+  .compact-brand .eyebrow,
+  .compact-brand .tagline {
+    display: none;
+  }
+
+  .compact-brand h1 {
+    font-size: 42px;
+  }
+
+  .economy-menu-card {
+    max-width: 920px;
+    max-height: none;
+    margin: 0 auto;
+  }
+}
+
+@media (max-width: 820px) {
+  .menu-mine-overview .mine-route-map {
+    height: 150px;
+    min-height: 150px;
+  }
+
+  .run-mode-grid.four-lobbies {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .four-lobbies .run-mode-card {
+    min-height: 204px;
+  }
+}
+
+@media (max-width: 560px) {
+  #menu.menu-v4 {
+    padding: 8px;
+  }
+
+  .compact-brand {
+    padding-top: 42px;
+  }
+
+  .economy-menu-card {
+    padding: 14px;
+    border-radius: 17px;
+  }
+
+  .matchmaking-heading {
+    gap: 10px;
+  }
+
+  .matchmaking-heading h2 {
+    font-size: 29px;
+  }
+
+  .matchmaking-heading p:last-child,
+  .menu-map-heading em {
+    display: none;
+  }
+
+  .matchmaking-day {
+    min-width: 72px;
+  }
+
+  .menu-map-heading > span {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .mine-route-map {
+    min-height: 110px;
+  }
+
+  .menu-mine-overview .mine-route-map {
+    height: 124px;
+    min-height: 124px;
+  }
+
+  .run-mode-grid.four-lobbies {
+    grid-template-columns: 1fr;
+  }
+
+  .four-lobbies .run-mode-card {
+    min-height: 170px;
+  }
+
+  .four-lobbies .run-mode-card > small {
+    min-height: 0;
+  }
+
+  .quick-play-guide {
+    grid-template-columns: 1fr;
+  }
+
+  .menu-stats {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .menu-nav-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 760px) {
+  .launch-hero {
+    min-height: 865px;
+  }
+
+  .compact-map {
+    min-height: 94px;
+    display: block;
+  }
+
+  .launch-daily-card {
+    bottom: 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .run-mode-card,
+  .mine-route-map {
+    scroll-behavior: auto;
+  }
+}

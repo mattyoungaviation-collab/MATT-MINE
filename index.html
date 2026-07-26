@@ -20,6 +20,7 @@
     <link rel="stylesheet" href="./src/v3.css" />
     <link rel="stylesheet" href="./src/v4.css" />
     <link rel="stylesheet" href="./src/launch.css" />
+    <link rel="stylesheet" href="./src/production.css" />
   </head>
   <body>
     <main id="app">
@@ -66,8 +67,10 @@
                 </button>
               </div>
               <div class="launch-chain-note">
-                <span class="launch-ronin-glyph" aria-hidden="true">R</span>
-                <span>Built on Ronin</span>
+                <span class="ronin-lockup">
+                  <img src="./assets/ronin-mark-official.png" alt="" aria-hidden="true" />
+                  <strong>BUILT ON RONIN</strong>
+                </span>
                 <i></i>
                 <span>Browser playable</span>
                 <i></i>
@@ -83,14 +86,34 @@
                 </div>
                 <b id="launch-live-status">SERVER ONLINE</b>
               </div>
-              <div class="launch-daily-map" aria-hidden="true">
-                <span class="map-room map-lift">LIFT</span>
-                <span class="map-line line-one"></span>
-                <span class="map-room map-combat">FIGHT</span>
-                <span class="map-line line-two"></span>
-                <span class="map-room map-mine">ORE</span>
-                <span class="map-line line-three"></span>
-                <span class="map-room map-guardian">BOSS</span>
+              <div class="mine-route-map compact-map" role="img" aria-label="Today's seven-room mine route">
+                <svg viewBox="0 0 520 210" role="img" aria-hidden="true">
+                  <path class="mine-route-shadow" d="M54 112 L130 68 L212 108 L292 58 L372 105 L454 70" />
+                  <path class="mine-route-shadow" d="M212 108 L288 160 L372 105" />
+                  <path class="mine-route-main" d="M54 112 L130 68 L212 108 L292 58 L372 105 L454 70" />
+                  <path class="mine-route-branch" d="M212 108 L288 160 L372 105" />
+                  <g class="mine-room lift-room" transform="translate(22 86)">
+                    <rect width="64" height="52" rx="12" /><text x="32" y="31">LIFT</text>
+                  </g>
+                  <g class="mine-room fight-room" transform="translate(98 42)">
+                    <rect width="64" height="52" rx="12" /><text x="32" y="31">FIGHT</text>
+                  </g>
+                  <g class="mine-room ore-room" transform="translate(180 82)">
+                    <rect width="64" height="52" rx="12" /><text x="32" y="31">ORE</text>
+                  </g>
+                  <g class="mine-room cache-room" transform="translate(260 32)">
+                    <rect width="64" height="52" rx="12" /><text x="32" y="31">CACHE</text>
+                  </g>
+                  <g class="mine-room deep-room" transform="translate(256 134)">
+                    <rect width="64" height="52" rx="12" /><text x="32" y="31">DEEP</text>
+                  </g>
+                  <g class="mine-room boss-room" transform="translate(338 79)">
+                    <rect width="68" height="56" rx="13" /><text x="34" y="33">BOSS</text>
+                  </g>
+                  <g class="mine-room exit-room" transform="translate(422 44)">
+                    <rect width="64" height="52" rx="12" /><text x="32" y="31">EXIT</text>
+                  </g>
+                </svg>
               </div>
               <div class="launch-daily-stats">
                 <div><span>FREE RUN</span><strong id="launch-free-status">READY</strong></div>
@@ -200,7 +223,7 @@
               </article>
               <article class="launch-tier-card arena-tier-card">
                 <div class="tier-glow"></div>
-                <div class="tier-topline"><span>MATT DAILY ARENA</span><b id="launch-arena-state">SECURITY PREVIEW</b></div>
+                <div class="tier-topline"><span>MATT DAILY ARENA</span><b id="launch-arena-state">LOADING</b></div>
                 <h3 id="launch-arena-entry">MATT ENTRY</h3>
                 <p class="tier-subtitle">Treasury-set daily price · 25K–1M MATT</p>
                 <ul>
@@ -304,58 +327,92 @@
         </div>
 
         <div class="menu-card economy-menu-card">
-          <div class="economy-status-grid">
-            <div class="economy-status free-status">
-              <span>FREE RUN</span>
-              <strong id="free-run-status">AVAILABLE</strong>
-              <small>Resets 00:00 UTC</small>
+          <div class="matchmaking-heading">
+            <div>
+              <p class="eyebrow">CHOOSE WHERE TO PLAY</p>
+              <h2>Pick a mine</h2>
+              <p>Every mine uses the same simple controls. The prize rules are different.</p>
             </div>
-            <div class="economy-status pass-status">
-              <span>MINE PASS</span>
-              <strong id="pass-status">FREE TIER</strong>
-              <small id="pass-days">Premium locked</small>
+            <span class="matchmaking-day"><small>TODAY</small><strong id="menu-date">JUL 26</strong></span>
+          </div>
+
+          <div class="menu-mine-overview">
+            <div class="menu-map-heading">
+              <span><b>TODAY'S MINE MAP</b><small>7 rooms → beat the boss → find the exit</small></span>
+              <em>SAME MAP FOR RANKED PLAYERS</em>
             </div>
-            <div class="economy-status paid-status">
-              <span>PAID CREDITS</span>
-              <strong id="paid-credit-count">0</strong>
-              <small id="paid-daily-status">0 / 10 used today</small>
+            <div class="mine-route-map" role="img" aria-label="Today's seven-room mine route">
+              <svg viewBox="0 0 520 210" role="img" aria-hidden="true">
+                <path class="mine-route-shadow" d="M54 112 L130 68 L212 108 L292 58 L372 105 L454 70" />
+                <path class="mine-route-shadow" d="M212 108 L288 160 L372 105" />
+                <path class="mine-route-main" d="M54 112 L130 68 L212 108 L292 58 L372 105 L454 70" />
+                <path class="mine-route-branch" d="M212 108 L288 160 L372 105" />
+                <g class="mine-room lift-room" transform="translate(22 86)">
+                  <rect width="64" height="52" rx="12" /><text x="32" y="31">LIFT</text>
+                </g>
+                <g class="mine-room fight-room" transform="translate(98 42)">
+                  <rect width="64" height="52" rx="12" /><text x="32" y="31">FIGHT</text>
+                </g>
+                <g class="mine-room ore-room" transform="translate(180 82)">
+                  <rect width="64" height="52" rx="12" /><text x="32" y="31">ORE</text>
+                </g>
+                <g class="mine-room cache-room" transform="translate(260 32)">
+                  <rect width="64" height="52" rx="12" /><text x="32" y="31">CACHE</text>
+                </g>
+                <g class="mine-room deep-room" transform="translate(256 134)">
+                  <rect width="64" height="52" rx="12" /><text x="32" y="31">DEEP</text>
+                </g>
+                <g class="mine-room boss-room" transform="translate(338 79)">
+                  <rect width="68" height="56" rx="13" /><text x="34" y="33">BOSS</text>
+                </g>
+                <g class="mine-room exit-room" transform="translate(422 44)">
+                  <rect width="64" height="52" rx="12" /><text x="32" y="31">EXIT</text>
+                </g>
+              </svg>
             </div>
           </div>
 
-          <div class="run-mode-grid" aria-label="Choose run type">
+          <div class="run-mode-grid four-lobbies" aria-label="Choose one of four play lobbies">
             <button id="free-run-button" class="run-mode-card free-run-card">
-              <span class="mode-kicker">FREE TIER</span>
-              <strong>DAILY RANKED RUN</strong>
-              <small>One official attempt · Free Leaderboard · MATT rewards</small>
+              <span class="lobby-number">1</span>
+              <span class="mode-kicker">FREE DAILY MINE</span>
+              <strong>Play once for free</strong>
+              <small>One ranked run today. Earn leaderboard rewards.</small>
+              <span class="lobby-status"><strong id="free-run-status">AVAILABLE</strong><small>Resets 00:00 UTC</small></span>
               <b id="free-run-cta">PLAY FREE</b>
             </button>
             <button id="paid-run-button" class="run-mode-card paid-run-card">
-              <span class="mode-kicker">MINE PASS</span>
-              <strong>PREMIUM RANKED RUN</strong>
-              <small>Pass required · Best daily score · Larger MATT pool</small>
-              <b id="paid-run-cta">VIEW PASS</b>
+              <span class="lobby-number">2</span>
+              <span class="mode-kicker">PASS MINE</span>
+              <strong>Use a run credit</strong>
+              <small>Pass holders compete for the larger weekly pool.</small>
+              <span class="lobby-status"><strong id="pass-status">FREE TIER</strong><small id="pass-days">Pass needed</small></span>
+              <span class="lobby-credit"><b id="paid-credit-count">0</b> credits · <small id="paid-daily-status">0 / 10 today</small></span>
+              <b id="paid-run-cta">GET MINE PASS</b>
+            </button>
+            <button id="arena-button" class="run-mode-card arena-run-card" type="button">
+              <span class="lobby-number">3</span>
+              <span class="mode-kicker">MATT ARENA</span>
+              <strong>Enter with MATT</strong>
+              <small>Unlimited entries. Your best score counts.</small>
+              <span class="lobby-status"><strong id="arena-menu-pool">—</strong><small>Today's prize pool</small></span>
+              <b id="arena-menu-action">ENTER ARENA</b>
             </button>
             <button id="practice-run-button" class="run-mode-card practice-run-card">
-              <span class="mode-kicker">UNLIMITED</span>
-              <strong>PRACTICE MINE</strong>
-              <small>No entry cost · No MATT rewards · Tune your build</small>
-              <b>PLAY PRACTICE</b>
+              <span class="lobby-number">4</span>
+              <span class="mode-kicker">PRACTICE MINE</span>
+              <strong>Learn with no risk</strong>
+              <small>Free and unlimited. No prizes. Great for learning.</small>
+              <span class="lobby-status"><strong>ALWAYS OPEN</strong><small>No wallet needed</small></span>
+              <b>START PRACTICE</b>
             </button>
           </div>
 
-          <button id="arena-button" class="arena-menu-banner" type="button">
-            <span class="arena-menu-icon" aria-hidden="true">M</span>
-            <span>
-              <small>DAILY MATT COMPETITION</small>
-              <strong>MATT ARENA</strong>
-              <b>Unlimited entries · Best score per wallet · Entire pool paid to winners</b>
-            </span>
-            <span class="arena-menu-pool">
-              <small>TODAY'S POOL</small>
-              <strong id="arena-menu-pool">—</strong>
-            </span>
-            <em id="arena-menu-action">VIEW PREVIEW →</em>
-          </button>
+          <div class="quick-play-guide" aria-label="How to play">
+            <span><b>1</b><strong>MOVE</strong><small>WASD, arrows, or joystick</small></span>
+            <span><b>2</b><strong>AIM &amp; ATTACK</strong><small>Mouse, Space, or attack button</small></span>
+            <span><b>3</b><strong>BEAT THE BOSS</strong><small>Then use the exit lift</small></span>
+          </div>
 
           <div class="menu-stats compact-stats">
             <div><span>Banked Nuggets</span><strong id="menu-nuggets">0</strong></div>
@@ -371,8 +428,6 @@
             <button id="sound-button" class="secondary-button">SOUND</button>
             <button id="admin-button" class="secondary-button admin-nav" hidden>ADMIN TEST</button>
           </div>
-          <p class="controls-copy">Move: WASD / arrows · Dash: Shift · Weapons: 1 / 2 / 3 · Aim: mouse · Attack: hold click or Space</p>
-          <p id="transaction-mode-notice" class="test-mode-notice">SAFE TEST MODE · REAL RON TRANSACTIONS DISABLED</p>
         </div>
 
         <button id="wallet-button" class="wallet-chip" title="Sign a one-time message with Ronin Wallet. No transaction is sent.">
@@ -540,7 +595,7 @@
             <div><span class="eyebrow">DAILY SETTLEMENT</span><strong id="arena-settlement-status">Competition open</strong><small id="arena-settlement-note">The Treasury Safe settles the verified daily result and the contract distributes the complete pool.</small></div>
             <button id="arena-refund-button" class="secondary-button" hidden>CLAIM CANCELED ENTRY REFUND</button>
           </div>
-          <p id="arena-note" class="preview-note">Daily Arena activation requires its isolated verified Ronin contract and server-authoritative scoring.</p>
+          <p id="arena-note" class="preview-note">Loading today's Arena status.</p>
         </div>
       </section>
 
