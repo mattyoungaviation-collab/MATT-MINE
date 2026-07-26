@@ -41,9 +41,9 @@ The legacy copy is intentionally retained for the first release so Render can ro
 
 ## Permanent snapshots
 
-A closed week remains editable during a 24-hour moderation window. MATT Mine also waits for every unexpired run from that week to finish or expire.
+A closed week becomes immutable when the weekly UTC countdown reaches zero. New ranked entries close during the final five minutes, and ranked run expiry is capped at the weekly boundary, so no unfinished score can cross into an already-finalized snapshot. Practice remains available.
 
-After those conditions are satisfied, the next server transaction creates:
+At or after the boundary, the next leaderboard read or server initialization creates:
 
 - One immutable Free snapshot.
 - One immutable Pass snapshot.

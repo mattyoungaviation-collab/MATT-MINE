@@ -5,6 +5,7 @@ export const RONIN_CHAINS = Object.freeze({
 export const AUTH_CHALLENGE_TTL_MS = 5 * 60 * 1000;
 export const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 export const RUN_TTL_MS = 45 * 60 * 1000;
+export const MIN_RANKED_RUN_WINDOW_MS = 5 * 60 * 1000;
 export const MAX_REQUEST_BYTES = 64 * 1024;
 export const MAX_RUN_SCORE = 5_000_000;
 export const SERVER_STATE_VERSION = 5;

@@ -35,14 +35,14 @@ The complete approved board pool is funded and published. If fewer than ten wall
 ## Lifecycle
 
 1. The UTC week ends.
-2. The existing 24-hour moderation window passes.
-3. The permanent Free or Pass leaderboard snapshot finalizes.
+2. The permanent Free or Pass leaderboard snapshot finalizes immediately.
+3. The primary admin reviews the immutable result.
 4. The primary admin creates a capped reward draft.
 5. The server creates contract-compatible OpenZeppelin Merkle proofs.
 6. The independent approver reviews and approves the exact root and totals.
-7. In dry-run mode, the API returns a clearly marked Safe transaction preview.
-8. When pilot publication is deliberately enabled, the same package is marked broadcast-ready.
-9. The 2-of-3 Safe approves MATT, funds the reward vault, and publishes the immutable epoch.
+7. Live Ronin preflight rejects a paused vault, duplicate epoch, or insufficient Treasury balance.
+8. The API returns a checksummed, broadcast-ready Safe transaction file.
+9. The 2-of-3 Safe executes any required MATT approval and funding, then publishes the immutable epoch.
 10. The admin sync endpoint verifies the exact root, allocation, and deadline on Ronin.
 11. Included players see their MATT reward in the leaderboard screen.
 12. Each player signs their own `claim` transaction in Ronin Wallet.
@@ -53,11 +53,11 @@ Render creates the independent approval secret automatically:
 
 ```text
 MATT_MINE_REWARD_APPROVER_KEY=<generated Render secret>
-MATT_MINE_REWARD_PUBLISHING_ENABLED=false
+MATT_MINE_REWARD_PUBLISHING_ENABLED=true
 MATT_MINE_REWARD_MAX_BOARD_MATT=5000000
 ```
 
-Keep publication disabled for the first full dry run. The code cap remains active even if the Render maximum is accidentally configured above 5,000,000 MATT.
+Publication-enabled means the reviewed JSON is executable; the server still cannot sign or broadcast it. Independent approval and the 2-of-3 Treasury Safe remain mandatory. The code cap remains active even if the Render maximum is accidentally configured above 5,000,000 MATT.
 
 ## Operator API
 

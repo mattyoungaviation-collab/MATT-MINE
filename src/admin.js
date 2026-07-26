@@ -186,8 +186,13 @@ async function approveReward(id) {
     headers: { 'x-matt-reward-approver-key': approverKey }
   });
   const transactions = result.safeTransactions || result.safeTransactionPreview || [];
+  const vault = result.vault || {};
   $('#reward-transaction-result').hidden = false;
   $('#reward-transaction-result').innerHTML = `<h2>Reward Safe package</h2><p>${escapeHtml(result.safety)}</p>
+    ${row('Preflight', vault.paused === false && vault.epochAvailable === true ? 'Passed' : 'Unavailable')}
+    ${row('Vault available (raw)', vault.availableRaw || 'Unavailable')}
+    ${row('Funding shortfall (raw)', vault.fundingShortfallRaw || '0')}
+    ${row('Ordered transactions', transactions.length)}
     <p>Download this file, then drag it into the Ronin Safe Transaction Builder.</p>
     <div class="action-row"><button id="download-reward-safe-json">Download Safe JSON</button><button class="ghost" id="copy-reward-safe-json">Copy JSON</button></div>
     <div class="code">${escapeHtml(JSON.stringify(transactions, null, 2))}</div>`;
@@ -228,15 +233,18 @@ $('#contract-form').addEventListener('submit', async (event) => {
     }
   });
   const transaction = result.transaction;
+  const transactions = result.transactions || [transaction];
   const safeFile = result.safeTransactionBuilderFile;
   $('#transaction-result').hidden = false;
   $('#transaction-result').innerHTML = `<h2>Prepared — not broadcast</h2>
-    ${row('Required signer', transaction.requiredSigner)}${row('To', transaction.to)}${row('Value', transaction.value)}
-    <p>Calldata</p><div class="code">${escapeHtml(transaction.data)}</div>
+    ${row('Required signer', transaction.requiredSigner)}${row('Ordered transactions', transactions.length)}
+    ${transactions.map((entry, index) => `<h3>${index + 1}. ${escapeHtml(entry.purpose || words(entry.functionName))}</h3>
+      ${row('To', entry.to)}${row('Value', entry.value)}
+      <p>Calldata</p><div class="code">${escapeHtml(entry.data)}</div>`).join('')}
     ${safeFile
       ? '<p>Download this file, then drag it into the Ronin Safe Transaction Builder.</p><div class="action-row"><button id="download-safe-json">Download Safe JSON</button><button class="ghost" id="copy-transaction">Copy JSON</button></div>'
       : '<p class="muted">This action requires the named role wallet directly, not the Treasury Safe.</p><button id="copy-transaction">Copy transaction JSON</button>'}`;
-  $('#copy-transaction').addEventListener('click', () => navigator.clipboard.writeText(JSON.stringify(safeFile || transaction, null, 2)));
+  $('#copy-transaction').addEventListener('click', () => navigator.clipboard.writeText(JSON.stringify(safeFile || transactions, null, 2)));
   if (safeFile) $('#download-safe-json').addEventListener('click', () => downloadJson(result.safeFileName, safeFile));
 });
 

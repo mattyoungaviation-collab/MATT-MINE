@@ -159,9 +159,10 @@ test('closed weekly leaderboards are snapshotted once and read from immutable sn
   ]);
 });
 
-test('weekly snapshots wait through the 24-hour moderation window', async () => {
+test('weekly snapshots finalize immediately after the leaderboard timer reaches zero', async () => {
   const oneHourAfterWeekClose = Date.UTC(2026, 6, 20, 1, 0, 0);
   let snapshotWrites = 0;
+  let snapshotEntryWrites = 0;
   const pool = createRecordingPool({
     handler(normalized) {
       if (normalized.startsWith('SELECT DISTINCT WEEK_KEY, MODE FROM MATT_MINE_WEEKLY_SCORES')) {
@@ -170,6 +171,10 @@ test('weekly snapshots wait through the 24-hour moderation window', async () => 
       if (normalized.startsWith('INSERT INTO MATT_MINE_WEEKLY_SNAPSHOTS')) {
         snapshotWrites += 1;
         return { rows: [{ week_key: '2026-07-13' }] };
+      }
+      if (normalized.startsWith('INSERT INTO MATT_MINE_WEEKLY_SNAPSHOT_ENTRIES')) {
+        snapshotEntryWrites += 1;
+        return { rows: [] };
       }
       return undefined;
     }
@@ -180,7 +185,8 @@ test('weekly snapshots wait through the 24-hour moderation window', async () => 
     now: () => oneHourAfterWeekClose
   }).init();
 
-  assert.equal(snapshotWrites, 0);
+  assert.equal(snapshotWrites, 1);
+  assert.equal(snapshotEntryWrites, 1);
 });
 
 test('live normalized leaderboards return top rows, player rank, and wallet weekly totals', async () => {

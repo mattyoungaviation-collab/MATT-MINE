@@ -143,6 +143,10 @@ export function listAdminContractActions() {
 }
 
 export function prepareAdminContractTransaction(input = {}) {
+  return prepareAdminContractTransactions(input).at(-1);
+}
+
+export function prepareAdminContractTransactions(input = {}) {
   const actionId = String(input.action || '');
   const definition = ACTIONS[actionId];
   assertApi(definition, 400, 'unknown_contract_action', 'Unknown contract action.');
@@ -155,35 +159,80 @@ export function prepareAdminContractTransaction(input = {}) {
   );
   const normalizedArgs = definition.argumentTypes.map((type, index) => normalizeArgument(type, supplied[index]));
   const args = definition.mapArgs ? definition.mapArgs(normalizedArgs) : normalizedArgs;
-  const to = MATT_MINE_ADMIN_CONTRACTS[definition.contract];
+  if (actionId === 'rewards_fund_vault') {
+    return [
+      buildTransaction({
+        actionId,
+        contract: 'matt',
+        abi: MATT_ABI,
+        functionName: 'approve',
+        args: [MATT_MINE_ADMIN_CONTRACTS.rewards, args[0]],
+        requiredSigner: definition.requiredSigner,
+        purpose: 'Approve the reward vault to pull this exact MATT amount.'
+      }),
+      buildTransaction({
+        actionId,
+        contract: definition.contract,
+        abi: definition.abi,
+        functionName: definition.functionName,
+        args,
+        requiredSigner: definition.requiredSigner,
+        purpose: 'Fund the reward vault immediately after the matching approval.'
+      })
+    ];
+  }
+  return [buildTransaction({
+    actionId,
+    contract: definition.contract,
+    abi: definition.abi,
+    functionName: definition.functionName,
+    args,
+    requiredSigner: definition.requiredSigner
+  })];
+}
+
+function buildTransaction({
+  actionId,
+  contract,
+  abi,
+  functionName,
+  args,
+  requiredSigner,
+  purpose = ''
+}) {
   return {
     chainId: 2020,
     action: actionId,
-    contract: definition.contract,
-    to,
+    contract,
+    to: MATT_MINE_ADMIN_CONTRACTS[contract],
     value: '0',
     data: encodeFunctionData({
-      abi: definition.abi,
-      functionName: definition.functionName,
+      abi,
+      functionName,
       args
     }),
-    functionName: definition.functionName,
+    functionName,
     arguments: args.map(String),
-    requiredSigner: definition.requiredSigner,
+    requiredSigner,
     safeAddress: MATT_MINE_ADMIN_CONTRACTS.safe,
     broadcast: false,
+    ...(purpose ? { purpose } : {}),
     warning: 'Prepared only. Review the destination, calldata, signer role, and current contract state before signing.'
   };
 }
 
-export function createAdminSafeTransactionFile(transaction, createdAt = Date.now()) {
-  if (!transaction.requiredSigner.includes('Safe')) return null;
-  return createSafeTransactionBuilderFile(transaction, {
-    chainId: transaction.chainId,
+export function createAdminSafeTransactionFile(transactionOrTransactions, createdAt = Date.now()) {
+  const transactions = Array.isArray(transactionOrTransactions)
+    ? transactionOrTransactions
+    : [transactionOrTransactions];
+  if (!transactions.length || transactions.some((transaction) => !transaction.requiredSigner.includes('Safe'))) return null;
+  const primary = transactions.at(-1);
+  return createSafeTransactionBuilderFile(transactions, {
+    chainId: primary.chainId,
     createdAt,
-    safeAddress: transaction.safeAddress,
-    name: `MATT Mine: ${transaction.action}`,
-    description: `Prepared by the MATT Mine Command Center for ${transaction.requiredSigner}.`
+    safeAddress: primary.safeAddress,
+    name: `MATT Mine: ${primary.action}`,
+    description: `Prepared by the MATT Mine Command Center for ${primary.requiredSigner}. Execute every transaction in order.`
   });
 }
 

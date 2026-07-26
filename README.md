@@ -4,7 +4,16 @@
 
 MATT Mine is a standalone browser action roguelite and daily Web3 competition on Ronin. It has its own launch website, wallet identity, separate Free and Pass leaderboards, live Pass and paid-run payments, verified contracts, and a production persistence path independent from MATT Hub.
 
-## v1.2 dry-run reward settlement
+## v1.4 live reward settlement hardening
+
+- Finalize immutable weekly leaderboard snapshots as soon as the UTC countdown reaches zero.
+- Close new ranked entries during the final five minutes so an unfinished run cannot cross the immutable snapshot boundary; Practice stays available.
+- Enable production reward publication while preserving independent approval and 2-of-3 Safe execution.
+- Run live Ronin preflight checks for vault pause state, duplicate epochs, available vault funding, and Treasury Safe MATT balance before creating a publication file.
+- Generate reward-vault funding as one ordered MATT approval and vault-funding Safe batch, preventing the missing-approval failure that produces Safe `GS013`.
+- Keep the non-adjustable 5,000,000 MATT per-board ceiling and 1,500,000 MATT first-place ceiling.
+
+## v1.2 reward settlement
 
 - Convert immutable weekly snapshots into deterministic OpenZeppelin Merkle reward proofs.
 - Allocate the complete approved board pool across eligible top-ten players using a 30% / 18% / 12% / 8% / 7% / 6% / 5.5% / 5% / 4.5% / 4% schedule, normalized when fewer than ten wallets qualify.
@@ -12,7 +21,7 @@ MATT Mine is a standalone browser action roguelite and daily Web3 competition on
 - Prepare exact approve, fund, and publish transactions for the existing 2-of-3 Safe without storing a publisher key on the server.
 - Verify the exact root, allocation, and deadline on Ronin before exposing claims.
 - Give included players a server-prepared, player-signed Ronin Wallet claim transaction.
-- Deploy with publication disabled and a non-adjustable 5,000,000 MATT per-board ceiling; first place can receive at most 30%, or 1,500,000 MATT.
+- Use a non-adjustable 5,000,000 MATT per-board ceiling; first place can receive at most 30%, or 1,500,000 MATT.
 
 See [`docs/REWARD_PIPELINE_V12.md`](docs/REWARD_PIPELINE_V12.md).
 
@@ -25,8 +34,7 @@ See [`docs/REWARD_PIPELINE_V12.md`](docs/REWARD_PIPELINE_V12.md).
 - Read production profile totals and leaderboards from the normalized score tables.
 - Exclude suspended wallets from live rankings and from final snapshots.
 - Preserve completed weekly rankings in immutable snapshot and snapshot-entry tables.
-- Keep a 24-hour moderation window after each UTC week closes before finalizing its snapshot.
-- Keep a closed week open while any unexpired official run from that week remains active.
+- Finalize the closed week at the UTC boundary after ranked entry closes for the final five minutes.
 - Allow authenticated historical leaderboard reads by Monday UTC week key.
 
 ## v1.0 standalone launch

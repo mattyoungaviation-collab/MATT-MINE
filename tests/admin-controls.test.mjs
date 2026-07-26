@@ -8,7 +8,8 @@ import { privateKeyToAccount } from 'viem/accounts';
 import {
   createAdminSafeTransactionFile,
   MATT_MINE_ADMIN_CONTRACTS,
-  prepareAdminContractTransaction
+  prepareAdminContractTransaction,
+  prepareAdminContractTransactions
 } from '../server/admin-controls.js';
 import {
   calculateSafeTransactionBuilderChecksum,
@@ -152,20 +153,28 @@ test('contract controls prepare exact calldata without signing or broadcasting',
   );
 });
 
-test('Treasury actions create checksummed Ronin Safe Transaction Builder JSON', () => {
-  const transaction = prepareAdminContractTransaction({
+test('Treasury vault funding always creates an ordered approve-and-fund Safe batch', () => {
+  const transactions = prepareAdminContractTransactions({
     action: 'rewards_fund_vault',
     arguments: ['1500000']
   });
-  const file = createAdminSafeTransactionFile(transaction, START);
+  const transaction = transactions.at(-1);
+  const file = createAdminSafeTransactionFile(transactions, START);
 
   assert.equal(file.version, '1.0');
   assert.equal(file.chainId, '2020');
   assert.equal(file.createdAt, START);
   assert.equal(file.meta.createdFromSafeAddress, MATT_MINE_ADMIN_CONTRACTS.safe);
   assert.match(file.meta.checksum, /^0x[a-f0-9]{64}$/);
-  assert.equal(file.transactions.length, 1);
+  assert.equal(file.transactions.length, 2);
   assert.deepEqual(file.transactions[0], {
+    to: MATT_MINE_ADMIN_CONTRACTS.matt,
+    value: '0',
+    data: transactions[0].data,
+    contractMethod: null,
+    contractInputsValues: null
+  });
+  assert.deepEqual(file.transactions[1], {
     to: MATT_MINE_ADMIN_CONTRACTS.rewards,
     value: '0',
     data: transaction.data,

@@ -8,7 +8,8 @@ import { ronin } from 'viem/chains';
 import {
   MATT_TOKEN_ADDRESS,
   REWARD_CHAIN_ID,
-  REWARD_CONTRACT_ADDRESS
+  REWARD_CONTRACT_ADDRESS,
+  REWARD_TREASURY_ADDRESS
 } from './reward-plan.js';
 import { assertApi } from './errors.js';
 
@@ -109,6 +110,16 @@ const ERC20_ABI = [
     stateMutability: 'view',
     inputs: [{ name: 'account', type: 'address' }],
     outputs: [{ type: 'uint256' }]
+  },
+  {
+    type: 'function',
+    name: 'allowance',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'owner', type: 'address' },
+      { name: 'spender', type: 'address' }
+    ],
+    outputs: [{ type: 'uint256' }]
   }
 ];
 
@@ -116,6 +127,7 @@ export class RoninRewardChain {
   constructor(options = {}) {
     this.rewardsAddress = getAddress(options.rewardsAddress || REWARD_CONTRACT_ADDRESS);
     this.mattAddress = getAddress(options.mattAddress || MATT_TOKEN_ADDRESS);
+    this.treasuryAddress = getAddress(options.treasuryAddress || REWARD_TREASURY_ADDRESS);
     this.client = options.client || createPublicClient({
       chain: ronin,
       transport: http(options.rpcUrl || 'https://api.roninchain.com/rpc')
@@ -133,7 +145,7 @@ export class RoninRewardChain {
 
   async publicationTransactions(plan) {
     const amount = BigInt(plan.allocatedRaw);
-    const [vaultBalance, reserved] = await Promise.all([
+    const [vaultBalance, reserved, treasuryBalance, treasuryAllowance, paused, epoch] = await Promise.all([
       this.client.readContract({
         address: this.mattAddress,
         abi: ERC20_ABI,
@@ -144,12 +156,55 @@ export class RoninRewardChain {
         address: this.rewardsAddress,
         abi: REWARDS_ABI,
         functionName: 'totalReservedMatt'
+      }),
+      this.client.readContract({
+        address: this.mattAddress,
+        abi: ERC20_ABI,
+        functionName: 'balanceOf',
+        args: [this.treasuryAddress]
+      }),
+      this.client.readContract({
+        address: this.mattAddress,
+        abi: ERC20_ABI,
+        functionName: 'allowance',
+        args: [this.treasuryAddress, this.rewardsAddress]
+      }),
+      this.client.readContract({
+        address: this.rewardsAddress,
+        abi: REWARDS_ABI,
+        functionName: 'paused'
+      }),
+      this.client.readContract({
+        address: this.rewardsAddress,
+        abi: REWARDS_ABI,
+        functionName: 'getEpoch',
+        args: [BigInt(plan.epoch), plan.board]
       })
     ]);
     const available = vaultBalance > reserved ? vaultBalance - reserved : 0n;
     const shortfall = amount > available ? amount - available : 0n;
+    assertApi(!paused, 409, 'reward_vault_paused', 'Reward publication is blocked because the reward vault is paused.');
+    assertApi(!epoch.published, 409, 'reward_epoch_exists', 'This reward epoch is already published on Ronin.');
+    assertApi(
+      treasuryBalance >= shortfall,
+      409,
+      'reward_treasury_insufficient',
+      'The Treasury Safe does not hold enough MATT to cover the reward vault shortfall.'
+    );
     const transactions = [];
     if (shortfall > 0n) {
+      if (treasuryAllowance > 0n && treasuryAllowance !== shortfall) {
+        transactions.push({
+          purpose: 'Reset the existing reward-vault allowance before setting the exact amount',
+          to: this.mattAddress,
+          value: '0x0',
+          data: encodeFunctionData({
+            abi: ERC20_ABI,
+            functionName: 'approve',
+            args: [this.rewardsAddress, 0n]
+          })
+        });
+      }
       transactions.push({
         purpose: 'Approve the reward vault to pull the exact pilot allocation',
         to: this.mattAddress,
@@ -193,7 +248,11 @@ export class RoninRewardChain {
         balanceRaw: String(vaultBalance),
         reservedRaw: String(reserved),
         availableRaw: String(available),
-        fundingShortfallRaw: String(shortfall)
+        fundingShortfallRaw: String(shortfall),
+        treasuryBalanceRaw: String(treasuryBalance),
+        treasuryAllowanceRaw: String(treasuryAllowance),
+        paused: false,
+        epochAvailable: true
       }
     };
   }
