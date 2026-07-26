@@ -1075,6 +1075,18 @@ async function refreshArena(silent = false) {
   try {
     const config = await apiClient.arenaConfig();
     arenaConfig = normalizeArenaConfig(config);
+    if (!arenaConfig.enabled) {
+      arenaLeaderboard = normalizeArenaLeaderboard({
+        day: arenaConfig.day,
+        status: arenaConfig.status,
+        totalPoolRaw: arenaConfig.prizePoolRaw,
+        rows: []
+      });
+      arenaPlayer = normalizeArenaPlayer();
+      renderArenaMenuStatus();
+      if ($('#daily-arena').classList.contains('active')) renderArena();
+      return arenaConfig;
+    }
     const requests = [apiClient.arenaLeaderboard(arenaConfig.day)];
     if (serverPlayer) requests.push(apiClient.arenaMe(arenaConfig.day));
     const [leaderboardResult, playerResult] = await Promise.allSettled(requests);
