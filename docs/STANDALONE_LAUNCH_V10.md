@@ -47,7 +47,7 @@ MATT reward claims remain disabled. Do not fund a public reward epoch until scor
    ```json
    {
      "ok": true,
-     "version": 10,
+     "version": 11,
      "database": {
        "ok": true,
        "kind": "postgresql"

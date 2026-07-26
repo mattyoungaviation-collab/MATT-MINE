@@ -4,6 +4,19 @@
 
 MATT Mine is a standalone browser action roguelite and daily Web3 competition on Ronin. It has its own launch website, wallet identity, separate Free and Pass leaderboards, live Pass and paid-run payments, verified contracts, and a production persistence path independent from MATT Hub.
 
+## v1.1 permanent leaderboard storage
+
+- Store every server-issued run in a dedicated PostgreSQL run table.
+- Maintain separate daily-best and weekly-total score tables for the Free and Pass leaderboards.
+- Copy existing JSON-backed production runs into the normalized tables automatically and idempotently.
+- Dual-write the legacy state during the first normalized release so an immediate application rollback does not discard scores.
+- Read production profile totals and leaderboards from the normalized score tables.
+- Exclude suspended wallets from live rankings and from final snapshots.
+- Preserve completed weekly rankings in immutable snapshot and snapshot-entry tables.
+- Keep a 24-hour moderation window after each UTC week closes before finalizing its snapshot.
+- Keep a closed week open while any unexpired official run from that week remains active.
+- Allow authenticated historical leaderboard reads by Monday UTC week key.
+
 ## v1.0 standalone launch
 
 - Add a complete standalone MATT Mine website with original hero artwork, responsive sections, gameplay explanation, Free/Pass comparison, economy flow, roadmap, verified-contract directory, and launch disclosures.
@@ -133,7 +146,7 @@ The included `render.yaml` creates one Node web service and one PostgreSQL datab
 4. Verify `/api/health` reports `"database":{"ok":true,"kind":"postgresql"}`.
 5. Run one controlled Pass and paid-run reconciliation before announcing the URL.
 
-See [`docs/STANDALONE_LAUNCH_V10.md`](docs/STANDALONE_LAUNCH_V10.md) for the deployment and go-live checklist.
+See [`docs/STANDALONE_LAUNCH_V10.md`](docs/STANDALONE_LAUNCH_V10.md) for the deployment and go-live checklist and [`docs/LEADERBOARD_STORAGE_V11.md`](docs/LEADERBOARD_STORAGE_V11.md) for the normalized leaderboard migration.
 
 ## Important live-payment boundary
 
@@ -150,4 +163,4 @@ Before real value is enabled, the production build still requires:
 7. Immutable weekly reward publication and onchain claims.
 8. 2-of-3 multisig control for treasury and major contract administration, with no timelock.
 
-See [`docs/STANDALONE_LAUNCH_V10.md`](docs/STANDALONE_LAUNCH_V10.md), [`docs/LIVE_PAYMENTS_V09.md`](docs/LIVE_PAYMENTS_V09.md), [`docs/CONTRACT_DEPLOYMENT_V08.md`](docs/CONTRACT_DEPLOYMENT_V08.md), [`docs/SECURITY_V07.md`](docs/SECURITY_V07.md), [`docs/ECONOMY_V1.md`](docs/ECONOMY_V1.md), and [`contracts/README.md`](contracts/README.md).
+See [`docs/LEADERBOARD_STORAGE_V11.md`](docs/LEADERBOARD_STORAGE_V11.md), [`docs/STANDALONE_LAUNCH_V10.md`](docs/STANDALONE_LAUNCH_V10.md), [`docs/LIVE_PAYMENTS_V09.md`](docs/LIVE_PAYMENTS_V09.md), [`docs/CONTRACT_DEPLOYMENT_V08.md`](docs/CONTRACT_DEPLOYMENT_V08.md), [`docs/SECURITY_V07.md`](docs/SECURITY_V07.md), [`docs/ECONOMY_V1.md`](docs/ECONOMY_V1.md), and [`contracts/README.md`](contracts/README.md).

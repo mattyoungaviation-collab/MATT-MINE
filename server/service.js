@@ -157,7 +157,8 @@ export class MattMineService {
     });
 
     result.entitlements.paidRunsEnabled = this.mainnetTransactionsEnabled;
-    return { token, expiresAt, ...result };
+    const hydrated = await this.hydratePlayerScores(result);
+    return { token, expiresAt, ...hydrated };
   }
 
   async signOut(token) {
@@ -173,7 +174,7 @@ export class MattMineService {
     const state = await this.database.read();
     const player = publicWalletSnapshot(state, session.address, this.now());
     player.entitlements.paidRunsEnabled = this.mainnetTransactionsEnabled;
-    return player;
+    return this.hydratePlayerScores(player);
   }
 
   async paymentStatus(token) {
@@ -260,9 +261,9 @@ export class MattMineService {
     const runToken = this.randomHex(24);
     const runTokenHash = hashToken(runToken);
 
-    return this.database.transact((state) => {
+    return this.database.transact(async (state, transaction) => {
       const wallet = requireWallet(state, session.address);
-      expireOldRuns(state, timestamp);
+      await expireOldRuns(state, timestamp, transaction);
       if (normalizedMode !== SERVER_RUN_MODES.PRACTICE) {
         assertApi(!wallet.suspended, 403, 'wallet_suspended', 'This wallet is suspended from ranked play.');
         const activeRanked = Object.values(state.runs).find((run) =>
@@ -292,7 +293,7 @@ export class MattMineService {
         : normalizedMode === SERVER_RUN_MODES.PAID
           ? `MATT-MINE-${day}-PAID`
           : `MATT-PRACTICE-${day}-${this.randomHex(10)}`;
-      state.runs[runId] = {
+      const serverRun = {
         id: runId,
         tokenHash: runTokenHash,
         address: session.address,
@@ -306,6 +307,8 @@ export class MattMineService {
         finishedAt: 0,
         result: null
       };
+      state.runs[runId] = serverRun;
+      await transaction?.upsertRun(serverRun);
       wallet.updatedAt = timestamp;
       addAudit(state, session.address, 'SERVER_RUN_STARTED', `${normalizedMode} ${runId}`, timestamp);
       return {
@@ -334,9 +337,18 @@ export class MattMineService {
     assertApi(/^[a-f0-9]{48}$/.test(runToken), 400, 'invalid_run_token', 'The run token is invalid.');
     const timestamp = this.now();
 
-    return this.database.transact((state) => {
+    const completed = await this.database.transact(async (state, transaction) => {
       const wallet = requireWallet(state, session.address);
-      const run = state.runs[runId];
+      let run = state.runs[runId];
+      if (!run && transaction?.normalizedLeaderboards) {
+        const storedStatus = await transaction.storedRunStatus(runId);
+        if (storedStatus === 'finished') {
+          throw new ApiError(409, 'run_already_finished', 'This run was already submitted.');
+        }
+        if (storedStatus === 'expired') {
+          throw new ApiError(410, 'run_expired', 'The run expired before it was submitted.');
+        }
+      }
       assertApi(run, 404, 'run_not_found', 'The server run was not found.');
       assertApi(run.address === session.address, 403, 'run_owner_mismatch', 'This run belongs to another wallet.');
       assertApi(run.status === 'active', 409, 'run_already_finished', 'This run was already submitted.');
@@ -355,17 +367,30 @@ export class MattMineService {
       wallet.profile.bestScore = Math.max(wallet.profile.bestScore, result.score);
       wallet.profile.totalRuns += 1;
       wallet.updatedAt = timestamp;
+      await transaction?.recordFinishedRun(run);
       addAudit(state, session.address, 'SERVER_RUN_VERIFIED', `${run.mode} score ${result.score}`, timestamp);
       return {
         accepted: true,
         run: publicRun(run),
         profile: structuredClone(wallet.profile),
-        leaderboard: leaderboardForState(state, run.mode, run.week, session.address)
+        mode: run.mode,
+        week: run.week
       };
     });
+    const leaderboard = await this.leaderboardFor(
+      completed.mode,
+      completed.week,
+      session.address
+    );
+    return {
+      accepted: completed.accepted,
+      run: completed.run,
+      profile: completed.profile,
+      leaderboard
+    };
   }
 
-  async leaderboard(token, mode, timestamp = this.now()) {
+  async leaderboard(token, mode, timestamp = this.now(), requestedWeek = '') {
     const session = await this.authenticate(token);
     const normalizedMode = String(mode || '');
     assertApi(
@@ -374,8 +399,48 @@ export class MattMineService {
       'invalid_leaderboard',
       'Choose the Free or Pass leaderboard.'
     );
+    const currentWeek = utcWeekKey(timestamp);
+    const week = normalizeWeekKey(requestedWeek, currentWeek);
     const state = await this.database.read();
-    return leaderboardForState(state, normalizedMode, utcWeekKey(timestamp), session.address);
+    const suspended = suspendedWalletAddresses(state);
+    await this.database.finalizeLeaderboards?.(currentWeek, suspended, timestamp);
+    if (typeof this.database.leaderboard === 'function') {
+      try {
+        return await this.database.leaderboard(normalizedMode, week, session.address, {
+          suspendedAddresses: suspended
+        });
+      } catch {
+        return leaderboardForState(state, normalizedMode, week, session.address);
+      }
+    }
+    return leaderboardForState(state, normalizedMode, week, session.address);
+  }
+
+  async leaderboardFor(mode, week, viewerAddress) {
+    const state = await this.database.read();
+    const suspended = suspendedWalletAddresses(state);
+    if (typeof this.database.leaderboard === 'function') {
+      try {
+        return await this.database.leaderboard(mode, week, viewerAddress, {
+          suspendedAddresses: suspended
+        });
+      } catch {
+        return leaderboardForState(state, mode, week, viewerAddress);
+      }
+    }
+    return leaderboardForState(state, mode, week, viewerAddress);
+  }
+
+  async hydratePlayerScores(player) {
+    if (typeof this.database.playerScores !== 'function') return player;
+    try {
+      return {
+        ...player,
+        scores: await this.database.playerScores(player.address, player.week)
+      };
+    } catch {
+      return player;
+    }
   }
 
   async purchaseUpgrade(token, upgradeId) {
@@ -573,10 +638,34 @@ function publicRun(run) {
   };
 }
 
-function expireOldRuns(state, timestamp) {
-  for (const run of Object.values(state.runs)) {
-    if (run.status === 'active' && run.expiresAt <= timestamp) run.status = 'expired';
+async function expireOldRuns(state, timestamp, transaction) {
+  for (const [runId, run] of Object.entries(state.runs)) {
+    if (run.status !== 'active' || run.expiresAt > timestamp) continue;
+    run.status = 'expired';
+    await transaction?.upsertRun(run);
   }
+}
+
+function suspendedWalletAddresses(state) {
+  return Object.values(state.wallets || {})
+    .filter((wallet) => wallet?.suspended === true)
+    .map((wallet) => wallet.address);
+}
+
+function normalizeWeekKey(value, currentWeek) {
+  if (!value) return currentWeek;
+  const week = String(value);
+  const parsed = Date.parse(`${week}T00:00:00.000Z`);
+  assertApi(
+    /^\d{4}-\d{2}-\d{2}$/.test(week) &&
+      Number.isFinite(parsed) &&
+      utcWeekKey(parsed) === week &&
+      week <= currentWeek,
+    400,
+    'invalid_leaderboard_week',
+    'Choose a valid current or historical leaderboard week.'
+  );
+  return week;
 }
 
 function pruneSecurityRecords(state, timestamp) {
