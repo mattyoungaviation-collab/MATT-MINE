@@ -21,6 +21,7 @@ import {
 } from './constants.js';
 import { buildSignInMessage, normalizeOrigin } from './auth-message.js';
 import { ApiError, assertApi } from './errors.js';
+import { validateAvatarDataUrl, validateUsername } from './identity.js';
 import { MATT_MINE_LAUNCH_PRICES } from './payment-verifier.js';
 import { defaultWalletState } from './state.js';
 import {
@@ -209,6 +210,60 @@ export class MattMineService {
     const player = publicWalletSnapshot(state, session.address, this.now());
     player.entitlements.paidRunsEnabled = this.mainnetTransactionsEnabled;
     return this.hydratePlayerScores(player);
+  }
+
+  async setPlayerIdentity(token, input = {}) {
+    const session = await this.authenticate(token);
+    const username = validateUsername(input.name);
+    const avatarDataUrl = validateAvatarDataUrl(input.avatarDataUrl, { optional: true });
+    const timestamp = this.now();
+    return this.database.transact((state) => {
+      const wallet = requireWallet(state, session.address);
+      assertApi(!wallet.identity.name, 409, 'username_permanent', 'Your miner name is already set and cannot be changed.');
+      const duplicate = Object.values(state.wallets).find((candidate) =>
+        candidate.address !== session.address &&
+        candidate.identity?.nameKey === username.key
+      );
+      assertApi(!duplicate, 409, 'username_taken', 'That miner name is already taken.');
+      wallet.identity = {
+        name: username.name,
+        nameKey: username.key,
+        avatarDataUrl,
+        createdAt: timestamp,
+        avatarUpdatedAt: avatarDataUrl ? timestamp : 0
+      };
+      wallet.updatedAt = timestamp;
+      addAudit(state, session.address, 'MINER_IDENTITY_CREATED', username.name, timestamp);
+      return { identity: publicIdentity(wallet) };
+    });
+  }
+
+  async updatePlayerAvatar(token, avatarDataUrl) {
+    const session = await this.authenticate(token);
+    const normalizedAvatar = validateAvatarDataUrl(avatarDataUrl);
+    const timestamp = this.now();
+    return this.database.transact((state) => {
+      const wallet = requireWallet(state, session.address);
+      assertIdentityReady(wallet);
+      wallet.identity.avatarDataUrl = normalizedAvatar;
+      wallet.identity.avatarUpdatedAt = Math.max(timestamp, Number(wallet.identity.avatarUpdatedAt || 0) + 1);
+      wallet.updatedAt = timestamp;
+      addAudit(state, session.address, 'MINER_AVATAR_UPDATED', `${normalizedAvatar.length} bytes encoded`, timestamp);
+      return { identity: publicIdentity(wallet) };
+    });
+  }
+
+  async profileAvatar(address) {
+    const normalizedAddress = normalizeAddress(address);
+    const state = await this.database.read();
+    const wallet = state.wallets[normalizedAddress];
+    const match = wallet?.identity?.avatarDataUrl?.match(/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/);
+    assertApi(match, 404, 'avatar_missing', 'This miner has not uploaded a profile picture.');
+    return {
+      contentType: `image/${match[1]}`,
+      body: Buffer.from(match[2], 'base64'),
+      updatedAt: Number(wallet.identity.avatarUpdatedAt || 0)
+    };
   }
 
   async paymentStatus(token) {
@@ -460,6 +515,7 @@ export class MattMineService {
       const wallet = requireWallet(state, session.address);
       await expireOldRuns(state, timestamp, transaction);
       if (normalizedMode !== SERVER_RUN_MODES.PRACTICE) {
+        assertIdentityReady(wallet);
         assertApi(!wallet.suspended, 403, 'wallet_suspended', 'This wallet is suspended from ranked play.');
         const activeRanked = Object.values(state.runs).find((run) =>
           run.address === session.address &&
@@ -937,19 +993,26 @@ export class MattMineService {
 
   async finishArenaRun(token, payload) {
     const { session } = await this.arenaPlayer(token);
-    return this.arenaService.finishRun(session.address, payload);
+    const result = await this.arenaService.finishRun(session.address, payload);
+    const state = await this.database.read();
+    return {
+      ...result,
+      leaderboard: enrichLeaderboardAppearances(result.leaderboard, state)
+    };
   }
 
   async arenaLeaderboard(day = '') {
     this.assertArenaEnabled();
     const state = await this.database.read();
-    return this.arenaService.leaderboard(day, suspendedWalletAddresses(state));
+    const leaderboard = await this.arenaService.leaderboard(day, suspendedWalletAddresses(state));
+    return enrichLeaderboardAppearances(leaderboard, state);
   }
 
   async arenaMe(token, day = '') {
     const { session } = await this.arenaPlayer(token, {
       allowSuspended: true,
-      allowMaintenance: true
+      allowMaintenance: true,
+      allowIdentityMissing: true
     });
     return this.arenaService.playerStatus(session.address, day);
   }
@@ -957,7 +1020,8 @@ export class MattMineService {
   async prepareArenaRefund(token, day = '') {
     const { session } = await this.arenaPlayer(token, {
       allowSuspended: true,
-      allowMaintenance: true
+      allowMaintenance: true,
+      allowIdentityMissing: true
     });
     return this.arenaService.prepareRefund(session.address, day);
   }
@@ -1026,6 +1090,7 @@ export class MattMineService {
     const session = await this.authenticate(token);
     const state = await this.database.read();
     const wallet = requireWallet(state, session.address);
+    if (!options.allowIdentityMissing) assertIdentityReady(wallet);
     if (!options.allowSuspended) {
       assertApi(!wallet.suspended, 403, 'wallet_suspended', 'This wallet is suspended from Daily Arena play.');
     }
@@ -1114,6 +1179,7 @@ function publicWalletSnapshot(state, address, timestamp) {
   );
   return {
     address,
+    identity: publicIdentity(wallet),
     profile: structuredClone(wallet.profile),
     passProgress: publicPassProgress(wallet),
     passInventory: publicPassInventory(wallet),
@@ -1121,7 +1187,7 @@ function publicWalletSnapshot(state, address, timestamp) {
     day,
     week,
     entitlements: {
-      freeRunAvailable: !wallet.suspended && !freeDaily.freeRunUsed && !activeRanked,
+      freeRunAvailable: Boolean(wallet.identity?.name) && !wallet.suspended && !freeDaily.freeRunUsed && !activeRanked,
       paidRunsEnabled: false,
       activeRankedRunId: activeRanked?.id || null
     },
@@ -1144,10 +1210,11 @@ function leaderboardForState(state, mode, week, viewerAddress) {
     .map((row, index) => ({
       rank: index + 1,
       address: row.address,
-      walletId: abbreviateAddress(row.address),
+      walletId: state.wallets[row.address]?.identity?.name || abbreviateAddress(row.address),
       score: row.score,
       isPlayer: row.address === viewerAddress,
       verified: true,
+      identity: publicIdentity(state.wallets[row.address]),
       appearance: publicLeaderboardAppearance(state.wallets[row.address])
     }));
   const player = rows.find((row) => row.address === viewerAddress);
@@ -1269,11 +1336,26 @@ function publicLeaderboardAppearance(wallet) {
   };
 }
 
+function publicIdentity(wallet) {
+  const identity = wallet?.identity || {};
+  return {
+    name: identity.name || '',
+    avatarUrl: identity.avatarDataUrl && wallet?.address
+      ? `/api/profiles/${wallet.address}/avatar?v=${Number(identity.avatarUpdatedAt || 0)}`
+      : '',
+    createdAt: Number(identity.createdAt || 0),
+    avatarUpdatedAt: Number(identity.avatarUpdatedAt || 0),
+    requiresSetup: !identity.name
+  };
+}
+
 function enrichLeaderboardAppearances(leaderboard, state) {
   return {
     ...leaderboard,
     rows: (leaderboard.rows || []).map((row) => ({
       ...row,
+      walletId: state.wallets[row.address]?.identity?.name || row.walletId || abbreviateAddress(row.address),
+      identity: publicIdentity(state.wallets[row.address]),
       appearance: publicLeaderboardAppearance(state.wallets[row.address])
     }))
   };
@@ -1296,6 +1378,7 @@ function adminWalletSnapshot(state, wallet, timestamp) {
   const today = wallet.daily[utcDayKey(timestamp)] || { freeRunUsed: false };
   return {
     address: wallet.address,
+    identity: publicIdentity(wallet),
     suspended: wallet.suspended,
     profile: structuredClone(wallet.profile),
     passProgress: publicPassProgress(wallet),
@@ -1365,6 +1448,15 @@ function requireWallet(state, address) {
   const wallet = state.wallets[address];
   assertApi(wallet, 401, 'wallet_missing', 'The authenticated wallet profile was not found.');
   return wallet;
+}
+
+function assertIdentityReady(wallet) {
+  assertApi(
+    Boolean(wallet?.identity?.name),
+    409,
+    'miner_identity_required',
+    'Choose your permanent miner name before entering ranked play.'
+  );
 }
 
 function normalizeAddress(value) {

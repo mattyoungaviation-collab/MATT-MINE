@@ -54,13 +54,16 @@ async function handleApiRequest({
   const clientKey = request.socket.remoteAddress || 'unknown';
   const stricter = requestUrl.pathname === '/api/auth/challenge';
   rateLimiter.consume(`${clientKey}:${stricter ? 'challenge' : 'api'}`, stricter ? 12 : 240, stricter ? 10 * 60_000 : 60_000);
+  if (requestUrl.pathname === '/api/profile/identity' || requestUrl.pathname === '/api/profile/avatar') {
+    rateLimiter.consume(`${clientKey}:profile-media`, 12, 10 * 60_000);
+  }
   enforceSameOrigin(request, service.publicOrigin);
 
   const method = request.method || 'GET';
   const path = requestUrl.pathname;
   if (method === 'GET' && path === '/api/health') {
     const health = await service.health();
-    sendJson(response, 200, { ok: true, service: 'matt-mine', version: 16, ...health });
+    sendJson(response, 200, { ok: true, service: 'matt-mine', version: 17, ...health });
     return;
   }
   if (method === 'GET' && path === '/api/config') {
@@ -98,6 +101,29 @@ async function handleApiRequest({
   if (method === 'GET' && path === '/api/me') {
     const player = await service.me(bearerToken(request));
     sendJson(response, 200, { ok: true, player });
+    return;
+  }
+  const profileAvatarMatch = path.match(/^\/api\/profiles\/(0x[a-fA-F0-9]{40})\/avatar$/);
+  if (method === 'GET' && profileAvatarMatch) {
+    const avatar = await service.profileAvatar(profileAvatarMatch[1]);
+    response.writeHead(200, {
+      'content-type': avatar.contentType,
+      'content-length': avatar.body.length,
+      'cache-control': 'public, max-age=31536000, immutable'
+    });
+    response.end(avatar.body);
+    return;
+  }
+  if (method === 'POST' && path === '/api/profile/identity') {
+    const body = await readJson(request, maxRequestBytes);
+    const result = await service.setPlayerIdentity(bearerToken(request), body);
+    sendJson(response, 201, { ok: true, ...result });
+    return;
+  }
+  if (method === 'PUT' && path === '/api/profile/avatar') {
+    const body = await readJson(request, maxRequestBytes);
+    const result = await service.updatePlayerAvatar(bearerToken(request), body.avatarDataUrl);
+    sendJson(response, 200, { ok: true, ...result });
     return;
   }
   if (method === 'GET' && path === '/api/payments/status') {

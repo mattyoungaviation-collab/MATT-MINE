@@ -111,6 +111,21 @@ export function pointInLayout(layout, x, y, padding = 0) {
     layout.corridors.some((corridor) => pointInRect(corridor, x, y, padding));
 }
 
+export function segmentInLayout(layout, startX, startY, endX, endY, padding = 0, stepSize = 8) {
+  const length = Math.hypot(endX - startX, endY - startY);
+  const steps = Math.max(1, Math.ceil(length / Math.max(2, stepSize)));
+  for (let step = 0; step <= steps; step += 1) {
+    const progress = step / steps;
+    if (!pointInLayout(
+      layout,
+      startX + (endX - startX) * progress,
+      startY + (endY - startY) * progress,
+      padding
+    )) return false;
+  }
+  return true;
+}
+
 export function roomAt(layout, x, y) {
   return layout.rooms.find((room) => pointInRect(room, x, y, 0)) || null;
 }

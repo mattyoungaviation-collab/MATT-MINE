@@ -70,6 +70,7 @@ let arenaBusy = false;
 let arenaCountdownTimer = null;
 let activeArenaRun = null;
 let activeArenaTranscript = null;
+let pendingAvatarDataUrl = '';
 const wallet = new RoninWalletAdapter({
   api: apiClient,
   onInvalidated(reason) {
@@ -159,7 +160,9 @@ function updateMenu() {
   $('#menu-nuggets').textContent = formatNumber(profile.bankedNuggets);
   $('#menu-depth').textContent = String(profile.bestDepth);
   $('#menu-score').textContent = formatNumber(profile.bestScore);
-  $('#wallet-label').textContent = connected ? abbreviateAddress(serverPlayer.address) : walletBusy ? 'CONNECTING…' : 'CONNECT RONIN';
+  $('#wallet-label').textContent = connected
+    ? serverPlayer.identity?.name || abbreviateAddress(serverPlayer.address)
+    : walletBusy ? 'CONNECTING…' : 'CONNECT RONIN';
   $('#wallet-network').textContent = connected
     ? `${serverConfig?.chainName || 'RONIN'} · SERVER VERIFIED`
     : `${serverConfig?.chainName || 'RONIN MAINNET'} · SIGN TO PLAY RANKED`;
@@ -239,7 +242,7 @@ function updateLaunch({ connected, freeAccess, passPrice, paidRunPrice, livePaym
     }).format(new Date()).toUpperCase();
   }
   if (walletLabel) walletLabel.textContent = connected
-    ? abbreviateAddress(serverPlayer.address)
+    ? serverPlayer.identity?.name || abbreviateAddress(serverPlayer.address)
     : walletBusy ? 'CONNECTING…' : 'CONNECT RONIN';
   if (walletButton) {
     walletButton.disabled = walletBusy;
@@ -290,6 +293,138 @@ function toast(message) {
   toastTimer = setTimeout(() => element.classList.remove('active'), 2600);
 }
 
+function openMinerProfile(forceSetup = false) {
+  if (!serverPlayer) {
+    void connectWallet().then((connected) => {
+      if (connected) openMinerProfile(false);
+    });
+    return;
+  }
+  pendingAvatarDataUrl = '';
+  const identity = serverPlayer.identity || { requiresSetup: true };
+  const requiresSetup = forceSetup || identity.requiresSetup || !identity.name;
+  const panel = $('.miner-profile-panel');
+  panel?.classList.toggle('setup-required', requiresSetup);
+  $('#profile-title').textContent = requiresSetup ? 'Create Your Miner' : 'Your Miner Profile';
+  $('#profile-intro').textContent = requiresSetup
+    ? 'Choose carefully. Your miner name is unique and permanently tied to this wallet.'
+    : 'Your miner name is permanent. You can upload a new leaderboard picture whenever you want.';
+  $('#profile-name').value = identity.name || '';
+  $('#profile-name').readOnly = !requiresSetup;
+  $('#profile-name-note').textContent = requiresSetup
+    ? 'Names ignore capitalization when checking duplicates and cannot be changed after saving.'
+    : `Permanently linked to ${abbreviateAddress(serverPlayer.address)}.`;
+  $('#save-profile-button').hidden = !requiresSetup;
+  $('#update-avatar-button').hidden = true;
+  $('#profile-status').textContent = requiresSetup
+    ? 'Finish this one-time setup before entering ranked games.'
+    : 'Your name and picture appear on every MATT Mine leaderboard.';
+  renderProfileAvatar(identity.avatarUrl || '');
+  showScreen('miner-profile');
+  if (requiresSetup) $('#profile-name').focus();
+}
+
+function renderProfileAvatar(dataUrl = '') {
+  const preview = $('#profile-avatar-preview');
+  const fallback = $('#profile-avatar-fallback');
+  preview.hidden = !dataUrl;
+  fallback.hidden = Boolean(dataUrl);
+  if (dataUrl) preview.src = dataUrl;
+  else preview.removeAttribute('src');
+  fallback.textContent = (serverPlayer?.identity?.name || $('#profile-name').value || 'M').slice(0, 1).toUpperCase();
+}
+
+async function saveMinerIdentity() {
+  if (!serverPlayer || !serverPlayer.identity?.requiresSetup || walletBusy) return;
+  walletBusy = true;
+  const button = $('#save-profile-button');
+  button.disabled = true;
+  button.textContent = 'SAVING PERMANENT NAME…';
+  try {
+    const result = await apiClient.setIdentity($('#profile-name').value, pendingAvatarDataUrl);
+    serverPlayer.identity = result.identity;
+    if (wallet.player) wallet.player.identity = result.identity;
+    pendingAvatarDataUrl = '';
+    updateMenu();
+    showScreen('menu');
+    toast(`Welcome to the mine, ${result.identity.name}.`);
+  } catch (error) {
+    $('#profile-status').textContent = error.message;
+    toast(error.message);
+  } finally {
+    walletBusy = false;
+    button.disabled = false;
+    button.textContent = 'LOCK IN MINER NAME';
+  }
+}
+
+async function updateMinerAvatar() {
+  if (!serverPlayer?.identity?.name || !pendingAvatarDataUrl || walletBusy) return;
+  walletBusy = true;
+  const button = $('#update-avatar-button');
+  button.disabled = true;
+  button.textContent = 'UPLOADING…';
+  try {
+    const result = await apiClient.updateAvatar(pendingAvatarDataUrl);
+    serverPlayer.identity = result.identity;
+    if (wallet.player) wallet.player.identity = result.identity;
+    pendingAvatarDataUrl = '';
+    renderProfileAvatar(result.identity.avatarUrl);
+    button.hidden = true;
+    $('#profile-status').textContent = 'Profile picture updated across the server leaderboards.';
+    toast('Profile picture updated');
+  } catch (error) {
+    $('#profile-status').textContent = error.message;
+    toast(error.message);
+  } finally {
+    walletBusy = false;
+    button.disabled = false;
+    button.textContent = 'UPDATE PROFILE PICTURE';
+  }
+}
+
+async function prepareProfileImage(file) {
+  if (!file || !['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+    throw new Error('Choose a PNG, JPEG, or WebP image.');
+  }
+  if (file.size > 5 * 1024 * 1024) throw new Error('Choose an image smaller than 5 MB.');
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = await new Promise((resolve, reject) => {
+      const element = new Image();
+      element.onload = () => resolve(element);
+      element.onerror = () => reject(new Error('The selected image could not be opened.'));
+      element.src = objectUrl;
+    });
+    const sourceSize = Math.min(image.naturalWidth, image.naturalHeight);
+    const sourceX = (image.naturalWidth - sourceSize) / 2;
+    const sourceY = (image.naturalHeight - sourceSize) / 2;
+    for (const [size, quality] of [[160, 0.82], [144, 0.7], [128, 0.6]]) {
+      const output = document.createElement('canvas');
+      output.width = size;
+      output.height = size;
+      output.getContext('2d').drawImage(
+        image,
+        sourceX,
+        sourceY,
+        sourceSize,
+        sourceSize,
+        0,
+        0,
+        size,
+        size
+      );
+      const dataUrl = output.toDataURL('image/webp', quality);
+      const encoded = dataUrl.split(',')[1] || '';
+      const decodedBytes = Math.floor(encoded.length * 3 / 4);
+      if (decodedBytes <= 48 * 1024) return dataUrl;
+    }
+    throw new Error('That picture is too detailed. Try a simpler or smaller image.');
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
 async function connectWallet() {
   if (walletBusy) return false;
   walletBusy = true;
@@ -300,7 +435,12 @@ async function connectWallet() {
     saveProfile(profile);
     game.setProfile(profile);
     await refreshPaymentStatus(true);
-    toast(`Signed in · ${abbreviateAddress(serverPlayer.address)}`);
+    if (serverPlayer.identity?.requiresSetup) {
+      openMinerProfile(true);
+      toast('Choose your permanent miner name to finish signing in.');
+      return false;
+    }
+    toast(`Signed in · ${serverPlayer.identity?.name || abbreviateAddress(serverPlayer.address)}`);
     return true;
   } catch (error) {
     toast(error?.message || 'Ronin Wallet sign-in failed.');
@@ -325,6 +465,7 @@ async function refreshServerPlayer() {
     await refreshPaymentStatus(true);
     await refreshArena(true);
     updateMenu();
+    if (serverPlayer.identity?.requiresSetup) openMinerProfile(true);
     return serverPlayer;
   } catch (error) {
     serverPlayer = null;
@@ -452,6 +593,10 @@ async function startRunMode(mode) {
     if (!serverPlayer) {
       const connected = await connectWallet();
       if (!connected) return;
+    }
+    if (mode !== RUN_MODES.PRACTICE && serverPlayer.identity?.requiresSetup) {
+      openMinerProfile(true);
+      return;
     }
     try {
       const run = await apiClient.startRun(mode);
@@ -683,6 +828,30 @@ $('#sound-button').addEventListener('click', () => {
   renderAudioSettings();
   showScreen('sound-settings');
 });
+$('#profile-button').addEventListener('click', () => openMinerProfile(false));
+$('#save-profile-button').addEventListener('click', () => void saveMinerIdentity());
+$('#update-avatar-button').addEventListener('click', () => void updateMinerAvatar());
+$('#profile-name').addEventListener('input', () => renderProfileAvatar(pendingAvatarDataUrl || serverPlayer?.identity?.avatarUrl || ''));
+$('#profile-avatar-input').addEventListener('change', async (event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  $('#profile-status').textContent = 'Preparing your profile picture…';
+  try {
+    pendingAvatarDataUrl = await prepareProfileImage(file);
+    renderProfileAvatar(pendingAvatarDataUrl);
+    $('#update-avatar-button').hidden = Boolean(serverPlayer?.identity?.requiresSetup);
+    $('#profile-status').textContent = serverPlayer?.identity?.requiresSetup
+      ? 'Picture ready. Lock in your name to save the complete profile.'
+      : 'Picture ready. Select Update Profile Picture to publish it.';
+  } catch (error) {
+    pendingAvatarDataUrl = '';
+    renderProfileAvatar(serverPlayer?.identity?.avatarUrl || '');
+    $('#profile-status').textContent = error.message;
+    toast(error.message);
+  } finally {
+    event.target.value = '';
+  }
+});
 $('#sound-mute-button').addEventListener('click', () => {
   game.audio.setMuted(!game.audio.settings().muted);
   renderAudioSettings();
@@ -704,6 +873,10 @@ $('#admin-button').addEventListener('click', openAdmin);
 
 for (const button of document.querySelectorAll('[data-close]')) {
   button.addEventListener('click', () => {
+    if (button.dataset.close === 'miner-profile' && serverPlayer?.identity?.requiresSetup) {
+      toast('Choose your permanent miner name to continue.');
+      return;
+    }
     showScreen('menu');
     updateMenu();
   });
@@ -1030,7 +1203,7 @@ function renderArena() {
     ? rows.map((row) => `
         <tr class="${row.isPlayer ? 'player-row' : ''}">
           <td>#${row.rank}</td>
-          <td>${abbreviateAddress(row.address || row.walletId)}${row.isPlayer ? ' · YOU' : ''}</td>
+          <td>${renderMinerIdentity(row)}${row.isPlayer ? ' · YOU' : ''}</td>
           <td>${formatNumber(row.score)}</td>
           <td>${formatNumber(row.entries)}</td>
           <td>${formatMattRaw(row.payoutRaw || row.projectedRaw)}</td>
@@ -1477,13 +1650,17 @@ async function renderServerLeaderboard(mode) {
 
 function renderMinerIdentity(row) {
   const appearance = row.appearance || {};
+  const identity = row.identity || {};
   const title = cosmeticById(appearance.title);
   const badge = cosmeticById(appearance.badge);
   const trophy = cosmeticById(appearance.trophy);
+  const name = identity.name || row.walletId || abbreviateAddress(row.address);
+  const avatar = identity.avatarUrl || '';
   return `
     <span class="miner-identity ${appearance.frame === 'founder_frame' ? 'founder-frame' : ''}">
+      ${avatar ? `<img class="miner-avatar" src="${escapeHtml(avatar)}" alt="" aria-hidden="true" />` : ''}
       ${badge ? `<i class="miner-badge" title="${escapeHtml(badge.name)}">${renderCosmeticIcon(badge)}</i>` : ''}
-      <b>${escapeHtml(row.walletId)}</b>
+      <b>${escapeHtml(name)}</b>
       ${title ? `<small>${escapeHtml(title.name)}</small>` : ''}
       ${trophy ? `<em title="${escapeHtml(trophy.name)}">${trophy.icon}</em>` : ''}
     </span>
@@ -1492,14 +1669,16 @@ function renderMinerIdentity(row) {
 
 function renderRunCosmeticResult() {
   const equipped = serverPlayer?.passInventory?.equipped || {};
+  const identity = serverPlayer?.identity || {};
   const title = cosmeticById(equipped.title);
   const badge = cosmeticById(equipped.badge);
   const trophy = cosmeticById(equipped.trophy);
-  if (!title && !badge && !trophy && equipped.frame !== 'founder_frame') return '';
+  if (!serverPlayer && !title && !badge && !trophy && equipped.frame !== 'founder_frame') return '';
   return `
     <span class="miner-identity result-identity ${equipped.frame === 'founder_frame' ? 'founder-frame' : ''}">
+      ${identity.avatarUrl ? `<img class="miner-avatar" src="${escapeHtml(identity.avatarUrl)}" alt="" aria-hidden="true" />` : ''}
       ${badge ? `<i class="miner-badge" title="${escapeHtml(badge.name)}">${renderCosmeticIcon(badge)}</i>` : ''}
-      <b>${serverPlayer ? escapeHtml(abbreviateAddress(serverPlayer.address)) : 'MATT MINER'}</b>
+      <b>${serverPlayer ? escapeHtml(identity.name || abbreviateAddress(serverPlayer.address)) : 'MATT MINER'}</b>
       ${title ? `<small>${escapeHtml(title.name)}</small>` : ''}
       ${trophy ? `<em>${trophy.icon}</em>` : ''}
     </span>
@@ -1736,6 +1915,7 @@ async function bootstrapServer() {
   adminButton.hidden = !isLocalPreview;
   adminButton.parentElement?.classList.toggle('public-menu', !isLocalPreview);
   updateMenu();
+  if (serverPlayer?.identity?.requiresSetup) openMinerProfile(true);
 }
 
 updateMenu();

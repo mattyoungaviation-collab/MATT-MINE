@@ -1,6 +1,6 @@
 import { BLASTER_RUN_UPGRADES, CONFIG, ORE_TYPES, RUN_UPGRADES } from './config.js';
 import { InputController } from './input.js';
-import { createMineLayout, pointInLayout, randomPointInRoom, roomAt } from './layout.js';
+import { createMineLayout, pointInLayout, randomPointInRoom, roomAt, segmentInLayout } from './layout.js';
 import {
   angleTo,
   clamp,
@@ -658,10 +658,16 @@ export class MattMineGame {
 
   updateDrone() {
     if (this.player.droneCount <= 0 || this.player.droneTimer > 0) return;
-    const target = this.nearestTarget(380, true);
+    const orbit = this.dronePosition(0);
+    const target = this.enemies
+      .map((enemy) => ({ enemy, range: distance(this.player, enemy) }))
+      .filter(({ enemy, range }) =>
+        range < 380 &&
+        segmentInLayout(this.layout, orbit.x, orbit.y, enemy.x, enemy.y, 4)
+      )
+      .sort((left, right) => left.range - right.range)[0]?.enemy;
     if (!target) return;
     this.player.droneTimer = Math.max(0.34, 0.9 - this.player.droneCount * 0.14);
-    const orbit = this.dronePosition(0);
     const angle = Math.atan2(target.y - orbit.y, target.x - orbit.x);
     this.tracers.push({
       x1: orbit.x,

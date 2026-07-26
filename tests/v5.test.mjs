@@ -423,6 +423,46 @@ test('fast player projectiles cannot tunnel through walls during a long frame', 
   assert.equal(target.hp, target.maxHp);
 });
 
+test('mining drones only damage enemies with a clear path through the mine', async () => {
+  const { MattMineGame } = await import('../src/game/GameV4.js');
+  const stubs = installBrowserStubs();
+  const game = new MattMineGame(stubs.canvas, stubs.profile);
+  game.startRun({ mode: RUN_MODES.PRACTICE, seed: 'DRONE-WALLS' });
+  const firstRoom = { id: 1, x: 100, y: 200, width: 200, height: 300, type: 'start' };
+  const secondRoom = { id: 2, x: 430, y: 200, width: 200, height: 300, type: 'combat' };
+  game.layout = {
+    rooms: [firstRoom, secondRoom],
+    corridors: [],
+    startRoom: firstRoom,
+    guardianRoom: secondRoom
+  };
+  game.player.x = 100;
+  game.player.y = 200;
+  game.player.droneCount = 1;
+  game.player.droneTimer = 0;
+  game.run.elapsed = 0;
+  const target = enemyTarget(game, { x: 430, y: 200, roomId: 2, hp: 200, maxHp: 200 });
+  game.enemies = [target];
+  game.tracers = [];
+
+  game.updateDrone();
+  assert.equal(target.hp, 200);
+  assert.equal(game.tracers.length, 0);
+  assert.equal(game.player.droneTimer, 0);
+
+  game.layout.corridors.push({
+    x: 265,
+    y: 200,
+    width: 330,
+    height: 90,
+    orientation: 'horizontal'
+  });
+  game.updateDrone();
+  assert.ok(target.hp < 200);
+  assert.equal(game.tracers.length, 1);
+  assert.ok(game.player.droneTimer > 0);
+});
+
 test('Crystal Blaster bolts expire at their configured maximum range', async () => {
   const { MattMineGame } = await import('../src/game/GameV4.js');
   const stubs = installBrowserStubs();

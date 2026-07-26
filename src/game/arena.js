@@ -88,6 +88,8 @@ export function normalizeArenaLeaderboard(value = {}) {
         rank: safeInteger(row.rank) || index + 1,
         address: String(row.address || ''),
         walletId: String(row.walletId || ''),
+        identity: normalizeArenaIdentity(row.identity),
+        appearance: row.appearance && typeof row.appearance === 'object' ? { ...row.appearance } : {},
         score: safeInteger(row.score),
         entries: safeInteger(row.entries ?? row.entryCount),
         projectedRaw: rawToken(row.projectedRaw ?? row.payoutRaw ?? 0),
@@ -108,6 +110,17 @@ export function normalizeArenaLeaderboard(value = {}) {
       ...row,
       projectedRaw: row.projectedRaw || projections[index] || 0n
     }))
+  };
+}
+
+function normalizeArenaIdentity(value = {}) {
+  const source = value && typeof value === 'object' ? value : {};
+  const avatarUrl = String(source.avatarUrl || '');
+  return {
+    name: String(source.name || '').slice(0, 16),
+    avatarUrl: /^\/api\/profiles\/0x[a-fA-F0-9]{40}\/avatar\?v=\d+$/.test(avatarUrl)
+      ? avatarUrl
+      : ''
   };
 }
 

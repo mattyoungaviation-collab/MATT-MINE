@@ -4,6 +4,15 @@
 
 MATT Mine is a standalone browser action roguelite and daily Web3 competition on Ronin. It has its own launch website, wallet identity, separate Free and Pass leaderboards, live Pass and paid-run payments, verified contracts, and a production persistence path independent from MATT Hub.
 
+## v2.2 permanent miner identities
+
+- Require every connected wallet to choose one unique, permanent server-owned miner name before entering ranked play.
+- Enforce case-insensitive name uniqueness and protect official, staff, and treasury names.
+- Let miners upload or replace a validated PNG, JPEG, or WebP profile picture without changing their permanent name.
+- Store identity data in the durable server state and serve lightweight cached avatar URLs instead of embedding images in leaderboard payloads.
+- Show miner names and profile pictures on the Free, Pass, and Daily Arena leaderboards.
+- Stop mining drones from targeting or damaging enemies through cave walls.
+
 ## v2.1 combat and progression balance
 
 - Start Free, Pass, and Practice miners with the Crystal Blaster; keep the live deterministic Arena rules unchanged for replay compatibility.

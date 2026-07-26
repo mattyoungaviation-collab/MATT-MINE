@@ -28,6 +28,7 @@ const otherAccount = privateKeyToAccount(OTHER_PRIVATE_KEY);
 const START = Date.UTC(2026, 6, 25, 12, 0, 0);
 const ORIGIN = 'http://localhost:4173';
 const UNSUPPORTED_CHAIN_ID = 1;
+const VALID_AVATAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
 
 function createHarness(options = {}) {
   let timestamp = options.timestamp ?? START;
@@ -56,7 +57,7 @@ function createHarness(options = {}) {
   };
 }
 
-async function signIn(harness, signer = account) {
+async function signIn(harness, signer = account, options = {}) {
   const challenge = await harness.service.createChallenge({
     address: signer.address,
     chainId: RONIN_CHAINS.MAINNET,
@@ -68,8 +69,60 @@ async function signIn(harness, signer = account) {
     nonce: challenge.nonce,
     signature
   });
+  if (!options.skipIdentity) {
+    const created = await harness.service.setPlayerIdentity(
+      session.token,
+      { name: `Miner_${signer.address.slice(2, 8)}` }
+    );
+    session.identity = created.identity;
+    session.entitlements.freeRunAvailable = true;
+  }
   return { challenge, signature, session };
 }
+
+test('wallet identities require one permanent unique name and serve validated leaderboard avatars', async () => {
+  const harness = createHarness();
+  const first = await signIn(harness, account, { skipIdentity: true });
+  assert.equal(first.session.identity.requiresSetup, true);
+  assert.equal(first.session.entitlements.freeRunAvailable, false);
+  await assert.rejects(
+    () => harness.service.startRun(first.session.token, SERVER_RUN_MODES.FREE),
+    (error) => error.code === 'miner_identity_required'
+  );
+
+  const created = await harness.service.setPlayerIdentity(first.session.token, {
+    name: 'Rock_Runner',
+    avatarDataUrl: VALID_AVATAR
+  });
+  assert.deepEqual(created.identity.name, 'Rock_Runner');
+  assert.match(created.identity.avatarUrl, /^\/api\/profiles\/0x[a-f0-9]{40}\/avatar\?v=\d+$/);
+  assert.equal(created.identity.requiresSetup, false);
+  const avatar = await harness.service.profileAvatar(account.address);
+  assert.equal(avatar.contentType, 'image/png');
+  assert.equal(avatar.body.subarray(1, 4).toString('ascii'), 'PNG');
+
+  const second = await signIn(harness, otherAccount, { skipIdentity: true });
+  await assert.rejects(
+    () => harness.service.setPlayerIdentity(second.session.token, { name: 'rock_runner' }),
+    (error) => error.code === 'username_taken'
+  );
+  await assert.rejects(
+    () => harness.service.setPlayerIdentity(first.session.token, { name: 'DifferentName' }),
+    (error) => error.code === 'username_permanent'
+  );
+  await assert.rejects(
+    () => harness.service.updatePlayerAvatar(first.session.token, 'data:image/png;base64,bm90LWFuLWltYWdl'),
+    (error) => error.code === 'avatar_signature'
+  );
+
+  const run = await harness.service.startRun(first.session.token, SERVER_RUN_MODES.FREE);
+  harness.advance(61_000);
+  await finish(harness.service, first.session, run, extractedResult());
+  const leaderboard = await harness.service.leaderboard(first.session.token, SERVER_RUN_MODES.FREE);
+  assert.equal(leaderboard.rows[0].walletId, 'Rock_Runner');
+  assert.equal(leaderboard.rows[0].identity.name, 'Rock_Runner');
+  assert.equal(leaderboard.rows[0].identity.avatarUrl, created.identity.avatarUrl);
+});
 
 function extractedResult(overrides = {}) {
   return {
@@ -813,7 +866,7 @@ test('the HTTP server exposes same-origin APIs, security headers, and authentica
   const healthResponse = await fetch(`${baseUrl}/api/health`);
   assert.equal(healthResponse.status, 200);
   const healthPayload = await healthResponse.json();
-  assert.equal(healthPayload.version, 16);
+  assert.equal(healthPayload.version, 17);
   assert.equal(healthPayload.database.kind, 'memory');
 
   const launchResponse = await fetch(baseUrl);
@@ -858,6 +911,15 @@ test('the HTTP server exposes same-origin APIs, security headers, and authentica
     })
   });
   assert.equal(crossOrigin.status, 403);
+
+  const { session } = await signIn(harness);
+  const updated = await harness.service.updatePlayerAvatar(session.token, VALID_AVATAR);
+  const avatarResponse = await fetch(`${baseUrl}${updated.identity.avatarUrl}`);
+  assert.equal(avatarResponse.status, 200);
+  assert.equal(avatarResponse.headers.get('content-type'), 'image/png');
+  assert.match(avatarResponse.headers.get('cache-control'), /immutable/);
+  const avatarBytes = new Uint8Array(await avatarResponse.arrayBuffer());
+  assert.equal(Buffer.from(avatarBytes.subarray(1, 4)).toString('ascii'), 'PNG');
 });
 
 function createFakePostgresPool() {
@@ -959,6 +1021,46 @@ test('the browser API client reaches every authenticated Pass collection action'
   assert.equal(requests.every((request) => request.authorization === 'Bearer session-token'), true);
   assert.deepEqual(requests[2].body, { slot: 'trail', cosmeticId: 'gold_trail' });
   assert.deepEqual(requests[3].body, { chestId: PASS_CHEST_ID });
+});
+
+test('the browser API client creates permanent identities and replaces profile pictures', async () => {
+  const requests = [];
+  const client = new MattMineApiClient({
+    storage: {
+      getItem: () => 'session-token',
+      setItem() {},
+      removeItem() {}
+    },
+    fetch: async (url, options) => {
+      requests.push({
+        url,
+        method: options.method,
+        body: JSON.parse(options.body),
+        authorization: options.headers.authorization
+      });
+      return new Response(JSON.stringify({ ok: true, identity: {} }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      });
+    }
+  });
+  const avatar = 'data:image/png;base64,iVBORw0KGgo=';
+  await client.setIdentity('MinerOne', avatar);
+  await client.updateAvatar(avatar);
+  assert.deepEqual(requests, [
+    {
+      url: '/api/profile/identity',
+      method: 'POST',
+      body: { name: 'MinerOne', avatarDataUrl: avatar },
+      authorization: 'Bearer session-token'
+    },
+    {
+      url: '/api/profile/avatar',
+      method: 'PUT',
+      body: { avatarDataUrl: avatar },
+      authorization: 'Bearer session-token'
+    }
+  ]);
 });
 
 test('the Ronin adapter switches to Mainnet, signs the server message, and invalidates on account change', async () => {

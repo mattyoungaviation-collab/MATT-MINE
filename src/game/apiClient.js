@@ -49,6 +49,22 @@ export class MattMineApiClient {
     return response.player;
   }
 
+  async setIdentity(name, avatarDataUrl = '') {
+    return this.request('/api/profile/identity', {
+      method: 'POST',
+      authenticated: true,
+      body: { name, avatarDataUrl }
+    });
+  }
+
+  async updateAvatar(avatarDataUrl) {
+    return this.request('/api/profile/avatar', {
+      method: 'PUT',
+      authenticated: true,
+      body: { avatarDataUrl }
+    });
+  }
+
   async paymentStatus() {
     const response = await this.request('/api/payments/status', { authenticated: true });
     return response.status;
