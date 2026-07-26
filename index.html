@@ -166,9 +166,9 @@
 
           <section id="launch-economy" class="launch-section launch-economy-section">
             <div class="launch-section-heading centered">
-              <p>ONE GAME · TWO LEADERBOARDS</p>
+              <p>ONE GAME · THREE WAYS TO COMPETE</p>
               <h2>Free to enter.<br /><span>Built to compete.</span></h2>
-              <p class="launch-section-copy">Everyone gets one fair daily ranked attempt. Mine Pass holders unlock a separate premium competition and can purchase additional ranked runs.</p>
+              <p class="launch-section-copy">Play the free daily mine, progress through the Mine Pass, or enter the player-funded MATT Daily Arena as many times as you choose.</p>
             </div>
             <div class="launch-tier-grid">
               <article class="launch-tier-card free-tier-card">
@@ -198,6 +198,20 @@
                 </ul>
                 <button type="button" data-launch-action="pass">VIEW MINE PASS</button>
               </article>
+              <article class="launch-tier-card arena-tier-card">
+                <div class="tier-glow"></div>
+                <div class="tier-topline"><span>MATT DAILY ARENA</span><b id="launch-arena-state">SECURITY PREVIEW</b></div>
+                <h3 id="launch-arena-entry">MATT ENTRY</h3>
+                <p class="tier-subtitle">Treasury-set daily price · 25K–1M MATT</p>
+                <ul>
+                  <li>Unlimited official entries</li>
+                  <li>Best verified score per wallet</li>
+                  <li>All entry MATT funds the daily pool</li>
+                  <li>Up to 10M MATT Treasury seed</li>
+                  <li>No entry-pool ceiling, burn, or house fee</li>
+                </ul>
+                <button type="button" data-launch-action="arena">VIEW DAILY ARENA</button>
+              </article>
             </div>
             <div class="launch-flywheel">
               <div><span>RON</span><small>PAID RUN</small></div>
@@ -210,7 +224,7 @@
               <b>+</b>
               <div><span>10%</span><small>GAME RESERVE</small></div>
             </div>
-            <p class="launch-economy-note">Zero MATT is burned. Rewards are capped and performance-based. Purchasing a Pass or run does not guarantee a reward.</p>
+            <p class="launch-economy-note">Zero MATT is burned. Free and Pass rewards remain fixed and performance-based; the Daily Arena pool grows with every entry and has no player-funded ceiling.</p>
           </section>
 
           <section id="launch-roadmap" class="launch-section launch-roadmap-section">
@@ -329,6 +343,20 @@
             </button>
           </div>
 
+          <button id="arena-button" class="arena-menu-banner" type="button">
+            <span class="arena-menu-icon" aria-hidden="true">M</span>
+            <span>
+              <small>DAILY MATT COMPETITION</small>
+              <strong>MATT ARENA</strong>
+              <b>Unlimited entries · Best score per wallet · Entire pool paid to winners</b>
+            </span>
+            <span class="arena-menu-pool">
+              <small>TODAY'S POOL</small>
+              <strong id="arena-menu-pool">—</strong>
+            </span>
+            <em id="arena-menu-action">VIEW PREVIEW →</em>
+          </button>
+
           <div class="menu-stats compact-stats">
             <div><span>Banked Nuggets</span><strong id="menu-nuggets">0</strong></div>
             <div><span>Best Depth</span><strong id="menu-depth">0</strong></div>
@@ -406,6 +434,83 @@
           <div id="pass-chest-card" class="pass-chest-card"></div>
           <div id="cosmetics-grid" class="cosmetics-grid"></div>
           <p id="cosmetics-note" class="preview-note">Connect Ronin Wallet to load your permanent collection.</p>
+        </div>
+      </section>
+
+      <section id="daily-arena" class="screen arena-screen" aria-labelledby="arena-title">
+        <div class="panel wide-panel economy-panel arena-panel">
+          <button class="close-button" data-close="daily-arena" aria-label="Close">×</button>
+          <div class="arena-heading">
+            <div>
+              <p class="eyebrow">DAILY PLAYER-FUNDED COMPETITION</p>
+              <h2 id="arena-title">MATT Daily Arena</h2>
+              <p>Pay the Treasury-set MATT entry, mine the identical daily challenge, and improve your score with unlimited entries. Only your best verified score holds your leaderboard position.</p>
+            </div>
+            <div id="arena-state-badge" class="arena-state-badge">LOADING</div>
+          </div>
+
+          <div class="arena-pool-grid" aria-label="Daily Arena pool">
+            <article>
+              <span>PLAYER ENTRY POOL</span>
+              <strong id="arena-entry-pool">—</strong>
+              <small>Every accepted entry · No ceiling</small>
+            </article>
+            <article class="arena-seed-card">
+              <span>TREASURY SEED</span>
+              <strong id="arena-seed-pool">—</strong>
+              <small>Up to 10,000,000 MATT daily</small>
+            </article>
+            <article class="arena-total-card">
+              <span>TOTAL PRIZE POOL</span>
+              <strong id="arena-total-pool">—</strong>
+              <small>100% distributed · 0 burned · 0 house fee</small>
+            </article>
+          </div>
+
+          <div class="arena-action-grid">
+            <article class="arena-entry-card">
+              <span class="eyebrow">TODAY'S TREASURY-SET ENTRY</span>
+              <strong id="arena-entry-price">— MATT</strong>
+              <div class="arena-entry-stats">
+                <div><span>Your entries</span><b id="arena-entry-count">0</b></div>
+                <div><span>Unused attempts</span><b id="arena-attempt-count">0</b></div>
+                <div><span>Your best</span><b id="arena-best-score">—</b></div>
+              </div>
+              <button id="buy-arena-entry-button" class="primary-button arena-buy-button">CONNECT RONIN TO ENTER</button>
+              <button id="start-arena-run-button" class="secondary-button" disabled>BUY AN ENTRY FIRST</button>
+              <p id="arena-entry-note">Ronin Wallet will request a MATT approval when needed, followed by the Arena entry transaction.</p>
+            </article>
+
+            <article class="arena-clock-card">
+              <span class="eyebrow">UTC COMPETITION WINDOW</span>
+              <strong id="arena-countdown">--:--:--</strong>
+              <small id="arena-day-label">MATT entry closes 23:35 UTC; official runs close at 00:00 UTC.</small>
+              <div class="arena-rules">
+                <span>Unlimited official entries</span>
+                <span>One leaderboard place per wallet</span>
+                <span>Server-verified deterministic mine</span>
+                <span>Canceled days return every entry</span>
+              </div>
+            </article>
+          </div>
+
+          <div class="arena-payout-strip" aria-label="Top ten payout percentages">
+            <span>#1 <b>30%</b></span><span>#2 <b>18%</b></span><span>#3 <b>12%</b></span>
+            <span>#4 <b>8%</b></span><span>#5 <b>7%</b></span><span>#6 <b>6%</b></span>
+            <span>#7 <b>5.5%</b></span><span>#8 <b>5%</b></span><span>#9 <b>4.5%</b></span><span>#10 <b>4%</b></span>
+          </div>
+
+          <div class="leaderboard-table-wrap arena-table-wrap">
+            <table class="leaderboard-table">
+              <thead><tr><th>Rank</th><th>Miner</th><th>Best Score</th><th>Entries</th><th>Projected MATT</th></tr></thead>
+              <tbody id="arena-leaderboard-body"><tr><td colspan="5">Connect Ronin Wallet to load today's Arena.</td></tr></tbody>
+            </table>
+          </div>
+          <div id="arena-settlement-card" class="arena-settlement-card">
+            <div><span class="eyebrow">DAILY SETTLEMENT</span><strong id="arena-settlement-status">Competition open</strong><small id="arena-settlement-note">The Treasury Safe settles the verified daily result and the contract distributes the complete pool.</small></div>
+            <button id="arena-refund-button" class="secondary-button" hidden>CLAIM CANCELED ENTRY REFUND</button>
+          </div>
+          <p id="arena-note" class="preview-note">Daily Arena activation requires its isolated verified Ronin contract and server-authoritative scoring.</p>
         </div>
       </section>
 

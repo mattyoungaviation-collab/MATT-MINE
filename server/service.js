@@ -41,6 +41,7 @@ export class MattMineService {
     this.verifySignature = options.verifySignature || verifyMessage;
     this.paymentVerifier = options.paymentVerifier || null;
     this.rewardManager = options.rewardManager || null;
+    this.arenaService = options.arenaService || null;
     this.mainnetTransactionsEnabled =
       options.mainnetTransactionsEnabled === true && Boolean(this.paymentVerifier);
     const configuredChainId = Number(options.chainId ?? RONIN_CHAINS.MAINNET);
@@ -65,6 +66,9 @@ export class MattMineService {
       realPaymentsEnabled: this.mainnetTransactionsEnabled,
       mattClaimsEnabled: Boolean(this.rewardManager),
       mainnetTransactionsEnabled: this.mainnetTransactionsEnabled,
+      arena: this.arenaService
+        ? this.arenaService.publicConfig()
+        : { enabled: false },
       operations: awaitlessPublicOperations(this.cachedOperations),
       ...(this.rewardManager
         ? { rewards: this.rewardManager.publicConfig() }
@@ -84,7 +88,10 @@ export class MattMineService {
       chainId: this.chainId,
       paymentsEnabled: this.mainnetTransactionsEnabled,
       rewardsEnabled: Boolean(this.rewardManager),
-      rewardPublishingEnabled: this.rewardManager?.publicationEnabled === true
+      rewardPublishingEnabled: this.rewardManager?.publicationEnabled === true,
+      arena: this.arenaService
+        ? await this.arenaService.health()
+        : { enabled: false }
     };
   }
 
@@ -903,6 +910,131 @@ export class MattMineService {
     };
   }
 
+  async arenaConfig(day = '') {
+    this.assertArenaEnabled();
+    return this.arenaService.config(day);
+  }
+
+  async quoteArenaEntry(token, input = {}) {
+    const { session } = await this.arenaPlayer(token);
+    return this.arenaService.quoteEntry(session.address, input);
+  }
+
+  async confirmArenaEntry(token, enterTransactionHash) {
+    const { session } = await this.arenaPlayer(token);
+    return this.arenaService.confirmEntry(session.address, enterTransactionHash);
+  }
+
+  async startArenaRun(token, input = {}) {
+    const { session } = await this.arenaPlayer(token);
+    return this.arenaService.startRun(session.address, input);
+  }
+
+  async appendArenaEvents(token, payload) {
+    const { session } = await this.arenaPlayer(token);
+    return this.arenaService.appendEvents(session.address, payload);
+  }
+
+  async finishArenaRun(token, payload) {
+    const { session } = await this.arenaPlayer(token);
+    return this.arenaService.finishRun(session.address, payload);
+  }
+
+  async arenaLeaderboard(day = '') {
+    this.assertArenaEnabled();
+    const state = await this.database.read();
+    return this.arenaService.leaderboard(day, suspendedWalletAddresses(state));
+  }
+
+  async arenaMe(token, day = '') {
+    const { session } = await this.arenaPlayer(token, {
+      allowSuspended: true,
+      allowMaintenance: true
+    });
+    return this.arenaService.playerStatus(session.address, day);
+  }
+
+  async prepareArenaRefund(token, day = '') {
+    const { session } = await this.arenaPlayer(token, {
+      allowSuspended: true,
+      allowMaintenance: true
+    });
+    return this.arenaService.prepareRefund(session.address, day);
+  }
+
+  async adminArenaOverview(adminKey, day = '') {
+    this.assertAdminKey(adminKey);
+    this.assertArenaEnabled();
+    const state = await this.database.read();
+    return this.arenaService.adminOverview(day, suspendedWalletAddresses(state));
+  }
+
+  async prepareArenaDay(adminKey, day, input = {}) {
+    this.assertAdminKey(adminKey);
+    this.assertArenaEnabled();
+    const result = await this.arenaService.prepareDay({ ...input, day });
+    await this.recordArenaAdminAudit('ARENA_DAY_PREPARED', `${day}: ${input.reason}`);
+    return result;
+  }
+
+  async prepareArenaSeedTopUp(adminKey, day, input = {}) {
+    this.assertAdminKey(adminKey);
+    this.assertArenaEnabled();
+    const result = await this.arenaService.prepareSeedTopUp(day, input);
+    await this.recordArenaAdminAudit('ARENA_SEED_PREPARED', `${day}: ${input.reason}`);
+    return result;
+  }
+
+  async prepareArenaControl(adminKey, action, input = {}) {
+    this.assertAdminKey(adminKey);
+    this.assertArenaEnabled();
+    const result = await this.arenaService.prepareControl(action, input.reason);
+    await this.recordArenaAdminAudit('ARENA_CONTROL_PREPARED', `${action}: ${input.reason}`);
+    return result;
+  }
+
+  async prepareArenaSettlement(adminKey, day, input = {}) {
+    this.assertAdminKey(adminKey);
+    this.assertArenaEnabled();
+    const state = await this.database.read();
+    const result = await this.arenaService.createSettlement(
+      day,
+      suspendedWalletAddresses(state),
+      input.reason
+    );
+    await this.recordArenaAdminAudit('ARENA_SETTLEMENT_PREPARED', `${day}: ${input.reason}`);
+    return result;
+  }
+
+  async prepareArenaCancellation(adminKey, day, input = {}) {
+    this.assertAdminKey(adminKey);
+    this.assertArenaEnabled();
+    const result = await this.arenaService.prepareCancellation(day, input.reason);
+    await this.recordArenaAdminAudit('ARENA_CANCELLATION_PREPARED', `${day}: ${input.reason}`);
+    return result;
+  }
+
+  async recordArenaAdminAudit(action, details) {
+    const timestamp = this.now();
+    await this.database.transact((state) => {
+      addAudit(state, 'SERVER_ADMIN', action, String(details || '').slice(0, 500), timestamp);
+    });
+  }
+
+  async arenaPlayer(token, options = {}) {
+    this.assertArenaEnabled();
+    const session = await this.authenticate(token);
+    const state = await this.database.read();
+    const wallet = requireWallet(state, session.address);
+    if (!options.allowSuspended) {
+      assertApi(!wallet.suspended, 403, 'wallet_suspended', 'This wallet is suspended from Daily Arena play.');
+    }
+    if (!options.allowMaintenance) {
+      assertApi(!state.operations.maintenanceMode, 503, 'maintenance_mode', state.operations.announcement || 'MATT Mine is temporarily under maintenance.');
+    }
+    return { session, wallet };
+  }
+
   async authenticate(token) {
     const rawToken = assertToken(token);
     const tokenHash = hashToken(rawToken);
@@ -926,6 +1058,10 @@ export class MattMineService {
       'payments_disabled',
       'Live Ronin payments are disabled on this MATT Mine server.'
     );
+  }
+
+  assertArenaEnabled() {
+    assertApi(this.arenaService, 503, 'arena_disabled', 'Daily Arena is disabled until its verified contract and server secrets are configured.');
   }
 }
 

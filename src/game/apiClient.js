@@ -107,6 +107,77 @@ export class MattMineApiClient {
     });
   }
 
+  async arenaConfig(day = '') {
+    const query = day ? `?${new URLSearchParams({ day })}` : '';
+    const response = await this.request(`/api/arena/config${query}`);
+    return response.arena || response.config;
+  }
+
+  async arenaEntryQuote(day = '') {
+    const response = await this.request('/api/arena/entries/quote', {
+      method: 'POST',
+      authenticated: true,
+      body: day ? { day } : {}
+    });
+    return response.quote;
+  }
+
+  async confirmArenaEntry(transactionHash) {
+    return this.request('/api/arena/entries/confirm', {
+      method: 'POST',
+      authenticated: true,
+      body: { transactionHash }
+    });
+  }
+
+  async arenaMe(day = '') {
+    const query = day ? `?${new URLSearchParams({ day })}` : '';
+    const response = await this.request(`/api/arena/me${query}`, {
+      authenticated: true
+    });
+    return response.player || response.arena;
+  }
+
+  async arenaLeaderboard(day = '') {
+    const query = day ? `?${new URLSearchParams({ day })}` : '';
+    const response = await this.request(`/api/arena/leaderboard${query}`);
+    return response.leaderboard;
+  }
+
+  async startArenaRun(entryId = '') {
+    const response = await this.request('/api/arena/runs/start', {
+      method: 'POST',
+      authenticated: true,
+      body: entryId ? { entryId } : {}
+    });
+    return response.run;
+  }
+
+  async appendArenaEvents(runId, runToken, previousCheckpoint, events) {
+    const response = await this.request('/api/arena/runs/events', {
+      method: 'POST',
+      authenticated: true,
+      body: { runId, runToken, previousCheckpoint, events }
+    });
+    return response.checkpoint;
+  }
+
+  async finishArenaRun(runId, runToken, checkpoint) {
+    return this.request('/api/arena/runs/finish', {
+      method: 'POST',
+      authenticated: true,
+      body: { runId, runToken, checkpoint }
+    });
+  }
+
+  async prepareArenaRefund(day = '') {
+    return this.request('/api/arena/refunds/prepare', {
+      method: 'POST',
+      authenticated: true,
+      body: day ? { day } : {}
+    });
+  }
+
   async startRun(mode) {
     const response = await this.request('/api/runs/start', {
       method: 'POST',

@@ -30,6 +30,7 @@ $('#tabs').addEventListener('click', async (event) => {
   document.querySelectorAll('.tab').forEach((tab) => tab.classList.toggle('active', tab.id === `tab-${name}`));
   if (name === 'players') await loadWallets();
   if (name === 'rewards') await loadRewards();
+  if (name === 'arena') await loadArenaAdmin();
   if (name === 'audit') await loadAudit();
 });
 
@@ -208,6 +209,236 @@ async function syncReward(id) {
   showAlert('Reward draft synchronized with Ronin.');
 }
 
+$('#refresh-arena-admin').addEventListener('click', loadArenaAdmin);
+$('#arena-admin-day').addEventListener('change', loadArenaAdmin);
+
+$('#arena-schedule-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const day = $('#arena-admin-day').value;
+  const feeMatt = Number($('#arena-admin-fee').value);
+  const seedMatt = Number($('#arena-admin-seed').value || 0);
+  const reason = $('#arena-admin-schedule-reason').value;
+  if (!await confirmAction(
+    'Prepare this Arena day?',
+    `${feeMatt.toLocaleString()} MATT per unlimited entry, with ${seedMatt.toLocaleString()} MATT Treasury seed. The price cannot change after the UTC day opens.`
+  )) return;
+  const result = await api(`/api/admin/arena/days/${encodeURIComponent(day)}`, {
+    method: 'PUT',
+    body: { feeMatt, seedMatt, reason }
+  });
+  renderArenaSafePackage(
+    'Arena schedule and seed',
+    result.arena?.safe,
+    result.arena?.transactions,
+    `matt-mine-arena-${day}-schedule.json`
+  );
+  $('#arena-admin-schedule-reason').value = '';
+  await loadArenaAdmin();
+  showAlert('Arena Safe package prepared. No transaction was broadcast.');
+});
+
+$('#arena-prepare-settlement').addEventListener('click', async () => {
+  const day = $('#arena-admin-day').value;
+  const reason = $('#arena-admin-action-reason').value;
+  if (!reason) {
+    showAlert('A settlement reason is required.', true);
+    return;
+  }
+  if (!await confirmAction(
+    'Prepare full-pool settlement?',
+    'The immutable daily snapshot becomes one Safe transaction that distributes the complete entry pool and Treasury seed to verified winners.'
+  )) return;
+  const result = await api(`/api/admin/arena/days/${encodeURIComponent(day)}/settlement`, {
+    method: 'POST',
+    body: { reason }
+  });
+  const draft = result.settlement?.draft || result.settlement;
+  renderArenaSafePackage(
+    'Arena full-pool settlement',
+    draft?.safe,
+    draft?.transactions || (draft?.transaction ? [draft.transaction] : []),
+    `matt-mine-arena-${day}-settlement.json`
+  );
+  $('#arena-admin-action-reason').value = '';
+  await loadArenaAdmin();
+});
+
+$('#arena-prepare-cancel').addEventListener('click', async () => {
+  const day = $('#arena-admin-day').value;
+  const reason = $('#arena-admin-action-reason').value;
+  if (!reason) {
+    showAlert('A cancellation reason is required.', true);
+    return;
+  }
+  if (!await confirmAction(
+    'Prepare Arena cancellation?',
+    'Cancellation enables exact player entry refunds and returns only that day’s Treasury seed under the contract rules.'
+  )) return;
+  const result = await api(`/api/admin/arena/days/${encodeURIComponent(day)}/cancel`, {
+    method: 'POST',
+    body: { reason }
+  });
+  renderArenaSafePackage(
+    'Arena cancellation',
+    result.cancellation?.safe,
+    result.cancellation?.transaction ? [result.cancellation.transaction] : [],
+    `matt-mine-arena-${day}-cancel.json`
+  );
+  $('#arena-admin-action-reason').value = '';
+  await loadArenaAdmin();
+});
+
+$('#arena-seed-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const day = $('#arena-admin-day').value;
+  const seedMatt = Number($('#arena-seed-top-up').value);
+  const reason = $('#arena-seed-reason').value;
+  if (!await confirmAction(
+    'Prepare Treasury seed top-up?',
+    `Prepare an ordered approval and ${seedMatt.toLocaleString()} MATT seed transaction for ${day}? The contract enforces the cumulative 10,000,000 MATT cap.`
+  )) return;
+  const result = await api(`/api/admin/arena/days/${encodeURIComponent(day)}/seed`, {
+    method: 'POST',
+    body: { seedMatt, reason }
+  });
+  renderArenaSafePackage(
+    'Arena seed top-up',
+    result.seed?.safe,
+    result.seed?.transactions,
+    `matt-mine-arena-${day}-seed.json`
+  );
+  $('#arena-seed-reason').value = '';
+  await loadArenaAdmin();
+});
+
+document.querySelectorAll('[data-arena-control]').forEach((button) => {
+  button.addEventListener('click', async () => {
+    const action = button.dataset.arenaControl;
+    const reason = $('#arena-control-reason').value;
+    if (!reason) {
+      showAlert('A control-change reason is required.', true);
+      return;
+    }
+    if (!await confirmAction(
+      'Prepare Arena pause control?',
+      `Prepare ${words(action)} for the emergency-pauser wallet? Nothing will be signed or broadcast.`
+    )) return;
+    const result = await api(`/api/admin/arena/controls/${encodeURIComponent(action)}`, {
+      method: 'POST',
+      body: { reason }
+    });
+    renderArenaDirectTransaction(
+      `Arena ${words(action)}`,
+      result.control,
+      `matt-mine-arena-${action}-direct.json`
+    );
+    $('#arena-control-reason').value = '';
+    await loadArenaAdmin();
+  });
+});
+
+async function loadArenaAdmin() {
+  const dayInput = $('#arena-admin-day');
+  if (!dayInput.value) dayInput.value = nextUtcDay();
+  try {
+    const data = await api(`/api/admin/arena?day=${encodeURIComponent(dayInput.value)}`);
+    const arena = data.arena || {};
+    const board = arena.leaderboard || {};
+    const settlement = arena.settlement || {};
+    const controls = arena.controls || {};
+    const config =
+      arena.day && typeof arena.day === 'object'
+        ? arena.day
+        : arena.config || arena.dayConfig || board;
+    const feeMatt = config.fee?.matt ?? config.feeMatt ?? config.entryFeeMatt ?? 25_000;
+    const seedMatt = config.seed?.matt ?? config.seedMatt ?? config.seededMatt ?? 0;
+    const replayReady = config.replayReady === true;
+    $('#arena-admin-fee').value = Number(feeMatt);
+    $('#arena-admin-seed').value = Number(seedMatt);
+    const scheduleButton = document.querySelector('#arena-schedule-form button[type="submit"]');
+    const seedButton = document.querySelector('#arena-seed-form button[type="submit"]');
+    const unpauseEntriesButton = document.querySelector('[data-arena-control="unpause-entries"]');
+    for (const button of [scheduleButton, seedButton, unpauseEntriesButton]) {
+      if (!button) continue;
+      button.disabled = !replayReady;
+      button.title = replayReady
+        ? ''
+        : 'Security-locked until input-only deterministic replay is release-ready.';
+    }
+    $('#arena-admin-metrics').innerHTML = [
+      metric('Status', config.status || board.status || 'Unscheduled'),
+      metric('Entries', config.entryCount || board.entryCount || 0),
+      metric('Unique miners', config.uniquePlayers || board.participantCount || 0),
+      metric('Entry pool', `${mattDisplay(config.entryPoolRaw ?? config.entryPoolMatt ?? config.entryMatt ?? board.entryPoolRaw)} MATT`),
+      metric('Treasury seed', `${mattDisplay(config.seed?.raw ?? config.seedRaw ?? config.seedMatt ?? config.seededMatt ?? board.seedRaw)} MATT`),
+      metric('Total pool', `${mattDisplay(config.prizePoolRaw ?? config.prizePoolMatt ?? config.totalPoolMatt ?? board.prizePoolRaw)} MATT`)
+    ].join('');
+    $('#arena-admin-status').innerHTML = [
+      row('UTC day', config.day || dayInput.value),
+      row('Configured entry', `${mattDisplay(config.fee?.raw ?? config.feeMatt ?? config.entryFeeMatt)} MATT`),
+      row('Player pool ceiling', 'None'),
+      row('Daily Treasury seed cap', '10,000,000 MATT'),
+      row('Paid entry release gate', config.enabled ? 'Enabled' : `Locked${config.liveBlocker ? ` · ${config.liveBlocker}` : ''}`),
+      row('Executable setup', replayReady ? 'Available' : 'Blocked by replay gate'),
+      row('Snapshot', board.finalized ? 'Immutable' : 'Not finalized'),
+      row('Settlement', settlement.status || (settlement.draft ? 'Draft ready' : 'Not prepared'))
+    ].join('');
+    $('#arena-control-status').innerHTML = [
+      row('Onchain entries', controls.entriesPaused ? 'Paused' : 'Open'),
+      row('Onchain settlement', controls.settlementPaused ? 'Paused' : 'Open')
+    ].join('');
+    const rows = settlement.allocations?.length ? settlement.allocations : board.rows || [];
+    $('#arena-admin-winners').innerHTML = rows.length
+      ? rows.slice(0, 10).map((winner, index) => `<tr>
+          <td>#${Number(winner.rank || index + 1)}</td>
+          <td>${escapeHtml(short(winner.address || winner.wallet))}</td>
+          <td>${Number(winner.score || 0).toLocaleString()}</td>
+          <td>${Number(winner.entries || winner.entryCount || 0).toLocaleString()}</td>
+          <td>${mattDisplay(winner.payoutMatt ?? winner.amountMatt ?? winner.payoutRaw)}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="5">No finalized Arena winners for this day.</td></tr>';
+  } catch (error) {
+    $('#arena-admin-metrics').innerHTML = metric('Arena', 'Not configured');
+    $('#arena-admin-status').innerHTML = `<p>${escapeHtml(error.message)}</p>`;
+    $('#arena-control-status').innerHTML = '<p>Onchain pause state is unavailable.</p>';
+    $('#arena-admin-winners').innerHTML = '<tr><td colspan="5">Arena data is unavailable.</td></tr>';
+  }
+}
+
+function renderArenaSafePackage(title, safe, transactions = [], fallbackFileName) {
+  const panel = $('#arena-admin-transaction');
+  panel.hidden = false;
+  panel.innerHTML = `<h2>${escapeHtml(title)} — not broadcast</h2>
+    ${row('Ordered Safe transactions', transactions?.length || safe?.transactions?.length || 0)}
+    <p>Download this JSON file, inspect the exact day, MATT amounts, winner addresses, and total, then drag it into the Ronin Safe Transaction Builder for 2-of-3 approval.</p>
+    <div class="action-row"><button id="download-arena-safe-json">Download Safe JSON</button><button id="copy-arena-safe-json" class="ghost">Copy JSON</button></div>
+    <div class="code">${escapeHtml(JSON.stringify(transactions?.length ? transactions : safe?.transactions || [], null, 2))}</div>`;
+  $('#download-arena-safe-json').addEventListener('click', () => downloadJson(fallbackFileName, safe));
+  $('#copy-arena-safe-json').addEventListener('click', () => navigator.clipboard.writeText(JSON.stringify(safe, null, 2)));
+}
+
+function renderArenaDirectTransaction(title, control = {}, fallbackFileName) {
+  const panel = $('#arena-admin-transaction');
+  const transaction = control.transaction || control.transactions?.[0] || {};
+  const downloadable = {
+    schemaVersion: 1,
+    kind: 'direct-role-transaction',
+    requiredSigner: control.requiredSigner || transaction.requiredSigner,
+    broadcast: false,
+    transaction
+  };
+  panel.hidden = false;
+  panel.innerHTML = `<h2>${escapeHtml(title)} â€” not broadcast</h2>
+    ${row('Required signer', downloadable.requiredSigner || 'Emergency pauser')}
+    ${row('To', transaction.to || 'Unavailable')}
+    ${row('Value', transaction.value ?? '0')}
+    <p>This action must be sent directly by the named emergency-pauser wallet. It is not a Treasury Safe transaction.</p>
+    <p>Calldata</p><div class="code">${escapeHtml(transaction.data || '')}</div>
+    <div class="action-row"><button id="download-arena-direct-json">Download direct transaction JSON</button><button id="copy-arena-direct-json" class="ghost">Copy JSON</button></div>`;
+  $('#download-arena-direct-json').addEventListener('click', () => downloadJson(fallbackFileName, downloadable));
+  $('#copy-arena-direct-json').addEventListener('click', () => navigator.clipboard.writeText(JSON.stringify(downloadable, null, 2)));
+}
+
 function renderContractActions() {
   $('#contract-action').innerHTML = state.actions.map((entry) =>
     `<option value="${entry.id}">${words(entry.id)} — ${escapeHtml(entry.requiredSigner)}</option>`
@@ -295,10 +526,26 @@ function showAlert(message, error = false) {
   alert.textContent = message;
 }
 function row(label, value) { return `<div class="kv"><span>${escapeHtml(label)}</span><span>${escapeHtml(value)}</span></div>`; }
+function metric(label, value) { return `<div class="metric"><span class="muted">${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`; }
 function status(enabled) { return enabled ? 'Enabled' : 'Paused'; }
 function short(value) { const text = String(value || ''); return text.length > 16 ? `${text.slice(0, 8)}…${text.slice(-6)}` : text; }
-function words(value) { return String(value).replaceAll('_', ' ').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/\b\w/g, (char) => char.toUpperCase()); }
+function words(value) { return String(value).replace(/[-_]/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/\b\w/g, (char) => char.toUpperCase()); }
 function argumentHint(type) { return type === 'address' ? '0x…' : type === 'board' ? 'free or paid' : type === 'ron' ? 'RON amount' : type === 'matt' ? 'MATT amount' : 'Whole number'; }
+function nextUtcDay() {
+  return new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+}
+function mattDisplay(value) {
+  if (value === undefined || value === null || value === '') return '0';
+  const text = String(value);
+  try {
+    const parsed = BigInt(text);
+    const matt = parsed > 10_000_000_000n ? parsed / 10n ** 18n : parsed;
+    return Number(matt <= BigInt(Number.MAX_SAFE_INTEGER) ? matt : 0n).toLocaleString();
+  } catch {
+    const number = Number(value);
+    return Number.isFinite(number) ? number.toLocaleString() : '0';
+  }
+}
 
 const savedKey = sessionStorage.getItem('mattMineAdminKey');
 if (savedKey) {

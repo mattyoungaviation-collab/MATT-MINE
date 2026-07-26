@@ -35,6 +35,7 @@
         <button data-tab="operations">Operations</button>
         <button data-tab="players">Players</button>
         <button data-tab="rewards">Rewards</button>
+        <button data-tab="arena">Daily Arena</button>
         <button data-tab="contracts">Contracts</button>
         <button data-tab="audit">Audit</button>
         <button id="lock-button" class="ghost">Lock</button>
@@ -86,6 +87,68 @@
         </form>
         <div id="reward-transaction-result" class="panel" hidden></div>
         <div id="reward-drafts" class="cards"></div>
+      </section>
+
+      <section id="tab-arena" class="tab">
+        <div class="section-heading">
+          <div><p class="eyebrow">PLAYER-FUNDED MATT COMPETITION</p><h2>Daily Arena</h2></div>
+          <button id="refresh-arena-admin" class="ghost">Refresh</button>
+        </div>
+        <div class="notice warning">Every accepted entry and Treasury seed becomes reserved player prize money. Active Arena pools cannot be withdrawn or redirected.</div>
+        <div id="arena-admin-metrics" class="metrics"></div>
+        <div class="grid two">
+          <form id="arena-schedule-form" class="panel">
+            <h2>Schedule a future Arena</h2>
+            <label>UTC competition day<input id="arena-admin-day" type="date" required></label>
+            <label>Entry price (MATT)<input id="arena-admin-fee" type="number" min="25000" max="1000000" step="1" required></label>
+            <label>Treasury seed (MATT, optional)<input id="arena-admin-seed" type="number" min="0" max="10000000" step="1" value="0"></label>
+            <label>Required reason<input id="arena-admin-schedule-reason" maxlength="240" placeholder="Why is this day and price being scheduled?" required></label>
+            <button type="submit">Prepare schedule &amp; seed Safe JSON</button>
+            <p>Price locks for that UTC day. Player entries are unlimited and have no pool ceiling. Daily Treasury seed is capped at 10,000,000 MATT.</p>
+          </form>
+
+          <article class="panel">
+            <h2>Selected day status</h2>
+            <div id="arena-admin-status"></div>
+            <div class="action-row">
+              <button id="arena-prepare-settlement" type="button">Prepare full-pool settlement</button>
+              <button id="arena-prepare-cancel" type="button" class="danger">Prepare cancellation</button>
+            </div>
+            <label>Required settlement/cancellation reason<input id="arena-admin-action-reason" maxlength="240" placeholder="Document the reason before creating Safe calldata"></label>
+          </article>
+        </div>
+
+        <div class="grid two">
+          <form id="arena-seed-form" class="panel">
+            <h2>Top up selected day</h2>
+            <label>Additional Treasury seed (MATT)<input id="arena-seed-top-up" type="number" min="1" max="10000000" step="1" required></label>
+            <label>Required reason<input id="arena-seed-reason" maxlength="240" placeholder="Why is more Treasury seed being added?" required></label>
+            <button type="submit">Prepare seed top-up Safe JSON</button>
+            <p>The contract enforces a cumulative 10,000,000 MATT seed cap. v1.8 blocks funding while paid Arena entry is security-locked.</p>
+          </form>
+
+          <article class="panel">
+            <h2>Emergency contract controls</h2>
+            <div id="arena-control-status"></div>
+            <label>Required reason<input id="arena-control-reason" maxlength="240" placeholder="Why is this pause state changing?" required></label>
+            <div class="action-row">
+              <button type="button" data-arena-control="pause-entries" class="danger">Pause entries</button>
+              <button type="button" data-arena-control="unpause-entries">Unpause entries</button>
+              <button type="button" data-arena-control="pause-settlement" class="danger">Pause settlement</button>
+              <button type="button" data-arena-control="unpause-settlement">Unpause settlement</button>
+            </div>
+            <p>These buttons prepare direct calldata for the separate emergency-pauser wallet. They do not use the Treasury Safe, sign, or broadcast.</p>
+          </article>
+        </div>
+
+        <div id="arena-admin-transaction" class="panel" hidden></div>
+        <div class="panel table-wrap">
+          <h2>Verified daily winners</h2>
+          <table>
+            <thead><tr><th>Rank</th><th>Wallet</th><th>Best score</th><th>Entries</th><th>MATT payout</th></tr></thead>
+            <tbody id="arena-admin-winners"><tr><td colspan="5">Select a day to load its immutable snapshot.</td></tr></tbody>
+          </table>
+        </div>
       </section>
 
       <section id="tab-contracts" class="tab">

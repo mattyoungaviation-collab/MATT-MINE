@@ -1,6 +1,6 @@
 {
   "name": "matt-mine",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -18,7 +18,11 @@
     "contracts:check-deployment:ronin": "npm --workspace contracts run check-deployment:ronin",
     "contracts:check-deployer:ronin": "npm --workspace contracts run check-deployer:ronin",
     "contracts:deploy:ronin": "npm --workspace contracts run deploy:ronin",
-    "contracts:verify:ronin": "npm --workspace contracts run verify:ronin"
+    "contracts:verify:ronin": "npm --workspace contracts run verify:ronin",
+    "contracts:check-arena-deployer:ronin": "npm --workspace contracts run check-arena-deployer:ronin",
+    "contracts:deploy-arena:ronin": "npm --workspace contracts run deploy-arena:ronin",
+    "contracts:check-arena-deployment:ronin": "npm --workspace contracts run check-arena-deployment:ronin",
+    "contracts:verify-arena:ronin": "npm --workspace contracts run verify-arena:ronin"
   },
   "engines": {
     "node": ">=20"
