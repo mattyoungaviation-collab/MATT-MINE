@@ -4,6 +4,14 @@
 
 MATT Mine is a standalone browser action roguelite and daily Web3 competition on Ronin. It has its own launch website, wallet identity, separate Free and Pass leaderboards, live Pass and paid-run payments, verified contracts, and a production persistence path independent from MATT Hub.
 
+## v1.5 live Mine Pass
+
+- Verify each 95 RON Pass purchase against the exact Ronin transaction, approved Pass contract call, purchasing wallet, payment amount, and `PassPurchased` event.
+- Store confirmed Pass purchases and progression per wallet in PostgreSQL-backed server state with replay-safe confirmation.
+- Award 25 server-owned Pass XP for an active holder's daily Free ranked run and 100 XP for every completed Pass ranked run.
+- Return live Pass level, XP progress, and reward-track unlocks instead of displaying browser-only test progression.
+- Keep Pass leaderboard access and paid-run credits gated by current onchain Pass ownership.
+
 ## v1.4.2 gameplay soundtrack
 
 - Play `Ore Reactor` as looping background music during every Free, Pass, and Practice run.

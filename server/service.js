@@ -1,7 +1,7 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { getAddress, verifyMessage } from 'viem';
 import { META_UPGRADES } from '../src/game/config.js';
-import { utcDayKey, utcWeekKey } from '../src/game/economy.js';
+import { passLevel, utcDayKey, utcWeekKey } from '../src/game/economy.js';
 import {
   AUTH_CHALLENGE_TTL_MS,
   MAX_RUN_SCORE,
@@ -21,6 +21,9 @@ import {
   MATT_MINE_ADMIN_CONTRACTS,
   prepareAdminContractTransactions
 } from './admin-controls.js';
+
+const FREE_PASS_XP = 25;
+const PAID_PASS_XP = 100;
 
 export class MattMineService {
   constructor(database, options = {}) {
@@ -203,8 +206,50 @@ export class MattMineService {
       address: session.address,
       suspended: wallet.suspended,
       confirmedCredits: unusedPaidEntitlements(state, session.address).length,
+      passProgress: publicPassProgress(wallet),
       ...chain
     };
+  }
+
+  async confirmPassPurchase(token, transactionHash) {
+    const session = await this.authenticate(token);
+    this.assertPaymentsEnabled();
+    const before = await this.database.read();
+    assertApi(!before.operations.purchasesPaused, 503, 'server_purchases_paused', 'Pass purchases are temporarily paused by MATT Mine.');
+    const wallet = requireWallet(before, session.address);
+    assertApi(!wallet.suspended, 403, 'wallet_suspended', 'This wallet is suspended from Pass purchases.');
+    const verified = await this.paymentVerifier.verifyPassPurchase(transactionHash, session.address);
+    const timestamp = this.now();
+    return this.database.transact((state) => {
+      const currentWallet = requireWallet(state, session.address);
+      assertApi(!currentWallet.suspended, 403, 'wallet_suspended', 'This wallet is suspended from Pass purchases.');
+      const existing = state.passPurchases[verified.key];
+      if (existing) {
+        assertApi(existing.address === session.address, 409, 'payment_already_owned', 'This Pass payment is already registered to another wallet.');
+        return {
+          purchase: structuredClone(existing),
+          passProgress: publicPassProgress(currentWallet),
+          alreadyConfirmed: true
+        };
+      }
+      state.passPurchases[verified.key] = {
+        ...verified,
+        confirmedAt: timestamp
+      };
+      currentWallet.updatedAt = timestamp;
+      addAudit(
+        state,
+        session.address,
+        'PASS_PAYMENT_CONFIRMED',
+        `${verified.transactionHash} expires ${new Date(verified.expiresAt).toISOString()}`,
+        timestamp
+      );
+      return {
+        purchase: structuredClone(state.passPurchases[verified.key]),
+        passProgress: publicPassProgress(currentWallet),
+        alreadyConfirmed: false
+      };
+    });
   }
 
   async quotePaidRun(token) {
@@ -271,6 +316,7 @@ export class MattMineService {
     if (normalizedMode === SERVER_RUN_MODES.PAID) {
       assertApi(!operationState.operations.passRankedPaused, 503, 'pass_ranked_paused', 'Pass ranked runs are temporarily paused.');
     }
+    let passActiveAtStart = false;
     if (normalizedMode === SERVER_RUN_MODES.PAID) {
       assertApi(
         this.mainnetTransactionsEnabled,
@@ -281,6 +327,10 @@ export class MattMineService {
       const paymentStatus = await this.paymentVerifier.status(session.address);
       assertApi(paymentStatus.pass.active, 403, 'active_pass_required', 'An active MATT Mine Pass is required.');
       assertApi(!paymentStatus.paidRuns.paused, 503, 'paid_runs_paused', 'Paid ranked runs are currently paused.');
+      passActiveAtStart = true;
+    } else if (normalizedMode === SERVER_RUN_MODES.FREE && this.mainnetTransactionsEnabled) {
+      const paymentStatus = await this.paymentVerifier.status(session.address).catch(() => null);
+      passActiveAtStart = paymentStatus?.pass?.active === true;
     }
     const timestamp = this.now();
     const runId = `run_${this.randomHex(12)}`;
@@ -342,6 +392,8 @@ export class MattMineService {
           ? timestamp + RUN_TTL_MS
           : Math.min(timestamp + RUN_TTL_MS, weekEndsAt),
         finishedAt: 0,
+        passActiveAtStart,
+        passXpAwarded: 0,
         result: null
       };
       state.runs[runId] = serverRun;
@@ -403,6 +455,18 @@ export class MattMineService {
       wallet.profile.bestDepth = Math.max(wallet.profile.bestDepth, result.depth);
       wallet.profile.bestScore = Math.max(wallet.profile.bestScore, result.score);
       wallet.profile.totalRuns += 1;
+      const passXpAwarded = run.passActiveAtStart
+        ? run.mode === SERVER_RUN_MODES.PAID
+          ? PAID_PASS_XP
+          : run.mode === SERVER_RUN_MODES.FREE
+            ? FREE_PASS_XP
+            : 0
+        : 0;
+      run.passXpAwarded = passXpAwarded;
+      if (passXpAwarded > 0) {
+        wallet.passProgress.xp += passXpAwarded;
+        wallet.passProgress.updatedAt = timestamp;
+      }
       wallet.updatedAt = timestamp;
       await transaction?.recordFinishedRun(run);
       addAudit(state, session.address, 'SERVER_RUN_VERIFIED', `${run.mode} score ${result.score}`, timestamp);
@@ -410,6 +474,7 @@ export class MattMineService {
         accepted: true,
         run: publicRun(run),
         profile: structuredClone(wallet.profile),
+        passProgress: publicPassProgress(wallet),
         mode: run.mode,
         week: run.week
       };
@@ -423,6 +488,7 @@ export class MattMineService {
       accepted: completed.accepted,
       run: completed.run,
       profile: completed.profile,
+      passProgress: completed.passProgress,
       leaderboard
     };
   }
@@ -792,6 +858,7 @@ function publicWalletSnapshot(state, address, timestamp) {
   return {
     address,
     profile: structuredClone(wallet.profile),
+    passProgress: publicPassProgress(wallet),
     suspended: wallet.suspended,
     day,
     week,
@@ -874,7 +941,22 @@ function publicRun(run) {
     status: run.status,
     startedAt: run.startedAt,
     finishedAt: run.finishedAt,
+    passXpAwarded: Number(run.passXpAwarded || 0),
     result: structuredClone(run.result)
+  };
+}
+
+function publicPassProgress(wallet) {
+  const xp = Number(wallet?.passProgress?.xp || 0);
+  const level = passLevel(xp);
+  return {
+    xp,
+    level: level.level,
+    progress: level.progress,
+    currentLevelXp: level.current,
+    nextLevelXp: level.next,
+    maxLevel: level.maxLevel,
+    updatedAt: Number(wallet?.passProgress?.updatedAt || 0)
   };
 }
 
@@ -897,6 +979,7 @@ function adminWalletSnapshot(state, wallet, timestamp) {
     address: wallet.address,
     suspended: wallet.suspended,
     profile: structuredClone(wallet.profile),
+    passProgress: publicPassProgress(wallet),
     freeRunUsedToday: today.freeRunUsed === true,
     activeSessions: sessions.length,
     activeRuns: runs.filter((run) => run.status === 'active' && run.expiresAt > timestamp).length,

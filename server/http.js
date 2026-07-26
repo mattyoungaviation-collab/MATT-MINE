@@ -105,6 +105,12 @@ async function handleApiRequest({
     sendJson(response, 200, { ok: true, status });
     return;
   }
+  if (method === 'POST' && path === '/api/payments/pass/confirm') {
+    const body = await readJson(request, maxRequestBytes);
+    const result = await service.confirmPassPurchase(bearerToken(request), body.transactionHash);
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
   if (method === 'POST' && path === '/api/payments/paid-run/quote') {
     await readJson(request, maxRequestBytes);
     const quote = await service.quotePaidRun(bearerToken(request));

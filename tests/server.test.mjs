@@ -12,6 +12,7 @@ import { RoninWalletAdapter, parseChainId } from '../src/game/walletAdapter.js';
 import { JsonFileDatabase, MemoryDatabase, PostgresDatabase } from '../server/database.js';
 import { createMattMineHttpServer } from '../server/http.js';
 import {
+  MATT_MINE_PASS_ABI,
   MATT_MINE_RUNS_ABI,
   RONIN_PAYMENT_CONTRACTS,
   RoninPaymentVerifier
@@ -141,6 +142,17 @@ function createFakePaymentVerifier(options = {}) {
           value: '0x8ac7230489e80000',
           data: '0x12345678'
         }
+      };
+    },
+    async verifyPassPurchase(transactionHash, address) {
+      return {
+        key: `${transactionHash.toLowerCase()}:0`,
+        transactionHash: transactionHash.toLowerCase(),
+        logIndex: 0,
+        blockNumber: '58780000',
+        address: address.toLowerCase(),
+        priceRon: '95000000000000000000',
+        expiresAt: START + 30 * 86_400_000
       };
     },
     async verifyPaidRunPurchase(transactionHash, address) {
@@ -306,6 +318,41 @@ test('paid server runs stay disabled while authenticated Practice remains unlimi
   assert.notEqual(first.runId, second.runId);
 });
 
+test('live Pass confirmation is idempotent and server-owned Pass XP follows ranked play', async () => {
+  const harness = createHarness({
+    mainnetTransactionsEnabled: true,
+    paymentVerifier: createFakePaymentVerifier()
+  });
+  const { session } = await signIn(harness);
+  const passHash = `0x${'9'.repeat(64)}`;
+
+  const confirmed = await harness.service.confirmPassPurchase(session.token, passHash);
+  assert.equal(confirmed.alreadyConfirmed, false);
+  assert.equal(confirmed.passProgress.xp, 0);
+  assert.equal(confirmed.passProgress.level, 1);
+  const duplicate = await harness.service.confirmPassPurchase(session.token, passHash);
+  assert.equal(duplicate.alreadyConfirmed, true);
+  const stored = await harness.database.read();
+  assert.equal(Object.keys(stored.passPurchases).length, 1);
+
+  const freeRun = await harness.service.startRun(session.token, SERVER_RUN_MODES.FREE);
+  harness.advance(60_000);
+  const freeResult = await finish(harness.service, session, freeRun, extractedResult());
+  assert.equal(freeResult.run.passXpAwarded, 25);
+  assert.equal(freeResult.passProgress.xp, 25);
+
+  await harness.service.confirmPaidRunPurchase(session.token, `0x${'8'.repeat(64)}`);
+  const paidRun = await harness.service.startRun(session.token, SERVER_RUN_MODES.PAID);
+  harness.advance(60_000);
+  const paidResult = await finish(harness.service, session, paidRun, extractedResult());
+  assert.equal(paidResult.run.passXpAwarded, 100);
+  assert.equal(paidResult.passProgress.xp, 125);
+
+  const player = await harness.service.me(session.token);
+  assert.equal(player.passProgress.xp, 125);
+  assert.equal(player.passProgress.level, 1);
+});
+
 test('confirmed Ronin purchases create one-time paid-run entitlements and daily-best Pass scores', async () => {
   const paymentVerifier = createFakePaymentVerifier();
   const harness = createHarness({
@@ -384,6 +431,65 @@ test('pass state, contract pause, and server suspension block paid access safely
   await assert.rejects(
     () => suspendedHarness.service.confirmPaidRunPurchase(suspendedSession.token, `0x${'3'.repeat(64)}`),
     (error) => error.code === 'wallet_suspended'
+  );
+});
+
+test('Pass receipt verifier requires the approved purchasePass call and activation event', async () => {
+  const transactionHash = `0x${'6'.repeat(64)}`;
+  const priceRon = 95n * 10n ** 18n;
+  const expiresAt = BigInt(Math.floor(START / 1000) + 30 * 86_400);
+  const topics = encodeEventTopics({
+    abi: MATT_MINE_PASS_ABI,
+    eventName: 'PassPurchased',
+    args: { player: account.address }
+  });
+  const data = encodeAbiParameters(
+    [{ type: 'uint256' }, { type: 'uint64' }],
+    [priceRon, expiresAt]
+  );
+  const receipt = {
+    status: 'success',
+    to: RONIN_PAYMENT_CONTRACTS.pass,
+    blockNumber: 58_780_000n,
+    logs: [{
+      address: RONIN_PAYMENT_CONTRACTS.pass,
+      topics,
+      data,
+      logIndex: 3
+    }]
+  };
+  const transaction = {
+    from: account.address,
+    to: RONIN_PAYMENT_CONTRACTS.pass,
+    value: priceRon,
+    input: encodeFunctionData({
+      abi: MATT_MINE_PASS_ABI,
+      functionName: 'purchasePass'
+    })
+  };
+  const verifier = new RoninPaymentVerifier({
+    confirmations: 1,
+    client: {
+      waitForTransactionReceipt: async () => receipt,
+      getTransaction: async () => transaction
+    }
+  });
+
+  const verified = await verifier.verifyPassPurchase(transactionHash, account.address);
+  assert.equal(verified.key, `${transactionHash}:3`);
+  assert.equal(verified.priceRon, String(priceRon));
+  assert.equal(verified.expiresAt, Number(expiresAt) * 1000);
+
+  const wrongWalletVerifier = new RoninPaymentVerifier({
+    confirmations: 1,
+    client: {
+      waitForTransactionReceipt: async () => receipt,
+      getTransaction: async () => ({ ...transaction, from: otherAccount.address })
+    }
+  });
+  await assert.rejects(
+    () => wrongWalletVerifier.verifyPassPurchase(transactionHash, account.address),
+    (error) => error.code === 'payment_wallet_mismatch'
   );
 });
 

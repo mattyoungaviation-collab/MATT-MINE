@@ -54,6 +54,14 @@ export class MattMineApiClient {
     return response.status;
   }
 
+  async confirmPassPurchase(transactionHash) {
+    return this.request('/api/payments/pass/confirm', {
+      method: 'POST',
+      authenticated: true,
+      body: { transactionHash }
+    });
+  }
+
   async paidRunQuote() {
     const response = await this.request('/api/payments/paid-run/quote', {
       method: 'POST',
