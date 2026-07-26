@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { getAddress } from 'viem';
-import { HARD_MAX_PILOT_BOARD_MATT } from './constants.js';
+import { HARD_MAX_BOARD_MATT } from './constants.js';
 import { ApiError, assertApi } from './errors.js';
 import {
   createRewardPlan,
@@ -18,7 +18,7 @@ export class RewardManager {
     this.adminKey = String(options.adminKey || '');
     this.approverKey = String(options.approverKey || '');
     this.publicationEnabled = options.publicationEnabled === true;
-    this.maxBoardMatt = boundedPilotCap(options.maxBoardMatt);
+    this.maxBoardMatt = boundedBoardCap(options.maxBoardMatt);
   }
 
   async init() {
@@ -189,10 +189,10 @@ function publicReward(reward) {
   };
 }
 
-function boundedPilotCap(value) {
+function boundedBoardCap(value) {
   const parsed = Number(value || 100_000);
   if (!Number.isSafeInteger(parsed) || parsed <= 0) return 100_000;
-  return Math.min(parsed, HARD_MAX_PILOT_BOARD_MATT);
+  return Math.min(parsed, HARD_MAX_BOARD_MATT);
 }
 
 function normalizeClaimDays(value) {
