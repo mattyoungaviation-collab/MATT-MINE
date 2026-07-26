@@ -22,6 +22,11 @@ export class MattMineApiClient {
     return response.config;
   }
 
+  async publicPaymentStatus() {
+    const response = await this.request('/api/payments/public-status');
+    return response.status;
+  }
+
   async createChallenge(address, chainId, origin = globalThis.location?.origin) {
     const response = await this.request('/api/auth/challenge', {
       method: 'POST',

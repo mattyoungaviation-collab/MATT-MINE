@@ -1,0 +1,13 @@
+.git
+.github
+.env
+.env.*
+!.env.example
+node_modules
+data
+contracts/artifacts
+contracts/cache
+contracts/coverage
+contracts/deployments
+contracts/config/ronin.json
+npm-debug.log*

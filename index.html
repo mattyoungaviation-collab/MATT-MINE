@@ -4,18 +4,284 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#0b0d12" />
-    <meta name="description" content="MATT Mine — dig deep, fight hard, get out alive." />
-    <title>MATT Mine</title>
+    <meta name="description" content="MATT Mine is a free-to-play action roguelite on Ronin. Dig, fight, extract, and compete in daily skill-based mines." />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="MATT Mine — Dig. Fight. Extract." />
+    <meta property="og:description" content="One free ranked run every day. Enter the mine, defeat the Guardian, and extract your best score." />
+    <meta property="og:image" content="/assets/launch/matt-mine-hero.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="MATT Mine — Dig. Fight. Extract." />
+    <meta name="twitter:description" content="A browser action roguelite and daily competition built on Ronin." />
+    <meta name="twitter:image" content="/assets/launch/matt-mine-hero.png" />
+    <title>MATT Mine — Dig. Fight. Extract.</title>
     <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg" />
+    <link rel="preload" as="image" href="./assets/launch/matt-mine-hero.png" fetchpriority="high" />
     <link rel="stylesheet" href="./src/styles.css" />
     <link rel="stylesheet" href="./src/v3.css" />
     <link rel="stylesheet" href="./src/v4.css" />
+    <link rel="stylesheet" href="./src/launch.css" />
   </head>
   <body>
     <main id="app">
       <canvas id="game" width="1280" height="720" aria-label="MATT Mine game canvas"></canvas>
 
-      <section id="menu" class="screen active menu-v4" aria-labelledby="game-title">
+      <section id="launch" class="screen active launch-screen" aria-labelledby="launch-title">
+        <header class="launch-nav">
+          <button class="launch-brand" type="button" data-launch-scroll="launch-top" aria-label="MATT Mine home">
+            <span class="launch-brand-mark" aria-hidden="true">⛏</span>
+            <span><b>MATT</b> MINE<small>RONIN ACTION ROGUELITE</small></span>
+          </button>
+          <nav class="launch-links" aria-label="Main navigation">
+            <button type="button" data-launch-scroll="launch-gameplay">GAME</button>
+            <button type="button" data-launch-scroll="launch-economy">ECONOMY</button>
+            <button type="button" data-launch-scroll="launch-roadmap">ROADMAP</button>
+            <button type="button" data-launch-scroll="launch-contracts">CONTRACTS</button>
+          </nav>
+          <div class="launch-nav-actions">
+            <button id="launch-wallet-button" class="launch-wallet-button" type="button">
+              <span class="status-dot"></span>
+              <span id="launch-wallet-label">CONNECT RONIN</span>
+            </button>
+            <button class="launch-enter-button" type="button" data-launch-action="enter">ENTER MINE</button>
+          </div>
+        </header>
+
+        <div id="launch-scroll" class="launch-scroll">
+          <section id="launch-top" class="launch-hero">
+            <div class="launch-hero-art" role="img" aria-label="A MATT miner faces the towering crystal Guardian deep underground"></div>
+            <div class="launch-hero-shade"></div>
+            <div class="launch-hero-content">
+              <div class="launch-live-pill"><span></span> LIVE ON RONIN MAINNET</div>
+              <p class="launch-kicker">THE MINE OPENS EVERY DAY</p>
+              <h1 id="launch-title"><span>MATT</span><br />MINE</h1>
+              <p class="launch-hero-copy">Dig for ore. Fight through sealed chambers. Defeat the Guardian. Extract before the mine takes everything.</p>
+              <div class="launch-hero-actions">
+                <button class="launch-primary-cta" type="button" data-launch-action="enter">
+                  <span>PLAY FREE</span>
+                  <small>ONE RANKED RUN EVERY DAY</small>
+                </button>
+                <button class="launch-secondary-cta" type="button" data-launch-action="practice">
+                  <span>TRY PRACTICE</span>
+                  <small>NO WALLET REQUIRED</small>
+                </button>
+              </div>
+              <div class="launch-chain-note">
+                <span class="launch-ronin-glyph" aria-hidden="true">R</span>
+                <span>Built for Ronin</span>
+                <i></i>
+                <span>Browser playable</span>
+                <i></i>
+                <span>Desktop + mobile</span>
+              </div>
+            </div>
+
+            <aside class="launch-daily-card" aria-label="Today's mine status">
+              <div class="launch-daily-heading">
+                <div>
+                  <span>TODAY'S MINE</span>
+                  <strong id="launch-date">JUL 25</strong>
+                </div>
+                <b id="launch-live-status">SERVER ONLINE</b>
+              </div>
+              <div class="launch-daily-map" aria-hidden="true">
+                <span class="map-room map-lift">LIFT</span>
+                <span class="map-line line-one"></span>
+                <span class="map-room map-combat">FIGHT</span>
+                <span class="map-line line-two"></span>
+                <span class="map-room map-mine">ORE</span>
+                <span class="map-line line-three"></span>
+                <span class="map-room map-guardian">BOSS</span>
+              </div>
+              <div class="launch-daily-stats">
+                <div><span>FREE RUN</span><strong id="launch-free-status">READY</strong></div>
+                <div><span>PASS</span><strong><span id="launch-pass-price">95</span> RON</strong></div>
+                <div><span>PAID RUN</span><strong><span id="launch-run-price">10</span> RON</strong></div>
+              </div>
+              <button type="button" data-launch-action="enter">VIEW RUN SELECT</button>
+            </aside>
+
+            <div class="launch-scroll-cue" aria-hidden="true"><span></span> DESCEND</div>
+          </section>
+
+          <section class="launch-proof-rail" aria-label="Game highlights">
+            <div><strong>1</strong><span>FREE RANKED RUN<br />EVERY UTC DAY</span></div>
+            <div><strong>3</strong><span>WEAPONS TO MASTER<br />PICKAXE · DYNAMITE · BLASTER</span></div>
+            <div><strong>7</strong><span>PROCEDURAL ROOMS<br />ONE DAILY SEED</span></div>
+            <div><strong>0</strong><span>MATT BURNED<br />REWARDS RECYCLE SUPPLY</span></div>
+          </section>
+
+          <section id="launch-gameplay" class="launch-section launch-gameplay-section">
+            <div class="launch-section-heading">
+              <p>THE RUN</p>
+              <h2>Five minutes in.<br /><span>Everything on the line.</span></h2>
+              <p class="launch-section-copy">MATT Mine is an action roguelite built around one clean decision: extract what you have, or descend for a larger multiplier and risk losing it.</p>
+            </div>
+            <div class="launch-loop-grid">
+              <article>
+                <b>01</b>
+                <span class="loop-icon">⛏</span>
+                <h3>DIG</h3>
+                <p>Break ore veins, find rare MATT crystals, and build your run before the cave fights back.</p>
+              </article>
+              <article>
+                <b>02</b>
+                <span class="loop-icon">⚔</span>
+                <h3>FIGHT</h3>
+                <p>Clear sealed combat rooms with three weapons and upgrades that reshape every run.</p>
+              </article>
+              <article>
+                <b>03</b>
+                <span class="loop-icon">◆</span>
+                <h3>RISK</h3>
+                <p>Defeat the three-phase Guardian, then choose the lift—or go deeper for a bigger score.</p>
+              </article>
+              <article>
+                <b>04</b>
+                <span class="loop-icon">⇧</span>
+                <h3>EXTRACT</h3>
+                <p>Bank your nuggets, climb the leaderboard, earn Pass XP, and return for tomorrow's seed.</p>
+              </article>
+            </div>
+
+            <div class="launch-arsenal">
+              <div class="arsenal-copy">
+                <p class="launch-kicker">BUILD YOUR LOADOUT</p>
+                <h3>Three tools.<br />One way out.</h3>
+                <p>Every weapon solves a different problem. Crack armor up close, clear rooms with controlled explosions, or keep dangerous enemies at range.</p>
+                <button type="button" data-launch-action="practice">LEARN THE CONTROLS</button>
+              </div>
+              <div class="arsenal-cards">
+                <article class="weapon-pickaxe">
+                  <span>⛏</span><div><b>MATT PICKAXE</b><small>HEAVY · CLOSE RANGE · MINING</small></div>
+                </article>
+                <article class="weapon-dynamite">
+                  <span>✹</span><div><b>POCKET DYNAMITE</b><small>AREA DAMAGE · LIMITED AMMO</small></div>
+                </article>
+                <article class="weapon-blaster">
+                  <span>✦</span><div><b>CRYSTAL BLASTER</b><small>RANGED · FAST · CRYSTAL POWERED</small></div>
+                </article>
+              </div>
+            </div>
+          </section>
+
+          <section id="launch-economy" class="launch-section launch-economy-section">
+            <div class="launch-section-heading centered">
+              <p>ONE GAME · TWO LEADERBOARDS</p>
+              <h2>Free to enter.<br /><span>Built to compete.</span></h2>
+              <p class="launch-section-copy">Everyone gets one fair daily ranked attempt. Mine Pass holders unlock a separate premium competition and can purchase additional ranked runs.</p>
+            </div>
+            <div class="launch-tier-grid">
+              <article class="launch-tier-card free-tier-card">
+                <div class="tier-topline"><span>FREE TIER</span><b>FOR EVERY MINER</b></div>
+                <h3>0 RON</h3>
+                <p class="tier-subtitle">No purchase required</p>
+                <ul>
+                  <li>One ranked run every UTC day</li>
+                  <li>Free weekly leaderboard</li>
+                  <li>Daily quests and streak progress</li>
+                  <li>Unlimited unranked Practice</li>
+                  <li>Eligible for Free-pool MATT rewards</li>
+                </ul>
+                <button type="button" data-launch-action="enter">START FREE</button>
+              </article>
+              <article class="launch-tier-card pass-tier-card">
+                <div class="tier-glow"></div>
+                <div class="tier-topline"><span>MINE PASS</span><b>30 DAYS</b></div>
+                <h3><span id="launch-pass-price-card">95</span> RON</h3>
+                <p class="tier-subtitle">Live contract price · Ronin Wallet approval required</p>
+                <ul>
+                  <li>Premium Pass Leaderboard</li>
+                  <li>Paid ranked runs at <span id="launch-run-price-card">10</span> RON</li>
+                  <li>2× leaderboard reward weight</li>
+                  <li>Premium Pass XP and reward track</li>
+                  <li>Exclusive cosmetics and achievements</li>
+                </ul>
+                <button type="button" data-launch-action="pass">VIEW MINE PASS</button>
+              </article>
+            </div>
+            <div class="launch-flywheel">
+              <div><span>RON</span><small>PAID RUN</small></div>
+              <b>→</b>
+              <div><span>SWAP</span><small>RON BUYS MATT</small></div>
+              <b>→</b>
+              <div><span>70%</span><small>CURRENT PASS POOL</small></div>
+              <b>+</b>
+              <div><span>20%</span><small>FUTURE REWARDS</small></div>
+              <b>+</b>
+              <div><span>10%</span><small>GAME RESERVE</small></div>
+            </div>
+            <p class="launch-economy-note">Zero MATT is burned. Rewards are capped and performance-based. Purchasing a Pass or run does not guarantee a reward.</p>
+          </section>
+
+          <section id="launch-roadmap" class="launch-section launch-roadmap-section">
+            <div class="launch-roadmap-copy">
+              <p class="launch-kicker">BUILT IN PUBLIC</p>
+              <h2>The mine keeps<br /><span>getting deeper.</span></h2>
+              <p>Core combat, wallet login, live payments, and verified Ronin contracts are already here. The launch path now focuses on server durability, competition integrity, and new content.</p>
+            </div>
+            <div class="launch-roadmap-list">
+              <article class="complete"><span>01</span><div><b>GAMEPLAY CORE</b><small>Combat · mining · weapons · Guardian · extraction</small></div><em>LIVE</em></article>
+              <article class="complete"><span>02</span><div><b>RONIN ECONOMY</b><small>Wallet identity · Mine Pass · paid ranked runs</small></div><em>LIVE</em></article>
+              <article class="active"><span>03</span><div><b>COMPETITION LAUNCH</b><small>Production data · monitoring · moderated rewards</small></div><em>BUILDING</em></article>
+              <article><span>04</span><div><b>SEASON ONE</b><small>Quests · cosmetics · achievements · reward claims</small></div><em>NEXT</em></article>
+              <article><span>05</span><div><b>DEEPER MINES</b><small>New biomes · enemies · bosses · character classes</small></div><em>FUTURE</em></article>
+            </div>
+          </section>
+
+          <section id="launch-contracts" class="launch-section launch-contracts-section">
+            <div class="launch-section-heading">
+              <p>VERIFIED ON RONIN</p>
+              <h2>Contracts you can<br /><span>inspect yourself.</span></h2>
+              <p class="launch-section-copy">MATT Mine uses conventional, non-upgradeable contracts controlled by the approved 2-of-3 MATT Mine Treasury Safe. No replacement MATT token. No burn.</p>
+            </div>
+            <div class="launch-contract-grid">
+              <a href="https://explorer.roninchain.com/address/0x56a6d4Cf4Fbd1C7aA1572028556657CbC0fB5855?tab=contract" target="_blank" rel="noopener noreferrer">
+                <span>PASS</span><strong>0x56a6…5855</strong><small>EXACT MATCH VERIFIED ↗</small>
+              </a>
+              <a href="https://explorer.roninchain.com/address/0x4B5D10f6DA960436c5E3c23F40C52d36E2225555?tab=contract" target="_blank" rel="noopener noreferrer">
+                <span>PAID RUNS</span><strong>0x4B5D…5555</strong><small>EXACT MATCH VERIFIED ↗</small>
+              </a>
+              <a href="https://explorer.roninchain.com/address/0x6ba468EE15cb3634F4Ea340407E9FD7A75267619?tab=contract" target="_blank" rel="noopener noreferrer">
+                <span>REWARDS</span><strong>0x6ba4…619</strong><small>EXACT MATCH VERIFIED ↗</small>
+              </a>
+              <a href="https://explorer.roninchain.com/address/0x9f700037e9C8B3FfB5eDA15CDcf5a76bce235Af0?tab=contract" target="_blank" rel="noopener noreferrer">
+                <span>SWAP EXECUTOR</span><strong>0x9f70…5Af0</strong><small>EXACT MATCH VERIFIED ↗</small>
+              </a>
+              <a href="https://explorer.roninchain.com/address/0xBacE355D23d378a6E1adD986E53a18Dd12E6EeAc" target="_blank" rel="noopener noreferrer">
+                <span>TREASURY SAFE</span><strong>0xBacE…EeAc</strong><small>2 OF 3 SIGNERS ↗</small>
+              </a>
+              <a href="https://explorer.roninchain.com/address/0xa5450417BDCa0BDfB058ffE41205400FfDA1174d" target="_blank" rel="noopener noreferrer">
+                <span>MATT TOKEN</span><strong>0xa545…174d</strong><small>OFFICIAL TOKEN ↗</small>
+              </a>
+            </div>
+          </section>
+
+          <section class="launch-final-cta">
+            <div>
+              <p class="launch-kicker">YOUR DAILY RUN IS WAITING</p>
+              <h2>How deep can<br />you go?</h2>
+              <p>Play free. Learn the mine. Put your best score on the board.</p>
+            </div>
+            <button type="button" data-launch-action="enter"><span>ENTER MATT MINE</span><small>RONIN MAINNET · FREE DAILY RUN</small></button>
+          </section>
+
+          <footer class="launch-footer">
+            <button class="launch-brand footer-brand" type="button" data-launch-scroll="launch-top">
+              <span class="launch-brand-mark" aria-hidden="true">⛏</span>
+              <span><b>MATT</b> MINE<small>DIG DEEP. GET OUT ALIVE.</small></span>
+            </button>
+            <p>Skill-based browser game. Rewards are not guaranteed. Network fees, eligibility rules, and local restrictions may apply. Never share your seed phrase.</p>
+            <div>
+              <a href="https://explorer.roninchain.com/address/0xa5450417BDCa0BDfB058ffE41205400FfDA1174d" target="_blank" rel="noopener noreferrer">MATT TOKEN</a>
+              <a href="https://explorer.roninchain.com/address/0xBacE355D23d378a6E1adD986E53a18Dd12E6EeAc" target="_blank" rel="noopener noreferrer">TREASURY SAFE</a>
+              <button type="button" data-launch-action="enter">PLAY</button>
+            </div>
+          </footer>
+        </div>
+      </section>
+
+      <section id="menu" class="screen menu-v4" aria-labelledby="game-title">
+        <button id="home-button" class="home-chip" type="button" aria-label="Return to MATT Mine website">← HOME</button>
         <div class="brand-lockup compact-brand">
           <div class="brand-mark" aria-hidden="true">⛏</div>
           <p class="eyebrow">A MATT TOKEN GAME</p>
@@ -73,7 +339,7 @@
             <button id="leaderboards-button" class="secondary-button">LEADERBOARDS</button>
             <button id="pass-button" class="secondary-button">MINE PASS</button>
             <button id="upgrades-button" class="secondary-button">UPGRADES</button>
-            <button id="admin-button" class="secondary-button admin-nav">ADMIN TEST</button>
+            <button id="admin-button" class="secondary-button admin-nav" hidden>ADMIN TEST</button>
           </div>
           <p class="controls-copy">Move: WASD / arrows · Dash: Shift · Weapons: 1 / 2 / 3 · Aim: mouse · Attack: hold click or Space</p>
           <p id="transaction-mode-notice" class="test-mode-notice">SAFE TEST MODE · REAL RON TRANSACTIONS DISABLED</p>

@@ -2,7 +2,19 @@
 
 **Dig deep. Fight hard. Get out alive.**
 
-MATT Mine is a standalone browser action roguelite and daily Web3 competition prototype. It remains isolated from MATT Token Live until gameplay, economy rules, server validation, and contracts are production-ready.
+MATT Mine is a standalone browser action roguelite and daily Web3 competition on Ronin. It has its own launch website, wallet identity, separate Free and Pass leaderboards, live Pass and paid-run payments, verified contracts, and a production persistence path independent from MATT Hub.
+
+## v1.0 standalone launch
+
+- Add a complete standalone MATT Mine website with original hero artwork, responsive sections, gameplay explanation, Free/Pass comparison, economy flow, roadmap, verified-contract directory, and launch disclosures.
+- Keep the playable action roguelite inside the same fast, dependency-light application.
+- Make the public site the default screen while preserving direct access to Practice, run selection, leaderboards, Pass, upgrades, and wallet login.
+- Hide local admin test controls automatically outside localhost.
+- Read the approved 95 RON Pass and 10 RON paid-run prices through a public, read-only server route before wallet sign-in.
+- Move production state to PostgreSQL when `DATABASE_URL` is configured while retaining JSON storage for local development.
+- Serialize state changes inside PostgreSQL transactions so receipt confirmation and paid-run credit consumption remain atomic.
+- Add production health reporting, safer proxy-origin detection, asset caching, Render Blueprint configuration, and a container build.
+- Keep MATT reward claims disabled until competition moderation and reward publication are ready.
 
 ## v0.9 live Pass and paid-run integration
 
@@ -109,6 +121,20 @@ Run all checks with:
 npm test
 ```
 
+The homepage is now the default. Choose **Enter Mine** for run selection or **Try Practice** to play immediately without a wallet.
+
+## Deploy the standalone site
+
+The included `render.yaml` creates one Node web service and one PostgreSQL database. Before the first public launch:
+
+1. Set `MATT_MINE_PUBLIC_ORIGIN` to the exact HTTPS site origin, with no trailing slash.
+2. Confirm `MATT_MINE_MAINNET_TRANSACTIONS_ENABLED=true` only on the production service.
+3. Keep `MATT_MINE_PAYMENT_CONFIRMATIONS=3`.
+4. Verify `/api/health` reports `"database":{"ok":true,"kind":"postgresql"}`.
+5. Run one controlled Pass and paid-run reconciliation before announcing the URL.
+
+See [`docs/STANDALONE_LAUNCH_V10.md`](docs/STANDALONE_LAUNCH_V10.md) for the deployment and go-live checklist.
+
 ## Important live-payment boundary
 
 v0.9 can prepare real Pass and paid-run transactions only when the server operator explicitly enables the Mainnet transaction switch. Every purchase still requires the player to click the purchase button and approve the exact transaction in Ronin Wallet. MATT claims remain disabled. Ranked validation remains a hardened product foundation, not yet a sufficient anti-cheat system for public token payouts.
@@ -124,4 +150,4 @@ Before real value is enabled, the production build still requires:
 7. Immutable weekly reward publication and onchain claims.
 8. 2-of-3 multisig control for treasury and major contract administration, with no timelock.
 
-See [`docs/LIVE_PAYMENTS_V09.md`](docs/LIVE_PAYMENTS_V09.md), [`docs/CONTRACT_DEPLOYMENT_V08.md`](docs/CONTRACT_DEPLOYMENT_V08.md), [`docs/SECURITY_V07.md`](docs/SECURITY_V07.md), [`docs/ECONOMY_V1.md`](docs/ECONOMY_V1.md), and [`contracts/README.md`](contracts/README.md).
+See [`docs/STANDALONE_LAUNCH_V10.md`](docs/STANDALONE_LAUNCH_V10.md), [`docs/LIVE_PAYMENTS_V09.md`](docs/LIVE_PAYMENTS_V09.md), [`docs/CONTRACT_DEPLOYMENT_V08.md`](docs/CONTRACT_DEPLOYMENT_V08.md), [`docs/SECURITY_V07.md`](docs/SECURITY_V07.md), [`docs/ECONOMY_V1.md`](docs/ECONOMY_V1.md), and [`contracts/README.md`](contracts/README.md).

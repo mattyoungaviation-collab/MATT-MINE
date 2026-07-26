@@ -302,7 +302,7 @@ test('economy saves recover invalid JSON and discard corrupt nested records', ()
   assert.equal(normalized.walletId, 'TEST-WALLET-01');
   assert.equal(normalized.player.paidRunCredits, 0);
   assert.equal(normalized.player.banned, false);
-  assert.equal(normalized.settings.passPriceRon, 88);
+  assert.equal(normalized.settings.passPriceRon, 95);
   assert.equal(normalized.settings.rankedPaused, false);
   assert.equal(normalized.settings.paidSplitCurrentPercent, 70);
   assert.deepEqual(normalized.daily['2026-07-25'], {

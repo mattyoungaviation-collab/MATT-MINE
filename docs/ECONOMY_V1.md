@@ -14,7 +14,7 @@ This document records the approved v0.4 rules implemented by the standalone test
 ### MATT Mine Pass
 
 - Thirty days of premium access from purchase or extension.
-- The test default is 88 RON and is adjustable by the Price Manager.
+- The test default matches the deployed 95 RON launch price and is adjustable by the Price Manager.
 - An active pass unlocks paid ranked runs and the Pass Leaderboard.
 - Pass purchases are modeled as 50% development RON, 30% market-purchased MATT for pass rewards, and 20% marketing RON.
 

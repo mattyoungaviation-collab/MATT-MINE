@@ -116,6 +116,13 @@ const ROUTER_ABI = [
 ];
 
 const TRANSACTION_HASH_PATTERN = /^0x[a-fA-F0-9]{64}$/;
+const LAUNCH_PASS_PRICE_WEI = 95n * 10n ** 18n;
+const LAUNCH_PAID_RUN_PRICE_WEI = 10n * 10n ** 18n;
+
+export const MATT_MINE_LAUNCH_PRICES = Object.freeze({
+  passPriceRonWei: String(LAUNCH_PASS_PRICE_WEI),
+  paidRunPriceRonWei: String(LAUNCH_PAID_RUN_PRICE_WEI)
+});
 
 export class RoninPaymentVerifier {
   constructor(options = {}) {
@@ -142,6 +149,26 @@ export class RoninPaymentVerifier {
       },
       confirmations: this.confirmations,
       explorerUrl: 'https://explorer.roninchain.com'
+    };
+  }
+
+  async publicStatus() {
+    const [passPriceRon, passPaused, paidRunPriceRon, runsPaused] = await Promise.all([
+      this.read(this.contracts.pass, PASS_ABI, 'passPriceRon'),
+      this.read(this.contracts.pass, PASS_ABI, 'paused'),
+      this.read(this.contracts.runs, MATT_MINE_RUNS_ABI, 'paidRunPriceRon'),
+      this.read(this.contracts.runs, MATT_MINE_RUNS_ABI, 'paused')
+    ]);
+    return {
+      live: true,
+      pass: {
+        priceRonWei: String(passPriceRon),
+        paused: passPaused === true
+      },
+      paidRuns: {
+        priceRonWei: String(paidRunPriceRon),
+        paused: runsPaused === true
+      }
     };
   }
 

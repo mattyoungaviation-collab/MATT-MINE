@@ -9,7 +9,7 @@ import { decodeFunctionData, encodeAbiParameters, encodeEventTopics, encodeFunct
 
 import { MattMineApiClient, SESSION_STORAGE_KEY } from '../src/game/apiClient.js';
 import { RoninWalletAdapter, parseChainId } from '../src/game/walletAdapter.js';
-import { MemoryDatabase, JsonFileDatabase } from '../server/database.js';
+import { JsonFileDatabase, MemoryDatabase, PostgresDatabase } from '../server/database.js';
 import { createMattMineHttpServer } from '../server/http.js';
 import {
   MATT_MINE_RUNS_ABI,
@@ -562,6 +562,27 @@ test('JSON server storage persists profiles and recovers corrupt state safely', 
   assert.deepEqual(JSON.parse(await readFile(filePath, 'utf8')).wallets, {});
 });
 
+test('PostgreSQL storage initializes, serializes transactions, and reports readiness', async () => {
+  const fakePool = createFakePostgresPool();
+  const database = await new PostgresDatabase(null, { pool: fakePool }).init();
+  const result = await database.transact((state) => {
+    state.audit.push({ action: 'POSTGRES_WRITE', timestamp: START });
+    return { saved: true };
+  });
+  assert.deepEqual(result, { saved: true });
+
+  const persisted = await database.read();
+  assert.equal(persisted.audit[0].action, 'POSTGRES_WRITE');
+  assert.equal(fakePool.transactionLog.includes('BEGIN'), true);
+  assert.equal(fakePool.transactionLog.includes('COMMIT'), true);
+  assert.equal(fakePool.transactionLog.includes('ROLLBACK'), false);
+
+  const health = await database.healthCheck();
+  assert.equal(health.ok, true);
+  assert.equal(health.kind, 'postgresql');
+  assert.equal(Number.isSafeInteger(health.latencyMs), true);
+});
+
 test('the HTTP server exposes same-origin APIs, security headers, and authenticated player data', async (context) => {
   const harness = createHarness();
   const server = createMattMineHttpServer({
@@ -572,6 +593,26 @@ test('the HTTP server exposes same-origin APIs, security headers, and authentica
   context.after(() => new Promise((resolve) => server.close(resolve)));
   const address = server.address();
   const baseUrl = `http://127.0.0.1:${address.port}`;
+
+  const healthResponse = await fetch(`${baseUrl}/api/health`);
+  assert.equal(healthResponse.status, 200);
+  const healthPayload = await healthResponse.json();
+  assert.equal(healthPayload.version, 10);
+  assert.equal(healthPayload.database.kind, 'memory');
+
+  const launchResponse = await fetch(baseUrl);
+  assert.equal(launchResponse.status, 200);
+  assert.equal(launchResponse.headers.get('cache-control'), 'no-cache');
+  assert.equal(launchResponse.headers.get('cross-origin-opener-policy'), 'same-origin');
+  const launchHtml = await launchResponse.text();
+  assert.match(launchHtml, /id="launch" class="screen active launch-screen"/);
+  assert.match(launchHtml, /0x4B5D10f6DA960436c5E3c23F40C52d36E2225555/);
+  assert.match(launchHtml, /MATT Mine — Dig\. Fight\. Extract\./);
+
+  const heroResponse = await fetch(`${baseUrl}/assets/launch/matt-mine-hero.png`);
+  assert.equal(heroResponse.status, 200);
+  assert.equal(heroResponse.headers.get('content-type'), 'image/png');
+  assert.equal(heroResponse.headers.get('cache-control'), 'public, max-age=86400');
 
   const configResponse = await fetch(`${baseUrl}/api/config`);
   assert.equal(configResponse.status, 200);
@@ -584,6 +625,13 @@ test('the HTTP server exposes same-origin APIs, security headers, and authentica
   assert.equal(configPayload.config.mattClaimsEnabled, false);
   assert.equal(configPayload.config.mainnetTransactionsEnabled, false);
 
+  const publicPaymentResponse = await fetch(`${baseUrl}/api/payments/public-status`);
+  assert.equal(publicPaymentResponse.status, 200);
+  const publicPaymentPayload = await publicPaymentResponse.json();
+  assert.equal(publicPaymentPayload.status.live, false);
+  assert.equal(publicPaymentPayload.status.pass.priceRonWei, String(95n * 10n ** 18n));
+  assert.equal(publicPaymentPayload.status.paidRuns.priceRonWei, String(10n * 10n ** 18n));
+
   const crossOrigin = await fetch(`${baseUrl}/api/auth/challenge`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', origin: 'https://evil.example' },
@@ -595,6 +643,42 @@ test('the HTTP server exposes same-origin APIs, security headers, and authentica
   });
   assert.equal(crossOrigin.status, 403);
 });
+
+function createFakePostgresPool() {
+  let data = null;
+  const transactionLog = [];
+
+  async function query(sql, params = []) {
+    const normalized = sql.replace(/\s+/g, ' ').trim().toUpperCase();
+    if (normalized.startsWith('CREATE TABLE')) return { rows: [] };
+    if (normalized.startsWith('INSERT INTO MATT_MINE_STATE')) {
+      if (!data) data = JSON.parse(params[0]);
+      return { rows: [] };
+    }
+    if (normalized === 'SELECT 1') return { rows: [{ '?column?': 1 }] };
+    if (normalized.startsWith('SELECT DATA FROM MATT_MINE_STATE')) {
+      return { rows: data ? [{ data: structuredClone(data) }] : [] };
+    }
+    if (normalized.startsWith('UPDATE MATT_MINE_STATE')) {
+      data = JSON.parse(params[0]);
+      return { rows: [] };
+    }
+    if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(normalized)) {
+      transactionLog.push(normalized);
+      return { rows: [] };
+    }
+    throw new Error(`Unexpected fake PostgreSQL query: ${normalized}`);
+  }
+
+  return {
+    transactionLog,
+    query,
+    async connect() {
+      return { query, release() {} };
+    },
+    async end() {}
+  };
+}
 
 test('the browser API client stores sessions only in session storage and clears them on 401', async () => {
   const values = new Map();
