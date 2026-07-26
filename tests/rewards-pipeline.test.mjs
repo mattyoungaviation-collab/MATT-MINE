@@ -290,7 +290,25 @@ test('the hard code cap cannot be bypassed by a larger environment setting', () 
     chain: fakeChain(),
     maxBoardMatt: 9_999_999_999
   });
-  assert.equal(manager.publicConfig().maxBoardMatt, 1_000_000);
+  assert.equal(manager.publicConfig().maxBoardMatt, 5_000_000);
+
+  const maximumPlan = createRewardPlan({
+    snapshot: finalizedSnapshot(),
+    poolMatt: 5_000_000,
+    claimDeadline: Math.floor(NOW / 1000) + 30 * 86_400,
+    maxBoardMatt: 9_999_999_999
+  });
+  assert.equal(maximumPlan.entries[0].amountMatt, 1_500_000);
+  assert.equal(maximumPlan.allocatedMatt, 5_000_000);
+  assert.throws(
+    () => createRewardPlan({
+      snapshot: finalizedSnapshot(),
+      poolMatt: 5_000_001,
+      claimDeadline: Math.floor(NOW / 1000) + 30 * 86_400,
+      maxBoardMatt: 9_999_999_999
+    }),
+    (error) => error.code === 'reward_pool_cap_exceeded'
+  );
 });
 
 test('Safe publication funds only the vault shortfall and never double-funds available MATT', async () => {

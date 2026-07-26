@@ -1,6 +1,6 @@
 import { getAddress } from 'viem';
 import {
-  HARD_MAX_PILOT_BOARD_MATT,
+  HARD_MAX_BOARD_MATT,
   MATT_TOKEN_DECIMALS,
   SERVER_RUN_MODES
 } from './constants.js';
@@ -35,7 +35,7 @@ export function createRewardPlan({
   assertApi(snapshot?.finalized === true, 409, 'leaderboard_not_finalized', 'The weekly leaderboard must be finalized before rewards are drafted.');
   const mode = normalizeRewardMode(snapshot.mode);
   const week = normalizeRewardWeek(snapshot.week);
-  const safeMaximum = Math.min(normalizePositiveInteger(maxBoardMatt, 'maxBoardMatt'), HARD_MAX_PILOT_BOARD_MATT);
+  const safeMaximum = Math.min(normalizePositiveInteger(maxBoardMatt, 'maxBoardMatt'), HARD_MAX_BOARD_MATT);
   const requestedMatt = normalizePositiveInteger(poolMatt, 'poolMatt');
   assertApi(
     requestedMatt >= 100,
