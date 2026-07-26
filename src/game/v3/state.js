@@ -73,6 +73,7 @@ export const stateMethods = {
     this.portal = null;
     this.spawnTimer = 0;
     this.state = 'playing';
+    this.audio.startMusic();
     this.audio.resume();
     this.generateDepth();
     this.hooks.onRunStart?.();
@@ -297,6 +298,7 @@ export const stateMethods = {
     this.run.displayedScore = projected;
     this.state = 'ended';
     this.audio.stopBoss();
+    this.audio.stopMusic();
     if (extracted) this.audio.play('extract');
     this.hooks.onProfileChanged?.(this.profile);
     this.hooks.onRunEnd?.({
@@ -313,6 +315,8 @@ export const stateMethods = {
   backToMenu() {
     this.runtimeError = null;
     this.state = 'menu';
+    this.audio.stopBoss();
+    this.audio.stopMusic();
     this.hooks.onMenu?.();
   },
   updateObjective() {

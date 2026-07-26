@@ -13,7 +13,8 @@ const MIME_TYPES = Object.freeze({
   '.json': 'application/json; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
-  '.ico': 'image/x-icon'
+  '.ico': 'image/x-icon',
+  '.mp3': 'audio/mpeg'
 });
 
 export function createMattMineHttpServer({ root, service, maxRequestBytes = MAX_REQUEST_BYTES }) {
@@ -293,7 +294,7 @@ async function serveStatic(request, response, pathname, root) {
   const extension = extname(filePath);
   const cacheControl = requestedPath === 'index.html'
     ? 'no-cache'
-    : ['.png', '.svg', '.ico'].includes(extension)
+    : ['.png', '.svg', '.ico', '.mp3'].includes(extension)
       ? 'public, max-age=86400'
       : 'no-cache';
   response.writeHead(200, {

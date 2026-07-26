@@ -1,9 +1,20 @@
 export class GameAudio {
-  constructor() {
+  constructor({
+    musicUrl = '/assets/audio/ore-reactor.mp3',
+    musicVolume = 0.32,
+    audioFactory
+  } = {}) {
     this.context = null;
     this.master = null;
     this.ambient = null;
     this.bossNodes = [];
+    this.musicUrl = musicUrl;
+    this.musicVolume = musicVolume;
+    this.audioFactory = audioFactory || ((url) => {
+      const AudioConstructor = globalThis.Audio || globalThis.window?.Audio;
+      return AudioConstructor ? new AudioConstructor(url) : null;
+    });
+    this.music = null;
   }
 
   async resume() {
@@ -18,6 +29,33 @@ export class GameAudio {
     }
     if (this.context.state === 'suspended') await this.context.resume();
     this.startAmbience();
+  }
+
+  startMusic() {
+    if (!this.music) {
+      this.music = this.audioFactory(this.musicUrl);
+      if (!this.music) return;
+      this.music.loop = true;
+      this.music.preload = 'auto';
+      this.music.volume = this.musicVolume;
+    }
+
+    const playback = this.music.play?.();
+    playback?.catch?.(() => {
+      // A browser may still block audio until its first user gesture. The next
+      // run-start gesture retries playback without interrupting gameplay.
+    });
+  }
+
+  stopMusic({ reset = true } = {}) {
+    if (!this.music) return;
+    this.music.pause?.();
+    if (!reset) return;
+    try {
+      this.music.currentTime = 0;
+    } catch {
+      // Some media implementations reject seeking before metadata is loaded.
+    }
   }
 
   startAmbience() {

@@ -308,6 +308,7 @@ export class MattMineGame {
     this.state = 'runtime-error';
     this.input.reset?.();
     this.audio?.stopBoss?.();
+    this.audio?.stopMusic?.();
     console.error('[MATT Mine] The run was stopped safely after a runtime error.', resolved);
     try {
       this.hooks.onFatalError?.({ ...this.runtimeError });
