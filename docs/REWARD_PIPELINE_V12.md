@@ -5,8 +5,8 @@ MATT Mine v1.2 completes the path from an immutable weekly leaderboard snapshot 
 ## Safety boundary
 
 - `MATT_MINE_REWARD_PUBLISHING_ENABLED=false` is the production default.
-- The configured pilot cap defaults to 100,000 MATT per board.
-- A non-adjustable code ceiling prevents any board draft above 1,000,000 MATT.
+- The configured and non-adjustable code ceiling prevents any board draft above 5,000,000 MATT.
+- First place receives at most 30%, so its maximum payout is 1,500,000 MATT.
 - A finalized weekly snapshot is mandatory.
 - One primary admin creates the immutable allocation draft.
 - A different secret is required for independent approval.
@@ -54,10 +54,10 @@ Render creates the independent approval secret automatically:
 ```text
 MATT_MINE_REWARD_APPROVER_KEY=<generated Render secret>
 MATT_MINE_REWARD_PUBLISHING_ENABLED=false
-MATT_MINE_REWARD_MAX_BOARD_MATT=100000
+MATT_MINE_REWARD_MAX_BOARD_MATT=5000000
 ```
 
-Keep publication disabled for the first full dry run. The code cap remains active even if the Render maximum is accidentally configured above 1,000,000 MATT.
+Keep publication disabled for the first full dry run. The code cap remains active even if the Render maximum is accidentally configured above 5,000,000 MATT.
 
 ## Operator API
 

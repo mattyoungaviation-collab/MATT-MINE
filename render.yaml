@@ -27,7 +27,7 @@ services:
       - key: MATT_MINE_REWARD_PUBLISHING_ENABLED
         value: "false"
       - key: MATT_MINE_REWARD_MAX_BOARD_MATT
-        value: "100000"
+        value: "5000000"
       - key: MATT_MINE_MAINNET_TRANSACTIONS_ENABLED
         value: "true"
       - key: MATT_MINE_PAYMENT_CONFIRMATIONS

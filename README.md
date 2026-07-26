@@ -12,7 +12,7 @@ MATT Mine is a standalone browser action roguelite and daily Web3 competition on
 - Prepare exact approve, fund, and publish transactions for the existing 2-of-3 Safe without storing a publisher key on the server.
 - Verify the exact root, allocation, and deadline on Ronin before exposing claims.
 - Give included players a server-prepared, player-signed Ronin Wallet claim transaction.
-- Deploy with publication disabled, a 100,000 MATT configured pilot cap, and a non-adjustable 1,000,000 MATT code ceiling.
+- Deploy with publication disabled and a non-adjustable 5,000,000 MATT per-board ceiling; first place can receive at most 30%, or 1,500,000 MATT.
 
 See [`docs/REWARD_PIPELINE_V12.md`](docs/REWARD_PIPELINE_V12.md).
 
