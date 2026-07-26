@@ -1,4 +1,10 @@
 import { defaultProfile, normalizeProfile } from '../src/game/storage.js';
+import {
+  COSMETIC_SLOTS,
+  PASS_CHEST_ID,
+  PASS_COSMETICS,
+  defaultPassInventory
+} from '../src/game/passRewards.js';
 import { SERVER_STATE_VERSION } from './constants.js';
 
 export function defaultServerState() {
@@ -20,6 +26,7 @@ export function defaultWalletState(address, timestamp = Date.now()) {
     address,
     profile: defaultProfile(),
     passProgress: defaultPassProgress(),
+    passInventory: defaultPassInventory(),
     suspended: false,
     daily: {},
     createdAt: timestamp,
@@ -136,6 +143,7 @@ function normalizeWallets(input) {
         address: normalizedAddress,
         profile: normalizeProfile(wallet.profile),
         passProgress: normalizePassProgress(wallet.passProgress),
+        passInventory: normalizePassInventory(wallet.passInventory),
         suspended: wallet.suspended === true,
         daily: normalizeDaily(wallet.daily),
         createdAt: safeTimestamp(wallet.createdAt),
@@ -156,6 +164,40 @@ function normalizePassProgress(input) {
   return {
     xp: safeBoundedInteger(source.xp, 1_000_000_000),
     updatedAt: safeTimestamp(source.updatedAt)
+  };
+}
+
+function normalizePassInventory(input) {
+  const source = isRecord(input) ? input : {};
+  const defaults = defaultPassInventory();
+  const cosmetics = Array.isArray(source.cosmetics)
+    ? [...new Set(source.cosmetics.filter((id) => typeof id === 'string' && PASS_COSMETICS[id]))]
+    : [];
+  const equippedSource = isRecord(source.equipped) ? source.equipped : {};
+  const equipped = Object.fromEntries(COSMETIC_SLOTS.map((slot) => {
+    const cosmeticId = typeof equippedSource[slot] === 'string' ? equippedSource[slot] : '';
+    const cosmetic = PASS_COSMETICS[cosmeticId];
+    return [slot, cosmetic && cosmetic.slot === slot && cosmetics.includes(cosmeticId) ? cosmeticId : ''];
+  }));
+  const claimedLevels = Array.isArray(source.claimedLevels)
+    ? [...new Set(source.claimedLevels
+      .filter((level) => Number.isSafeInteger(level) && level >= 1 && level <= 8))]
+      .sort((left, right) => left - right)
+    : [];
+  const chestSource = isRecord(source.chests?.[PASS_CHEST_ID])
+    ? source.chests[PASS_CHEST_ID]
+    : defaults.chests[PASS_CHEST_ID];
+  return {
+    claimedLevels,
+    cosmetics,
+    equipped,
+    chests: {
+      [PASS_CHEST_ID]: {
+        available: safeBoundedInteger(chestSource.available, 100),
+        opened: safeBoundedInteger(chestSource.opened, 100),
+        lastOpenedAt: safeTimestamp(chestSource.lastOpenedAt)
+      }
+    }
   };
 }
 

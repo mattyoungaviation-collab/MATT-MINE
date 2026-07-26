@@ -60,7 +60,7 @@ async function handleApiRequest({
   const path = requestUrl.pathname;
   if (method === 'GET' && path === '/api/health') {
     const health = await service.health();
-    sendJson(response, 200, { ok: true, service: 'matt-mine', version: 13, ...health });
+    sendJson(response, 200, { ok: true, service: 'matt-mine', version: 14, ...health });
     return;
   }
   if (method === 'GET' && path === '/api/config') {
@@ -108,6 +108,29 @@ async function handleApiRequest({
   if (method === 'POST' && path === '/api/payments/pass/confirm') {
     const body = await readJson(request, maxRequestBytes);
     const result = await service.confirmPassPurchase(bearerToken(request), body.transactionHash);
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
+  if (method === 'GET' && path === '/api/pass/rewards') {
+    const result = await service.passRewards(bearerToken(request));
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
+  if (method === 'POST' && path === '/api/pass/rewards/sync') {
+    await readJson(request, maxRequestBytes);
+    const result = await service.syncPassRewards(bearerToken(request));
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
+  if (method === 'PUT' && path === '/api/pass/loadout') {
+    const body = await readJson(request, maxRequestBytes);
+    const result = await service.equipPassCosmetic(bearerToken(request), body.slot, body.cosmeticId);
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
+  if (method === 'POST' && path === '/api/pass/chests/open') {
+    const body = await readJson(request, maxRequestBytes);
+    const result = await service.openPassChest(bearerToken(request), body.chestId);
     sendJson(response, 200, { ok: true, ...result });
     return;
   }

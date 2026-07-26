@@ -62,6 +62,34 @@ export class MattMineApiClient {
     });
   }
 
+  async passRewards() {
+    return this.request('/api/pass/rewards', { authenticated: true });
+  }
+
+  async syncPassRewards() {
+    return this.request('/api/pass/rewards/sync', {
+      method: 'POST',
+      authenticated: true,
+      body: {}
+    });
+  }
+
+  async equipPassCosmetic(slot, cosmeticId) {
+    return this.request('/api/pass/loadout', {
+      method: 'PUT',
+      authenticated: true,
+      body: { slot, cosmeticId }
+    });
+  }
+
+  async openPassChest(chestId) {
+    return this.request('/api/pass/chests/open', {
+      method: 'POST',
+      authenticated: true,
+      body: { chestId }
+    });
+  }
+
   async paidRunQuote() {
     const response = await this.request('/api/payments/paid-run/quote', {
       method: 'POST',

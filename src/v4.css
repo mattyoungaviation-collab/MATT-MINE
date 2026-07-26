@@ -250,6 +250,17 @@
   background: rgba(244,215,94,0.08);
 }
 
+.pass-node.ready {
+  opacity: 0.82;
+  border-color: rgba(139,233,255,0.5);
+  background: rgba(112,217,255,0.07);
+}
+
+.pass-node.owned span {
+  background: #f4d75e;
+  color: #10131a;
+}
+
 .pass-node span {
   display: block;
   width: 25px;
@@ -264,6 +275,222 @@
 
 .pass-node small {
   color: #b6bdc8;
+}
+
+.pass-cosmetics-button {
+  width: 100%;
+  margin: 14px 0 0;
+}
+
+.cosmetics-panel {
+  width: min(1120px, calc(100vw - 30px));
+}
+
+.cosmetics-intro {
+  color: #9ca5b2;
+  max-width: 760px;
+  line-height: 1.55;
+}
+
+.cosmetic-preview,
+.pass-chest-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 22px;
+  align-items: center;
+  padding: 18px;
+  margin: 16px 0;
+  border: 1px solid rgba(244,215,94,0.22);
+  border-radius: 16px;
+  background: linear-gradient(145deg, rgba(44,34,17,0.72), rgba(8,11,17,0.86));
+}
+
+.cosmetic-preview h3,
+.cosmetic-preview p,
+.pass-chest-card h3,
+.pass-chest-card p {
+  margin: 4px 0;
+}
+
+.cosmetic-preview p,
+.pass-chest-card p {
+  color: #969fab;
+}
+
+.cosmetic-preview-miner {
+  position: relative;
+  width: 92px;
+  height: 92px;
+  display: grid;
+  place-items: center;
+  border-radius: 24px;
+  background: #f5d142;
+  border: 4px solid #fff2a0;
+  box-shadow: 0 16px 30px rgba(0,0,0,0.35);
+}
+
+.cosmetic-preview-miner b {
+  position: relative;
+  z-index: 2;
+  color: #151821;
+  font-size: 42px;
+}
+
+.cosmetic-preview-miner.crystal-skin {
+  background: #62e8ff;
+  border-color: #d8fbff;
+  box-shadow: 0 0 28px rgba(112,217,255,0.5);
+}
+
+.cosmetic-preview-miner.founder-frame {
+  outline: 4px double #f4d75e;
+  outline-offset: 5px;
+}
+
+.preview-aura {
+  position: absolute;
+  inset: -12px;
+  border: 3px solid transparent;
+  border-radius: 50%;
+}
+
+.preview-aura.active {
+  border-color: rgba(112,217,255,0.7);
+  box-shadow: 0 0 24px rgba(112,217,255,0.65), inset 0 0 18px rgba(112,217,255,0.25);
+  animation: cosmetic-pulse 1.8s ease-in-out infinite;
+}
+
+.preview-trail {
+  position: absolute;
+  left: -70px;
+  color: #ffd95a;
+  font-size: 18px;
+  letter-spacing: 5px;
+  text-shadow: 0 0 12px #ffb62e;
+}
+
+@keyframes cosmetic-pulse {
+  50% { transform: scale(1.08); opacity: 0.72; }
+}
+
+.pass-chest-card {
+  grid-template-columns: 1fr auto;
+  border-color: rgba(159,99,240,0.42);
+  background: linear-gradient(145deg, rgba(51,27,79,0.68), rgba(8,11,17,0.86));
+}
+
+.pass-chest-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.pass-chest-actions strong {
+  color: #d49cff;
+  letter-spacing: 0.08em;
+}
+
+.cosmetics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.cosmetic-card {
+  display: grid;
+  grid-template-columns: 58px 1fr auto;
+  gap: 13px;
+  align-items: center;
+  min-height: 130px;
+  padding: 14px;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 14px;
+  background: rgba(8,11,17,0.76);
+}
+
+.cosmetic-card.owned {
+  border-color: rgba(244,215,94,0.34);
+}
+
+.cosmetic-card.equipped {
+  border-color: #70d9ff;
+  background: rgba(112,217,255,0.07);
+  box-shadow: inset 0 0 24px rgba(112,217,255,0.08);
+}
+
+.cosmetic-card.locked {
+  opacity: 0.46;
+}
+
+.cosmetic-icon {
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  color: #f4d75e;
+  background: rgba(244,215,94,0.1);
+  font-size: 28px;
+}
+
+.cosmetic-card small {
+  color: #7e8998;
+  letter-spacing: 0.13em;
+  font-weight: 900;
+}
+
+.cosmetic-card h3,
+.cosmetic-card p {
+  margin: 3px 0;
+}
+
+.cosmetic-card p {
+  color: #969fab;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.cosmetic-equip-button {
+  min-width: 92px;
+  margin: 0;
+}
+
+.miner-identity {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 3px 6px;
+  border-radius: 7px;
+}
+
+.miner-identity.founder-frame {
+  border: 1px solid #f4d75e;
+  box-shadow: 0 0 10px rgba(244,215,94,0.28);
+}
+
+.miner-identity i,
+.miner-identity em {
+  color: #f4d75e;
+  font-style: normal;
+}
+
+.miner-identity small {
+  color: #70d9ff;
+  font-size: 9px;
+  letter-spacing: 0.09em;
+}
+
+.run-cosmetic-result {
+  display: flex;
+  justify-content: center;
+  min-height: 8px;
+  margin: 8px 0 2px;
+}
+
+.result-identity {
+  padding: 7px 12px;
+  background: rgba(8,11,17,0.7);
 }
 
 .paid-run-purchase-card {
@@ -539,6 +766,12 @@
   .run-mode-card { min-height: 115px; }
   .menu-nav-grid { grid-template-columns: repeat(2, 1fr); }
   .paid-run-purchase-card { grid-template-columns: 1fr; }
+  .cosmetics-grid { grid-template-columns: 1fr; }
+  .cosmetic-preview,
+  .pass-chest-card { grid-template-columns: 1fr; }
+  .pass-chest-actions { justify-content: space-between; }
+  .cosmetic-card { grid-template-columns: 48px 1fr; }
+  .cosmetic-equip-button { grid-column: 1 / -1; width: 100%; }
   .audit-entry { grid-template-columns: 1fr; }
   .leaderboard-table th:nth-child(4),
   .leaderboard-table td:nth-child(4) { display: none; }

@@ -19,6 +19,7 @@ import {
 } from '../server/payment-verifier.js';
 import { MattMineService } from '../server/service.js';
 import { AUTH_CHALLENGE_TTL_MS, RONIN_CHAINS, SERVER_RUN_MODES } from '../server/constants.js';
+import { PASS_CHEST_ID } from '../src/game/passRewards.js';
 
 const PRIVATE_KEY = '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 const OTHER_PRIVATE_KEY = '0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd';
@@ -351,6 +352,85 @@ test('live Pass confirmation is idempotent and server-owned Pass XP follows rank
   const player = await harness.service.me(session.token);
   assert.equal(player.passProgress.xp, 125);
   assert.equal(player.passProgress.level, 1);
+});
+
+test('Pass levels permanently deliver cosmetics, chest contents, and server-owned loadouts', async () => {
+  const harness = createHarness({
+    mainnetTransactionsEnabled: true,
+    paymentVerifier: createFakePaymentVerifier()
+  });
+  const { session } = await signIn(harness);
+  const confirmed = await harness.service.confirmPassPurchase(session.token, `0x${'7'.repeat(64)}`);
+  assert.deepEqual(confirmed.passInventory.claimedLevels, [1]);
+  assert.deepEqual(confirmed.passInventory.cosmetics, ['starter_badge']);
+  assert.equal(confirmed.passInventory.equipped.badge, 'starter_badge');
+
+  await harness.database.transact((state) => {
+    state.wallets[account.address.toLowerCase()].passProgress.xp = 3_800;
+  });
+  const synced = await harness.service.syncPassRewards(session.token);
+  assert.deepEqual(synced.passInventory.claimedLevels, [1, 2, 3, 4, 5, 6, 7, 8]);
+  assert.equal(synced.passInventory.chests[PASS_CHEST_ID].available, 1);
+  assert.equal(synced.passInventory.cosmetics.includes('molten_pickaxe'), false);
+  assert.equal(synced.passInventory.equipped.skin, 'crystal_skin');
+  assert.equal(synced.passInventory.equipped.frame, 'founder_frame');
+
+  const chest = await harness.service.openPassChest(session.token, PASS_CHEST_ID);
+  assert.equal(chest.rewards.cosmetic.id, 'molten_pickaxe');
+  assert.equal(chest.rewards.nuggets, 2_500);
+  assert.equal(chest.profile.bankedNuggets, 2_500);
+  assert.equal(chest.passInventory.chests[PASS_CHEST_ID].available, 0);
+  assert.equal(chest.passInventory.chests[PASS_CHEST_ID].opened, 1);
+  assert.equal(chest.passInventory.cosmetics.length, 8);
+  assert.equal(chest.passInventory.equipped.weapon, 'molten_pickaxe');
+
+  const unequipped = await harness.service.equipPassCosmetic(session.token, 'trail', '');
+  assert.equal(unequipped.passInventory.equipped.trail, '');
+  const equipped = await harness.service.equipPassCosmetic(session.token, 'trail', 'gold_trail');
+  assert.equal(equipped.passInventory.equipped.trail, 'gold_trail');
+  await assert.rejects(
+    () => harness.service.equipPassCosmetic(session.token, 'skin', 'molten_pickaxe'),
+    (error) => error.code === 'cosmetic_not_owned'
+  );
+  await assert.rejects(
+    () => harness.service.openPassChest(session.token, PASS_CHEST_ID),
+    (error) => error.code === 'pass_chest_unavailable'
+  );
+
+  const permanent = await harness.service.passRewards(session.token);
+  assert.equal(permanent.passInventory.cosmetics.includes('season_trophy'), true);
+  assert.equal(permanent.passInventory.equipped.title, 'ore_reactor_title');
+
+  const freeRun = await harness.service.startRun(session.token, SERVER_RUN_MODES.FREE);
+  harness.advance(60_000);
+  const scored = await finish(harness.service, session, freeRun, extractedResult());
+  assert.equal(scored.leaderboard.rows[0].appearance.frame, 'founder_frame');
+  assert.equal(scored.leaderboard.rows[0].appearance.title, 'ore_reactor_title');
+  assert.equal(scored.leaderboard.rows[0].appearance.trophy, 'season_trophy');
+});
+
+test('historical Pass XP remains claimable after expiry while non-buyers cannot unlock level one', async () => {
+  const expiredHarness = createHarness({
+    mainnetTransactionsEnabled: true,
+    paymentVerifier: createFakePaymentVerifier({ active: false })
+  });
+  const { session } = await signIn(expiredHarness);
+  await expiredHarness.service.confirmPassPurchase(session.token, `0x${'6'.repeat(64)}`);
+  await expiredHarness.database.transact((state) => {
+    state.wallets[account.address.toLowerCase()].passProgress.xp = 500;
+    state.wallets[account.address.toLowerCase()].passInventory.claimedLevels = [1];
+    state.wallets[account.address.toLowerCase()].passInventory.cosmetics = ['starter_badge'];
+  });
+  const recovered = await expiredHarness.service.syncPassRewards(session.token);
+  assert.deepEqual(recovered.passInventory.claimedLevels, [1, 2, 3]);
+  assert.equal(recovered.passInventory.chests[PASS_CHEST_ID].available, 1);
+
+  const noPassHarness = createHarness();
+  const noPassSession = await signIn(noPassHarness);
+  await assert.rejects(
+    () => noPassHarness.service.syncPassRewards(noPassSession.session.token),
+    (error) => error.code === 'pass_not_owned'
+  );
 });
 
 test('confirmed Ronin purchases create one-time paid-run entitlements and daily-best Pass scores', async () => {
@@ -733,7 +813,7 @@ test('the HTTP server exposes same-origin APIs, security headers, and authentica
   const healthResponse = await fetch(`${baseUrl}/api/health`);
   assert.equal(healthResponse.status, 200);
   const healthPayload = await healthResponse.json();
-  assert.equal(healthPayload.version, 13);
+  assert.equal(healthPayload.version, 14);
   assert.equal(healthPayload.database.kind, 'memory');
 
   const launchResponse = await fetch(baseUrl);
@@ -843,6 +923,42 @@ test('the browser API client stores sessions only in session storage and clears 
   assert.equal(values.get(SESSION_STORAGE_KEY), 'a'.repeat(64));
   await assert.rejects(() => client.me(), (error) => error.code === 'session_expired');
   assert.equal(values.has(SESSION_STORAGE_KEY), false);
+});
+
+test('the browser API client reaches every authenticated Pass collection action', async () => {
+  const requests = [];
+  const client = new MattMineApiClient({
+    storage: {
+      getItem: () => 'session-token',
+      setItem() {},
+      removeItem() {}
+    },
+    fetch: async (url, options) => {
+      requests.push({
+        url,
+        method: options.method,
+        body: options.body ? JSON.parse(options.body) : null,
+        authorization: options.headers.authorization
+      });
+      return new Response(JSON.stringify({ ok: true, passInventory: {} }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      });
+    }
+  });
+  await client.passRewards();
+  await client.syncPassRewards();
+  await client.equipPassCosmetic('trail', 'gold_trail');
+  await client.openPassChest(PASS_CHEST_ID);
+  assert.deepEqual(requests.map((request) => [request.method, request.url]), [
+    ['GET', '/api/pass/rewards'],
+    ['POST', '/api/pass/rewards/sync'],
+    ['PUT', '/api/pass/loadout'],
+    ['POST', '/api/pass/chests/open']
+  ]);
+  assert.equal(requests.every((request) => request.authorization === 'Bearer session-token'), true);
+  assert.deepEqual(requests[2].body, { slot: 'trail', cosmeticId: 'gold_trail' });
+  assert.deepEqual(requests[3].body, { chestId: PASS_CHEST_ID });
 });
 
 test('the Ronin adapter switches to Mainnet, signs the server message, and invalidates on account change', async () => {

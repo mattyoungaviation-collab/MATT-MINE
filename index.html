@@ -194,7 +194,7 @@
                   <li>Paid ranked runs at <span id="launch-run-price-card">10</span> RON</li>
                   <li>2× leaderboard reward weight</li>
                   <li>Premium Pass XP and reward track</li>
-                  <li>Exclusive cosmetics and achievements</li>
+                  <li>Permanent cosmetics and loadouts</li>
                 </ul>
                 <button type="button" data-launch-action="pass">VIEW MINE PASS</button>
               </article>
@@ -374,7 +374,7 @@
                 <li>Paid ranked runs at <b id="paid-run-price-copy">10 RON</b></li>
                 <li>2× leaderboard reward weight</li>
                 <li>Premium pass XP and rewards</li>
-                <li>Exclusive cosmetics and achievements</li>
+                <li>Permanent cosmetics and loadouts</li>
               </ul>
             </div>
           </div>
@@ -383,6 +383,7 @@
             <div class="bar"><div id="pass-xp-fill" class="bar-fill pass-xp-fill"></div></div>
             <div id="pass-track" class="pass-track"></div>
             <p class="preview-note">Active Pass holders earn 25 XP from the daily Free ranked run and 100 XP from every completed Pass ranked run.</p>
+            <button id="manage-cosmetics-button" class="secondary-button pass-cosmetics-button">MANAGE COSMETICS &amp; REWARDS</button>
           </div>
           <div class="paid-run-purchase-card">
             <div>
@@ -392,6 +393,19 @@
             </div>
             <button id="buy-paid-run-button" class="primary-button">PASS REQUIRED</button>
           </div>
+        </div>
+      </section>
+
+      <section id="pass-cosmetics" class="screen" aria-labelledby="cosmetics-title">
+        <div class="panel wide-panel economy-panel cosmetics-panel">
+          <button class="close-button" data-close="pass-cosmetics" aria-label="Close">×</button>
+          <p class="eyebrow">PERMANENT PASS COLLECTION</p>
+          <h2 id="cosmetics-title">MATT Mine Loadout</h2>
+          <p class="cosmetics-intro">Unlocked rewards remain yours after the Pass expires. Equip your miner, leaderboard identity, and Season One trophy here.</p>
+          <div id="cosmetic-preview" class="cosmetic-preview"></div>
+          <div id="pass-chest-card" class="pass-chest-card"></div>
+          <div id="cosmetics-grid" class="cosmetics-grid"></div>
+          <p id="cosmetics-note" class="preview-note">Connect Ronin Wallet to load your permanent collection.</p>
         </div>
       </section>
 
@@ -507,6 +521,7 @@
           <p id="end-kicker" class="eyebrow">RUN COMPLETE</p>
           <h2 id="end-title">Loot Secured</h2>
           <div id="run-mode-result" class="run-mode-result">PRACTICE RUN</div>
+          <div id="run-cosmetic-result" class="run-cosmetic-result"></div>
           <div id="end-stats" class="end-stats"></div>
           <div id="economy-result" class="economy-result"></div>
           <button id="play-again-button" class="primary-button">CHOOSE NEXT RUN</button>

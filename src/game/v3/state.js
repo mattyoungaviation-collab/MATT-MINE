@@ -235,6 +235,23 @@ export const stateMethods = {
       this.player.vy = 0;
     }
     this.moveEntity(this.player, this.player.vx * dt, this.player.vy * dt);
+    if (
+      this.cosmetics?.trail === 'gold_trail' &&
+      moveLength > 0.08 &&
+      this.player.trailTimer <= 0
+    ) {
+      this.player.trailTimer = 0.055;
+      this.particles.push({
+        x: this.player.x - this.player.lastMoveX * 20,
+        y: this.player.y - this.player.lastMoveY * 20,
+        vx: randomRange(-12, 12),
+        vy: randomRange(-18, 4),
+        radius: randomRange(3, 7),
+        color: '#ffd95a',
+        life: 0.42,
+        maxLife: 0.42
+      });
+    }
   },
   damagePlayer(amount, sourceAngle) {
     if (this.player.invulnerable > 0) return;
