@@ -17,6 +17,7 @@ test('the Pass catalog defines eight permanent levels and valid cosmetic slots',
   assert.deepEqual(PASS_REWARD_LEVELS.map((reward) => reward.level), [1, 2, 3, 4, 5, 6, 7, 8]);
   assert.equal(PASS_REWARD_LEVELS[2].chestId, PASS_CHEST_ID);
   assert.equal(Object.keys(PASS_COSMETICS).length, 8);
+  assert.equal(PASS_COSMETICS.starter_badge.image, '/assets/matt-coin-official.png');
   const inventory = defaultPassInventory();
   inventory.cosmetics.push('gold_trail');
   assert.equal(canEquipCosmetic(inventory, 'trail', 'gold_trail'), true);
