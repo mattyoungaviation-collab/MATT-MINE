@@ -19,6 +19,7 @@ export class MattMineGame {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.profile = profile;
+    this.cosmetics = {};
     this.hooks = hooks;
     this.input = new InputController(canvas);
     this.state = 'menu';
@@ -51,6 +52,10 @@ export class MattMineGame {
 
   setProfile(profile) {
     this.profile = profile;
+  }
+
+  setCosmetics(cosmetics = {}) {
+    this.cosmetics = { ...cosmetics };
   }
 
   startRun() {

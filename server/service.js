@@ -3,6 +3,14 @@ import { getAddress, verifyMessage } from 'viem';
 import { META_UPGRADES } from '../src/game/config.js';
 import { passLevel, utcDayKey, utcWeekKey } from '../src/game/economy.js';
 import {
+  COSMETIC_SLOTS,
+  PASS_CHEST_BONUS_NUGGETS,
+  PASS_CHEST_ID,
+  PASS_COSMETICS,
+  PASS_REWARD_LEVELS,
+  canEquipCosmetic
+} from '../src/game/passRewards.js';
+import {
   AUTH_CHALLENGE_TTL_MS,
   MAX_RUN_SCORE,
   MIN_RANKED_RUN_WINDOW_MS,
@@ -207,6 +215,7 @@ export class MattMineService {
       suspended: wallet.suspended,
       confirmedCredits: unusedPaidEntitlements(state, session.address).length,
       passProgress: publicPassProgress(wallet),
+      passInventory: publicPassInventory(wallet),
       ...chain
     };
   }
@@ -229,6 +238,8 @@ export class MattMineService {
         return {
           purchase: structuredClone(existing),
           passProgress: publicPassProgress(currentWallet),
+          passInventory: publicPassInventory(currentWallet),
+          rewards: [],
           alreadyConfirmed: true
         };
       }
@@ -236,6 +247,7 @@ export class MattMineService {
         ...verified,
         confirmedAt: timestamp
       };
+      const rewards = syncPassRewardsForWallet(currentWallet, timestamp);
       currentWallet.updatedAt = timestamp;
       addAudit(
         state,
@@ -247,7 +259,107 @@ export class MattMineService {
       return {
         purchase: structuredClone(state.passPurchases[verified.key]),
         passProgress: publicPassProgress(currentWallet),
+        passInventory: publicPassInventory(currentWallet),
+        rewards,
         alreadyConfirmed: false
+      };
+    });
+  }
+
+  async passRewards(token) {
+    const session = await this.authenticate(token);
+    const state = await this.database.read();
+    const wallet = requireWallet(state, session.address);
+    return {
+      passProgress: publicPassProgress(wallet),
+      passInventory: publicPassInventory(wallet)
+    };
+  }
+
+  async syncPassRewards(token) {
+    const session = await this.authenticate(token);
+    const timestamp = this.now();
+    return this.database.transact((state) => {
+      const wallet = requireWallet(state, session.address);
+      assertApi(!wallet.suspended, 403, 'wallet_suspended', 'This wallet is suspended from Pass rewards.');
+      const hasPassHistory = Object.values(state.passPurchases)
+        .some((purchase) => purchase.address === session.address);
+      assertApi(hasPassHistory, 403, 'pass_not_owned', 'Purchase the MATT Mine Pass before unlocking Pass rewards.');
+      const rewards = syncPassRewardsForWallet(wallet, timestamp);
+      wallet.updatedAt = timestamp;
+      if (rewards.length) {
+        addAudit(state, session.address, 'PASS_REWARDS_UNLOCKED', rewards.map((reward) => reward.name).join(', '), timestamp);
+      }
+      return {
+        rewards,
+        passProgress: publicPassProgress(wallet),
+        passInventory: publicPassInventory(wallet)
+      };
+    });
+  }
+
+  async equipPassCosmetic(token, slot, cosmeticId) {
+    const session = await this.authenticate(token);
+    const normalizedSlot = String(slot || '');
+    const normalizedCosmeticId = String(cosmeticId || '');
+    assertApi(COSMETIC_SLOTS.includes(normalizedSlot), 400, 'cosmetic_slot_invalid', 'Choose a valid cosmetic slot.');
+    const timestamp = this.now();
+    return this.database.transact((state) => {
+      const wallet = requireWallet(state, session.address);
+      assertApi(!wallet.suspended, 403, 'wallet_suspended', 'This wallet is suspended from cosmetic changes.');
+      if (normalizedCosmeticId) {
+        assertApi(
+          canEquipCosmetic(wallet.passInventory, normalizedSlot, normalizedCosmeticId),
+          403,
+          'cosmetic_not_owned',
+          'That cosmetic is not owned by this wallet.'
+        );
+      }
+      wallet.passInventory.equipped[normalizedSlot] = normalizedCosmeticId;
+      wallet.updatedAt = timestamp;
+      addAudit(
+        state,
+        session.address,
+        normalizedCosmeticId ? 'PASS_COSMETIC_EQUIPPED' : 'PASS_COSMETIC_UNEQUIPPED',
+        `${normalizedSlot}: ${normalizedCosmeticId || 'none'}`,
+        timestamp
+      );
+      return { passInventory: publicPassInventory(wallet) };
+    });
+  }
+
+  async openPassChest(token, chestId) {
+    const session = await this.authenticate(token);
+    const normalizedChestId = String(chestId || '');
+    assertApi(normalizedChestId === PASS_CHEST_ID, 400, 'pass_chest_invalid', 'Choose a valid Pass Chest.');
+    const timestamp = this.now();
+    return this.database.transact((state) => {
+      const wallet = requireWallet(state, session.address);
+      assertApi(!wallet.suspended, 403, 'wallet_suspended', 'This wallet is suspended from opening Pass rewards.');
+      const chest = wallet.passInventory.chests[PASS_CHEST_ID];
+      assertApi(chest.available > 0, 409, 'pass_chest_unavailable', 'No unopened Pass Chest is available.');
+      chest.available -= 1;
+      chest.opened += 1;
+      chest.lastOpenedAt = timestamp;
+      unlockCosmetic(wallet, 'molten_pickaxe');
+      if (!wallet.passInventory.equipped.weapon) wallet.passInventory.equipped.weapon = 'molten_pickaxe';
+      wallet.profile.bankedNuggets += PASS_CHEST_BONUS_NUGGETS;
+      wallet.updatedAt = timestamp;
+      addAudit(
+        state,
+        session.address,
+        'PASS_CHEST_OPENED',
+        `Molten Pickaxe and ${PASS_CHEST_BONUS_NUGGETS} nuggets`,
+        timestamp
+      );
+      return {
+        chestId: PASS_CHEST_ID,
+        rewards: {
+          cosmetic: structuredClone(PASS_COSMETICS.molten_pickaxe),
+          nuggets: PASS_CHEST_BONUS_NUGGETS
+        },
+        profile: structuredClone(wallet.profile),
+        passInventory: publicPassInventory(wallet)
       };
     });
   }
@@ -467,6 +579,9 @@ export class MattMineService {
         wallet.passProgress.xp += passXpAwarded;
         wallet.passProgress.updatedAt = timestamp;
       }
+      const passRewardsUnlocked = passXpAwarded > 0
+        ? syncPassRewardsForWallet(wallet, timestamp)
+        : [];
       wallet.updatedAt = timestamp;
       await transaction?.recordFinishedRun(run);
       addAudit(state, session.address, 'SERVER_RUN_VERIFIED', `${run.mode} score ${result.score}`, timestamp);
@@ -475,6 +590,8 @@ export class MattMineService {
         run: publicRun(run),
         profile: structuredClone(wallet.profile),
         passProgress: publicPassProgress(wallet),
+        passInventory: publicPassInventory(wallet),
+        passRewardsUnlocked,
         mode: run.mode,
         week: run.week
       };
@@ -489,6 +606,8 @@ export class MattMineService {
       run: completed.run,
       profile: completed.profile,
       passProgress: completed.passProgress,
+      passInventory: completed.passInventory,
+      passRewardsUnlocked: completed.passRewardsUnlocked,
       leaderboard
     };
   }
@@ -509,9 +628,10 @@ export class MattMineService {
     await this.database.finalizeLeaderboards?.(currentWeek, suspended, timestamp);
     if (typeof this.database.leaderboard === 'function') {
       try {
-        return await this.database.leaderboard(normalizedMode, week, session.address, {
+        const leaderboard = await this.database.leaderboard(normalizedMode, week, session.address, {
           suspendedAddresses: suspended
         });
+        return enrichLeaderboardAppearances(leaderboard, state);
       } catch {
         return leaderboardForState(state, normalizedMode, week, session.address);
       }
@@ -524,9 +644,10 @@ export class MattMineService {
     const suspended = suspendedWalletAddresses(state);
     if (typeof this.database.leaderboard === 'function') {
       try {
-        return await this.database.leaderboard(mode, week, viewerAddress, {
+        const leaderboard = await this.database.leaderboard(mode, week, viewerAddress, {
           suspendedAddresses: suspended
         });
+        return enrichLeaderboardAppearances(leaderboard, state);
       } catch {
         return leaderboardForState(state, mode, week, viewerAddress);
       }
@@ -859,6 +980,7 @@ function publicWalletSnapshot(state, address, timestamp) {
     address,
     profile: structuredClone(wallet.profile),
     passProgress: publicPassProgress(wallet),
+    passInventory: publicPassInventory(wallet),
     suspended: wallet.suspended,
     day,
     week,
@@ -889,7 +1011,8 @@ function leaderboardForState(state, mode, week, viewerAddress) {
       walletId: abbreviateAddress(row.address),
       score: row.score,
       isPlayer: row.address === viewerAddress,
-      verified: true
+      verified: true,
+      appearance: publicLeaderboardAppearance(state.wallets[row.address])
     }));
   const player = rows.find((row) => row.address === viewerAddress);
   return {
@@ -960,6 +1083,66 @@ function publicPassProgress(wallet) {
   };
 }
 
+function publicPassInventory(wallet) {
+  const inventory = wallet?.passInventory || {};
+  return {
+    claimedLevels: [...(inventory.claimedLevels || [])],
+    cosmetics: [...(inventory.cosmetics || [])],
+    equipped: structuredClone(inventory.equipped || {}),
+    chests: structuredClone(inventory.chests || {})
+  };
+}
+
+function syncPassRewardsForWallet(wallet, timestamp) {
+  const level = passLevel(wallet.passProgress.xp).level;
+  const unlocked = [];
+  for (const reward of PASS_REWARD_LEVELS) {
+    if (reward.level > level || wallet.passInventory.claimedLevels.includes(reward.level)) continue;
+    wallet.passInventory.claimedLevels.push(reward.level);
+    wallet.passInventory.claimedLevels.sort((left, right) => left - right);
+    if (reward.type === 'cosmetic') {
+      unlockCosmetic(wallet, reward.cosmeticId);
+      const cosmetic = PASS_COSMETICS[reward.cosmeticId];
+      if (cosmetic && !wallet.passInventory.equipped[cosmetic.slot]) {
+        wallet.passInventory.equipped[cosmetic.slot] = cosmetic.id;
+      }
+    }
+    if (reward.type === 'chest') {
+      wallet.passInventory.chests[reward.chestId].available += 1;
+    }
+    unlocked.push(structuredClone(reward));
+  }
+  if (unlocked.length) wallet.passProgress.updatedAt = timestamp;
+  return unlocked;
+}
+
+function unlockCosmetic(wallet, cosmeticId) {
+  if (!PASS_COSMETICS[cosmeticId]) return false;
+  if (wallet.passInventory.cosmetics.includes(cosmeticId)) return false;
+  wallet.passInventory.cosmetics.push(cosmeticId);
+  return true;
+}
+
+function publicLeaderboardAppearance(wallet) {
+  const equipped = wallet?.passInventory?.equipped || {};
+  return {
+    badge: equipped.badge || '',
+    frame: equipped.frame || '',
+    title: equipped.title || '',
+    trophy: equipped.trophy || ''
+  };
+}
+
+function enrichLeaderboardAppearances(leaderboard, state) {
+  return {
+    ...leaderboard,
+    rows: (leaderboard.rows || []).map((row) => ({
+      ...row,
+      appearance: publicLeaderboardAppearance(state.wallets[row.address])
+    }))
+  };
+}
+
 function publicAdminRun(run) {
   return {
     ...publicRun(run),
@@ -980,6 +1163,7 @@ function adminWalletSnapshot(state, wallet, timestamp) {
     suspended: wallet.suspended,
     profile: structuredClone(wallet.profile),
     passProgress: publicPassProgress(wallet),
+    passInventory: publicPassInventory(wallet),
     freeRunUsedToday: today.freeRunUsed === true,
     activeSessions: sessions.length,
     activeRuns: runs.filter((run) => run.status === 'active' && run.expiresAt > timestamp).length,

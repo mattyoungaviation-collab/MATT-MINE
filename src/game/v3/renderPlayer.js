@@ -3,12 +3,27 @@ import { TAU, roundRect } from './drawHelpers.js';
 export const renderPlayerMethods = {
   drawPlayer(ctx) {
     const player = this.player;
+    const cosmetics = this.cosmetics || {};
     const movement = Math.hypot(player.vx, player.vy);
     const stride = player.dashTimer > 0 ? 0 : Math.sin(this.run.elapsed * 13) * Math.min(5, movement / 60);
     const facing = Math.cos(player.angle) >= 0 ? 1 : -1;
     ctx.save();
     ctx.translate(player.x, player.y);
     ctx.globalAlpha = player.invulnerable > 0 && Math.floor(player.invulnerable * 18) % 2 ? 0.45 : 1;
+
+    if (cosmetics.aura === 'guardian_aura') {
+      const pulse = 1 + Math.sin(this.run.elapsed * 4) * 0.08;
+      ctx.save();
+      ctx.scale(pulse, pulse);
+      ctx.strokeStyle = 'rgba(139, 233, 255, 0.72)';
+      ctx.fillStyle = 'rgba(92, 141, 255, 0.12)';
+      ctx.shadowColor = '#70d9ff';
+      ctx.shadowBlur = 22;
+      ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(0, 2, 35, 0, TAU); ctx.fill(); ctx.stroke();
+      ctx.restore();
+    }
+
     ctx.fillStyle = 'rgba(0,0,0,0.38)';
     ctx.beginPath(); ctx.ellipse(0, 22, 24, 9, 0, 0, TAU); ctx.fill();
 
@@ -18,11 +33,12 @@ export const renderPlayerMethods = {
     ctx.beginPath(); ctx.moveTo(-8, 12); ctx.lineTo(-11 + stride, 25); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(8, 12); ctx.lineTo(11 - stride, 25); ctx.stroke();
 
-    ctx.fillStyle = player.hitFlash > 0 ? '#ffffff' : '#f5d142';
-    ctx.strokeStyle = player.dashTimer > 0 ? '#8be9ff' : '#fff2a0';
+    const crystalSkin = cosmetics.skin === 'crystal_skin';
+    ctx.fillStyle = player.hitFlash > 0 ? '#ffffff' : crystalSkin ? '#62e8ff' : '#f5d142';
+    ctx.strokeStyle = player.dashTimer > 0 ? '#8be9ff' : crystalSkin ? '#d8fbff' : '#fff2a0';
     ctx.lineWidth = player.dashTimer > 0 ? 7 : 4;
-    ctx.shadowColor = player.dashTimer > 0 ? '#70d9ff' : 'transparent';
-    ctx.shadowBlur = player.dashTimer > 0 ? 20 : 0;
+    ctx.shadowColor = player.dashTimer > 0 || crystalSkin ? '#70d9ff' : 'transparent';
+    ctx.shadowBlur = player.dashTimer > 0 ? 20 : crystalSkin ? 14 : 0;
     roundRect(ctx, -19, -13, 38, 38, 13); ctx.fill(); ctx.stroke();
     ctx.shadowBlur = 0;
 
@@ -30,7 +46,7 @@ export const renderPlayerMethods = {
     ctx.beginPath(); ctx.arc(0, -18, 15, 0, TAU); ctx.fill();
     ctx.fillStyle = '#30343d';
     ctx.beginPath(); ctx.arc(0, -22, 17, Math.PI, TAU); ctx.fill();
-    ctx.fillStyle = '#f5d142';
+    ctx.fillStyle = crystalSkin ? '#8be9ff' : '#f5d142';
     ctx.fillRect(-18, -23, 36, 6);
     ctx.fillStyle = '#151821';
     ctx.beginPath(); ctx.arc(6 * facing, -18, 2.8, 0, TAU); ctx.fill();
@@ -54,13 +70,17 @@ export const renderPlayerMethods = {
       ctx.beginPath(); ctx.arc(47, -8, 4, 0, TAU); ctx.fill();
     } else {
       const swing = player.swingTimer > 0 ? -0.7 + (0.16 - player.swingTimer) * 8 : -0.35;
+      const molten = cosmetics.weapon === 'molten_pickaxe';
       ctx.rotate(swing);
-      ctx.strokeStyle = '#a96f3d';
+      ctx.strokeStyle = molten ? '#7d351e' : '#a96f3d';
       ctx.lineWidth = 7;
       ctx.beginPath(); ctx.moveTo(9, 4); ctx.lineTo(52, 4); ctx.stroke();
-      ctx.strokeStyle = '#d6dae4';
+      ctx.strokeStyle = molten ? '#ff8a3d' : '#d6dae4';
+      ctx.shadowColor = molten ? '#ff5a24' : 'transparent';
+      ctx.shadowBlur = molten ? 18 : 0;
       ctx.lineWidth = 10;
       ctx.beginPath(); ctx.moveTo(45, -10); ctx.lineTo(58, 2); ctx.lineTo(45, 14); ctx.stroke();
+      ctx.shadowBlur = 0;
     }
     ctx.restore();
 

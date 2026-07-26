@@ -26,6 +26,13 @@ import {
   weeklyUserScore
 } from './game/economy.js';
 import { formatNumber } from './game/utils.js';
+import {
+  PASS_CHEST_BONUS_NUGGETS,
+  PASS_CHEST_ID,
+  PASS_COSMETICS,
+  PASS_REWARD_LEVELS,
+  cosmeticById
+} from './game/passRewards.js';
 import { loadProfile, saveProfile } from './game/storage.js';
 import { RoninWalletAdapter } from './game/walletAdapter.js';
 
@@ -47,6 +54,7 @@ let publicPaymentStatus = null;
 let walletBusy = false;
 let paymentBusy = false;
 let activeServerClaim = null;
+let passRewardsBusy = false;
 const wallet = new RoninWalletAdapter({
   api: apiClient,
   onInvalidated(reason) {
@@ -86,6 +94,13 @@ function showScreen(id = null) {
 function setGameplayUi(active) {
   hud.classList.toggle('active', active);
   mobileControls.classList.toggle('active', active);
+}
+
+function applyPassInventory(passInventory) {
+  if (!passInventory) return;
+  if (serverPlayer) serverPlayer.passInventory = passInventory;
+  if (paymentStatus) paymentStatus.passInventory = passInventory;
+  game?.setCosmetics(passInventory.equipped || {});
 }
 
 function updateMenu() {
@@ -307,6 +322,7 @@ async function refreshPaymentStatus(silent = false) {
   }
   try {
     paymentStatus = await apiClient.paymentStatus();
+    applyPassInventory(paymentStatus.passInventory);
     updateMenu();
     return paymentStatus;
   } catch (error) {
@@ -337,9 +353,11 @@ async function submitServerRun(serverRun, result) {
     if (serverPlayer) {
       serverPlayer.profile = accepted.profile;
       serverPlayer.passProgress = accepted.passProgress;
+      serverPlayer.passInventory = accepted.passInventory;
       serverPlayer.scores[serverRun.mode] = leaderboard.playerScore;
     }
     if (paymentStatus && accepted.passProgress) paymentStatus.passProgress = accepted.passProgress;
+    applyPassInventory(accepted.passInventory);
     const boardName = serverRun.mode === RUN_MODES.FREE
       ? 'Free'
       : serverRun.mode === RUN_MODES.PAID
@@ -348,9 +366,12 @@ async function submitServerRun(serverRun, result) {
     const passXpCopy = accepted.run?.passXpAwarded
       ? ` · +${accepted.run.passXpAwarded} Pass XP`
       : '';
+    const unlockedCopy = accepted.passRewardsUnlocked?.length
+      ? ` · UNLOCKED ${accepted.passRewardsUnlocked.map((reward) => reward.name).join(', ')}`
+      : '';
     $('#economy-result').innerHTML = `
       <strong>SERVER VERIFIED${leaderboard.playerRank ? ` · #${leaderboard.playerRank}` : ''}</strong>
-      <span>Weekly ${boardName} score: ${formatNumber(leaderboard.playerScore)}${passXpCopy}</span>
+      <span>Weekly ${boardName} score: ${formatNumber(leaderboard.playerScore)}${passXpCopy}${unlockedCopy}</span>
       <small>Entitlement, Pass status, one-time run token, telemetry limits, secured-loot rule, and duplicate submission checks passed.</small>
     `;
     toast('Run accepted by the MATT Mine server');
@@ -491,6 +512,7 @@ const game = new MattMineGame(canvas, profile, {
     $('#end-title').textContent = result.extracted ? 'Loot Secured' : 'You Were Knocked Out';
     $('#run-mode-result').textContent = modeLabel(mode, result.rewardWeight);
     $('#run-mode-result').dataset.mode = mode;
+    $('#run-cosmetic-result').innerHTML = renderRunCosmeticResult();
     $('#end-stats').innerHTML = `
       <div><span>Banked</span><strong>${formatNumber(result.banked)}</strong></div>
       <div><span>${result.extracted ? 'Run Score' : 'Lost Loot'}</span><strong>${formatNumber(result.extracted ? result.projected : result.lost)}</strong></div>
@@ -593,6 +615,7 @@ $('#upgrades-button').addEventListener('click', () => {
   showScreen('upgrade-shop');
 });
 $('#pass-button').addEventListener('click', openPass);
+$('#manage-cosmetics-button').addEventListener('click', () => void openCosmetics());
 $('#leaderboards-button').addEventListener('click', () => openLeaderboards(RUN_MODES.FREE));
 $('#admin-button').addEventListener('click', openAdmin);
 
@@ -724,6 +747,10 @@ async function purchaseLivePass() {
     if (paymentStatus && confirmation.passProgress) {
       paymentStatus.passProgress = confirmation.passProgress;
     }
+    applyPassInventory(confirmation.passInventory);
+    if (confirmation.rewards?.length) {
+      toast(`Unlocked ${confirmation.rewards.map((reward) => reward.name).join(', ')}`);
+    }
     toast(`Pass transaction confirmed · ${abbreviateHash(transactionHash)}`);
     await refreshPaymentStatus();
   } catch (error) {
@@ -801,6 +828,7 @@ function openPass() {
     if (passNote) {
       passNote.textContent = 'This sends real RON on Ronin Mainnet only after you approve it in Ronin Wallet.';
     }
+    if (active && serverPlayer) void syncLivePassRewards();
     updateMenu();
     showScreen('mine-pass');
     return;
@@ -829,12 +857,166 @@ function renderPassProgress() {
   $('#pass-level').textContent = String(level.level);
   $('#pass-xp-text').textContent = `${formatNumber(xp)} XP`;
   $('#pass-xp-fill').style.width = `${Math.round(level.progress * 100)}%`;
-  const rewards = ['Starter Badge', 'Gold Trail', 'Pass Chest', 'Crystal Skin', 'Founder Frame', 'Guardian Aura', 'Ore Reactor Title', 'Season Trophy'];
-  $('#pass-track').innerHTML = rewards.map((reward, index) => `
-    <div class="pass-node ${passActive && index + 1 <= level.level ? 'unlocked' : ''}">
-      <span>${index + 1}</span><small>${reward}${passActive && index + 1 <= level.level ? ' · UNLOCKED' : ''}</small>
+  const inventory = paymentStatus?.passInventory || serverPlayer?.passInventory;
+  const claimedLevels = inventory?.claimedLevels || [];
+  $('#pass-track').innerHTML = PASS_REWARD_LEVELS.map((reward) => {
+    const owned = claimedLevels.includes(reward.level);
+    const earned = reward.level <= level.level;
+    const suffix = owned ? ' · OWNED' : earned && passActive ? ' · READY' : '';
+    return `
+    <div class="pass-node ${owned ? 'unlocked owned' : earned && passActive ? 'ready' : ''}">
+      <span>${reward.level}</span><small>${reward.name}${suffix}</small>
     </div>
-  `).join('');
+  `;
+  }).join('');
+  const manageButton = $('#manage-cosmetics-button');
+  if (manageButton) {
+    manageButton.disabled = !serverPlayer && !isLocalPreview;
+    manageButton.textContent = serverPlayer || isLocalPreview
+      ? 'MANAGE COSMETICS & REWARDS'
+      : 'CONNECT RONIN TO MANAGE REWARDS';
+  }
+}
+
+async function syncLivePassRewards() {
+  if (passRewardsBusy || !serverPlayer || paymentStatus?.pass?.active !== true) return;
+  passRewardsBusy = true;
+  try {
+    const result = await apiClient.syncPassRewards();
+    if (serverPlayer) serverPlayer.passProgress = result.passProgress;
+    if (paymentStatus) paymentStatus.passProgress = result.passProgress;
+    applyPassInventory(result.passInventory);
+    if (result.rewards?.length) {
+      toast(`Pass reward unlocked · ${result.rewards.map((reward) => reward.name).join(', ')}`);
+    }
+    renderPassProgress();
+  } catch (error) {
+    if (error?.code !== 'pass_inactive') console.warn('[MATT Mine] Pass reward sync failed.', error);
+  } finally {
+    passRewardsBusy = false;
+  }
+}
+
+async function openCosmetics() {
+  showScreen('pass-cosmetics');
+  renderCosmetics();
+  if (!serverPlayer) return;
+  const note = $('#cosmetics-note');
+  if (note) note.textContent = 'Loading your permanent server-owned collection…';
+  try {
+    const result = await apiClient.syncPassRewards();
+    if (serverPlayer) serverPlayer.passProgress = result.passProgress;
+    applyPassInventory(result.passInventory);
+    renderCosmetics();
+  } catch (error) {
+    if (error?.code === 'pass_not_owned') {
+      const result = await apiClient.passRewards().catch(() => null);
+      if (result) {
+        applyPassInventory(result.passInventory);
+        renderCosmetics();
+      }
+      if (note) note.textContent = 'Activate the MATT Mine Pass to begin unlocking permanent rewards.';
+    } else if (note) {
+      note.textContent = `Collection unavailable: ${error.message}`;
+    }
+  }
+}
+
+function renderCosmetics() {
+  const inventory = paymentStatus?.passInventory || serverPlayer?.passInventory;
+  const equipped = inventory?.equipped || {};
+  const cosmetics = inventory?.cosmetics || [];
+  const previewItems = ['skin', 'trail', 'weapon', 'aura', 'frame', 'badge', 'title', 'trophy']
+    .map((slot) => cosmeticById(equipped[slot]))
+    .filter(Boolean);
+  $('#cosmetic-preview').innerHTML = `
+    <div class="cosmetic-preview-miner ${equipped.frame === 'founder_frame' ? 'founder-frame' : ''} ${equipped.skin === 'crystal_skin' ? 'crystal-skin' : ''}">
+      <span class="preview-aura ${equipped.aura === 'guardian_aura' ? 'active' : ''}"></span>
+      <b>M</b>
+      ${equipped.trail === 'gold_trail' ? '<i class="preview-trail">✦ ✦ ✦</i>' : ''}
+    </div>
+    <div>
+      <span class="eyebrow">CURRENT LOADOUT</span>
+      <h3>${previewItems.length ? previewItems.map((item) => item.name).join(' · ') : 'Standard Miner'}</h3>
+      <p>${equipped.title === 'ore_reactor_title' ? '⚡ ORE REACTOR · ' : ''}${equipped.badge === 'starter_badge' ? 'MATT PASS HOLDER · ' : ''}${equipped.trophy === 'season_trophy' ? '★ SEASON ONE COMPLETE' : 'Equip unlocked rewards below.'}</p>
+    </div>
+  `;
+
+  const chest = inventory?.chests?.[PASS_CHEST_ID] || { available: 0, opened: 0 };
+  $('#pass-chest-card').innerHTML = `
+    <div>
+      <span class="eyebrow">LEVEL 3 REWARD</span>
+      <h3>Pass Chest</h3>
+      <p>Contains the exclusive Molten Pickaxe and ${formatNumber(PASS_CHEST_BONUS_NUGGETS)} permanent nuggets.</p>
+    </div>
+    <div class="pass-chest-actions">
+      <strong>${chest.available || 0} UNOPENED</strong>
+      <button id="open-pass-chest-button" class="primary-button" ${!serverPlayer || !chest.available || passRewardsBusy ? 'disabled' : ''}>${chest.available ? 'OPEN CHEST' : chest.opened ? 'OPENED' : 'LOCKED'}</button>
+    </div>
+  `;
+
+  $('#cosmetics-grid').innerHTML = Object.values(PASS_COSMETICS).map((cosmetic) => {
+    const owned = cosmetics.includes(cosmetic.id);
+    const isEquipped = equipped[cosmetic.slot] === cosmetic.id;
+    return `
+      <article class="cosmetic-card ${owned ? 'owned' : 'locked'} ${isEquipped ? 'equipped' : ''}">
+        <span class="cosmetic-icon">${cosmetic.icon}</span>
+        <div><small>${cosmetic.slot.toUpperCase()}</small><h3>${cosmetic.name}</h3><p>${cosmetic.description}</p></div>
+        <button class="secondary-button cosmetic-equip-button" data-slot="${cosmetic.slot}" data-cosmetic-id="${cosmetic.id}" ${!owned || passRewardsBusy ? 'disabled' : ''}>
+          ${isEquipped ? 'UNEQUIP' : owned ? 'EQUIP' : 'LOCKED'}
+        </button>
+      </article>
+    `;
+  }).join('');
+
+  const note = $('#cosmetics-note');
+  if (note) {
+    note.textContent = serverPlayer
+      ? `${cosmetics.length} of ${Object.keys(PASS_COSMETICS).length} cosmetics owned · unlocks are permanent and server verified.`
+      : 'Connect Ronin Wallet to load your permanent collection.';
+  }
+
+  $('#open-pass-chest-button')?.addEventListener('click', () => void openPassChest());
+  for (const button of document.querySelectorAll('.cosmetic-equip-button')) {
+    button.addEventListener('click', () => void toggleCosmetic(button.dataset.slot, button.dataset.cosmeticId));
+  }
+}
+
+async function toggleCosmetic(slot, cosmeticId) {
+  if (passRewardsBusy || !serverPlayer) return;
+  const equipped = serverPlayer.passInventory?.equipped?.[slot] === cosmeticId;
+  passRewardsBusy = true;
+  renderCosmetics();
+  try {
+    const result = await apiClient.equipPassCosmetic(slot, equipped ? '' : cosmeticId);
+    applyPassInventory(result.passInventory);
+    toast(`${cosmeticById(cosmeticId)?.name || 'Cosmetic'} ${equipped ? 'unequipped' : 'equipped'}`);
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    passRewardsBusy = false;
+    renderCosmetics();
+  }
+}
+
+async function openPassChest() {
+  if (passRewardsBusy || !serverPlayer) return;
+  passRewardsBusy = true;
+  renderCosmetics();
+  try {
+    const result = await apiClient.openPassChest(PASS_CHEST_ID);
+    profile = result.profile;
+    saveProfile(profile);
+    game.setProfile(profile);
+    applyPassInventory(result.passInventory);
+    toast(`Pass Chest opened · Molten Pickaxe + ${formatNumber(result.rewards.nuggets)} nuggets`);
+    updateMenu();
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    passRewardsBusy = false;
+    renderCosmetics();
+  }
 }
 
 function openLeaderboards(mode) {
@@ -867,7 +1049,7 @@ function openLeaderboards(mode) {
   $('#leaderboard-body').innerHTML = rows.map((row) => `
     <tr class="${row.isPlayer ? 'player-row' : ''}">
       <td>#${row.rank}</td>
-      <td>${row.walletId}${row.isPlayer ? ' · YOU' : ''}</td>
+      <td>${renderMinerIdentity(row)}${row.isPlayer ? ' · YOU' : ''}</td>
       <td>${formatNumber(row.score)}</td>
       <td>${row.isPreview ? 'PREVIEW' : row.score > 0 ? 'VERIFIED LOCAL' : 'NO SCORE'}</td>
     </tr>
@@ -889,7 +1071,7 @@ async function renderServerLeaderboard(mode) {
       ? rows.map((row) => `
           <tr class="${row.isPlayer ? 'player-row' : ''}">
             <td>#${row.rank}</td>
-            <td>${escapeHtml(row.walletId)}${row.isPlayer ? ' · YOU' : ''}</td>
+            <td>${renderMinerIdentity(row)}${row.isPlayer ? ' · YOU' : ''}</td>
             <td>${formatNumber(row.score)}</td>
             <td>SERVER VERIFIED</td>
           </tr>
@@ -908,6 +1090,37 @@ async function renderServerLeaderboard(mode) {
     renderServerClaim(null);
     if (note) note.textContent = `Server leaderboard unavailable: ${error.message}`;
   }
+}
+
+function renderMinerIdentity(row) {
+  const appearance = row.appearance || {};
+  const title = cosmeticById(appearance.title);
+  const badge = cosmeticById(appearance.badge);
+  const trophy = cosmeticById(appearance.trophy);
+  return `
+    <span class="miner-identity ${appearance.frame === 'founder_frame' ? 'founder-frame' : ''}">
+      ${badge ? `<i title="${escapeHtml(badge.name)}">${badge.icon}</i>` : ''}
+      <b>${escapeHtml(row.walletId)}</b>
+      ${title ? `<small>${escapeHtml(title.name)}</small>` : ''}
+      ${trophy ? `<em title="${escapeHtml(trophy.name)}">${trophy.icon}</em>` : ''}
+    </span>
+  `;
+}
+
+function renderRunCosmeticResult() {
+  const equipped = serverPlayer?.passInventory?.equipped || {};
+  const title = cosmeticById(equipped.title);
+  const badge = cosmeticById(equipped.badge);
+  const trophy = cosmeticById(equipped.trophy);
+  if (!title && !badge && !trophy && equipped.frame !== 'founder_frame') return '';
+  return `
+    <span class="miner-identity result-identity ${equipped.frame === 'founder_frame' ? 'founder-frame' : ''}">
+      ${badge ? `<i>${badge.icon}</i>` : ''}
+      <b>${serverPlayer ? escapeHtml(abbreviateAddress(serverPlayer.address)) : 'MATT MINER'}</b>
+      ${title ? `<small>${escapeHtml(title.name)}</small>` : ''}
+      ${trophy ? `<em>${trophy.icon}</em>` : ''}
+    </span>
+  `;
 }
 
 function renderServerClaim(claim) {

@@ -4,6 +4,17 @@
 
 MATT Mine is a standalone browser action roguelite and daily Web3 competition on Ronin. It has its own launch website, wallet identity, separate Free and Pass leaderboards, live Pass and paid-run payments, verified contracts, and a production persistence path independent from MATT Hub.
 
+## v1.6 permanent Pass collection
+
+- Deliver all eight Pass levels from server-owned XP into a permanent wallet inventory.
+- Unlock the Starter Badge, Gold Trail, Crystal Skin, Founder Frame, Guardian Aura, Ore Reactor title, and Season One Trophy.
+- Open the level-three Pass Chest for the exclusive Molten Pickaxe and 2,500 permanent nuggets.
+- Equip or remove every owned cosmetic through the MATT Mine Loadout screen.
+- Show equipped skins, auras, trails, and pickaxes directly during gameplay.
+- Show equipped frames, badges, titles, and trophies on server-verified leaderboard rows.
+- Preserve owned rewards after the 30-day Pass expires while requiring an active Pass to earn new XP.
+- Migrate and sanitize existing production save state into the new inventory format.
+
 ## v1.5 live Mine Pass
 
 - Verify each 95 RON Pass purchase against the exact Ronin transaction, approved Pass contract call, purchasing wallet, payment amount, and `PassPurchased` event.

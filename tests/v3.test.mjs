@@ -93,3 +93,30 @@ test('v0.3 combat render and weapon loop run without throwing', async () => {
   assert.equal(game.projectiles.some((projectile) => projectile.kind === 'crystalBolt'), true);
   assert.doesNotThrow(() => game.render());
 });
+
+test('equipped Pass cosmetics render on the miner and emit the gold movement trail', async () => {
+  const { canvas, profile } = installBrowserStubs(true);
+  const { MattMineGame } = await import('../src/game/GameV3.js');
+  const game = new MattMineGame(canvas, profile);
+  game.setCosmetics({
+    trail: 'gold_trail',
+    weapon: 'molten_pickaxe',
+    skin: 'crystal_skin',
+    aura: 'guardian_aura'
+  });
+  game.startRun();
+  game.player.vx = 80;
+  game.player.vy = 0;
+  game.player.trailTimer = 0;
+  game.input.movement = () => ({ x: 1, y: 0 });
+  game.input.consumeDash = () => false;
+  game.updatePlayerMovement(0.1);
+  assert.equal(game.particles.some((particle) => particle.color === '#ffd95a'), true);
+  assert.doesNotThrow(() => game.render());
+  assert.deepEqual(game.cosmetics, {
+    trail: 'gold_trail',
+    weapon: 'molten_pickaxe',
+    skin: 'crystal_skin',
+    aura: 'guardian_aura'
+  });
+});
