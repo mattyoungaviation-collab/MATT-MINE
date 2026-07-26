@@ -8,6 +8,7 @@ export const roomsMethods = {
     const padding = Math.max(8, entity.radius * 0.68);
     let boundsRoom = null;
     if (entity === this.player && this.activeLockedRoomId) boundsRoom = this.layout.rooms.find((room) => room.id === this.activeLockedRoomId);
+    else if (entity.isBoss) boundsRoom = this.layout.guardianRoom;
     else if (entity.roomId && this.roomStates?.[entity.roomId]?.locked) boundsRoom = this.layout.rooms.find((room) => room.id === entity.roomId);
 
     if (boundsRoom) {

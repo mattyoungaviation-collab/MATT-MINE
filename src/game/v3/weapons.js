@@ -87,6 +87,8 @@ export const weaponsMethods = {
       vy: Math.sin(this.player.angle) * speed,
       radius: 10,
       life: 0.68,
+      travelled: 0,
+      maxRange: CONFIG.dynamiteRange,
       damage: this.player.damage * 1.8,
       explosionRadius: 155,
       color: '#ffb342'
@@ -114,6 +116,8 @@ export const weaponsMethods = {
       vy: Math.sin(this.player.angle) * speed,
       radius: 7,
       life: 0.82,
+      travelled: 0,
+      maxRange: CONFIG.blasterRange,
       damage: this.player.damage * 0.56,
       color: CONFIG.colors.crystal
     });
@@ -121,38 +125,69 @@ export const weaponsMethods = {
   },
   updateProjectiles(dt) {
     for (const projectile of this.projectiles) {
+      const previousLife = projectile.life;
       projectile.life -= dt;
       if (projectile.life <= 0 && projectile.kind !== 'dynamite') {
         projectile.dead = true;
         continue;
       }
-      projectile.x += projectile.vx * dt;
-      projectile.y += projectile.vy * dt;
+
+      const movementTime = projectile.kind === 'dynamite'
+        ? Math.min(dt, Math.max(0, previousLife))
+        : dt;
+      const distanceToMove = Math.hypot(projectile.vx, projectile.vy) * movementTime;
+      const steps = Math.max(1, Math.ceil(distanceToMove / Math.max(4, projectile.radius * 0.75)));
+      const stepTime = movementTime / steps;
+      let hitWall = false;
+
+      for (let step = 0; step < steps && !projectile.dead; step += 1) {
+        const stepX = projectile.vx * stepTime;
+        const stepY = projectile.vy * stepTime;
+        const nextX = projectile.x + stepX;
+        const nextY = projectile.y + stepY;
+        const padding = Math.max(3, projectile.radius * 0.72);
+        if (!pointInLayout(this.layout, nextX, nextY, padding)) {
+          hitWall = true;
+          break;
+        }
+        projectile.x = nextX;
+        projectile.y = nextY;
+        projectile.travelled = (projectile.travelled || 0) + Math.hypot(stepX, stepY);
+        if (Number.isFinite(projectile.maxRange) && projectile.travelled >= projectile.maxRange) {
+          projectile.dead = true;
+          break;
+        }
+        if (projectile.kind !== 'dynamite') this.resolveProjectileHit(projectile);
+      }
+
       if (projectile.kind === 'dynamite') {
         projectile.vx *= Math.max(0, 1 - dt * 2.8);
         projectile.vy *= Math.max(0, 1 - dt * 2.8);
-        if (projectile.life <= 0) {
+        if (projectile.life <= 0 || hitWall || projectile.dead) {
           this.explode(projectile.x, projectile.y, projectile.explosionRadius, projectile.damage);
           projectile.dead = true;
         }
         continue;
       }
-      if (!pointInLayout(this.layout, projectile.x, projectile.y, 4)) {
-        projectile.dead = true;
-        continue;
-      }
-      if (projectile.owner === 'player') {
-        const target = [...this.enemies, ...this.ores].find((entry) => distance(projectile, entry) <= projectile.radius + entry.radius);
-        if (target) {
-          this.damageTarget(target, projectile.damage, false, Math.atan2(projectile.vy, projectile.vx), 'blaster');
-          projectile.dead = true;
-        }
-      } else if (distance(projectile, this.player) <= projectile.radius + this.player.radius) {
-        this.damagePlayer(projectile.damage, Math.atan2(projectile.vy, projectile.vx));
+      if (hitWall) {
         projectile.dead = true;
       }
     }
     this.projectiles = this.projectiles.filter((projectile) => !projectile.dead && projectile.life > 0);
+  },
+  resolveProjectileHit(projectile) {
+    if (projectile.owner === 'player') {
+      const target = [...this.enemies, ...this.ores]
+        .find((entry) => distance(projectile, entry) <= projectile.radius + entry.radius);
+      if (!target) return;
+      this.damageTarget(target, projectile.damage, false, Math.atan2(projectile.vy, projectile.vx), 'blaster');
+      projectile.dead = true;
+      return;
+    }
+    if (distance(projectile, this.player) <= projectile.radius + this.player.radius) {
+      this.damagePlayer(projectile.damage, Math.atan2(projectile.vy, projectile.vx));
+      projectile.dead = true;
+    }
   },
   damageTarget(target, damage, critical = false, impactAngle = 0, source = 'pick') {
     if (!target || target.hp <= 0) return;

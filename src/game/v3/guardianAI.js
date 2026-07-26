@@ -1,4 +1,5 @@
-import { angleTo } from '../utils.js';
+import { CONFIG } from '../config.js';
+import { angleTo, clamp } from '../utils.js';
 import { bossPhaseForHealth } from '../combat.js';
 
 const TAU = Math.PI * 2;
@@ -13,7 +14,20 @@ export const guardianAIMethods = {
       this.camera.shake = 15;
       this.hooks.onToast?.(`GUARDIAN PHASE ${phase}`);
     }
-    const angle = angleTo(enemy, this.player);
+    const prediction = phase === 1 ? 0.12 : phase === 2 ? 0.24 : CONFIG.guardianPredictionSeconds;
+    const target = {
+      x: clamp(
+        this.player.x + this.player.vx * prediction,
+        this.layout.guardianRoom.x - this.layout.guardianRoom.width / 2,
+        this.layout.guardianRoom.x + this.layout.guardianRoom.width / 2
+      ),
+      y: clamp(
+        this.player.y + this.player.vy * prediction,
+        this.layout.guardianRoom.y - this.layout.guardianRoom.height / 2,
+        this.layout.guardianRoom.y + this.layout.guardianRoom.height / 2
+      )
+    };
+    const angle = angleTo(enemy, target);
     enemy.facing = angle;
     const speedScale = phase === 3 ? 1.6 : phase === 2 ? 1.05 : 0.82;
     enemy.vx += (Math.cos(angle) * enemy.speed * speedScale - enemy.vx) * Math.min(1, dt * (phase === 3 ? 7 : 4));

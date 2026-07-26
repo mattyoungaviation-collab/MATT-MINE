@@ -1,3 +1,4 @@
+import { CONFIG } from '../config.js';
 import { roomAt } from '../layout.js';
 import { angleTo, distance, randomRange } from '../utils.js';
 
@@ -14,14 +15,23 @@ export const enemyBehaviorMethods = {
       if (!enemy.awake) continue;
 
       const enemyRoom = roomAt(this.layout, enemy.x, enemy.y);
-      const active = distance(enemy, this.player) < 440 || (playerRoom && enemyRoom && playerRoom.id === enemyRoom.id);
+      const awarenessRange = enemy.isBoss ? CONFIG.guardianAwarenessRange : 440;
+      const active = enemy.isBoss
+        ? enemy.engaged === true ||
+          distance(enemy, this.player) < awarenessRange ||
+          (playerRoom && enemyRoom && playerRoom.id === enemyRoom.id)
+        : distance(enemy, this.player) < awarenessRange ||
+          (playerRoom && enemyRoom && playerRoom.id === enemyRoom.id);
       if (!active) {
         enemy.vx *= Math.max(0, 1 - dt * 7);
         enemy.vy *= Math.max(0, 1 - dt * 7);
         continue;
       }
 
-      if (enemy.isBoss) this.updateGuardian(enemy, dt);
+      if (enemy.isBoss) {
+        enemy.engaged = true;
+        this.updateGuardian(enemy, dt);
+      }
       else this.updateEnemyBehavior(enemy, dt);
       if (!this.enemies.includes(enemy)) continue;
 

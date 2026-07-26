@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 
 import {
   ADMIN_ROLES,
@@ -25,6 +26,7 @@ import {
   defaultProfile,
   loadProfile
 } from '../src/game/storage.js';
+import { CONFIG } from '../src/game/config.js';
 
 const NOW = Date.UTC(2026, 6, 25, 12, 0, 0);
 
@@ -251,6 +253,132 @@ test('player, enemy, expired, and wall projectile paths resolve without throwing
   });
   assert.doesNotThrow(() => game.updateProjectiles(0.016));
   assert.equal(game.projectiles.length, 0);
+});
+
+test('fast player projectiles cannot tunnel through walls during a long frame', async () => {
+  const { MattMineGame } = await import('../src/game/GameV4.js');
+  const stubs = installBrowserStubs();
+  const game = new MattMineGame(stubs.canvas, stubs.profile);
+  game.startRun({ mode: RUN_MODES.PRACTICE, seed: 'WALL-SWEEP' });
+  const firstRoom = { id: 1, x: 100, y: 200, width: 200, height: 300, type: 'start' };
+  const secondRoom = { id: 2, x: 500, y: 200, width: 200, height: 300, type: 'guardian' };
+  game.layout = {
+    rooms: [firstRoom, secondRoom],
+    corridors: [],
+    startRoom: firstRoom,
+    guardianRoom: secondRoom
+  };
+  game.player.x = 100;
+  game.player.y = 200;
+  const target = enemyTarget(game, { x: 550, y: 200, roomId: 2 });
+  game.enemies = [target];
+  game.ores = [];
+  game.projectiles = [{
+    id: game.entityId++,
+    kind: 'crystalBolt',
+    owner: 'player',
+    x: 150,
+    y: 200,
+    vx: 1_000,
+    vy: 0,
+    radius: 7,
+    life: 1,
+    travelled: 0,
+    maxRange: 1_000,
+    damage: 50,
+    color: '#ffffff'
+  }];
+
+  game.updateProjectiles(0.4);
+
+  assert.equal(game.projectiles.length, 0);
+  assert.equal(target.hp, target.maxHp);
+});
+
+test('Crystal Blaster bolts expire at their configured maximum range', async () => {
+  const { MattMineGame } = await import('../src/game/GameV4.js');
+  const stubs = installBrowserStubs();
+  const game = new MattMineGame(stubs.canvas, stubs.profile);
+  game.startRun({ mode: RUN_MODES.PRACTICE, seed: 'BLASTER-RANGE' });
+  const room = { id: 1, x: 700, y: 300, width: 1_400, height: 600, type: 'start' };
+  game.layout = {
+    rooms: [room],
+    corridors: [],
+    startRoom: room,
+    guardianRoom: room
+  };
+  game.player.x = 100;
+  game.player.y = 300;
+  game.player.angle = 0;
+  const target = enemyTarget(game, { x: 680, y: 300 });
+  game.enemies = [target];
+  game.ores = [];
+  game.unlockWeapon('blaster');
+  game.player.blasterEnergy = game.player.blasterEnergyMax;
+  game.fireBlaster();
+  const startX = game.projectiles[0].x;
+  let furthestX = startX;
+  for (let frame = 0; frame < 30 && game.projectiles.length; frame += 1) {
+    game.updateProjectiles(0.05);
+    furthestX = Math.max(furthestX, game.projectiles[0]?.x || furthestX);
+  }
+
+  assert.equal(game.projectiles.length, 0);
+  assert.ok(furthestX <= startX + CONFIG.blasterRange + 8);
+  assert.equal(target.hp, target.maxHp);
+});
+
+test('the Guardian acquires the player across rooms and stays contained in its vault', async () => {
+  const { MattMineGame } = await import('../src/game/GameV4.js');
+  const stubs = installBrowserStubs();
+  const game = new MattMineGame(stubs.canvas, stubs.profile);
+  game.startRun({ mode: RUN_MODES.PRACTICE, seed: 'GUARDIAN-AWARENESS' });
+  const firstRoom = { id: 1, x: 100, y: 200, width: 300, height: 300, type: 'start' };
+  const guardianRoom = { id: 2, x: 700, y: 200, width: 300, height: 300, type: 'guardian' };
+  game.layout = {
+    rooms: [firstRoom, guardianRoom],
+    corridors: [],
+    startRoom: firstRoom,
+    guardianRoom
+  };
+  game.roomStates = {
+    1: { locked: false, cleared: true },
+    2: { locked: false, cleared: false }
+  };
+  game.player.x = 100;
+  game.player.y = 200;
+  game.player.vx = 120;
+  const guardian = enemyTarget(game, {
+    type: 'guardian',
+    isBoss: true,
+    x: 700,
+    y: 200,
+    roomId: 2,
+    radius: 56,
+    hp: 620,
+    maxHp: 620,
+    speed: 56,
+    awake: true,
+    engaged: false,
+    aiTimer: 1,
+    attackTimer: 1,
+    summonTimer: 4,
+    lastBossPhase: 1
+  });
+  game.enemies = [guardian];
+
+  game.updateEnemies(0.1);
+
+  assert.equal(guardian.engaged, true);
+  assert.ok(guardian.vx < 0);
+  assert.ok(guardian.x >= guardianRoom.x - guardianRoom.width / 2 + guardian.radius * 0.68);
+});
+
+test('production leaderboard copy never offers a test MATT claim', async () => {
+  const source = await readFile(new URL('../src/main.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(source, /CLAIM TEST MATT|Test claim recorded|test publisher/i);
+  assert.match(source, /CONNECT WALLET TO CLAIM/);
+  assert.match(source, /CLAIM MATT/);
 });
 
 test('profile saves recover invalid JSON and sanitize unsafe numeric fields', () => {
