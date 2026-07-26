@@ -6,6 +6,7 @@ import {
   defaultPassInventory
 } from '../src/game/passRewards.js';
 import { SERVER_STATE_VERSION } from './constants.js';
+import { normalizeIdentity } from './identity.js';
 
 export function defaultServerState() {
   return {
@@ -24,6 +25,7 @@ export function defaultServerState() {
 export function defaultWalletState(address, timestamp = Date.now()) {
   return {
     address,
+    identity: normalizeIdentity(),
     profile: defaultProfile(),
     passProgress: defaultPassProgress(),
     passInventory: defaultPassInventory(),
@@ -141,6 +143,7 @@ function normalizeWallets(input) {
       const normalizedAddress = address.toLowerCase();
       return [normalizedAddress, {
         address: normalizedAddress,
+        identity: normalizeIdentity(wallet.identity),
         profile: normalizeProfile(wallet.profile),
         passProgress: normalizePassProgress(wallet.passProgress),
         passInventory: normalizePassInventory(wallet.passInventory),

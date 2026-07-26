@@ -213,7 +213,7 @@
 }
 
 .menu-nav-grid {
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
 }
 
 .menu-nav-grid .secondary-button {
@@ -843,6 +843,24 @@
   border-radius: 7px;
 }
 
+.miner-avatar {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  object-fit: cover;
+  border: 1px solid rgba(112,217,255,0.55);
+  border-radius: 50%;
+  background: #111722;
+  box-shadow: 0 0 11px rgba(112,217,255,0.16);
+}
+
+.miner-identity > b {
+  max-width: 170px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .miner-identity.founder-frame {
   border: 1px solid #f4d75e;
   box-shadow: 0 0 10px rgba(244,215,94,0.28);
@@ -881,6 +899,110 @@
   justify-content: center;
   min-height: 8px;
   margin: 8px 0 2px;
+}
+
+.miner-profile-panel {
+  width: min(650px, calc(100vw - 30px));
+}
+
+.miner-profile-panel > p {
+  color: #939dab;
+  line-height: 1.55;
+}
+
+.profile-editor {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  gap: 24px;
+  align-items: center;
+  margin: 24px 0;
+  padding: 20px;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.025);
+}
+
+.profile-avatar-shell {
+  width: 132px;
+  height: 132px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 2px solid rgba(244,215,94,0.6);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 30%, rgba(112,217,255,0.2), transparent 40%),
+    #101620;
+  box-shadow: 0 0 25px rgba(244,215,94,0.13);
+}
+
+.profile-avatar-shell img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-avatar-shell span {
+  color: #f4d75e;
+  font-size: 52px;
+  font-weight: 1000;
+}
+
+.profile-fields {
+  display: grid;
+  gap: 9px;
+}
+
+.profile-fields label {
+  color: #f4d75e;
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0.13em;
+}
+
+.profile-fields input[type='text'] {
+  width: 100%;
+  padding: 13px 14px;
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 9px;
+  background: #0b1018;
+  color: #f5f7fa;
+  font: 800 16px system-ui, sans-serif;
+}
+
+.profile-fields input[readonly] {
+  color: #f4d75e;
+  cursor: not-allowed;
+}
+
+.profile-fields small {
+  color: #7f8997;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.profile-upload-button {
+  width: fit-content;
+  margin-top: 7px;
+  padding: 10px 13px;
+  border: 1px solid rgba(112,217,255,0.35);
+  border-radius: 8px;
+  color: #70d9ff !important;
+  cursor: pointer;
+}
+
+.profile-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.profile-actions button {
+  flex: 1;
+  margin: 0;
+}
+
+.miner-profile-panel.setup-required .close-button {
+  display: none;
 }
 
 .result-identity {
@@ -1163,6 +1285,13 @@
   .admin-dashboard-grid,
   .leaderboard-summary {
     grid-template-columns: 1fr;
+  }
+  .profile-editor {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+  .profile-fields {
+    width: 100%;
   }
   .arena-menu-banner {
     grid-template-columns: auto 1fr;

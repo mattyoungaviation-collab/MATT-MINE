@@ -367,6 +367,7 @@
             <button id="leaderboards-button" class="secondary-button">LEADERBOARDS</button>
             <button id="pass-button" class="secondary-button">MINE PASS</button>
             <button id="upgrades-button" class="secondary-button">UPGRADES</button>
+            <button id="profile-button" class="secondary-button">PROFILE</button>
             <button id="sound-button" class="secondary-button">SOUND</button>
             <button id="admin-button" class="secondary-button admin-nav" hidden>ADMIN TEST</button>
           </div>
@@ -381,6 +382,34 @@
             <small id="wallet-network">RONIN MAINNET · SIGN TO PLAY RANKED</small>
           </span>
         </button>
+      </section>
+
+      <section id="miner-profile" class="screen" aria-labelledby="profile-title">
+        <div class="panel miner-profile-panel">
+          <button id="profile-close-button" class="close-button" data-close="miner-profile" aria-label="Close">Ã—</button>
+          <p class="eyebrow">SERVER IDENTITY</p>
+          <h2 id="profile-title">Create Your Miner</h2>
+          <p id="profile-intro">Choose carefully. Your miner name is unique and permanently tied to this wallet.</p>
+          <div class="profile-editor">
+            <div class="profile-avatar-shell">
+              <img id="profile-avatar-preview" alt="Profile picture preview" hidden />
+              <span id="profile-avatar-fallback" aria-hidden="true">M</span>
+            </div>
+            <div class="profile-fields">
+              <label for="profile-name">MINER NAME</label>
+              <input id="profile-name" type="text" minlength="3" maxlength="16" autocomplete="off" spellcheck="false" placeholder="3â€“16 letters, numbers, or _" />
+              <small id="profile-name-note">Names ignore capitalization when checking duplicates and cannot be changed after saving.</small>
+              <label class="profile-upload-button" for="profile-avatar-input">CHOOSE PROFILE PICTURE</label>
+              <input id="profile-avatar-input" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+              <small>Images are cropped square, resized, and safely stored with your server profile.</small>
+            </div>
+          </div>
+          <div class="profile-actions">
+            <button id="save-profile-button" class="primary-button">LOCK IN MINER NAME</button>
+            <button id="update-avatar-button" class="secondary-button" hidden>UPDATE PROFILE PICTURE</button>
+          </div>
+          <p id="profile-status" class="preview-note">Sign in with Ronin Wallet to manage your miner profile.</p>
+        </div>
       </section>
 
       <section id="mine-pass" class="screen" aria-labelledby="pass-title">

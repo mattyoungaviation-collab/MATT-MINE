@@ -52,7 +52,13 @@ async function signIn(service) {
     origin: ORIGIN
   });
   const signature = await account.signMessage({ message: challenge.message });
-  return service.verifyChallenge({ address: account.address, nonce: challenge.nonce, signature });
+  const session = await service.verifyChallenge({ address: account.address, nonce: challenge.nonce, signature });
+  if (session.identity.requiresSetup) {
+    const created = await service.setPlayerIdentity(session.token, { name: 'AdminTester' });
+    session.identity = created.identity;
+    session.entitlements.freeRunAvailable = true;
+  }
+  return session;
 }
 
 test('server operations are authenticated, audited, and gate each production surface independently', async () => {
