@@ -4,6 +4,19 @@
 
 MATT Mine is a standalone browser action roguelite and daily Web3 competition on Ronin. It has its own launch website, wallet identity, separate Free and Pass leaderboards, live Pass and paid-run payments, verified contracts, and a production persistence path independent from MATT Hub.
 
+## v1.9 verified Arena production wiring
+
+The isolated MATT Daily Arena is deployed and exact-match verified on Ronin
+Mainnet at `0x506f969279F8264fd629BBB0Df861Ab91343b12C`.
+
+Production now pins that exact address and runtime bytecode hash, validates the
+official MATT token and all Safe/pauser roles during server startup, and exposes
+the proof in the health endpoint. Paid entry remains deliberately disabled and
+the contract remains entry-paused until input-only deterministic server replay
+ships in a separately reviewed release.
+
+See [`docs/ARENA_PRODUCTION_WIRING_V19.md`](docs/ARENA_PRODUCTION_WIRING_V19.md).
+
 ## v1.8 MATT Daily Arena preview
 
 - Add an isolated daily MATT-entry competition without changing the four existing live contracts.

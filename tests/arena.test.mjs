@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {
   encodeAbiParameters,
   encodeEventTopics,
-  encodeFunctionData
+  encodeFunctionData,
+  keccak256
 } from 'viem';
 import {
   ARENA_EVENT_TYPES,
@@ -28,6 +29,7 @@ import {
 import {
   ARENA_ERC20_ABI,
   DAILY_ARENA_ABI,
+  RONIN_ARENA_DEPLOYMENT,
   RoninArenaChain
 } from '../server/arena-chain.js';
 import {
@@ -47,6 +49,104 @@ const TOKEN = '0x4444444444444444444444444444444444444444';
 const SAFE = '0x5555555555555555555555555555555555555555';
 const HASH_A = `0x${'a'.repeat(64)}`;
 const HASH_B = `0x${'b'.repeat(64)}`;
+
+test('production Arena deployment constants pin the exact verified Ronin contract', () => {
+  assert.equal(RONIN_ARENA_DEPLOYMENT.chainId, 2020);
+  assert.equal(RONIN_ARENA_DEPLOYMENT.contract, '0x506f969279F8264fd629BBB0Df861Ab91343b12C');
+  assert.equal(RONIN_ARENA_DEPLOYMENT.runtimeCodeHash, '0xbe675f45747d267318291cad7295374ad5c65fa06063fe3b8cc111b8fa27453a');
+  assert.equal(RONIN_ARENA_DEPLOYMENT.treasurySafe, '0xBacE355D23d378a6E1adD986E53a18Dd12E6EeAc');
+  assert.equal(RONIN_ARENA_DEPLOYMENT.emergencyPauser, '0x57Dc8DB3a263506a0344eC15B4C623EBb8E589F4');
+  assert.equal(RONIN_ARENA_DEPLOYMENT.temporaryDeployer, '0xeED0491B506C78EA7fD10988B1E98A3C88e1C630');
+});
+
+test('Arena startup accepts only the pinned bytecode, token, Safe roles, pauser, and paused entries', async () => {
+  const code = '0x6001600055';
+  const roleValues = {
+    DEFAULT_ADMIN_ROLE: `0x${'0'.repeat(64)}`,
+    TREASURY_ROLE: `0x${'1'.repeat(64)}`,
+    SETTLER_ROLE: `0x${'2'.repeat(64)}`,
+    PRICER_ROLE: `0x${'3'.repeat(64)}`,
+    PAUSER_ROLE: `0x${'4'.repeat(64)}`
+  };
+  const pauser = address(99);
+  const expectedRoleAccounts = new Map([
+    [roleValues.DEFAULT_ADMIN_ROLE, SAFE],
+    [roleValues.TREASURY_ROLE, SAFE],
+    [roleValues.SETTLER_ROLE, SAFE],
+    [roleValues.PRICER_ROLE, SAFE],
+    [roleValues.PAUSER_ROLE, pauser]
+  ]);
+  const client = {
+    async getCode() {
+      return code;
+    },
+    async readContract({ functionName, args = [] }) {
+      if (functionName === 'matt') return TOKEN;
+      if (functionName === 'seedTreasury') return SAFE;
+      if (functionName === 'entriesPaused') return true;
+      if (functionName === 'settlementPaused') return false;
+      if (roleValues[functionName]) return roleValues[functionName];
+      if (functionName === 'hasRole') {
+        return expectedRoleAccounts.get(args[0])?.toLowerCase() === args[1].toLowerCase();
+      }
+      throw new Error(`Unexpected deployment read: ${functionName}`);
+    }
+  };
+  const chain = new RoninArenaChain({
+    contractAddress: ARENA,
+    expectedContractAddress: ARENA,
+    runtimeCodeHash: keccak256(code),
+    mattTokenAddress: TOKEN,
+    safeAddress: SAFE,
+    emergencyPauserAddress: pauser,
+    temporaryDeployerAddress: OTHER,
+    requireEntriesPaused: true,
+    client
+  });
+
+  const deployment = await chain.validateDeployment();
+  assert.equal(deployment.pinned, true);
+  assert.equal(deployment.runtimeCodeHash, keccak256(code));
+  assert.equal(deployment.entriesPaused, true);
+
+  const wrongHash = new RoninArenaChain({
+    contractAddress: ARENA,
+    expectedContractAddress: ARENA,
+    runtimeCodeHash: `0x${'f'.repeat(64)}`,
+    mattTokenAddress: TOKEN,
+    safeAddress: SAFE,
+    emergencyPauserAddress: pauser,
+    temporaryDeployerAddress: OTHER,
+    requireEntriesPaused: true,
+    client
+  });
+  await assert.rejects(
+    () => wrongHash.validateDeployment(),
+    (error) => error.code === 'arena_contract_code_mismatch'
+  );
+
+  const unpaused = new RoninArenaChain({
+    contractAddress: ARENA,
+    expectedContractAddress: ARENA,
+    runtimeCodeHash: keccak256(code),
+    mattTokenAddress: TOKEN,
+    safeAddress: SAFE,
+    emergencyPauserAddress: pauser,
+    temporaryDeployerAddress: OTHER,
+    requireEntriesPaused: true,
+    client: {
+      ...client,
+      async readContract(input) {
+        if (input.functionName === 'entriesPaused') return false;
+        return client.readContract(input);
+      }
+    }
+  });
+  await assert.rejects(
+    () => unpaused.validateDeployment(),
+    (error) => error.code === 'arena_entries_not_paused'
+  );
+});
 
 test('Daily Arena payout weights are the exact requested top-ten schedule', () => {
   assert.deepEqual(ARENA_WINNER_WEIGHTS_BPS, [
