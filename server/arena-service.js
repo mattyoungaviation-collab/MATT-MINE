@@ -60,10 +60,14 @@ export class DailyArenaService {
     this.safeAddress = getAddress(options.safeAddress);
     this.liveRequested = options.liveEnabled === true;
     this.liveEnabled = this.liveRequested && ARENA_REPLAY_READY;
+    this.deployment = null;
   }
 
   async init() {
     await this.store.init();
+    this.deployment = typeof this.chain.validateDeployment === 'function'
+      ? await this.chain.validateDeployment()
+      : null;
     return this;
   }
 
@@ -75,6 +79,7 @@ export class DailyArenaService {
       replayReady: ARENA_REPLAY_READY,
       verificationMode: 'preview-milestone-transcript',
       liveBlocker: this.liveEnabled ? '' : 'input_replay_not_ready',
+      deploymentPinned: this.deployment?.pinned === true,
       chain: this.chain.publicConfig(),
       transcriptVersion: ARENA_TRANSCRIPT_VERSION,
       tickMs: ARENA_TICK_MS,
@@ -105,7 +110,8 @@ export class DailyArenaService {
       liveRequested: this.liveRequested,
       replayReady: ARENA_REPLAY_READY,
       storage: await this.store.healthCheck(),
-      contract: this.chain.contractAddress
+      contract: this.chain.contractAddress,
+      deployment: this.deployment || { pinned: false }
     };
   }
 

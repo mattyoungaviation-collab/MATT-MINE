@@ -8,7 +8,10 @@ import { RewardManager } from '../server/reward-manager.js';
 import { MemoryRewardStore, PostgresRewardStore } from '../server/reward-store.js';
 import { MattMineService } from '../server/service.js';
 import { DailyArenaService } from '../server/arena-service.js';
-import { RoninArenaChain } from '../server/arena-chain.js';
+import {
+  RONIN_ARENA_DEPLOYMENT,
+  RoninArenaChain
+} from '../server/arena-chain.js';
 import { MemoryArenaStore, PostgresArenaStore } from '../server/arena-store.js';
 import { MATT_MINE_ADMIN_CONTRACTS } from '../server/admin-controls.js';
 
@@ -44,6 +47,7 @@ const rewardManager = await new RewardManager({
 }).init();
 const arenaContractAddress = process.env.MATT_MINE_ARENA_CONTRACT_ADDRESS?.trim();
 const arenaReceiptSecret = process.env.MATT_MINE_ARENA_RECEIPT_SECRET || '';
+const arenaLiveRequested = process.env.MATT_MINE_ARENA_LIVE === 'true';
 const arenaEnabled = Boolean(arenaContractAddress && arenaReceiptSecret);
 const arenaStore = arenaEnabled
   ? database.kind === 'postgresql'
@@ -56,13 +60,29 @@ const arenaService = arenaEnabled
       chain: new RoninArenaChain({
         contractAddress: arenaContractAddress,
         mattTokenAddress: process.env.MATT_MINE_ARENA_MATT_ADDRESS || RONIN_PAYMENT_CONTRACTS.matt,
+        expectedContractAddress:
+          process.env.MATT_MINE_ARENA_EXPECTED_CONTRACT_ADDRESS ||
+          RONIN_ARENA_DEPLOYMENT.contract,
+        runtimeCodeHash:
+          process.env.MATT_MINE_ARENA_RUNTIME_CODE_HASH ||
+          RONIN_ARENA_DEPLOYMENT.runtimeCodeHash,
+        safeAddress:
+          process.env.MATT_MINE_ARENA_SAFE_ADDRESS ||
+          RONIN_ARENA_DEPLOYMENT.treasurySafe,
+        emergencyPauserAddress:
+          process.env.MATT_MINE_ARENA_PAUSER_ADDRESS ||
+          RONIN_ARENA_DEPLOYMENT.emergencyPauser,
+        temporaryDeployerAddress:
+          process.env.MATT_MINE_ARENA_DEPLOYER_ADDRESS ||
+          RONIN_ARENA_DEPLOYMENT.temporaryDeployer,
+        requireEntriesPaused: !arenaLiveRequested,
         rpcUrl: process.env.RONIN_RPC_URL,
         confirmations: Number(process.env.MATT_MINE_PAYMENT_CONFIRMATIONS || 3)
       }),
       receiptSecret: arenaReceiptSecret,
       seedSecret: process.env.MATT_MINE_ARENA_SEED_SECRET || arenaReceiptSecret,
       safeAddress: process.env.MATT_MINE_ARENA_SAFE_ADDRESS || MATT_MINE_ADMIN_CONTRACTS.safe,
-      liveEnabled: process.env.MATT_MINE_ARENA_LIVE === 'true'
+      liveEnabled: arenaLiveRequested
     }).init()
   : null;
 const service = new MattMineService(database, {
@@ -76,11 +96,11 @@ const service = new MattMineService(database, {
 const server = createMattMineHttpServer({ root, service });
 
 server.listen(port, '0.0.0.0', () => {
-  console.log(`MATT Mine v1.8 running at http://localhost:${port}`);
+  console.log(`MATT Mine v1.9 running at http://localhost:${port}`);
   console.log(`Ranked wallet network: ${service.config().chainName} (${service.config().chainId})`);
   console.log(`Mainnet transaction mode: ${mainnetTransactionsEnabled ? 'ENABLED (real RON)' : 'disabled'}`);
   console.log(`Reward publication: ${rewardManager.publicationEnabled ? 'PILOT ENABLED' : 'DRY RUN'}`);
-  console.log(`Daily Arena: ${arenaEnabled ? `configured (${arenaContractAddress}); paid entry SECURITY-GATED pending input replay` : 'disabled until contract + receipt secret are configured'}`);
+  console.log(`Daily Arena: ${arenaEnabled ? `exact deployment pinned (${arenaContractAddress}); paid entry SECURITY-GATED pending input replay` : 'disabled until contract + receipt secret are configured'}`);
   console.log(`Server data: ${database.kind}${databaseUrl ? '' : ` (${dataFile})`}`);
 });
 

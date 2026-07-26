@@ -4,6 +4,7 @@ import {
   encodeFunctionData,
   getAddress,
   http,
+  keccak256,
   parseEventLogs
 } from 'viem';
 import { ronin } from 'viem/chains';
@@ -11,6 +12,20 @@ import { assertApi } from './errors.js';
 import { utcDayId } from './arena-settlement.js';
 
 const TRANSACTION_HASH_PATTERN = /^0x[a-fA-F0-9]{64}$/;
+const BYTES32_PATTERN = /^0x[a-fA-F0-9]{64}$/;
+
+export const RONIN_ARENA_DEPLOYMENT = Object.freeze({
+  chainId: 2020,
+  contract: '0x506f969279F8264fd629BBB0Df861Ab91343b12C',
+  runtimeCodeHash: '0xbe675f45747d267318291cad7295374ad5c65fa06063fe3b8cc111b8fa27453a',
+  mattToken: '0xa5450417BDCa0BDfB058ffE41205400FfDA1174d',
+  treasurySafe: '0xBacE355D23d378a6E1adD986E53a18Dd12E6EeAc',
+  emergencyPauser: '0x57Dc8DB3a263506a0344eC15B4C623EBb8E589F4',
+  temporaryDeployer: '0xeED0491B506C78EA7fD10988B1E98A3C88e1C630',
+  deploymentTransaction: '0x5808b7ca0a3006bd469ff63a7d89ff7137bf2108ae24561cd40bf90207dcfe32',
+  deploymentBlock: 58_792_525,
+  explorerUrl: 'https://explorer.roninchain.com/address/0x506f969279F8264fd629BBB0Df861Ab91343b12C?tab=contract'
+});
 
 export const ARENA_ERC20_ABI = [
   {
@@ -55,6 +70,58 @@ export const DAILY_ARENA_ABI = [
     name: 'settlementPaused',
     stateMutability: 'view',
     inputs: [],
+    outputs: [{ type: 'bool' }]
+  },
+  {
+    type: 'function',
+    name: 'seedTreasury',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }]
+  },
+  {
+    type: 'function',
+    name: 'DEFAULT_ADMIN_ROLE',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'bytes32' }]
+  },
+  {
+    type: 'function',
+    name: 'TREASURY_ROLE',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'bytes32' }]
+  },
+  {
+    type: 'function',
+    name: 'SETTLER_ROLE',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'bytes32' }]
+  },
+  {
+    type: 'function',
+    name: 'PRICER_ROLE',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'bytes32' }]
+  },
+  {
+    type: 'function',
+    name: 'PAUSER_ROLE',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'bytes32' }]
+  },
+  {
+    type: 'function',
+    name: 'hasRole',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'role', type: 'bytes32' },
+      { name: 'account', type: 'address' }
+    ],
     outputs: [{ type: 'bool' }]
   },
   {
@@ -174,11 +241,156 @@ export class RoninArenaChain {
     assertApi(options.contractAddress, 500, 'arena_contract_missing', 'The Daily Arena contract address is not configured.');
     this.contractAddress = getAddress(options.contractAddress);
     this.mattTokenAddress = getAddress(options.mattTokenAddress);
+    this.expectedContractAddress = options.expectedContractAddress
+      ? getAddress(options.expectedContractAddress)
+      : null;
+    this.runtimeCodeHash = String(options.runtimeCodeHash || '');
+    this.safeAddress = options.safeAddress ? getAddress(options.safeAddress) : null;
+    this.emergencyPauserAddress = options.emergencyPauserAddress
+      ? getAddress(options.emergencyPauserAddress)
+      : null;
+    this.temporaryDeployerAddress = options.temporaryDeployerAddress
+      ? getAddress(options.temporaryDeployerAddress)
+      : null;
+    this.requireEntriesPaused = options.requireEntriesPaused === true;
     this.confirmations = positiveInteger(options.confirmations, 3);
     this.receiptTimeoutMs = positiveInteger(options.receiptTimeoutMs, 120_000);
     this.client = options.client || createPublicClient({
       chain: ronin,
       transport: http(options.rpcUrl || 'https://api.roninchain.com/rpc')
+    });
+  }
+
+  async validateDeployment() {
+    assertApi(
+      !this.expectedContractAddress || this.contractAddress === this.expectedContractAddress,
+      500,
+      'arena_contract_address_mismatch',
+      'The configured Daily Arena address is not the approved exact-match deployment.'
+    );
+    assertApi(
+      BYTES32_PATTERN.test(this.runtimeCodeHash),
+      500,
+      'arena_code_hash_missing',
+      'The approved Daily Arena runtime code hash is not configured.'
+    );
+    assertApi(
+      this.safeAddress && this.emergencyPauserAddress && this.temporaryDeployerAddress,
+      500,
+      'arena_role_config_missing',
+      'The approved Arena Safe, emergency pauser, and temporary deployer are not configured.'
+    );
+
+    const code = await this.client.getCode({ address: this.contractAddress });
+    assertApi(
+      typeof code === 'string' && code !== '0x',
+      503,
+      'arena_contract_code_missing',
+      'No deployed code exists at the configured Daily Arena address.'
+    );
+    const runtimeCodeHash = keccak256(code);
+    assertApi(
+      runtimeCodeHash.toLowerCase() === this.runtimeCodeHash.toLowerCase(),
+      503,
+      'arena_contract_code_mismatch',
+      'The configured Daily Arena bytecode does not match the exact verified deployment.'
+    );
+
+    const [
+      mattToken,
+      seedTreasury,
+      entriesPaused,
+      settlementPaused,
+      defaultAdminRole,
+      treasuryRole,
+      settlerRole,
+      pricerRole,
+      pauserRole
+    ] = await Promise.all([
+      this.#read('matt'),
+      this.#read('seedTreasury'),
+      this.#read('entriesPaused'),
+      this.#read('settlementPaused'),
+      this.#read('DEFAULT_ADMIN_ROLE'),
+      this.#read('TREASURY_ROLE'),
+      this.#read('SETTLER_ROLE'),
+      this.#read('PRICER_ROLE'),
+      this.#read('PAUSER_ROLE')
+    ]);
+
+    assertApi(
+      sameAddress(mattToken, this.mattTokenAddress),
+      503,
+      'arena_matt_token_mismatch',
+      'The configured MATT token does not match the immutable Daily Arena token.'
+    );
+    assertApi(
+      sameAddress(seedTreasury, this.safeAddress),
+      503,
+      'arena_seed_treasury_mismatch',
+      'The Daily Arena seed Treasury is not the approved Safe.'
+    );
+
+    const expectedRoleChecks = await Promise.all([
+      this.#hasRole(defaultAdminRole, this.safeAddress),
+      this.#hasRole(treasuryRole, this.safeAddress),
+      this.#hasRole(settlerRole, this.safeAddress),
+      this.#hasRole(pricerRole, this.safeAddress),
+      this.#hasRole(pauserRole, this.emergencyPauserAddress)
+    ]);
+    assertApi(
+      expectedRoleChecks.every(Boolean),
+      503,
+      'arena_role_mismatch',
+      'One or more Daily Arena production roles are not assigned to the approved controller.'
+    );
+    const removedDeployerRoles = await Promise.all([
+      defaultAdminRole,
+      treasuryRole,
+      settlerRole,
+      pricerRole,
+      pauserRole
+    ].map((role) => this.#hasRole(role, this.temporaryDeployerAddress)));
+    assertApi(
+      removedDeployerRoles.every((assigned) => assigned === false),
+      503,
+      'arena_deployer_role_present',
+      'The temporary Arena deployer still holds a production role.'
+    );
+    assertApi(
+      !this.requireEntriesPaused || entriesPaused === true,
+      503,
+      'arena_entries_not_paused',
+      'Daily Arena entries must remain paused while production live mode is disabled.'
+    );
+
+    return {
+      pinned: true,
+      contract: this.contractAddress,
+      runtimeCodeHash,
+      mattToken: getAddress(mattToken),
+      treasurySafe: this.safeAddress,
+      emergencyPauser: this.emergencyPauserAddress,
+      temporaryDeployer: this.temporaryDeployerAddress,
+      entriesPaused: Boolean(entriesPaused),
+      settlementPaused: Boolean(settlementPaused)
+    };
+  }
+
+  #read(functionName) {
+    return this.client.readContract({
+      address: this.contractAddress,
+      abi: DAILY_ARENA_ABI,
+      functionName
+    });
+  }
+
+  #hasRole(role, account) {
+    return this.client.readContract({
+      address: this.contractAddress,
+      abi: DAILY_ARENA_ABI,
+      functionName: 'hasRole',
+      args: [role, account]
     });
   }
 
@@ -188,7 +400,8 @@ export class RoninArenaChain {
       contract: this.contractAddress,
       mattToken: this.mattTokenAddress,
       confirmations: this.confirmations,
-      explorerUrl: 'https://explorer.roninchain.com'
+      explorerUrl: 'https://explorer.roninchain.com',
+      exactMatchDeployment: this.expectedContractAddress === this.contractAddress
     };
   }
 

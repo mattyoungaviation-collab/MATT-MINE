@@ -121,6 +121,18 @@ test('Arena security preview remains configured but cannot be mistaken for live 
   assert.equal(config.transcriptVersion, 'matt-arena-transcript-v1');
 });
 
+test('Render pins the exact verified Arena deployment while paid entry remains disabled', () => {
+  const blueprint = fs.readFileSync(new URL('../render.yaml', import.meta.url), 'utf8');
+  assert.match(blueprint, /MATT_MINE_ARENA_CONTRACT_ADDRESS[\s\S]*0x506f969279F8264fd629BBB0Df861Ab91343b12C/);
+  assert.match(blueprint, /MATT_MINE_ARENA_RUNTIME_CODE_HASH[\s\S]*0xbe675f45747d267318291cad7295374ad5c65fa06063fe3b8cc111b8fa27453a/);
+  assert.match(blueprint, /MATT_MINE_ARENA_SAFE_ADDRESS[\s\S]*0xBacE355D23d378a6E1adD986E53a18Dd12E6EeAc/);
+  assert.match(blueprint, /MATT_MINE_ARENA_PAUSER_ADDRESS[\s\S]*0x57Dc8DB3a263506a0344eC15B4C623EBb8E589F4/);
+  assert.match(blueprint, /MATT_MINE_ARENA_DEPLOYER_ADDRESS[\s\S]*0xeED0491B506C78EA7fD10988B1E98A3C88e1C630/);
+  assert.match(blueprint, /MATT_MINE_ARENA_RECEIPT_SECRET\s*\n\s*generateValue: true/);
+  assert.match(blueprint, /MATT_MINE_ARENA_SEED_SECRET\s*\n\s*generateValue: true/);
+  assert.match(blueprint, /MATT_MINE_ARENA_LIVE\s*\n\s*value: "false"/);
+});
+
 test('Arena leaderboard derives an exact projected full-pool split when the server returns scores only', () => {
   const pool = 1_000_000n * MATT_SCALE;
   const board = normalizeArenaLeaderboard({
