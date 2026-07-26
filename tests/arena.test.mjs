@@ -693,6 +693,32 @@ test('stale active run from a prior UTC day expires before a new attempt consume
   assert.equal((await store.activeRun(PLAYER)).runId, started.run.runId);
 });
 
+test('abandoning a Daily Arena run consumes its entry but releases the active-run lock without a score', async () => {
+  const store = await new MemoryArenaStore().init();
+  await store.ensureDay(dayRecord({ chainStatus: 1, configurationState: 'confirmed' }));
+  await store.confirmEntry(entryRecord(1, HASH_A));
+  const arena = await new DailyArenaService({
+    store,
+    chain: fakeArenaAdapter(() => scheduledChainDay()),
+    receiptSecret: 'r'.repeat(64),
+    seedSecret: 's'.repeat(64),
+    safeAddress: SAFE,
+    liveEnabled: true,
+    now: () => Date.parse(`${DAY}T12:00:00Z`)
+  }).init();
+
+  const started = await arena.startRun(PLAYER);
+  const abandoned = await arena.abandonRun(PLAYER, {
+    runId: started.run.runId,
+    runToken: started.run.runToken
+  });
+  assert.equal(abandoned.abandoned, true);
+  assert.equal(abandoned.status, 'expired');
+  assert.equal(await store.activeRun(PLAYER), null);
+  assert.equal((await store.leaderboard(DAY)).rows.length, 0);
+  assert.equal((await store.unusedEntries(PLAYER, DAY)).length, 0);
+});
+
 test('paid entry, one-time run token, raw controls, server replay, and leaderboard finish end to end', async () => {
   const store = await new MemoryArenaStore().init();
   await store.ensureDay(dayRecord({ chainStatus: 1, configurationState: 'confirmed' }));

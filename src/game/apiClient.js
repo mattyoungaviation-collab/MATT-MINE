@@ -186,6 +186,14 @@ export class MattMineApiClient {
     });
   }
 
+  async abandonArenaRun(runId, runToken) {
+    return this.request('/api/arena/runs/abandon', {
+      method: 'POST',
+      authenticated: true,
+      body: { runId, runToken }
+    });
+  }
+
   async prepareArenaRefund(day = '') {
     return this.request('/api/arena/refunds/prepare', {
       method: 'POST',
@@ -208,6 +216,14 @@ export class MattMineApiClient {
       method: 'POST',
       authenticated: true,
       body: { runId, runToken, result }
+    });
+  }
+
+  async abandonRun(runId, runToken) {
+    return this.request('/api/runs/abandon', {
+      method: 'POST',
+      authenticated: true,
+      body: { runId, runToken }
     });
   }
 

@@ -18,6 +18,7 @@ export const stateMethods = {
       oreBroken: 0,
       crystals: 0,
       bossKilled: false,
+      bossReady: false,
       bossSpawned: false,
       elapsed: 0,
       runLevelUps: 0,
@@ -109,6 +110,7 @@ export const stateMethods = {
     this.activeLockedRoomId = null;
     this.run.crystals = 0;
     this.run.bossKilled = false;
+    this.run.bossReady = false;
     this.run.bossSpawned = false;
     this.lastRoomId = this.layout.startRoom.id;
     this.player.x = this.layout.startRoom.x;
@@ -321,14 +323,9 @@ export const stateMethods = {
     this.pickups = this.pickups.filter((pickup) => !pickup.collected);
 
     const goal = this.crystalGoal();
-    if (this.run.crystals >= goal && !this.run.bossSpawned) {
-      this.run.bossSpawned = true;
-      this.spawnEnemy(true);
-      const guardian = this.enemies.find((enemy) => enemy.isBoss);
-      if (guardian) guardian.awake = true;
-      const currentRoom = roomAt(this.layout, this.player.x, this.player.y);
-      if (currentRoom?.id === this.layout.guardianRoom.id) this.lockRoom(currentRoom);
-      this.hooks.onToast?.(`Guardian awakened in ${this.layout.guardianRoom.name}`);
+    if (this.run.crystals >= goal && !this.run.bossReady) {
+      this.run.bossReady = true;
+      this.hooks.onToast?.(`${this.layout.guardianRoom.name} unlocked`);
     }
     this.updateObjective();
   },
@@ -373,6 +370,22 @@ export const stateMethods = {
     this.audio.stopMusic();
     this.hooks.onMenu?.();
   },
+  abandonRun() {
+    if (!this.run || ['ended', 'menu'].includes(this.state)) return false;
+    const context = {
+      mode: this.runContext?.mode || 'practice',
+      elapsed: this.run.elapsed
+    };
+    this.runtimeError = null;
+    this.state = 'menu';
+    this.camera.shake = 0;
+    this.projectiles = [];
+    this.audio.stopBoss();
+    this.audio.stopMusic();
+    this.hooks.onRunAbandoned?.(context);
+    this.hooks.onMenu?.();
+    return true;
+  },
   updateObjective() {
     const goal = this.crystalGoal();
     let text;
@@ -387,7 +400,8 @@ export const stateMethods = {
         text = `Guardian phase ${phase} · ${remaining} threat${remaining === 1 ? '' : 's'} remaining`;
       } else text = `Room sealed · ${remaining} enem${remaining === 1 ? 'y' : 'ies'} remaining`;
     } else if (this.run.bossKilled) text = 'Return to the extraction lift';
-    else if (this.run.bossSpawned) text = `Enter the Guardian Vault and defeat the Guardian`;
+    else if (this.run.bossSpawned) text = 'Defeat the Guardian';
+    else if (this.run.bossReady) text = 'Enter the Guardian Vault';
     else text = `MATT crystals: ${this.run.crystals} / ${goal}`;
     this.hooks.onObjective?.(text);
   },

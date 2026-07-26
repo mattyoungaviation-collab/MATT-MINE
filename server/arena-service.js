@@ -417,6 +417,19 @@ export class DailyArenaService {
     };
   }
 
+  async abandonRun(address, payload) {
+    this.assertLive();
+    assertApi(payload && typeof payload === 'object' && !Array.isArray(payload), 400, 'arena_abandon_invalid', 'A Daily Arena abandonment request is required.');
+    const run = await this.#authenticatedRun(address, payload.runId, payload.runToken);
+    assertApi(run.status === 'active', 409, 'arena_run_not_active', 'The Daily Arena run is no longer active.');
+    const abandoned = await this.store.expireRun(run.runId, this.now());
+    return {
+      abandoned: true,
+      runId: abandoned.runId,
+      status: abandoned.status
+    };
+  }
+
   async leaderboard(dayInput, suspendedAddresses = []) {
     const timestamp = this.now();
     const day = normalizeDay(dayInput || '', timestamp);

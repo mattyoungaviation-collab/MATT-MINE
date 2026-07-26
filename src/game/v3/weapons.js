@@ -57,7 +57,7 @@ export const weaponsMethods = {
 
     const { target } = candidates[0];
     const critical = random() < this.player.critChance;
-    const damage = this.player.damage * (critical ? 2 : 1);
+    const damage = this.player.damage * CONFIG.pickaxeDamageScale * (critical ? 2 : 1);
     this.damageTarget(target, damage, critical, angleTo(this.player, target));
     this.run.attackCounter += 1;
 
@@ -90,7 +90,7 @@ export const weaponsMethods = {
       life: 0.68,
       travelled: 0,
       maxRange: CONFIG.dynamiteRange,
-      damage: this.player.damage * 1.8,
+      damage: CONFIG.dynamiteDamage,
       explosionRadius: 155,
       color: '#ffb342'
     });

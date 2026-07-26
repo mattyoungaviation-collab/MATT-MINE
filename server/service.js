@@ -675,6 +675,32 @@ export class MattMineService {
     };
   }
 
+  async abandonRun(token, payload) {
+    const session = await this.authenticate(token);
+    assertApi(payload && typeof payload === 'object' && !Array.isArray(payload), 400, 'invalid_run_abandonment', 'A run abandonment request is required.');
+    const runId = typeof payload.runId === 'string' ? payload.runId : '';
+    const runToken = typeof payload.runToken === 'string' ? payload.runToken : '';
+    assertApi(/^run_[a-f0-9]{24}$/.test(runId), 400, 'invalid_run_id', 'The run identifier is invalid.');
+    assertApi(/^[a-f0-9]{48}$/.test(runToken), 400, 'invalid_run_token', 'The run token is invalid.');
+    const timestamp = this.now();
+    return this.database.transact(async (state, transaction) => {
+      const run = state.runs[runId];
+      assertApi(run, 404, 'run_not_found', 'The server run was not found.');
+      assertApi(run.address === session.address, 403, 'run_owner_mismatch', 'This run belongs to another wallet.');
+      assertApi(run.status === 'active', 409, 'run_not_active', 'This run is no longer active.');
+      assertApi(safeTokenEqual(run.tokenHash, hashToken(runToken)), 401, 'run_token_rejected', 'The run token is invalid.');
+      run.status = 'expired';
+      run.finishedAt = timestamp;
+      run.result = null;
+      await transaction?.upsertRun(run);
+      addAudit(state, session.address, 'SERVER_RUN_ABANDONED', `${run.mode} ${runId}`, timestamp);
+      return {
+        abandoned: true,
+        run: publicRun(run)
+      };
+    });
+  }
+
   async leaderboard(token, mode, timestamp = this.now(), requestedWeek = '') {
     const session = await this.authenticate(token);
     const normalizedMode = String(mode || '');
@@ -999,6 +1025,11 @@ export class MattMineService {
       ...result,
       leaderboard: enrichLeaderboardAppearances(result.leaderboard, state)
     };
+  }
+
+  async abandonArenaRun(token, payload) {
+    const { session } = await this.arenaPlayer(token);
+    return this.arenaService.abandonRun(session.address, payload);
   }
 
   async arenaLeaderboard(day = '') {

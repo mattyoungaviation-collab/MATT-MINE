@@ -1,8 +1,12 @@
 import { TAU, roundRect } from './drawHelpers.js';
 import { imageIsReady } from './visualAssets.js';
 
-const MATT_DYNO_FRAME_COUNT = 6;
 const MATT_DYNO_WALK_FRAMES = 4;
+const MATT_DYNO_FRAME_WIDTH = 120;
+const MATT_DYNO_FRAME_HEIGHT = 241;
+const MATT_DYNO_SHEET_EDGE = 2;
+const MATT_DYNO_DRAW_WIDTH = 108;
+const MATT_DYNO_DRAW_HEIGHT = 180;
 
 export const renderPlayerMethods = {
   drawPlayer(ctx) {
@@ -61,11 +65,11 @@ export const renderPlayerMethods = {
         : moving
           ? 1 + Math.floor(this.run.elapsed * (player.dashTimer > 0 ? 14 : 8)) % MATT_DYNO_WALK_FRAMES
           : 0;
-      const frameWidth = mattDyno.naturalWidth / MATT_DYNO_FRAME_COUNT;
       const usesVerticalSheet = verticalFacing && mattDyno === verticalAssets[player.weapon];
-      const frameHeight = usesVerticalSheet
+      const frameWidth = Math.min(MATT_DYNO_FRAME_WIDTH, mattDyno.naturalWidth);
+      const frameHeight = Math.min(MATT_DYNO_FRAME_HEIGHT, usesVerticalSheet
         ? mattDyno.naturalHeight / 2
-        : mattDyno.naturalHeight;
+        : mattDyno.naturalHeight);
       const frameRow = usesVerticalSheet && Math.sin(visualAngle) < 0 ? 1 : 0;
       const breathing = moving ? 1 : 1 + Math.sin(this.run.elapsed * 3.4) * 0.018;
       const stepBob = moving
@@ -101,14 +105,17 @@ export const renderPlayerMethods = {
             : 'none';
       ctx.drawImage(
         mattDyno,
-        frame * frameWidth,
+        Math.min(
+          MATT_DYNO_SHEET_EDGE + frame * MATT_DYNO_FRAME_WIDTH,
+          Math.max(0, mattDyno.naturalWidth - frameWidth)
+        ),
         frameRow * frameHeight,
         frameWidth,
         frameHeight,
-        -63,
-        -148,
-        126,
-        210
+        -MATT_DYNO_DRAW_WIDTH / 2,
+        -127,
+        MATT_DYNO_DRAW_WIDTH,
+        MATT_DYNO_DRAW_HEIGHT
       );
       ctx.restore();
       ctx.restore();
