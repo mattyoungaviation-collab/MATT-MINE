@@ -86,34 +86,8 @@
                 </div>
                 <b id="launch-live-status">SERVER ONLINE</b>
               </div>
-              <div class="mine-route-map compact-map" role="img" aria-label="Today's seven-room mine route">
-                <svg viewBox="0 0 520 210" role="img" aria-hidden="true">
-                  <path class="mine-route-shadow" d="M54 112 L130 68 L212 108 L292 58 L372 105 L454 70" />
-                  <path class="mine-route-shadow" d="M212 108 L288 160 L372 105" />
-                  <path class="mine-route-main" d="M54 112 L130 68 L212 108 L292 58 L372 105 L454 70" />
-                  <path class="mine-route-branch" d="M212 108 L288 160 L372 105" />
-                  <g class="mine-room lift-room" transform="translate(22 86)">
-                    <rect width="64" height="52" rx="12" /><text x="32" y="31">LIFT</text>
-                  </g>
-                  <g class="mine-room fight-room" transform="translate(98 42)">
-                    <rect width="64" height="52" rx="12" /><text x="32" y="31">FIGHT</text>
-                  </g>
-                  <g class="mine-room ore-room" transform="translate(180 82)">
-                    <rect width="64" height="52" rx="12" /><text x="32" y="31">ORE</text>
-                  </g>
-                  <g class="mine-room cache-room" transform="translate(260 32)">
-                    <rect width="64" height="52" rx="12" /><text x="32" y="31">CACHE</text>
-                  </g>
-                  <g class="mine-room deep-room" transform="translate(256 134)">
-                    <rect width="64" height="52" rx="12" /><text x="32" y="31">DEEP</text>
-                  </g>
-                  <g class="mine-room boss-room" transform="translate(338 79)">
-                    <rect width="68" height="56" rx="13" /><text x="34" y="33">BOSS</text>
-                  </g>
-                  <g class="mine-room exit-room" transform="translate(422 44)">
-                    <rect width="64" height="52" rx="12" /><text x="32" y="31">EXIT</text>
-                  </g>
-                </svg>
+              <div class="mine-route-map compact-map" role="img" aria-label="Actual top-down preview of today's Free Daily Mine">
+                <canvas data-daily-mine-preview width="520" height="210" aria-hidden="true"></canvas>
               </div>
               <div class="launch-daily-stats">
                 <div><span>FREE RUN</span><strong id="launch-free-status">READY</strong></div>
@@ -338,37 +312,11 @@
 
           <div class="menu-mine-overview">
             <div class="menu-map-heading">
-              <span><b>TODAY'S MINE MAP</b><small>7 rooms → beat the boss → find the exit</small></span>
-              <em>SAME MAP FOR RANKED PLAYERS</em>
+              <span><b>ACTUAL FREE DAILY MAP</b><small>7 rooms → beat the boss → return to the lift</small></span>
+              <em>SAME FREE MAP FOR EVERY RANKED PLAYER</em>
             </div>
-            <div class="mine-route-map" role="img" aria-label="Today's seven-room mine route">
-              <svg viewBox="0 0 520 210" role="img" aria-hidden="true">
-                <path class="mine-route-shadow" d="M54 112 L130 68 L212 108 L292 58 L372 105 L454 70" />
-                <path class="mine-route-shadow" d="M212 108 L288 160 L372 105" />
-                <path class="mine-route-main" d="M54 112 L130 68 L212 108 L292 58 L372 105 L454 70" />
-                <path class="mine-route-branch" d="M212 108 L288 160 L372 105" />
-                <g class="mine-room lift-room" transform="translate(22 86)">
-                  <rect width="64" height="52" rx="12" /><text x="32" y="31">LIFT</text>
-                </g>
-                <g class="mine-room fight-room" transform="translate(98 42)">
-                  <rect width="64" height="52" rx="12" /><text x="32" y="31">FIGHT</text>
-                </g>
-                <g class="mine-room ore-room" transform="translate(180 82)">
-                  <rect width="64" height="52" rx="12" /><text x="32" y="31">ORE</text>
-                </g>
-                <g class="mine-room cache-room" transform="translate(260 32)">
-                  <rect width="64" height="52" rx="12" /><text x="32" y="31">CACHE</text>
-                </g>
-                <g class="mine-room deep-room" transform="translate(256 134)">
-                  <rect width="64" height="52" rx="12" /><text x="32" y="31">DEEP</text>
-                </g>
-                <g class="mine-room boss-room" transform="translate(338 79)">
-                  <rect width="68" height="56" rx="13" /><text x="34" y="33">BOSS</text>
-                </g>
-                <g class="mine-room exit-room" transform="translate(422 44)">
-                  <rect width="64" height="52" rx="12" /><text x="32" y="31">EXIT</text>
-                </g>
-              </svg>
+            <div class="mine-route-map" role="img" aria-label="Actual top-down preview of today's Free Daily Mine">
+              <canvas data-daily-mine-preview width="1100" height="280" aria-hidden="true"></canvas>
             </div>
           </div>
 

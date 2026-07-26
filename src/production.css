@@ -103,99 +103,23 @@ button,
     radial-gradient(ellipse at center, transparent 50%, rgba(1, 3, 7, 0.62) 100%);
 }
 
-.mine-route-map svg {
+.mine-route-map svg,
+.mine-route-map canvas {
   position: relative;
   z-index: 1;
   width: 100%;
   height: 100%;
   min-height: inherit;
   display: block;
+}
+
+.mine-route-map svg {
   filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.5));
 }
 
-.mine-route-shadow,
-.mine-route-main,
-.mine-route-branch {
-  fill: none;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.mine-route-shadow {
-  stroke: rgba(0, 0, 0, 0.72);
-  stroke-width: 12;
-}
-
-.mine-route-main {
-  stroke: rgba(244, 197, 66, 0.62);
-  stroke-width: 4;
-}
-
-.mine-route-branch {
-  stroke: rgba(124, 205, 238, 0.38);
-  stroke-width: 3;
-  stroke-dasharray: 7 7;
-}
-
-.mine-room rect {
-  fill: #171d27;
-  stroke: rgba(255, 255, 255, 0.22);
-  stroke-width: 2;
-}
-
-.mine-room text {
-  fill: #c4cad4;
-  font: 900 11px/1 Inter, ui-sans-serif, system-ui, sans-serif;
-  letter-spacing: 0.055em;
-  text-anchor: middle;
-}
-
-.mine-room.lift-room rect,
-.mine-room.exit-room rect {
-  fill: #2c2512;
-  stroke: #f4c542;
-}
-
-.mine-room.lift-room text,
-.mine-room.exit-room text {
-  fill: #ffe784;
-}
-
-.mine-room.ore-room rect {
-  fill: #102832;
-  stroke: #62cfe9;
-}
-
-.mine-room.ore-room text {
-  fill: #91e7fa;
-}
-
-.mine-room.cache-room rect {
-  fill: #2d2111;
-  stroke: #d99132;
-}
-
-.mine-room.cache-room text {
-  fill: #f5bd69;
-}
-
-.mine-room.deep-room rect {
-  fill: #14231c;
-  stroke: #66be88;
-}
-
-.mine-room.deep-room text {
-  fill: #93e1ab;
-}
-
-.mine-room.boss-room rect {
-  fill: #25163b;
-  stroke: #a86cff;
-  filter: drop-shadow(0 0 12px rgba(157, 91, 255, 0.55));
-}
-
-.mine-room.boss-room text {
-  fill: #d8bcff;
+.mine-route-map canvas {
+  object-fit: cover;
+  image-rendering: auto;
 }
 
 .compact-map {

@@ -225,9 +225,9 @@ test('production run selection has four clear lobbies, a full mine map, and offi
   assert.match(html, /MATT ARENA/);
   assert.match(html, /PRACTICE MINE/);
   assert.equal((html.match(/class="lobby-number"/g) || []).length, 4);
-  assert.match(html, /TODAY'S MINE MAP/);
-  assert.match(html, /7 rooms → beat the boss → find the exit/);
-  assert.equal((html.match(/class="mine-room /g) || []).length, 14);
+  assert.match(html, /ACTUAL FREE DAILY MAP/);
+  assert.match(html, /7 rooms → beat the boss → return to the lift/);
+  assert.equal((html.match(/data-daily-mine-preview/g) || []).length, 2);
   assert.match(html, /ronin-mark-official\.png/);
   assert.match(html, /BUILT ON RONIN/);
   assert.ok(roninLogo.size > 1_000);
