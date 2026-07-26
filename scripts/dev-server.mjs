@@ -100,7 +100,9 @@ server.listen(port, '0.0.0.0', () => {
   console.log(`Ranked wallet network: ${service.config().chainName} (${service.config().chainId})`);
   console.log(`Mainnet transaction mode: ${mainnetTransactionsEnabled ? 'ENABLED (real RON)' : 'disabled'}`);
   console.log(`Reward publication: ${rewardManager.publicationEnabled ? 'PILOT ENABLED' : 'DRY RUN'}`);
-  console.log(`Daily Arena: ${arenaEnabled ? `exact deployment pinned (${arenaContractAddress}); paid entry SECURITY-GATED pending input replay` : 'disabled until contract + receipt secret are configured'}`);
+  console.log(`Daily Arena: ${arenaEnabled
+    ? `exact deployment pinned (${arenaContractAddress}); deterministic replay ${arenaLiveRequested ? 'LIVE' : 'ready, live mode disabled'}`
+    : 'disabled until contract + receipt secret are configured'}`);
   console.log(`Server data: ${database.kind}${databaseUrl ? '' : ` (${dataFile})`}`);
 });
 
