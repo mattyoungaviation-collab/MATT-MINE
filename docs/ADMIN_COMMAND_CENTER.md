@@ -28,7 +28,9 @@ The command center cannot:
 - Exceed the hard 5,000,000 MATT per-board reward ceiling
 - Store a private key, sign a Ronin transaction, or bypass a contract role
 
-Contract controls produce reviewable transaction JSON only. The transaction must be signed by the correct role wallet or the 2-of-3 MATT Mine Treasury Safe.
+Contract controls that require the Treasury Safe produce a downloadable Safe Transaction Builder `.json` file. Download it, open the Transaction Builder in the MATT Mine Treasury Safe, and drag the file into the builder. The file includes Ronin chain ID 2020, the Treasury Safe address, the destination, value, calldata, metadata, and checksum. Review every field before creating and signing the Safe transaction.
+
+Actions assigned to a separate role wallet do not produce a Safe file. The command center labels those actions with the exact required signer and provides their raw transaction JSON instead.
 
 ## Key handling
 

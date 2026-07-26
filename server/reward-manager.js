@@ -2,6 +2,8 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { getAddress } from 'viem';
 import { HARD_MAX_BOARD_MATT } from './constants.js';
 import { ApiError, assertApi } from './errors.js';
+import { MATT_MINE_ADMIN_CONTRACTS } from './admin-controls.js';
+import { createSafeTransactionBuilderFile } from './safe-transaction-builder.js';
 import {
   createRewardPlan,
   normalizeRewardMode,
@@ -59,6 +61,13 @@ export class RewardManager {
     const draft = await this.requireDraft(id);
     const publication = await this.chain.publicationTransactions(draft);
     const transactions = Array.isArray(publication) ? publication : publication.transactions;
+    const safeTransactionBuilderFile = createSafeTransactionBuilderFile(transactions, {
+      chainId: 2020,
+      createdAt: this.now(),
+      safeAddress: MATT_MINE_ADMIN_CONTRACTS.safe,
+      name: `MATT Mine rewards: ${draft.id}`,
+      description: `Fund and publish the independently approved ${draft.mode} reward epoch.`
+    });
     return {
       draft,
       broadcastReady: this.publicationEnabled,
@@ -66,6 +75,8 @@ export class RewardManager {
         ? `Pilot publication is enabled and capped at ${this.maxBoardMatt.toLocaleString('en-US')} MATT per board.`
         : 'DRY RUN: publication is disabled. These Safe transactions are previews and should not be executed.',
       [this.publicationEnabled ? 'safeTransactions' : 'safeTransactionPreview']: transactions,
+      safeTransactionBuilderFile,
+      safeFileName: `matt-mine-${draft.id}-safe.json`,
       ...(publication?.vault ? { vault: publication.vault } : {})
     };
   }

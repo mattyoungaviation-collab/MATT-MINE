@@ -15,6 +15,7 @@ import { ApiError, assertApi } from './errors.js';
 import { MATT_MINE_LAUNCH_PRICES } from './payment-verifier.js';
 import { defaultWalletState } from './state.js';
 import {
+  createAdminSafeTransactionFile,
   listAdminContractActions,
   MATT_MINE_ADMIN_CONTRACTS,
   prepareAdminContractTransaction
@@ -693,7 +694,12 @@ export class MattMineService {
     await this.database.transact((state) => {
       addAudit(state, 'SERVER_ADMIN', 'CONTRACT_TRANSACTION_PREPARED', `${transaction.action}: ${normalizedReason}`, timestamp);
     });
-    return { transaction, reason: normalizedReason };
+    return {
+      transaction,
+      safeTransactionBuilderFile: createAdminSafeTransactionFile(transaction, timestamp),
+      safeFileName: `matt-mine-${transaction.action}-${new Date(timestamp).toISOString().replace(/[:.]/g, '-')}.json`,
+      reason: normalizedReason
+    };
   }
 
   async authenticate(token) {

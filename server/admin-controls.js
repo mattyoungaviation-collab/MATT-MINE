@@ -1,6 +1,7 @@
 import { encodeFunctionData, getAddress, parseEther, parseUnits } from 'viem';
 import { ApiError, assertApi } from './errors.js';
 import { RONIN_PAYMENT_CONTRACTS } from './payment-verifier.js';
+import { createSafeTransactionBuilderFile } from './safe-transaction-builder.js';
 
 export const MATT_MINE_ADMIN_CONTRACTS = Object.freeze({
   ...RONIN_PAYMENT_CONTRACTS,
@@ -173,6 +174,17 @@ export function prepareAdminContractTransaction(input = {}) {
     broadcast: false,
     warning: 'Prepared only. Review the destination, calldata, signer role, and current contract state before signing.'
   };
+}
+
+export function createAdminSafeTransactionFile(transaction, createdAt = Date.now()) {
+  if (!transaction.requiredSigner.includes('Safe')) return null;
+  return createSafeTransactionBuilderFile(transaction, {
+    chainId: transaction.chainId,
+    createdAt,
+    safeAddress: transaction.safeAddress,
+    name: `MATT Mine: ${transaction.action}`,
+    description: `Prepared by the MATT Mine Command Center for ${transaction.requiredSigner}.`
+  });
 }
 
 function action(contract, abi, functionName, requiredSigner, argumentTypes, mapArgs = null) {
