@@ -1,4 +1,5 @@
 import { CONFIG } from '../config.js';
+import { segmentInLayout } from '../layout.js';
 import { angleTo, distance } from '../utils.js';
 
 const TAU = Math.PI * 2;
@@ -8,7 +9,17 @@ export const guardianAttackMethods = {
     this.camera.shake = 15;
     this.audio.play('boom');
     this.tracers.push({ x1: enemy.x, y1: enemy.y, x2: enemy.x, y2: enemy.y, radius, color: '#d86cff', life: 0.42, maxLife: 0.42, ring: true });
-    if (distance(enemy, this.player) < radius + this.player.radius) this.damagePlayer(damage, angleTo(enemy, this.player));
+    const playerIsExposed = segmentInLayout(
+      this.layout,
+      enemy.x,
+      enemy.y,
+      this.player.x,
+      this.player.y,
+      Math.min(6, this.player.radius * 0.2)
+    );
+    if (playerIsExposed && distance(enemy, this.player) < radius + this.player.radius) {
+      this.damagePlayer(damage, angleTo(enemy, this.player));
+    }
   },
   fireEnemyVolley(enemy, count, spread, speed, radial = false) {
     const predictedPlayer = {
