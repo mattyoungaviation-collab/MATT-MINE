@@ -9,6 +9,7 @@ export class InputController {
     this.mobileMove = { x: 0, y: 0 };
     this.mobileAttack = false;
     this.mobileDashQueued = false;
+    this.mobileWeaponQueued = null;
     this.joystickPointerId = null;
     this.bindKeyboard();
     this.bindPointer();
@@ -30,6 +31,7 @@ export class InputController {
       this.pointer.down = false;
       this.mobileAttack = false;
       this.mobileDashQueued = false;
+      this.mobileWeaponQueued = null;
     });
   }
 
@@ -103,6 +105,13 @@ export class InputController {
     attack.addEventListener('touchend', setAttack(false), { passive: false });
     attack.addEventListener('touchcancel', setAttack(false), { passive: false });
 
+    for (const button of document.querySelectorAll('.weapon-button')) {
+      button.addEventListener('touchstart', (event) => {
+        this.mobileWeaponQueued = button.dataset.weapon || null;
+        event.preventDefault();
+      }, { passive: false });
+    }
+
     if (dash) {
       dash.addEventListener('touchstart', (event) => {
         this.mobileDashQueued = true;
@@ -126,6 +135,37 @@ export class InputController {
 
   attacking() {
     return this.pointer.down || this.mobileAttack || this.keys.has('Space');
+  }
+
+  reset() {
+    this.keys.clear();
+    this.pressed.clear();
+    this.pointer.down = false;
+    this.mobileMove.x = 0;
+    this.mobileMove.y = 0;
+    this.mobileAttack = false;
+    this.mobileDashQueued = false;
+    this.mobileWeaponQueued = null;
+    this.joystickPointerId = null;
+  }
+
+  consumeWeaponSelection() {
+    let selected = this.mobileWeaponQueued;
+    this.mobileWeaponQueued = null;
+    const bindings = [
+      ['Digit1', 'pickaxe'],
+      ['Numpad1', 'pickaxe'],
+      ['Digit2', 'dynamite'],
+      ['Numpad2', 'dynamite'],
+      ['Digit3', 'blaster'],
+      ['Numpad3', 'blaster']
+    ];
+    for (const [code, weapon] of bindings) {
+      if (!this.pressed.has(code)) continue;
+      selected = weapon;
+      this.pressed.delete(code);
+    }
+    return selected;
   }
 
   consumeDash() {

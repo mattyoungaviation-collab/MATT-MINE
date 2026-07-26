@@ -28,9 +28,11 @@ export class MattMineGame {
     this.layout = null;
     this.decor = [];
     this.lastRoomId = null;
+    this.runtimeError = null;
+    this.frameHandle = null;
     this.resize();
     window.addEventListener('resize', () => this.resize());
-    requestAnimationFrame((time) => this.loop(time));
+    this.frameHandle = requestAnimationFrame((time) => this.loop(time));
   }
 
   resize() {
@@ -52,6 +54,7 @@ export class MattMineGame {
   }
 
   startRun() {
+    this.runtimeError = null;
     const meta = this.profile.meta;
     const maxHealth = CONFIG.basePlayerHealth + meta.health * 8;
     this.run = {
@@ -275,11 +278,63 @@ export class MattMineGame {
   }
 
   loop(time) {
-    const dt = Math.min((time - this.lastTime) / 1000, 0.033);
-    this.lastTime = time;
-    if (this.state === 'playing') this.update(dt);
-    this.render();
-    requestAnimationFrame((next) => this.loop(next));
+    const nextTime = Number.isFinite(time) ? time : performance.now();
+    const elapsed = (nextTime - this.lastTime) / 1000;
+    const dt = Number.isFinite(elapsed) ? clamp(elapsed, 0, 0.033) : 0;
+    this.lastTime = nextTime;
+
+    try {
+      if (this.runtimeError) this.renderRuntimeError();
+      else {
+        if (this.state === 'playing') this.update(dt);
+        this.render();
+      }
+    } catch (error) {
+      this.handleRuntimeError(error);
+      this.renderRuntimeError();
+    } finally {
+      this.frameHandle = requestAnimationFrame((next) => this.loop(next));
+    }
+  }
+
+  handleRuntimeError(error) {
+    if (this.runtimeError) return this.runtimeError;
+    const resolved = error instanceof Error ? error : new Error(String(error || 'Unknown game error'));
+    this.runtimeError = {
+      message: resolved.message || 'Unknown game error',
+      stack: resolved.stack || '',
+      timestamp: Date.now()
+    };
+    this.state = 'runtime-error';
+    this.input.reset?.();
+    this.audio?.stopBoss?.();
+    console.error('[MATT Mine] The run was stopped safely after a runtime error.', resolved);
+    try {
+      this.hooks.onFatalError?.({ ...this.runtimeError });
+    } catch (hookError) {
+      console.error('[MATT Mine] The fatal-error UI hook also failed.', hookError);
+    }
+    return this.runtimeError;
+  }
+
+  renderRuntimeError() {
+    try {
+      const ctx = this.ctx;
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.fillStyle = '#100d18';
+      ctx.fillRect(0, 0, this.viewportWidth || CONFIG.width, this.viewportHeight || CONFIG.height);
+      ctx.fillStyle = '#ffcf73';
+      ctx.font = '700 28px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('RUN PAUSED SAFELY', (this.viewportWidth || CONFIG.width) / 2, (this.viewportHeight || CONFIG.height) / 2 - 12);
+      ctx.fillStyle = '#f4e9ff';
+      ctx.font = '16px system-ui, sans-serif';
+      ctx.fillText('Return to the menu and start a new run.', (this.viewportWidth || CONFIG.width) / 2, (this.viewportHeight || CONFIG.height) / 2 + 24);
+      ctx.restore();
+    } catch {
+      // Keep scheduling frames even if the canvas itself is unavailable.
+    }
   }
 
   update(dt) {
@@ -742,6 +797,7 @@ export class MattMineGame {
   }
 
   backToMenu() {
+    this.runtimeError = null;
     this.state = 'menu';
     this.hooks.onMenu?.();
   }

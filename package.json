@@ -1,15 +1,30 @@
 {
   "name": "matt-mine",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Standalone procedural action-roguelite prototype for MATT Mine.",
+  "workspaces": [
+    "contracts"
+  ],
+  "description": "Standalone MATT Mine action roguelite with Ronin Mainnet authentication, verified competition, live payments, and production persistence.",
   "scripts": {
     "dev": "node scripts/dev-server.mjs",
     "start": "node scripts/dev-server.mjs",
-    "test": "node --test"
+    "test": "npm run test:game && npm run test:contracts",
+    "test:game": "node --test \"tests/*.test.mjs\"",
+    "test:contracts": "npm --workspace contracts test",
+    "contracts:compile": "npm --workspace contracts run compile",
+    "contracts:validate:ronin": "npm --workspace contracts run validate:ronin",
+    "contracts:check-deployment:ronin": "npm --workspace contracts run check-deployment:ronin",
+    "contracts:check-deployer:ronin": "npm --workspace contracts run check-deployer:ronin",
+    "contracts:deploy:ronin": "npm --workspace contracts run deploy:ronin",
+    "contracts:verify:ronin": "npm --workspace contracts run verify:ronin"
   },
   "engines": {
     "node": ">=20"
+  },
+  "dependencies": {
+    "pg": "8.16.3",
+    "viem": "2.55.8"
   }
 }

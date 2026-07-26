@@ -2,80 +2,152 @@
 
 **Dig deep. Fight hard. Get out alive.**
 
-MATT Mine is a standalone browser action roguelite built in a separate Git repository so its gameplay can be tested before merging into MATT Token Live.
+MATT Mine is a standalone browser action roguelite and daily Web3 competition on Ronin. It has its own launch website, wallet identity, separate Free and Pass leaderboards, live Pass and paid-run payments, verified contracts, and a production persistence path independent from MATT Hub.
 
-## v0.2 playable loop
+## v1.0 standalone launch
 
-- Explore a newly generated network of seven connected mine chambers every depth.
-- Discover dedicated mining rooms, combat rooms, a treasure cache, the Guardian Vault, and the Lift Station.
-- Mine stone, copper, gold, glowing rich veins, and rare MATT crystals.
-- Fight slimes, bats, crawlers, and the Mine Guardian.
-- Move with acceleration and momentum instead of instant start and stop movement.
-- Dash through danger with temporary invulnerability and a visible recharge meter.
-- Knock enemies backward and see damage numbers, health bars, hit flashes, debris, and screen shake.
-- Watch ore deposits visibly crack as they take damage.
-- Gain XP and build a run using twelve upgrades, including Pocket Dynamite, Mining Drones, Blast Boots, and Prospector Luck.
-- Collect the required MATT crystals to awaken the Guardian in the far-side vault.
-- Defeat the Guardian, return to the entrance lift, and extract or descend for a larger multiplier.
-- Keep all projected loot when extracting, or only 35% after being knocked out.
-- Spend banked nuggets on permanent browser-saved upgrades.
+- Add a complete standalone MATT Mine website with original hero artwork, responsive sections, gameplay explanation, Free/Pass comparison, economy flow, roadmap, verified-contract directory, and launch disclosures.
+- Keep the playable action roguelite inside the same fast, dependency-light application.
+- Make the public site the default screen while preserving direct access to Practice, run selection, leaderboards, Pass, upgrades, and wallet login.
+- Hide local admin test controls automatically outside localhost.
+- Read the approved 95 RON Pass and 10 RON paid-run prices through a public, read-only server route before wallet sign-in.
+- Move production state to PostgreSQL when `DATABASE_URL` is configured while retaining JSON storage for local development.
+- Serialize state changes inside PostgreSQL transactions so receipt confirmation and paid-run credit consumption remain atomic.
+- Add production health reporting, safer proxy-origin detection, asset caching, Render Blueprint configuration, and a container build.
+- Keep MATT reward claims disabled until competition moderation and reward publication are ready.
+
+## v0.9 live Pass and paid-run integration
+
+- Connect the verified Ronin Mainnet Pass and Paid Runs contracts to Ronin Wallet.
+- Keep real transactions off by default behind an explicit server environment switch.
+- Read current Pass status, contract prices, pause state, and daily purchase count directly from Ronin.
+- Build every transaction server-side against the approved contract addresses.
+- Fetch a fresh Katana quote with 5% slippage protection and a five-minute deadline.
+- Require the server to verify the successful transaction, wallet, contract, function call, and `PaidRunPurchased` event.
+- Store each confirmed purchase as a one-time server entitlement that cannot be replayed.
+- Require an active onchain Pass when a paid ranked run starts.
+- Count only the best paid score from each UTC day on the separate Pass leaderboard.
+- Keep MATT claims disabled.
+
+## v0.8 production contract release
+
+- Add non-upgradeable Pass, paid-run, swap, and reward contracts for Ronin Mainnet.
+- Use the existing fixed-supply MATT token; no replacement token and no burn.
+- Fix paid-run swaps to the approved Katana WRON → MATT route with minimum-output and deadline protection.
+- Route pass RON 50/30/20 and paid-run MATT 70/20/10.
+- Publish separate Free and Pass reward epochs with duplicate-claim and active-allocation protection.
+- Require a deployed contract-admin multisig and separate routine roles.
+- Deploy conventionally with no CREATE2 vanity salt, proxy, or timelock.
+- Validate Ronin protocol addresses onchain before deployment.
+- Store the temporary deployment key in Hardhat's encrypted keystore.
+- Checkpoint deployments, remove the temporary executor admin, and verify all source through Sourcify v2 on Ronin chain 2020.
+- Deploy and exact-match verify all four contracts, then validate their roles, destinations, prices, limits, and empty starting balances.
+
+## v0.7 Ronin Mainnet readiness
+
+- Lock wallet authentication to Ronin Mainnet chain `2020`.
+- Remove the testnet runtime path and network configuration.
+- Automatically request a switch to Ronin Mainnet before requesting the login signature.
+- Keep the login message non-transactional: signing does not spend RON or MATT.
+- Expose an explicit server safety flag showing that Mainnet transactions remain disabled.
+- Keep paid runs, Pass purchases, RON-to-MATT swaps, and MATT claims disabled.
+
+## v0.6 Ronin identity and verified competition
+
+- Connect through the injected Ronin Wallet provider.
+- Authenticate with a short-lived, one-use sign-in challenge bound to the wallet, chain, and website origin.
+- Keep raw session tokens in session storage only and persist only their server-side hashes.
+- Store profiles, entitlements, runs, suspensions, scores, and audit events on the server.
+- Issue opaque, one-use run tokens for ranked Free and connected Practice runs.
+- Enforce one Free ranked run per wallet per UTC day on the server.
+- Reject reused, expired, mismatched, malformed, and structurally impossible run submissions.
+- Keep Free leaderboard totals server-backed and separated from local sandbox Pass data.
+- Recover safely from a corrupt server data file by quarantining it and creating a validated store.
+- Preserve Practice access for suspended wallets while blocking their ranked access.
+- Keep paid runs, RON swaps, and real MATT claims deliberately disabled.
+
+## v0.5 resilience and stress testing
+
+- Keep the animation loop alive after an unexpected update or render error and return the player to a safe menu state.
+- Clear held keyboard, pointer, and mobile inputs when a run stops unexpectedly.
+- Repair corrupt or malformed profile and economy saves with validated defaults.
+- Cover the Pickaxe, Pocket Dynamite, Crystal Blaster, enemy projectile, wall collision, and expired-projectile paths with regression tests.
+- Keep Free and Pass leaderboard totals separate and count only the best score from each day.
+- Credit knocked-out ranked runs only for secured, banked nuggets rather than projected extraction loot.
+- Block suspended wallets from ranked access, paid-run purchases, and ranked score submission while preserving Practice mode.
+- Reject unknown settings, malformed values, and cross-role changes in the local admin controls.
+
+## v0.4 playable economy
+
+- Choose between Free Ranked, Pass Ranked, and unlimited Practice runs.
+- Receive one official Free Leaderboard attempt per wallet every UTC day.
+- Activate a simulated 30-day MATT Mine Pass priced in administrator-configured RON.
+- Purchase simulated paid-run credits at 10 RON by default, with an active pass required.
+- Enforce the daily paid-run cap and count only the best paid score each day.
+- Compete on separate weekly Free and Pass leaderboards.
+- Use deterministic daily mine seeds so official competitors receive the same mine for their tier.
+- Track the Free pool, Pass base pool, MATT purchased by run fees, future rewards, and reserve allocation.
+- Route paid-run MATT 70% to the current Pass pool, 20% to future rewards, and 10% to reserve.
+- Burn zero MATT.
+- Earn pass XP and preview the premium reward track.
+- Publish immutable local test reward epochs and record one test claim per epoch.
+- Use role-separated local admin controls with immediate pausing, price management, pool management, moderation, and audit logging.
+- Preserve the approved 2-of-3 multisig production model with no timelock.
+
+## v0.3 action loop retained
+
+- Procedural seven-room mines with mining, combat, treasure, Guardian, and Lift chambers.
+- MATT Pickaxe, Pocket Dynamite, and Crystal Blaster.
+- Sealed combat rooms and five enemy roles.
+- Three-phase Mine Guardian.
+- Extraction or deeper-descent choice.
+- Permanent browser-saved upgrades.
+- Desktop and mobile controls.
 
 ## Run locally on Windows
 
-1. Extract the ZIP.
-2. Open PowerShell inside the extracted `matt-mine` folder.
-3. Run:
-
 ```powershell
+npm install
 npm run dev
 ```
 
-4. Open `http://localhost:4173`.
+Open `http://localhost:4173`.
 
-No package installation is required.
+Node.js 20 or newer is required.
 
-Run the automated checks with:
+Run all checks with:
 
 ```powershell
 npm test
 ```
 
-## Controls
+The homepage is now the default. Choose **Enter Mine** for run selection or **Try Practice** to play immediately without a wallet.
 
-### Desktop
+## Deploy the standalone site
 
-- Move: `WASD` or arrow keys
-- Aim: mouse
-- Mine or attack: hold the left mouse button or `Space`
-- Dash: `Shift`
+The included `render.yaml` creates one Node web service and one PostgreSQL database. Before the first public launch:
 
-### Mobile
+1. Set `MATT_MINE_PUBLIC_ORIGIN` to the exact HTTPS site origin, with no trailing slash.
+2. Confirm `MATT_MINE_MAINNET_TRANSACTIONS_ENABLED=true` only on the production service.
+3. Keep `MATT_MINE_PAYMENT_CONFIRMATIONS=3`.
+4. Verify `/api/health` reports `"database":{"ok":true,"kind":"postgresql"}`.
+5. Run one controlled Pass and paid-run reconciliation before announcing the URL.
 
-- Move: virtual joystick
-- Mine or attack: pickaxe button
-- Dash: blue arrow button
-- Mobile attacks automatically aim toward the nearest target.
+See [`docs/STANDALONE_LAUNCH_V10.md`](docs/STANDALONE_LAUNCH_V10.md) for the deployment and go-live checklist.
 
-## Standalone-to-live integration boundary
+## Important live-payment boundary
 
-The game intentionally does not connect to a wallet yet. `src/game/walletAdapter.js` remains the integration seam for MATT Token Live.
+v0.9 can prepare real Pass and paid-run transactions only when the server operator explicitly enables the Mainnet transaction switch. Every purchase still requires the player to click the purchase button and approve the exact transaction in Ronin Wallet. MATT claims remain disabled. Ranked validation remains a hardened product foundation, not yet a sufficient anti-cheat system for public token payouts.
 
-The live merge should provide:
+Before real value is enabled, the production build still requires:
 
-1. A stable wallet-backed player ID.
-2. Existing MATT Token Live session authentication.
-3. Server-authoritative inventory, progression, purchases, and leaderboard records.
-4. Payment or ownership verification outside the real-time gameplay loop.
-5. A reward-service endpoint rather than direct client-side token transfers.
+1. Server-authoritative gameplay simulation or equivalent signed event validation.
+2. Ongoing monitoring and incident response for the deployed contracts and payment server.
+3. A controlled purchase smoke test with complete treasury and token reconciliation.
+4. Production database hosting, backups, observability, and distributed rate limiting.
+5. Anti-cheat review and payout moderation.
+6. Formal security review before materially increasing contract balances or public reward pools.
+7. Immutable weekly reward publication and onchain claims.
+8. 2-of-3 multisig control for treasury and major contract administration, with no timelock.
 
-Do not trust scores, purchases, rewards, or token balances sent by the browser in production. The current local-storage profile is strictly for gameplay testing.
-
-## Suggested next milestones
-
-1. Add original animated MATT character, enemy, ore, and mine-tile artwork.
-2. Add sound effects, music, controller support, and accessibility settings.
-3. Add ranged weapons, boss attack patterns, room gates, and more enemy behaviors.
-4. Add seeded daily challenges, quests, achievements, and a weekly leaderboard.
-5. Move persistence and score validation to a server.
-6. Add Founder access, cosmetics, seasonal progression, and wallet integration.
-7. Merge the stable game route into MATT Token Live.
+See [`docs/STANDALONE_LAUNCH_V10.md`](docs/STANDALONE_LAUNCH_V10.md), [`docs/LIVE_PAYMENTS_V09.md`](docs/LIVE_PAYMENTS_V09.md), [`docs/CONTRACT_DEPLOYMENT_V08.md`](docs/CONTRACT_DEPLOYMENT_V08.md), [`docs/SECURITY_V07.md`](docs/SECURITY_V07.md), [`docs/ECONOMY_V1.md`](docs/ECONOMY_V1.md), and [`contracts/README.md`](contracts/README.md).

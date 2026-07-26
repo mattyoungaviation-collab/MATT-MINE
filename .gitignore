@@ -1,0 +1,11 @@
+node_modules/
+data/
+.env
+.env.*
+!.env.example
+coverage/
+contracts/artifacts/
+contracts/cache/
+contracts/coverage/
+contracts/deployments/
+contracts/config/ronin.json

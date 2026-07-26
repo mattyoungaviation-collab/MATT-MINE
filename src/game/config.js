@@ -23,6 +23,10 @@ export const CONFIG = Object.freeze({
   deathKeepFraction: 0.35,
   enemySpawnInterval: 1.6,
   maxEnemiesBase: 11,
+  blasterEnergyMax: 100,
+  blasterEnergyRegen: 17,
+  blasterEnergyCost: 12,
+  dynamiteStartAmmo: 0,
   roomWidth: 410,
   roomHeight: 300,
   corridorWidth: 132,
@@ -48,6 +52,28 @@ export const CONFIG = Object.freeze({
     pickup: '#ffdf68',
     portal: '#5c8dff',
     treasure: '#9c65ff'
+  }
+});
+
+
+export const WEAPONS = Object.freeze({
+  pickaxe: {
+    id: 'pickaxe',
+    name: 'MATT Pickaxe',
+    icon: '⛏',
+    description: 'Heavy close-range mining and combat tool.'
+  },
+  dynamite: {
+    id: 'dynamite',
+    name: 'Pocket Dynamite',
+    icon: '🧨',
+    description: 'Limited ammo. Massive area damage.'
+  },
+  blaster: {
+    id: 'blaster',
+    name: 'Crystal Blaster',
+    icon: '✦',
+    description: 'Fast ranged weapon powered by regenerating crystal energy.'
   }
 });
 

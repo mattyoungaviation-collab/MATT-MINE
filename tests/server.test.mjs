@@ -1,0 +1,766 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { privateKeyToAccount } from 'viem/accounts';
+import { decodeFunctionData, encodeAbiParameters, encodeEventTopics, encodeFunctionData } from 'viem';
+
+import { MattMineApiClient, SESSION_STORAGE_KEY } from '../src/game/apiClient.js';
+import { RoninWalletAdapter, parseChainId } from '../src/game/walletAdapter.js';
+import { JsonFileDatabase, MemoryDatabase, PostgresDatabase } from '../server/database.js';
+import { createMattMineHttpServer } from '../server/http.js';
+import {
+  MATT_MINE_RUNS_ABI,
+  RONIN_PAYMENT_CONTRACTS,
+  RoninPaymentVerifier
+} from '../server/payment-verifier.js';
+import { MattMineService } from '../server/service.js';
+import { AUTH_CHALLENGE_TTL_MS, RONIN_CHAINS, SERVER_RUN_MODES } from '../server/constants.js';
+
+const PRIVATE_KEY = '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+const OTHER_PRIVATE_KEY = '0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd';
+const account = privateKeyToAccount(PRIVATE_KEY);
+const otherAccount = privateKeyToAccount(OTHER_PRIVATE_KEY);
+const START = Date.UTC(2026, 6, 25, 12, 0, 0);
+const ORIGIN = 'http://localhost:4173';
+const UNSUPPORTED_CHAIN_ID = 1;
+
+function createHarness(options = {}) {
+  let timestamp = options.timestamp ?? START;
+  let randomCounter = 0;
+  const database = options.database || new MemoryDatabase();
+  const service = new MattMineService(database, {
+    now: () => timestamp,
+    chainId: RONIN_CHAINS.MAINNET,
+    publicOrigin: ORIGIN,
+    adminKey: options.adminKey || 'test-admin-key',
+    mainnetTransactionsEnabled: options.mainnetTransactionsEnabled === true,
+    paymentVerifier: options.paymentVerifier,
+    randomHex(bytes) {
+      randomCounter += 1;
+      return randomCounter.toString(16).padStart(bytes * 2, '0').slice(-bytes * 2);
+    }
+  });
+  return {
+    database,
+    service,
+    now: () => timestamp,
+    advance(milliseconds) {
+      timestamp += milliseconds;
+      return timestamp;
+    }
+  };
+}
+
+async function signIn(harness, signer = account) {
+  const challenge = await harness.service.createChallenge({
+    address: signer.address,
+    chainId: RONIN_CHAINS.MAINNET,
+    origin: ORIGIN
+  });
+  const signature = await signer.signMessage({ message: challenge.message });
+  const session = await harness.service.verifyChallenge({
+    address: signer.address,
+    nonce: challenge.nonce,
+    signature
+  });
+  return { challenge, signature, session };
+}
+
+function extractedResult(overrides = {}) {
+  return {
+    extracted: true,
+    projected: 1_000,
+    banked: 1_000,
+    depth: 1,
+    kills: 8,
+    oreBroken: 5,
+    elapsed: 60,
+    ...overrides
+  };
+}
+
+async function finish(service, session, run, result) {
+  return service.finishRun(session.token, {
+    runId: run.runId,
+    runToken: run.runToken,
+    result
+  });
+}
+
+function createFakePaymentVerifier(options = {}) {
+  let counter = 0;
+  const active = options.active !== false;
+  return {
+    publicConfig() {
+      return {
+        contracts: {
+          pass: RONIN_PAYMENT_CONTRACTS.pass,
+          runs: RONIN_PAYMENT_CONTRACTS.runs,
+          matt: RONIN_PAYMENT_CONTRACTS.matt
+        },
+        confirmations: 3
+      };
+    },
+    async status() {
+      return {
+        pass: {
+          active,
+          expiresAt: START + 30 * 86_400_000,
+          priceRonWei: '95000000000000000000',
+          paused: false,
+          transaction: {
+            to: RONIN_PAYMENT_CONTRACTS.pass,
+            value: '0x5265c00a7b1c2d0000',
+            data: '0xdeadbeef'
+          }
+        },
+        paidRuns: {
+          priceRonWei: '10000000000000000000',
+          purchasedToday: 0,
+          dailyLimit: 10,
+          paused: options.paused === true
+        }
+      };
+    },
+    async quotePaidRun() {
+      if (options.paused === true) {
+        const error = new Error('Paid-run purchases are currently paused.');
+        error.code = 'paid_runs_paused';
+        throw error;
+      }
+      return {
+        quotedMattOut: '1000000000000000000000',
+        minMattOut: '950000000000000000000',
+        slippageBps: 500,
+        deadline: Math.floor(START / 1000) + 300,
+        transaction: {
+          to: RONIN_PAYMENT_CONTRACTS.runs,
+          value: '0x8ac7230489e80000',
+          data: '0x12345678'
+        }
+      };
+    },
+    async verifyPaidRunPurchase(transactionHash, address) {
+      counter += 1;
+      return {
+        key: `${transactionHash.toLowerCase()}:0`,
+        transactionHash: transactionHash.toLowerCase(),
+        logIndex: 0,
+        blockNumber: '58780000',
+        address: address.toLowerCase(),
+        entitlementId: String(counter),
+        ronPaid: '10000000000000000000',
+        mattBought: '1000000000000000000000',
+        currentPoolMatt: '700000000000000000000',
+        futureRewardsMatt: '200000000000000000000',
+        reserveMatt: '100000000000000000000'
+      };
+    }
+  };
+}
+
+test('Ronin SIWE-style challenges bind origin, chain, address, expiry, and one-time use', async () => {
+  assert.throws(
+    () => new MattMineService(new MemoryDatabase(), { chainId: UNSUPPORTED_CHAIN_ID }),
+    (error) => error.code === 'invalid_server_chain'
+  );
+  const harness = createHarness();
+  const { challenge, signature, session } = await signIn(harness);
+  assert.match(challenge.message, /wants you to sign in with your Ronin account/);
+  assert.match(challenge.message, new RegExp(`Chain ID: ${RONIN_CHAINS.MAINNET}`));
+  assert.match(challenge.message, /does not initiate a transaction or spend RON or MATT/);
+  assert.equal(session.address, account.address.toLowerCase());
+  assert.equal(session.entitlements.freeRunAvailable, true);
+  assert.equal(session.token.length, 64);
+
+  await assert.rejects(
+    () => harness.service.verifyChallenge({
+      address: account.address,
+      nonce: challenge.nonce,
+      signature
+    }),
+    (error) => error.code === 'challenge_not_found'
+  );
+
+  await assert.rejects(
+    () => harness.service.createChallenge({
+      address: account.address,
+      chainId: UNSUPPORTED_CHAIN_ID,
+      origin: ORIGIN
+    }),
+    (error) => error.code === 'wrong_chain'
+  );
+  await assert.rejects(
+    () => harness.service.createChallenge({
+      address: account.address,
+      chainId: RONIN_CHAINS.MAINNET,
+      origin: 'https://evil.example'
+    }),
+    (error) => error.code === 'origin_mismatch'
+  );
+});
+
+test('wrong-wallet and expired signatures cannot create sessions', async () => {
+  const harness = createHarness();
+  const challenge = await harness.service.createChallenge({
+    address: account.address,
+    chainId: RONIN_CHAINS.MAINNET,
+    origin: ORIGIN
+  });
+  const wrongSignature = await otherAccount.signMessage({ message: challenge.message });
+  await assert.rejects(
+    () => harness.service.verifyChallenge({
+      address: account.address,
+      nonce: challenge.nonce,
+      signature: wrongSignature
+    }),
+    (error) => error.code === 'signature_rejected'
+  );
+
+  const expiring = await harness.service.createChallenge({
+    address: account.address,
+    chainId: RONIN_CHAINS.MAINNET,
+    origin: ORIGIN
+  });
+  const signature = await account.signMessage({ message: expiring.message });
+  harness.advance(AUTH_CHALLENGE_TTL_MS + 1);
+  await assert.rejects(
+    () => harness.service.verifyChallenge({
+      address: account.address,
+      nonce: expiring.nonce,
+      signature
+    }),
+    (error) => error.code === 'challenge_expired'
+  );
+});
+
+test('the server owns the free entitlement, run token, replay protection, profile, and leaderboard score', async () => {
+  const harness = createHarness();
+  const { session } = await signIn(harness);
+  const run = await harness.service.startRun(session.token, SERVER_RUN_MODES.FREE);
+  assert.equal(run.seed, 'MATT-MINE-2026-07-25-FREE');
+  harness.advance(60_000);
+  const accepted = await finish(harness.service, session, run, extractedResult());
+  assert.equal(accepted.run.result.score, 1_000);
+  assert.equal(accepted.profile.bankedNuggets, 1_000);
+  assert.equal(accepted.profile.totalRuns, 1);
+  assert.equal(accepted.leaderboard.playerRank, 1);
+  assert.equal(accepted.leaderboard.playerScore, 1_000);
+
+  await assert.rejects(
+    () => finish(harness.service, session, run, extractedResult()),
+    (error) => error.code === 'run_already_finished'
+  );
+  await assert.rejects(
+    () => harness.service.startRun(session.token, SERVER_RUN_MODES.FREE),
+    (error) => error.code === 'free_run_used'
+  );
+
+  const player = await harness.service.me(session.token);
+  assert.equal(player.entitlements.freeRunAvailable, false);
+  assert.equal(player.scores.free, 1_000);
+});
+
+test('paid server runs stay disabled while authenticated Practice remains unlimited', async () => {
+  const harness = createHarness();
+  const { session } = await signIn(harness);
+  await assert.rejects(
+    () => harness.service.startRun(session.token, SERVER_RUN_MODES.PAID),
+    (error) => error.code === 'paid_runs_disabled'
+  );
+  const first = await harness.service.startRun(session.token, SERVER_RUN_MODES.PRACTICE);
+  const second = await harness.service.startRun(session.token, SERVER_RUN_MODES.PRACTICE);
+  assert.notEqual(first.runId, second.runId);
+});
+
+test('confirmed Ronin purchases create one-time paid-run entitlements and daily-best Pass scores', async () => {
+  const paymentVerifier = createFakePaymentVerifier();
+  const harness = createHarness({
+    mainnetTransactionsEnabled: true,
+    paymentVerifier
+  });
+  const { session } = await signIn(harness);
+  assert.equal(harness.service.config().realPaymentsEnabled, true);
+
+  const status = await harness.service.paymentStatus(session.token);
+  assert.equal(status.pass.active, true);
+  assert.equal(status.confirmedCredits, 0);
+  const quote = await harness.service.quotePaidRun(session.token);
+  assert.equal(quote.minMattOut, '950000000000000000000');
+
+  const firstHash = `0x${'1'.repeat(64)}`;
+  const firstConfirmation = await harness.service.confirmPaidRunPurchase(session.token, firstHash);
+  assert.equal(firstConfirmation.confirmedCredits, 1);
+  assert.equal(firstConfirmation.alreadyConfirmed, false);
+  const duplicate = await harness.service.confirmPaidRunPurchase(session.token, firstHash);
+  assert.equal(duplicate.confirmedCredits, 1);
+  assert.equal(duplicate.alreadyConfirmed, true);
+
+  const firstRun = await harness.service.startRun(session.token, SERVER_RUN_MODES.PAID);
+  assert.equal(firstRun.seed, 'MATT-MINE-2026-07-25-PAID');
+  assert.equal(firstRun.rewardWeight, 2);
+  harness.advance(60_000);
+  await finish(harness.service, session, firstRun, extractedResult({ projected: 1_000, banked: 1_000 }));
+  await assert.rejects(
+    () => harness.service.startRun(session.token, SERVER_RUN_MODES.PAID),
+    (error) => error.code === 'paid_run_credit_required'
+  );
+
+  const secondHash = `0x${'2'.repeat(64)}`;
+  await harness.service.confirmPaidRunPurchase(session.token, secondHash);
+  const secondRun = await harness.service.startRun(session.token, SERVER_RUN_MODES.PAID);
+  harness.advance(60_000);
+  const accepted = await finish(
+    harness.service,
+    session,
+    secondRun,
+    extractedResult({ projected: 1_500, banked: 1_500 })
+  );
+  assert.equal(accepted.leaderboard.playerScore, 1_500);
+  const finalStatus = await harness.service.paymentStatus(session.token);
+  assert.equal(finalStatus.confirmedCredits, 0);
+});
+
+test('pass state, contract pause, and server suspension block paid access safely', async () => {
+  const noPassHarness = createHarness({
+    mainnetTransactionsEnabled: true,
+    paymentVerifier: createFakePaymentVerifier({ active: false })
+  });
+  const { session: noPassSession } = await signIn(noPassHarness);
+  await assert.rejects(
+    () => noPassHarness.service.startRun(noPassSession.token, SERVER_RUN_MODES.PAID),
+    (error) => error.code === 'active_pass_required'
+  );
+
+  const pausedHarness = createHarness({
+    mainnetTransactionsEnabled: true,
+    paymentVerifier: createFakePaymentVerifier({ paused: true })
+  });
+  const { session: pausedSession } = await signIn(pausedHarness);
+  await assert.rejects(
+    () => pausedHarness.service.quotePaidRun(pausedSession.token),
+    (error) => error.code === 'paid_runs_paused'
+  );
+
+  const suspendedHarness = createHarness({
+    mainnetTransactionsEnabled: true,
+    paymentVerifier: createFakePaymentVerifier()
+  });
+  const { session: suspendedSession } = await signIn(suspendedHarness);
+  await suspendedHarness.service.setWalletSuspension('test-admin-key', account.address, true);
+  await assert.rejects(
+    () => suspendedHarness.service.confirmPaidRunPurchase(suspendedSession.token, `0x${'3'.repeat(64)}`),
+    (error) => error.code === 'wallet_suspended'
+  );
+});
+
+test('receipt verifier accepts only the approved Runs call and matching PaidRunPurchased event', async () => {
+  const transactionHash = `0x${'4'.repeat(64)}`;
+  const ronPaid = 10n * 10n ** 18n;
+  const minMattOut = 900n * 10n ** 18n;
+  const deadline = BigInt(Math.floor(START / 1000) + 300);
+  const topics = encodeEventTopics({
+    abi: MATT_MINE_RUNS_ABI,
+    eventName: 'PaidRunPurchased',
+    args: { player: account.address, entitlementId: 7n }
+  });
+  const data = encodeAbiParameters(
+    [
+      { type: 'uint256' },
+      { type: 'uint256' },
+      { type: 'uint256' },
+      { type: 'uint256' },
+      { type: 'uint256' }
+    ],
+    [
+      ronPaid,
+      1_000n * 10n ** 18n,
+      700n * 10n ** 18n,
+      200n * 10n ** 18n,
+      100n * 10n ** 18n
+    ]
+  );
+  const receipt = {
+    status: 'success',
+    to: RONIN_PAYMENT_CONTRACTS.runs,
+    blockNumber: 58_780_000n,
+    logs: [{
+      address: RONIN_PAYMENT_CONTRACTS.runs,
+      topics,
+      data,
+      logIndex: 4
+    }]
+  };
+  const transaction = {
+    from: account.address,
+    to: RONIN_PAYMENT_CONTRACTS.runs,
+    value: ronPaid,
+    input: encodeFunctionData({
+      abi: MATT_MINE_RUNS_ABI,
+      functionName: 'purchasePaidRun',
+      args: [minMattOut, deadline]
+    })
+  };
+  const verifier = new RoninPaymentVerifier({
+    confirmations: 1,
+    client: {
+      waitForTransactionReceipt: async () => receipt,
+      getTransaction: async () => transaction
+    }
+  });
+  const verified = await verifier.verifyPaidRunPurchase(transactionHash, account.address);
+  assert.equal(verified.key, `${transactionHash}:4`);
+  assert.equal(verified.entitlementId, '7');
+  assert.equal(verified.ronPaid, String(ronPaid));
+  assert.equal(verified.currentPoolMatt, String(700n * 10n ** 18n));
+
+  const wrongWalletVerifier = new RoninPaymentVerifier({
+    confirmations: 1,
+    client: {
+      waitForTransactionReceipt: async () => receipt,
+      getTransaction: async () => ({ ...transaction, from: otherAccount.address })
+    }
+  });
+  await assert.rejects(
+    () => wrongWalletVerifier.verifyPaidRunPurchase(transactionHash, account.address),
+    (error) => error.code === 'payment_wallet_mismatch'
+  );
+});
+
+test('live quote uses current contract prices, Katana output, slippage protection, and a short deadline', async () => {
+  const paidRunPrice = 10n * 10n ** 18n;
+  const quotedMatt = 2_000n * 10n ** 18n;
+  const blockTimestamp = BigInt(Math.floor(START / 1000));
+  const client = {
+    async readContract({ functionName }) {
+      if (functionName === 'hasActivePass') return true;
+      if (functionName === 'passExpiresAt') return blockTimestamp + 86_400n;
+      if (functionName === 'passPriceRon') return 95n * 10n ** 18n;
+      if (functionName === 'paidRunPriceRon') return paidRunPrice;
+      if (functionName === 'paidRunsToday') return 2;
+      if (functionName === 'paused') return false;
+      if (functionName === 'getAmountsOut') return [paidRunPrice, quotedMatt];
+      throw new Error(`Unexpected read ${functionName}`);
+    },
+    async getBlock() {
+      return { timestamp: blockTimestamp };
+    }
+  };
+  const verifier = new RoninPaymentVerifier({
+    client,
+    slippageBps: 500,
+    quoteLifetimeSeconds: 300
+  });
+  const quote = await verifier.quotePaidRun(account.address);
+  assert.equal(quote.quotedMattOut, String(quotedMatt));
+  assert.equal(quote.minMattOut, String((quotedMatt * 9_500n) / 10_000n));
+  assert.equal(quote.deadline, Number(blockTimestamp + 300n));
+  assert.equal(BigInt(quote.transaction.value), paidRunPrice);
+  const decoded = decodeFunctionData({
+    abi: MATT_MINE_RUNS_ABI,
+    data: quote.transaction.data
+  });
+  assert.equal(decoded.functionName, 'purchasePaidRun');
+  assert.equal(decoded.args[0], (quotedMatt * 9_500n) / 10_000n);
+  assert.equal(decoded.args[1], blockTimestamp + 300n);
+});
+
+test('impossible telemetry is rejected without consuming the active run submission', async () => {
+  const harness = createHarness();
+  const { session } = await signIn(harness);
+  const run = await harness.service.startRun(session.token, SERVER_RUN_MODES.FREE);
+  harness.advance(1_000);
+  await assert.rejects(
+    () => finish(harness.service, session, run, extractedResult({ elapsed: 100 })),
+    (error) => error.code === 'elapsed_time_impossible'
+  );
+  harness.advance(59_000);
+  const accepted = await finish(harness.service, session, run, extractedResult());
+  assert.equal(accepted.accepted, true);
+});
+
+test('ranked knockouts score only the exact secured 35 percent loot amount', async () => {
+  const harness = createHarness();
+  const { session } = await signIn(harness);
+  const run = await harness.service.startRun(session.token, SERVER_RUN_MODES.FREE);
+  harness.advance(30_000);
+  await assert.rejects(
+    () => finish(harness.service, session, run, extractedResult({
+      extracted: false,
+      projected: 1_001,
+      banked: 351,
+      elapsed: 30
+    })),
+    (error) => error.code === 'knockout_mismatch'
+  );
+  const accepted = await finish(harness.service, session, run, extractedResult({
+    extracted: false,
+    projected: 1_001,
+    banked: 350,
+    elapsed: 30
+  }));
+  assert.equal(accepted.run.result.score, 350);
+  assert.equal(accepted.profile.bankedNuggets, 350);
+});
+
+test('server suspension blocks ranked issuance and submission but keeps Practice available', async () => {
+  const harness = createHarness();
+  const { session } = await signIn(harness);
+  const ranked = await harness.service.startRun(session.token, SERVER_RUN_MODES.FREE);
+  await harness.service.setWalletSuspension('test-admin-key', account.address, true);
+  harness.advance(60_000);
+  await assert.rejects(
+    () => finish(harness.service, session, ranked, extractedResult()),
+    (error) => error.code === 'wallet_suspended'
+  );
+  await assert.rejects(
+    () => harness.service.startRun(session.token, SERVER_RUN_MODES.FREE),
+    (error) => error.code === 'wallet_suspended'
+  );
+  const practice = await harness.service.startRun(session.token, SERVER_RUN_MODES.PRACTICE);
+  assert.equal(practice.mode, SERVER_RUN_MODES.PRACTICE);
+  await assert.rejects(
+    () => harness.service.setWalletSuspension('wrong-key', account.address, false),
+    (error) => error.code === 'admin_key_rejected'
+  );
+});
+
+test('permanent upgrades spend only server-owned banked nuggets', async () => {
+  const harness = createHarness();
+  const { session } = await signIn(harness);
+  const run = await harness.service.startRun(session.token, SERVER_RUN_MODES.PRACTICE);
+  harness.advance(60_000);
+  await finish(harness.service, session, run, extractedResult());
+  const upgraded = await harness.service.purchaseUpgrade(session.token, 'health');
+  assert.equal(upgraded.cost, 75);
+  assert.equal(upgraded.rank, 1);
+  assert.equal(upgraded.profile.bankedNuggets, 925);
+  assert.equal(upgraded.profile.meta.health, 1);
+});
+
+test('JSON server storage persists profiles and recovers corrupt state safely', async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), 'matt-mine-v6-'));
+  context.after(() => rm(directory, { recursive: true, force: true }));
+  const filePath = join(directory, 'store.json');
+  const database = await new JsonFileDatabase(filePath, { now: () => START }).init();
+  const harness = createHarness({ database });
+  const { session } = await signIn(harness);
+  const run = await harness.service.startRun(session.token, SERVER_RUN_MODES.PRACTICE);
+  harness.advance(60_000);
+  await finish(harness.service, session, run, extractedResult());
+
+  const reloaded = await new JsonFileDatabase(filePath).init();
+  const persisted = await reloaded.read();
+  assert.equal(persisted.wallets[account.address.toLowerCase()].profile.bankedNuggets, 1_000);
+
+  await writeFile(filePath, '{broken-json', 'utf8');
+  const recovered = await new JsonFileDatabase(filePath, { now: () => START + 1 }).init();
+  assert.ok(recovered.recoveredFile?.endsWith(`.corrupt-${START + 1}`));
+  assert.deepEqual(JSON.parse(await readFile(filePath, 'utf8')).wallets, {});
+});
+
+test('PostgreSQL storage initializes, serializes transactions, and reports readiness', async () => {
+  const fakePool = createFakePostgresPool();
+  const database = await new PostgresDatabase(null, { pool: fakePool }).init();
+  const result = await database.transact((state) => {
+    state.audit.push({ action: 'POSTGRES_WRITE', timestamp: START });
+    return { saved: true };
+  });
+  assert.deepEqual(result, { saved: true });
+
+  const persisted = await database.read();
+  assert.equal(persisted.audit[0].action, 'POSTGRES_WRITE');
+  assert.equal(fakePool.transactionLog.includes('BEGIN'), true);
+  assert.equal(fakePool.transactionLog.includes('COMMIT'), true);
+  assert.equal(fakePool.transactionLog.includes('ROLLBACK'), false);
+
+  const health = await database.healthCheck();
+  assert.equal(health.ok, true);
+  assert.equal(health.kind, 'postgresql');
+  assert.equal(Number.isSafeInteger(health.latencyMs), true);
+});
+
+test('the HTTP server exposes same-origin APIs, security headers, and authenticated player data', async (context) => {
+  const harness = createHarness();
+  const server = createMattMineHttpServer({
+    root: fileURLToPath(new URL('../', import.meta.url)),
+    service: harness.service
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  context.after(() => new Promise((resolve) => server.close(resolve)));
+  const address = server.address();
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+
+  const healthResponse = await fetch(`${baseUrl}/api/health`);
+  assert.equal(healthResponse.status, 200);
+  const healthPayload = await healthResponse.json();
+  assert.equal(healthPayload.version, 10);
+  assert.equal(healthPayload.database.kind, 'memory');
+
+  const launchResponse = await fetch(baseUrl);
+  assert.equal(launchResponse.status, 200);
+  assert.equal(launchResponse.headers.get('cache-control'), 'no-cache');
+  assert.equal(launchResponse.headers.get('cross-origin-opener-policy'), 'same-origin');
+  const launchHtml = await launchResponse.text();
+  assert.match(launchHtml, /id="launch" class="screen active launch-screen"/);
+  assert.match(launchHtml, /0x4B5D10f6DA960436c5E3c23F40C52d36E2225555/);
+  assert.match(launchHtml, /MATT Mine — Dig\. Fight\. Extract\./);
+
+  const heroResponse = await fetch(`${baseUrl}/assets/launch/matt-mine-hero.png`);
+  assert.equal(heroResponse.status, 200);
+  assert.equal(heroResponse.headers.get('content-type'), 'image/png');
+  assert.equal(heroResponse.headers.get('cache-control'), 'public, max-age=86400');
+
+  const configResponse = await fetch(`${baseUrl}/api/config`);
+  assert.equal(configResponse.status, 200);
+  assert.equal(configResponse.headers.get('x-frame-options'), 'DENY');
+  const configPayload = await configResponse.json();
+  assert.equal(configPayload.config.chainId, RONIN_CHAINS.MAINNET);
+  assert.equal(configPayload.config.chainName, 'Ronin Mainnet');
+  assert.equal(configPayload.config.paidRunsEnabled, false);
+  assert.equal(configPayload.config.realPaymentsEnabled, false);
+  assert.equal(configPayload.config.mattClaimsEnabled, false);
+  assert.equal(configPayload.config.mainnetTransactionsEnabled, false);
+
+  const publicPaymentResponse = await fetch(`${baseUrl}/api/payments/public-status`);
+  assert.equal(publicPaymentResponse.status, 200);
+  const publicPaymentPayload = await publicPaymentResponse.json();
+  assert.equal(publicPaymentPayload.status.live, false);
+  assert.equal(publicPaymentPayload.status.pass.priceRonWei, String(95n * 10n ** 18n));
+  assert.equal(publicPaymentPayload.status.paidRuns.priceRonWei, String(10n * 10n ** 18n));
+
+  const crossOrigin = await fetch(`${baseUrl}/api/auth/challenge`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin: 'https://evil.example' },
+    body: JSON.stringify({
+      address: account.address,
+      chainId: RONIN_CHAINS.MAINNET,
+      origin: 'https://evil.example'
+    })
+  });
+  assert.equal(crossOrigin.status, 403);
+});
+
+function createFakePostgresPool() {
+  let data = null;
+  const transactionLog = [];
+
+  async function query(sql, params = []) {
+    const normalized = sql.replace(/\s+/g, ' ').trim().toUpperCase();
+    if (normalized.startsWith('CREATE TABLE')) return { rows: [] };
+    if (normalized.startsWith('INSERT INTO MATT_MINE_STATE')) {
+      if (!data) data = JSON.parse(params[0]);
+      return { rows: [] };
+    }
+    if (normalized === 'SELECT 1') return { rows: [{ '?column?': 1 }] };
+    if (normalized.startsWith('SELECT DATA FROM MATT_MINE_STATE')) {
+      return { rows: data ? [{ data: structuredClone(data) }] : [] };
+    }
+    if (normalized.startsWith('UPDATE MATT_MINE_STATE')) {
+      data = JSON.parse(params[0]);
+      return { rows: [] };
+    }
+    if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(normalized)) {
+      transactionLog.push(normalized);
+      return { rows: [] };
+    }
+    throw new Error(`Unexpected fake PostgreSQL query: ${normalized}`);
+  }
+
+  return {
+    transactionLog,
+    query,
+    async connect() {
+      return { query, release() {} };
+    },
+    async end() {}
+  };
+}
+
+test('the browser API client stores sessions only in session storage and clears them on 401', async () => {
+  const values = new Map();
+  const storage = {
+    getItem: (key) => values.get(key) || null,
+    setItem: (key, value) => values.set(key, value),
+    removeItem: (key) => values.delete(key)
+  };
+  const client = new MattMineApiClient({
+    storage,
+    fetch: async () => new Response(JSON.stringify({
+      ok: false,
+      error: { code: 'session_expired', message: 'Expired' }
+    }), {
+      status: 401,
+      headers: { 'content-type': 'application/json' }
+    })
+  });
+  client.setToken('a'.repeat(64));
+  assert.equal(values.get(SESSION_STORAGE_KEY), 'a'.repeat(64));
+  await assert.rejects(() => client.me(), (error) => error.code === 'session_expired');
+  assert.equal(values.has(SESSION_STORAGE_KEY), false);
+});
+
+test('the Ronin adapter switches to Mainnet, signs the server message, and invalidates on account change', async () => {
+  const calls = [];
+  const listeners = new Map();
+  const provider = {
+    async request(payload) {
+      calls.push(payload);
+      if (payload.method === 'eth_requestAccounts') return [account.address];
+      if (payload.method === 'eth_chainId') {
+        const switched = calls.some((entry) => entry.method === 'wallet_switchEthereumChain');
+        return switched ? `0x${RONIN_CHAINS.MAINNET.toString(16)}` : `0x${UNSUPPORTED_CHAIN_ID.toString(16)}`;
+      }
+      if (payload.method === 'wallet_switchEthereumChain') return null;
+      if (payload.method === 'personal_sign') return `0x${'1'.repeat(130)}`;
+      if (payload.method === 'eth_sendTransaction') return `0x${'5'.repeat(64)}`;
+      if (payload.method === 'eth_getTransactionReceipt') return { status: '0x1' };
+      throw new Error(`Unexpected method ${payload.method}`);
+    },
+    on(event, listener) {
+      listeners.set(event, listener);
+    },
+    removeListener(event) {
+      listeners.delete(event);
+    }
+  };
+  let cleared = false;
+  let invalidated = '';
+  const api = {
+    hasSession: () => false,
+    config: async () => ({ chainId: RONIN_CHAINS.MAINNET, chainName: 'Ronin Mainnet' }),
+    createChallenge: async () => ({ nonce: 'a'.repeat(24), message: 'Sign in safely' }),
+    verifyChallenge: async () => ({ address: account.address.toLowerCase(), profile: {}, entitlements: {} }),
+    clearSession() {
+      cleared = true;
+    }
+  };
+  const adapter = new RoninWalletAdapter({
+    api,
+    window: { ronin: { provider }, location: { origin: ORIGIN } },
+    onInvalidated(reason) {
+      invalidated = reason;
+    }
+  });
+  const player = await adapter.connect();
+  assert.equal(player.address, account.address.toLowerCase());
+  assert.equal(calls.some((entry) => entry.method === 'wallet_switchEthereumChain'), true);
+  assert.equal(calls.some((entry) => entry.method === 'personal_sign'), true);
+  const paymentHash = await adapter.purchasePass({
+    to: RONIN_PAYMENT_CONTRACTS.pass,
+    value: '0x5265c00a7b1c2d0000',
+    data: '0x12345678'
+  });
+  assert.equal(paymentHash, `0x${'5'.repeat(64)}`);
+  const sent = calls.find((entry) => entry.method === 'eth_sendTransaction');
+  assert.equal(sent.params[0].to, RONIN_PAYMENT_CONTRACTS.pass);
+  assert.equal(sent.params[0].from, account.address.toLowerCase());
+  assert.equal(sent.params[0].value, '0x5265c00a7b1c2d0000');
+  listeners.get('accountsChanged')?.([otherAccount.address]);
+  assert.equal(cleared, true);
+  assert.match(invalidated, /account changed/i);
+  assert.equal(parseChainId('0x7e4'), RONIN_CHAINS.MAINNET);
+});

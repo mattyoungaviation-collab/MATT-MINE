@@ -1,0 +1,30 @@
+{
+  "name": "@matt-mine/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Non-upgradeable MATT Mine Pass, paid-run, swap, and reward contracts for Ronin.",
+  "scripts": {
+    "compile": "hardhat compile --build-profile production",
+    "test": "hardhat test",
+    "validate:ronin": "hardhat run scripts/validate-mainnet-config.js --network roninReadOnly",
+    "check-deployment:ronin": "hardhat run scripts/check-mainnet-deployment.js --network roninReadOnly",
+    "check-deployer:ronin": "hardhat run scripts/check-deployer.js --network ronin",
+    "deploy:ronin": "hardhat run --build-profile production scripts/deploy-mainnet.js --network ronin",
+    "verify:ronin": "hardhat run --build-profile production scripts/verify-mainnet.js --network roninReadOnly"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "5.4.0"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-ethers": "4.0.15",
+    "@nomicfoundation/hardhat-keystore": "3.0.12",
+    "@nomicfoundation/hardhat-network-helpers": "3.0.11",
+    "@nomicfoundation/hardhat-node-test-runner": "3.0.17",
+    "@nomicfoundation/hardhat-verify": "3.0.21",
+    "@openzeppelin/merkle-tree": "1.0.8",
+    "ethers": "6.17.0",
+    "hardhat": "3.11.1",
+    "solc": "0.8.28"
+  }
+}

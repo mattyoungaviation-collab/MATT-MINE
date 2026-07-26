@@ -1,0 +1,143 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import {
+  EXPECTED_PROTOCOL,
+  configHash,
+  normalizeMainnetConfig
+} from "../scripts/lib/mainnet-config.js";
+
+function validConfig() {
+  return {
+    releaseId: "matt-mine-test",
+    chainId: 2020,
+    protocol: { ...EXPECTED_PROTOCOL },
+    roles: {
+      contractAdminMultisig: "0x0000000000000000000000000000000000000011",
+      priceManager: "0x0000000000000000000000000000000000000012",
+      configManager: "0x0000000000000000000000000000000000000013",
+      pauser: "0x0000000000000000000000000000000000000014",
+      rewardPublisher: "0x0000000000000000000000000000000000000015",
+      treasuryManager: "0x0000000000000000000000000000000000000016"
+    },
+    adminSafe: {
+      threshold: 2,
+      owners: [
+        "0x0000000000000000000000000000000000000031",
+        "0x0000000000000000000000000000000000000032",
+        "0x0000000000000000000000000000000000000033"
+      ]
+    },
+    treasuries: {
+      operations: "0x0000000000000000000000000000000000000021",
+      passRewards: "0x0000000000000000000000000000000000000022",
+      growth: "0x0000000000000000000000000000000000000023",
+      futureRewards: "0x0000000000000000000000000000000000000024",
+      reserve: "0x0000000000000000000000000000000000000025"
+    },
+    pass: {
+      initialPriceRonWei: "50",
+      minimumPriceRonWei: "1",
+      maximumPriceRonWei: "500"
+    },
+    paidRuns: {
+      initialPriceRonWei: "10",
+      minimumPriceRonWei: "5",
+      maximumPriceRonWei: "20"
+    }
+  };
+}
+
+describe("Ronin Mainnet configuration guards", function () {
+  it("normalizes the approved protocol addresses and produces a stable hash", function () {
+    const first = normalizeMainnetConfig(validConfig());
+    const reordered = {
+      ...validConfig(),
+      protocol: Object.fromEntries(
+        Object.entries(validConfig().protocol).reverse()
+      )
+    };
+    const second = normalizeMainnetConfig(reordered);
+    assert.equal(configHash(first), configHash(second));
+    assert.equal(first.protocol.mattToken, EXPECTED_PROTOCOL.mattToken);
+  });
+
+  it("rejects zero roles, wrong chain data, wrong protocol addresses, and bad price bounds", function () {
+    const zeroRole = validConfig();
+    zeroRole.roles.pauser = "0x0000000000000000000000000000000000000000";
+    assert.throws(() => normalizeMainnetConfig(zeroRole), /has not been configured/);
+
+    const wrongChain = validConfig();
+    wrongChain.chainId = 202601;
+    assert.throws(() => normalizeMainnetConfig(wrongChain), /chainId must be 2020/);
+
+    const wrongToken = validConfig();
+    wrongToken.protocol.mattToken =
+      "0x0000000000000000000000000000000000000042";
+    assert.throws(
+      () => normalizeMainnetConfig(wrongToken),
+      /does not match the approved Ronin address/
+    );
+
+    const badPrices = validConfig();
+    badPrices.paidRuns.initialPriceRonWei = "21";
+    assert.throws(
+      () => normalizeMainnetConfig(badPrices),
+      /prices are outside their configured bounds/
+    );
+  });
+
+  it("allows one Safe to protect administration, rewards, and treasuries", function () {
+    const config = validConfig();
+    const safe = config.roles.contractAdminMultisig;
+    config.roles.configManager = config.roles.priceManager;
+    config.roles.rewardPublisher = safe;
+    config.roles.treasuryManager = safe;
+    for (const key of Object.keys(config.treasuries)) {
+      config.treasuries[key] = safe;
+    }
+
+    const normalized = normalizeMainnetConfig(config);
+    assert.equal(normalized.roles.rewardPublisher, safe);
+    assert.equal(normalized.roles.treasuryManager, safe);
+    assert.deepEqual(new Set(Object.values(normalized.treasuries)), new Set([safe]));
+  });
+
+  it("keeps routine and emergency control outside the admin Safe", function () {
+    const config = validConfig();
+    config.roles.priceManager = config.roles.contractAdminMultisig;
+    assert.throws(
+      () => normalizeMainnetConfig(config),
+      /must be separate from the contract admin multisig/
+    );
+
+    const sharedPauser = validConfig();
+    sharedPauser.roles.pauser = sharedPauser.roles.priceManager;
+    assert.throws(
+      () => normalizeMainnetConfig(sharedPauser),
+      /pauser must be separate/
+    );
+
+    const sharedPublisher = validConfig();
+    sharedPublisher.roles.rewardPublisher = sharedPublisher.roles.configManager;
+    assert.throws(
+      () => normalizeMainnetConfig(sharedPublisher),
+      /admin multisig or a separate publisher/
+    );
+  });
+
+  it("requires exactly three unique Safe owners and a 2-of-3 threshold", function () {
+    const badThreshold = validConfig();
+    badThreshold.adminSafe.threshold = 1;
+    assert.throws(
+      () => normalizeMainnetConfig(badThreshold),
+      /threshold must be 2/
+    );
+
+    const duplicateOwner = validConfig();
+    duplicateOwner.adminSafe.owners[2] = duplicateOwner.adminSafe.owners[0];
+    assert.throws(
+      () => normalizeMainnetConfig(duplicateOwner),
+      /owners must be unique/
+    );
+  });
+});

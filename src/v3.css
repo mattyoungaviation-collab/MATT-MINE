@@ -1,0 +1,78 @@
+/* v0.3 weapons and combat-room HUD */
+.weapon-rack {
+  position: absolute;
+  left: 50%;
+  bottom: max(64px, calc(env(safe-area-inset-bottom) + 64px));
+  display: grid;
+  grid-template-columns: repeat(3, 112px);
+  gap: 8px;
+  transform: translateX(-50%);
+}
+.weapon-slot {
+  position: relative;
+  min-height: 54px;
+  padding: 7px 9px 7px 36px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  background: rgba(8,10,15,0.78);
+  color: #ffffff;
+  opacity: 0.72;
+  backdrop-filter: blur(8px);
+  transition: transform 120ms ease, border-color 120ms ease, opacity 120ms ease;
+}
+.weapon-slot > span { position: absolute; left: 11px; top: 14px; font-size: 20px; }
+.weapon-slot strong { font-size: 9px; letter-spacing: 0.08em; }
+.weapon-slot small { color: var(--yellow); font-size: 9px; font-weight: 900; }
+.weapon-slot kbd {
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  min-width: 16px;
+  padding: 1px 3px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.12);
+  color: #d7dce7;
+  font: 800 8px/1.4 inherit;
+}
+.weapon-slot.active {
+  border-color: rgba(245,209,66,0.72);
+  box-shadow: 0 0 22px rgba(245,209,66,0.16);
+  opacity: 1;
+  transform: translateY(-3px);
+}
+.weapon-slot.locked { filter: grayscale(1); opacity: 0.32; }
+
+.mobile-weapon-buttons {
+  position: absolute;
+  right: max(25px, env(safe-area-inset-right));
+  bottom: max(142px, calc(env(safe-area-inset-bottom) + 142px));
+  display: flex;
+  gap: 7px;
+  pointer-events: auto;
+}
+.weapon-button {
+  width: 46px;
+  height: 46px;
+  border: 2px solid rgba(255,255,255,0.22);
+  border-radius: 13px;
+  background: rgba(8,10,15,0.82);
+  color: #ffffff;
+  font-size: 20px;
+  pointer-events: auto;
+  touch-action: none;
+}
+.weapon-button.active { border-color: var(--yellow); box-shadow: 0 0 18px rgba(245,209,66,0.28); }
+.weapon-button.locked { opacity: 0.35; filter: grayscale(1); }
+
+@media (hover: hover) and (pointer: fine) {
+  .mobile-weapon-buttons { display: none; }
+}
+
+@media (max-width: 760px), (max-height: 620px) {
+  .weapon-rack { display: none; }
+  .mobile-weapon-buttons { right: max(22px, env(safe-area-inset-right)); bottom: max(144px, calc(env(safe-area-inset-bottom) + 144px)); }
+  .weapon-button { width: 42px; height: 42px; border-radius: 11px; font-size: 18px; }
+}

@@ -1,4 +1,8 @@
-const KEY = 'matt-mine-profile-v1';
+import { META_UPGRADES } from './config.js';
+
+export const PROFILE_STORAGE_KEY = 'matt-mine-profile-v1';
+
+const META_LIMITS = Object.fromEntries(META_UPGRADES.map((upgrade) => [upgrade.id, upgrade.max]));
 
 export function defaultProfile() {
   return {
@@ -10,33 +14,61 @@ export function defaultProfile() {
   };
 }
 
-export function loadProfile() {
+export function normalizeProfile(input = {}) {
+  const source = isRecord(input) ? input : {};
+  const meta = isRecord(source.meta) ? source.meta : {};
+  const base = defaultProfile();
+  return {
+    bankedNuggets: safeInteger(source.bankedNuggets, base.bankedNuggets),
+    bestDepth: safeInteger(source.bestDepth, base.bestDepth),
+    bestScore: safeInteger(source.bestScore, base.bestScore),
+    totalRuns: safeInteger(source.totalRuns, base.totalRuns),
+    meta: Object.fromEntries(Object.keys(base.meta).map((key) => [
+      key,
+      safeInteger(meta[key], base.meta[key], META_LIMITS[key] ?? 100)
+    ]))
+  };
+}
+
+export function loadProfile(storage = globalThis.localStorage) {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = storage?.getItem(PROFILE_STORAGE_KEY);
     if (!raw) return defaultProfile();
-    const parsed = JSON.parse(raw);
-    const base = defaultProfile();
-    return {
-      ...base,
-      ...parsed,
-      meta: { ...base.meta, ...(parsed.meta || {}) }
-    };
+    const normalized = normalizeProfile(JSON.parse(raw));
+    persistProfile(storage, normalized);
+    return normalized;
   } catch {
-    return defaultProfile();
+    const recovered = defaultProfile();
+    persistProfile(storage, recovered);
+    return recovered;
   }
 }
 
-export function saveProfile(profile) {
+export function saveProfile(profile, storage = globalThis.localStorage) {
+  return persistProfile(storage, normalizeProfile(profile));
+}
+
+export function resetProfile(storage = globalThis.localStorage) {
+  const profile = defaultProfile();
+  persistProfile(storage, profile);
+  return profile;
+}
+
+function persistProfile(storage, profile) {
   try {
-    localStorage.setItem(KEY, JSON.stringify(profile));
+    storage?.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
     return true;
   } catch {
     return false;
   }
 }
 
-export function resetProfile() {
-  const profile = defaultProfile();
-  saveProfile(profile);
-  return profile;
+function isRecord(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function safeInteger(value, fallback, max = Number.MAX_SAFE_INTEGER) {
+  const number = typeof value === 'number' ? value : Number.NaN;
+  if (!Number.isFinite(number) || number < 0) return fallback;
+  return Math.min(max, Math.floor(number));
 }
