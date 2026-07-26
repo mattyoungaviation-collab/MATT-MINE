@@ -220,6 +220,13 @@ test('independent approval produces a dry-run Safe package without publishing or
   assert.equal(approved.broadcastReady, false);
   assert.equal(approved.safeTransactions, undefined);
   assert.equal(approved.safeTransactionPreview.length, 1);
+  assert.equal(approved.safeTransactionBuilderFile.chainId, '2020');
+  assert.equal(
+    approved.safeTransactionBuilderFile.meta.createdFromSafeAddress,
+    '0xBacE355D23d378a6E1adD986E53a18Dd12E6EeAc'
+  );
+  assert.equal(approved.safeTransactionBuilderFile.transactions.length, 1);
+  assert.equal(approved.safeFileName, `matt-mine-${draft.id}-safe.json`);
   assert.match(approved.safety, /DRY RUN/);
 });
 

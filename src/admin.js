@@ -187,7 +187,12 @@ async function approveReward(id) {
   });
   const transactions = result.safeTransactions || result.safeTransactionPreview || [];
   $('#reward-transaction-result').hidden = false;
-  $('#reward-transaction-result').innerHTML = `<h2>Reward Safe package</h2><p>${escapeHtml(result.safety)}</p><div class="code">${escapeHtml(JSON.stringify(transactions, null, 2))}</div>`;
+  $('#reward-transaction-result').innerHTML = `<h2>Reward Safe package</h2><p>${escapeHtml(result.safety)}</p>
+    <p>Download this file, then drag it into the Ronin Safe Transaction Builder.</p>
+    <div class="action-row"><button id="download-reward-safe-json">Download Safe JSON</button><button class="ghost" id="copy-reward-safe-json">Copy JSON</button></div>
+    <div class="code">${escapeHtml(JSON.stringify(transactions, null, 2))}</div>`;
+  $('#download-reward-safe-json').addEventListener('click', () => downloadJson(result.safeFileName, result.safeTransactionBuilderFile));
+  $('#copy-reward-safe-json').addEventListener('click', () => navigator.clipboard.writeText(JSON.stringify(result.safeTransactionBuilderFile, null, 2)));
   await loadRewards();
 }
 
@@ -223,12 +228,16 @@ $('#contract-form').addEventListener('submit', async (event) => {
     }
   });
   const transaction = result.transaction;
+  const safeFile = result.safeTransactionBuilderFile;
   $('#transaction-result').hidden = false;
   $('#transaction-result').innerHTML = `<h2>Prepared — not broadcast</h2>
     ${row('Required signer', transaction.requiredSigner)}${row('To', transaction.to)}${row('Value', transaction.value)}
     <p>Calldata</p><div class="code">${escapeHtml(transaction.data)}</div>
-    <button id="copy-transaction">Copy transaction JSON</button>`;
-  $('#copy-transaction').addEventListener('click', () => navigator.clipboard.writeText(JSON.stringify(transaction, null, 2)));
+    ${safeFile
+      ? '<p>Download this file, then drag it into the Ronin Safe Transaction Builder.</p><div class="action-row"><button id="download-safe-json">Download Safe JSON</button><button class="ghost" id="copy-transaction">Copy JSON</button></div>'
+      : '<p class="muted">This action requires the named role wallet directly, not the Treasury Safe.</p><button id="copy-transaction">Copy transaction JSON</button>'}`;
+  $('#copy-transaction').addEventListener('click', () => navigator.clipboard.writeText(JSON.stringify(safeFile || transaction, null, 2)));
+  if (safeFile) $('#download-safe-json').addEventListener('click', () => downloadJson(result.safeFileName, safeFile));
 });
 
 $('#audit-filter').addEventListener('submit', async (event) => { event.preventDefault(); await loadAudit(); });
@@ -255,6 +264,21 @@ function confirmAction(title, copy) {
   $('#confirm-copy').textContent = copy;
   dialog.showModal();
   return new Promise((resolve) => dialog.addEventListener('close', () => resolve(dialog.returnValue === 'confirm'), { once: true }));
+}
+function downloadJson(fileName, value) {
+  if (!value) {
+    showAlert('No Safe file was created for this action.', true);
+    return;
+  }
+  const blob = new Blob([`${JSON.stringify(value, null, 2)}\n`], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName || 'matt-mine-safe-transactions.json';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 function showAlert(message, error = false) {
   const alert = $('#alert');

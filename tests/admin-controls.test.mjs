@@ -6,9 +6,14 @@ import { decodeFunctionData } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 
 import {
+  createAdminSafeTransactionFile,
   MATT_MINE_ADMIN_CONTRACTS,
   prepareAdminContractTransaction
 } from '../server/admin-controls.js';
+import {
+  calculateSafeTransactionBuilderChecksum,
+  createSafeTransactionBuilderFile
+} from '../server/safe-transaction-builder.js';
 import { MemoryDatabase } from '../server/database.js';
 import { createMattMineHttpServer } from '../server/http.js';
 import { MattMineService } from '../server/service.js';
@@ -147,6 +152,105 @@ test('contract controls prepare exact calldata without signing or broadcasting',
   );
 });
 
+test('Treasury actions create checksummed Ronin Safe Transaction Builder JSON', () => {
+  const transaction = prepareAdminContractTransaction({
+    action: 'rewards_fund_vault',
+    arguments: ['1500000']
+  });
+  const file = createAdminSafeTransactionFile(transaction, START);
+
+  assert.equal(file.version, '1.0');
+  assert.equal(file.chainId, '2020');
+  assert.equal(file.createdAt, START);
+  assert.equal(file.meta.createdFromSafeAddress, MATT_MINE_ADMIN_CONTRACTS.safe);
+  assert.match(file.meta.checksum, /^0x[a-f0-9]{64}$/);
+  assert.equal(file.transactions.length, 1);
+  assert.deepEqual(file.transactions[0], {
+    to: MATT_MINE_ADMIN_CONTRACTS.rewards,
+    value: '0',
+    data: transaction.data,
+    contractMethod: null,
+    contractInputsValues: null
+  });
+  assert.equal(calculateSafeTransactionBuilderChecksum(file), file.meta.checksum);
+
+  const directRole = prepareAdminContractTransaction({ action: 'rewards_pause', arguments: [] });
+  assert.equal(createAdminSafeTransactionFile(directRole, START), null);
+});
+
+test('Safe builder JSON preserves ordered batches and checksum detects calldata changes', () => {
+  const first = prepareAdminContractTransaction({
+    action: 'matt_approve_reward_vault',
+    arguments: ['1500000']
+  });
+  const second = prepareAdminContractTransaction({
+    action: 'rewards_fund_vault',
+    arguments: ['1500000']
+  });
+  const file = createSafeTransactionBuilderFile([first, second], {
+    chainId: 2020,
+    createdAt: START,
+    safeAddress: MATT_MINE_ADMIN_CONTRACTS.safe,
+    name: 'MATT Mine reward funding'
+  });
+  assert.deepEqual(file.transactions.map((entry) => entry.to), [
+    MATT_MINE_ADMIN_CONTRACTS.matt,
+    MATT_MINE_ADMIN_CONTRACTS.rewards
+  ]);
+
+  const changed = structuredClone(file);
+  changed.transactions[1].data = '0x1234';
+  assert.notEqual(calculateSafeTransactionBuilderChecksum(changed), file.meta.checksum);
+});
+
+test('Safe checksum matches the official Transaction Builder test vector', () => {
+  const officialSafeVector = {
+    version: '1.0',
+    chainId: '4',
+    createdAt: 1646321521061,
+    meta: {
+      name: 'test batch file',
+      txBuilderVersion: '1.4.0',
+      checksum: '',
+      createdFromSafeAddress: '0xDF8a1Ce35c9a6ACE153B4e0767942f1E2291a1Aa',
+      createdFromOwnerAddress: '0x49d4450977E2c95362C13D3a31a09311E0Ea26A6'
+    },
+    transactions: [
+      {
+        to: '0x49d4450977E2c95362C13D3a31a09311E0Ea26A6',
+        value: '0',
+        contractMethod: {
+          inputs: [{ internalType: 'address', name: 'paramAddress', type: 'address' }],
+          name: 'testAddress',
+          payable: false
+        },
+        contractInputsValues: {
+          paramAddress: '0x49d4450977E2c95362C13D3a31a09311E0Ea26A6'
+        }
+      },
+      {
+        to: '0x49d4450977E2c95362C13D3a31a09311E0Ea26A6',
+        value: '0',
+        contractMethod: {
+          inputs: [{ internalType: 'bool', name: 'paramBool', type: 'bool' }],
+          name: 'testBool',
+          payable: false
+        },
+        contractInputsValues: { paramAddress: '', paramBool: 'false' }
+      },
+      {
+        to: '0x49d4450977E2c95362C13D3a31a09311E0Ea26A6',
+        value: '2000000000000000000',
+        data: '0x42f4579000000000000000000000000049d4450977e2c95362c13d3a31a09311e0ea26a6'
+      }
+    ]
+  };
+  assert.equal(
+    calculateSafeTransactionBuilderChecksum(officialSafeVector),
+    '0x86c81826dbf7e8a37612153294cc85fdf5c81998dd0a44b86d945502a7eace7c'
+  );
+});
+
 test('private command center is a separate noindex page with no embedded secrets', async () => {
   const [html, script] = await Promise.all([
     readFile(`${ROOT}admin.html`, 'utf8'),
@@ -156,6 +260,9 @@ test('private command center is a separate noindex page with no embedded secrets
   assert.match(html, /MATT Mine Command Center/);
   assert.doesNotMatch(html + script, /MATT_MINE_ADMIN_KEY|admin-secret/);
   assert.match(script, /sessionStorage/);
+  assert.match(script, /Download Safe JSON/);
+  assert.match(script, /new Blob/);
+  assert.match(script, /link\.download/);
 });
 
 test('admin HTTP routes reject missing credentials and apply audited controls', async (context) => {
