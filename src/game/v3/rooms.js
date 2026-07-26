@@ -30,6 +30,12 @@ export const roomsMethods = {
     const state = this.roomStates?.[room.id];
     if (!state || state.cleared || state.locked) return;
     if (room.type === 'guardian' && !this.run.bossSpawned) return;
+    const hasRemainingEnemies = this.enemies.some((enemy) => enemy.roomId === room.id);
+    if (!hasRemainingEnemies) {
+      state.triggered = true;
+      this.unlockRoom(room.id, true);
+      return;
+    }
     state.triggered = true;
     state.locked = true;
     this.activeLockedRoomId = room.id;
