@@ -219,6 +219,20 @@ export class MattMineApiClient {
     });
   }
 
+  async updateKeybindings(keybindings) {
+    const response = await this.request('/api/profile/keybindings', {
+      method: 'PUT',
+      authenticated: true,
+      body: { keybindings }
+    });
+    return response.keybindings;
+  }
+
+  async gameTuning(lobby) {
+    const response = await this.request(`/api/game-tuning/${encodeURIComponent(lobby)}`);
+    return response.preset;
+  }
+
   async abandonRun(runId, runToken) {
     return this.request('/api/runs/abandon', {
       method: 'POST',

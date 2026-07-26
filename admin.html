@@ -34,6 +34,7 @@
         <button class="active" data-tab="overview">Overview</button>
         <button data-tab="operations">Operations</button>
         <button data-tab="players">Players</button>
+        <button data-tab="tuning">Game Tuning</button>
         <button data-tab="rewards">Rewards</button>
         <button data-tab="arena">Daily Arena</button>
         <button data-tab="contracts">Contracts</button>
@@ -66,10 +67,28 @@
       <section id="tab-players" class="tab">
         <div class="section-heading">
           <div><p class="eyebrow">MODERATION</p><h2>Players and wallets</h2></div>
-          <form id="wallet-search"><input id="wallet-query" placeholder="Search wallet address"><button>Search</button></form>
+          <form id="wallet-search"><input id="wallet-query" placeholder="Search miner name or wallet"><button>Search</button></form>
         </div>
         <div class="panel table-wrap"><table><thead><tr><th>Wallet</th><th>Status</th><th>Nuggets</th><th>Runs</th><th>Credits</th><th>Action</th></tr></thead><tbody id="wallet-rows"></tbody></table></div>
         <div id="wallet-detail" class="panel" hidden></div>
+      </section>
+
+      <section id="tab-tuning" class="tab">
+        <div class="section-heading">
+          <div><p class="eyebrow">LIVE GAME RULES</p><h2>Game tuning</h2></div>
+          <div class="action-row">
+            <label>Lobby<select id="tuning-lobby"><option value="practice">Practice</option><option value="free">Free ranked</option><option value="paid">Pass ranked</option><option value="arena">Daily Arena</option></select></label>
+            <label>Find setting<input id="tuning-search" placeholder="Health, boss, ore..."></label>
+          </div>
+        </div>
+        <div class="notice">Saved changes apply to new runs only. Contract prices, prize custody, pool caps, and finished scores stay protected.</div>
+        <form id="tuning-form">
+          <div id="tuning-fields" class="tuning-groups"></div>
+          <article class="panel">
+            <label>Required reason<input id="tuning-reason" maxlength="240" placeholder="Why are these game rules changing?" required></label>
+            <button type="submit">Save this lobby</button>
+          </article>
+        </form>
       </section>
 
       <section id="tab-rewards" class="tab">

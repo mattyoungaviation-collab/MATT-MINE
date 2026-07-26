@@ -4,6 +4,15 @@
 
 MATT Mine is a standalone browser action roguelite and daily Web3 competition on Ronin. It has its own launch website, wallet identity, separate Free and Pass leaderboards, live Pass and paid-run payments, verified contracts, and a production persistence path independent from MATT Hub.
 
+## v2.6 production game control
+
+- Add a Nitrado-style Game Tuning panel for Practice, Free, Pass, and Daily Arena lobbies.
+- Fine-tune player movement and health, every weapon, enemy families, Guardian behavior, room dimensions, ore, XP, scoring, and knockout rules.
+- Snapshot settings into every run so changing future rules cannot alter an active or completed run.
+- Stage Daily Arena tuning for the next UTC day and preserve identical rules for everyone competing today.
+- Search permanent miner names or wallet addresses, inspect individual activity, and grant audited nuggets, Pass XP, chests, or cosmetics.
+- Let every miner create unique keyboard controls and save them to their server profile.
+
 ## v2.5 combat clarity and run control
 
 - Render the official MATT Dyno at a smaller gameplay scale and sample exact sprite cells so adjacent frame fragments never bleed into view.

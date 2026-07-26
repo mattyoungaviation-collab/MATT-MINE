@@ -470,11 +470,12 @@ export class PostgresArenaStore {
         `INSERT INTO matt_mine_arena.runs (
            run_id,entry_id,day_key,address,entry_transaction_hash,token_hash,
            receipt_signature,status,started_at_ms,expires_at_ms,finished_at_ms,
-           through_seq,through_tick,transcript_hash,checkpoint_signature,result
-         ) VALUES ($1,$2,$3,$4,$5,$6,$7,'active',$8,$9,0,0,0,$10,$11,NULL)`,
+           through_seq,through_tick,transcript_hash,checkpoint_signature,tuning,result
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,'active',$8,$9,0,0,0,$10,$11,$12::jsonb,NULL)`,
         [storedRun.runId, storedRun.entryId, storedRun.day, storedRun.address,
           storedRun.entryTransactionHash, storedRun.tokenHash, storedRun.receiptSignature,
-          storedRun.startedAt, storedRun.expiresAt, storedRun.transcriptHash, storedRun.checkpointSignature]
+          storedRun.startedAt, storedRun.expiresAt, storedRun.transcriptHash, storedRun.checkpointSignature,
+          JSON.stringify(storedRun.tuning || {})]
       );
       await client.query(
         `UPDATE matt_mine_arena.entries SET run_id=$2,consumed_at_ms=$3 WHERE entry_id=$1`,
@@ -872,8 +873,10 @@ export async function createArenaPostgresSchema(pool) {
       through_tick INTEGER NOT NULL DEFAULT 0,
       transcript_hash TEXT NOT NULL,
       checkpoint_signature TEXT NOT NULL,
+      tuning JSONB NOT NULL DEFAULT '{}'::jsonb,
       result JSONB
     )`);
+  await pool.query(`ALTER TABLE matt_mine_arena.runs ADD COLUMN IF NOT EXISTS tuning JSONB NOT NULL DEFAULT '{}'::jsonb`);
   await pool.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS runs_one_active_wallet_idx
     ON matt_mine_arena.runs(address) WHERE status='active'`);
@@ -1028,6 +1031,7 @@ function normalizeRun(input) {
     throughTick: safeInteger(input.throughTick),
     transcriptHash: String(input.transcriptHash),
     checkpointSignature: String(input.checkpointSignature),
+    tuning: input.tuning && typeof input.tuning === 'object' ? clone(input.tuning) : {},
     result: input.result ? clone(input.result) : null
   };
 }
@@ -1096,6 +1100,7 @@ function formatRunRow(row) {
     finishedAt: Number(row.finished_at_ms), throughSeq: Number(row.through_seq),
     throughTick: Number(row.through_tick), transcriptHash: row.transcript_hash,
     checkpointSignature: row.checkpoint_signature,
+    tuning: typeof row.tuning === 'string' ? JSON.parse(row.tuning) : row.tuning,
     result: typeof row.result === 'string' ? JSON.parse(row.result) : row.result
   });
 }

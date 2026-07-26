@@ -22,6 +22,10 @@ export const guardianAttackMethods = {
     }
   },
   fireEnemyVolley(enemy, count, spread, speed, radial = false) {
+    if (enemy.isBoss) {
+      speed = this.runContext?.tuning?.bossProjectileSpeed || speed;
+      if (!radial) spread = this.runContext?.tuning?.bossVolleySpread || spread;
+    }
     const predictedPlayer = {
       x: this.player.x + this.player.vx * CONFIG.guardianPredictionSeconds,
       y: this.player.y + this.player.vy * CONFIG.guardianPredictionSeconds

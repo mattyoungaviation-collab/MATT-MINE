@@ -1,6 +1,6 @@
 import { CONFIG, ORE_TYPES } from '../config.js';
-import { createMineLayout, roomAt } from '../layout.js';
-import { clamp, randomRange, weightedChoice } from '../utils.js';
+import { createMineLayout, randomPointInRoom, roomAt } from '../layout.js';
+import { clamp, random, randomRange, weightedChoice } from '../utils.js';
 import { bossPhaseForHealth, roomRequiresLock } from '../combat.js';
 
 export const stateMethods = {
@@ -9,7 +9,8 @@ export const stateMethods = {
     this.entityId = 1;
     const isArena = this.runContext?.mode === 'arena';
     const meta = isArena ? {} : this.profile.meta;
-    const maxHealth = CONFIG.basePlayerHealth + (meta.health || 0) * 8;
+    const tuning = this.runContext?.tuning || {};
+    const maxHealth = (tuning.playerMaxHealth || CONFIG.basePlayerHealth) + (meta.health || 0) * 8;
     this.run = {
       depth: 1,
       rawNuggets: 0,
@@ -32,16 +33,16 @@ export const stateMethods = {
       y: CONFIG.worldHeight / 2,
       vx: 0,
       vy: 0,
-      radius: CONFIG.playerRadius,
+      radius: tuning.playerRadius || CONFIG.playerRadius,
       maxHealth,
       health: maxHealth,
-      speed: CONFIG.basePlayerSpeed * (1 + (meta.speed || 0) * 0.02),
-      damage: CONFIG.baseDamage * (1 + (meta.damage || 0) * 0.05),
-      attackCooldown: CONFIG.baseAttackCooldown,
+      speed: (tuning.playerSpeed || CONFIG.basePlayerSpeed) * (1 + (meta.speed || 0) * 0.02),
+      damage: (tuning.playerBaseDamage || CONFIG.baseDamage) * (1 + (meta.damage || 0) * 0.05),
+      attackCooldown: tuning.pickaxeCooldown || CONFIG.baseAttackCooldown,
       attackTimer: 0,
-      attackRange: CONFIG.baseAttackRange,
-      critChance: CONFIG.baseCritChance,
-      magnetRange: CONFIG.baseMagnetRange + (meta.magnet || 0) * 6,
+      attackRange: tuning.pickaxeRange || CONFIG.baseAttackRange,
+      critChance: tuning.playerCritChance ?? CONFIG.baseCritChance,
+      magnetRange: (tuning.playerMagnetRange || CONFIG.baseMagnetRange) + (meta.magnet || 0) * 6,
       armor: Math.min(0.25, (meta.armor || 0) * 0.01),
       level: 1,
       xp: 0,
@@ -51,9 +52,9 @@ export const stateMethods = {
       invulnerable: 0,
       swingTimer: 0,
       dashCooldown: 0,
-      dashCooldownMax: CONFIG.baseDashCooldown / (1 + (meta.dash || 0) * 0.02),
+      dashCooldownMax: (tuning.dashCooldown || CONFIG.baseDashCooldown) / (1 + (meta.dash || 0) * 0.02),
       dashTimer: 0,
-      dashSpeed: CONFIG.baseDashSpeed,
+      dashSpeed: tuning.dashSpeed || CONFIG.baseDashSpeed,
       lastMoveX: 1,
       lastMoveY: 0,
       dynamiteEvery: 0,
@@ -63,11 +64,11 @@ export const stateMethods = {
       runUpgradeCounts: {},
       weapon: 'pickaxe',
       unlockedWeapons: { pickaxe: true, dynamite: false, blaster: !isArena },
-      dynamiteAmmo: CONFIG.dynamiteStartAmmo,
-      blasterEnergy: CONFIG.blasterEnergyMax,
-      blasterEnergyMax: CONFIG.blasterEnergyMax,
-      blasterEnergyRegen: CONFIG.blasterEnergyRegen,
-      blasterDamageScale: CONFIG.blasterDamageScale * (1 + (meta.blaster || 0) * 0.03),
+      dynamiteAmmo: tuning.dynamiteStartAmmo ?? CONFIG.dynamiteStartAmmo,
+      blasterEnergy: tuning.blasterEnergy || CONFIG.blasterEnergyMax,
+      blasterEnergyMax: tuning.blasterEnergy || CONFIG.blasterEnergyMax,
+      blasterEnergyRegen: tuning.blasterRecharge || CONFIG.blasterEnergyRegen,
+      blasterDamageScale: (tuning.blasterDamageMultiplier || CONFIG.blasterDamageScale) * (1 + (meta.blaster || 0) * 0.03),
       blasterVolley: 1,
       emptyWeaponToast: 0
     };
@@ -91,10 +92,11 @@ export const stateMethods = {
   },
   generateDepth() {
     const arenaMode = this.runContext?.mode === 'arena';
-    this.layout = createMineLayout();
+    const tuning = this.runContext?.tuning || {};
+    this.layout = createMineLayout(tuning.roomsPerDepth || CONFIG.roomsPerDepth, tuning);
     if (!arenaMode && this.layout.guardianRoom) {
-      this.layout.guardianRoom.width = Math.max(this.layout.guardianRoom.width, 520);
-      this.layout.guardianRoom.height = Math.max(this.layout.guardianRoom.height, 390);
+      this.layout.guardianRoom.width = Math.max(this.layout.guardianRoom.width, tuning.bossRoomWidth || 520);
+      this.layout.guardianRoom.height = Math.max(this.layout.guardianRoom.height, tuning.bossRoomHeight || 390);
     }
     this.decor = this.makeDepthDecor();
     this.enemies = [];
@@ -119,7 +121,7 @@ export const stateMethods = {
     this.player.vy = 0;
     this.player.health = Math.min(this.player.maxHealth, this.player.health + this.player.maxHealth * 0.3);
     this.run.safeStartUntil = this.run.elapsed +
-      (arenaMode ? CONFIG.arenaSafeStartSeconds : CONFIG.safeStartSeconds);
+      (arenaMode ? CONFIG.arenaSafeStartSeconds : (tuning.safeStartSeconds ?? CONFIG.safeStartSeconds));
 
     const luck = this.runContext?.mode === 'arena' ? 0 : this.profile.meta.luck || 0;
     const oreEntries = Object.entries(ORE_TYPES)
@@ -128,14 +130,14 @@ export const stateMethods = {
     let guaranteedCrystals = this.crystalGoal() + 2;
 
     for (const room of this.layout.rooms) {
-      const oreCount = {
+      const oreCount = Math.round(({
         start: 3,
         mining: 14,
         combat: 4,
         mixed: 8,
         treasure: 5,
         guardian: 5
-      }[room.type] || 6;
+      }[room.type] || 6) * (tuning.oreAmountMultiplier || 1));
 
       for (let index = 0; index < oreCount; index += 1) {
         const shouldGuarantee = guaranteedCrystals > 0 && ['mining', 'treasure'].includes(room.type);
@@ -154,6 +156,7 @@ export const stateMethods = {
       }[room.type] ?? 2;
       for (let index = 0; index < enemyCount; index += 1) this.spawnEnemy(false, room);
     }
+    this.enemies = this.enemies.slice(0, Math.max(0, Math.round(tuning.enemyMaximum ?? CONFIG.maxEnemiesBase)));
 
     while (guaranteedCrystals > 0) {
       const room = this.layout.rooms.find((entry) => entry.type === 'mining') || this.layout.rooms[1];
@@ -164,6 +167,43 @@ export const stateMethods = {
     if (this.layout.treasureRoom) this.addOre({ id: 'cache', ...ORE_TYPES.cache }, this.layout.treasureRoom, luck, true);
     this.updateObjective();
     this.updateHud();
+  },
+  addOre(type, room, luck = 0, forceRich = false) {
+    const tuning = this.runContext?.tuning || {};
+    const position = randomPointInRoom(room, 52);
+    const scale = type.id === 'cache' ? 1.25 : randomRange(0.86, 1.2);
+    const richChance = 0.07 + luck * 0.01;
+    const rich = forceRich || type.id === 'cache' || (type.id !== 'stone' && random() < richChance);
+    const depthHealth = 1 + (this.run.depth - 1) * 0.11;
+    const treasureMultiplier = type.id === 'cache' ? (tuning.treasureAmountMultiplier ?? 1) : 1;
+    const hp = type.hp * depthHealth * (rich ? 1.22 : 1) * (tuning[`${type.id}HealthMultiplier`] || 1);
+    this.ores.push({
+      id: this.entityId++,
+      kind: type.id,
+      name: type.name,
+      x: position.x,
+      y: position.y,
+      radius: 22 * scale,
+      hp,
+      maxHp: hp,
+      nuggets: Math.round(type.nuggets * (rich ? 2 : 1) * treasureMultiplier * (tuning[`${type.id}ValueMultiplier`] ?? 1) * (tuning.nuggetMultiplier ?? 1)),
+      xp: Math.round(type.xp * (rich ? 1.35 : 1) * treasureMultiplier * (tuning.xpMultiplier ?? 1)),
+      color: type.color,
+      rotation: randomRange(0, Math.PI * 2),
+      hitFlash: 0,
+      rich,
+      roomId: room.id
+    });
+  },
+  projectedPayout() {
+    const tuning = this.runContext?.tuning || {};
+    return Math.floor(
+      this.run.rawNuggets *
+      this.run.lootMultiplier *
+      this.depthMultiplier() *
+      (tuning.scoreMultiplier ?? 1) *
+      (1 + (this.run.depth - 1) * ((tuning.depthScoreMultiplier ?? 1) - 1))
+    );
   },
   isSafeStartActive() {
     if (!this.layout?.startRoom) return false;
@@ -222,9 +262,10 @@ export const stateMethods = {
       dashY /= length;
       this.player.vx = dashX * this.player.dashSpeed;
       this.player.vy = dashY * this.player.dashSpeed;
-      this.player.dashTimer = CONFIG.dashDuration;
+      const dashDuration = this.runContext?.tuning?.dashDuration ?? CONFIG.dashDuration;
+      this.player.dashTimer = dashDuration;
       this.player.dashCooldown = this.player.dashCooldownMax;
-      this.player.invulnerable = Math.max(this.player.invulnerable, CONFIG.dashDuration + 0.08);
+      this.player.invulnerable = Math.max(this.player.invulnerable, dashDuration + 0.08);
       this.player.trailTimer = 0;
       this.camera.shake = 5;
       this.burst(this.player.x, this.player.y, '#70d9ff', 10);
@@ -251,7 +292,10 @@ export const stateMethods = {
 
     const targetVx = move.x * this.player.speed;
     const targetVy = move.y * this.player.speed;
-    const response = moveLength > 0.04 ? CONFIG.playerAcceleration : CONFIG.playerFriction;
+    const tuning = this.runContext?.tuning || {};
+    const response = moveLength > 0.04
+      ? tuning.playerAcceleration || CONFIG.playerAcceleration
+      : tuning.playerFriction || CONFIG.playerFriction;
     const blend = Math.min(1, response * dt);
     this.player.vx += (targetVx - this.player.vx) * blend;
     this.player.vy += (targetVy - this.player.vy) * blend;
@@ -332,7 +376,9 @@ export const stateMethods = {
   endRun(extracted) {
     if (!this.run || ['ended', 'menu'].includes(this.state)) return;
     const projected = this.projectedPayout();
-    const banked = extracted ? projected : Math.floor(projected * CONFIG.deathKeepFraction);
+    const banked = extracted
+      ? projected
+      : Math.floor(projected * (this.runContext?.tuning?.deathKeepFraction ?? CONFIG.deathKeepFraction));
     if (this.runContext?.mode !== 'arena' && !this.headless) {
       this.profile.bankedNuggets += banked;
       this.profile.bestDepth = Math.max(this.profile.bestDepth, this.run.depth);

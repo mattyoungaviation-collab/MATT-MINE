@@ -1,4 +1,4 @@
-const state = { key: '', overview: null, actions: [] };
+const state = { key: '', overview: null, actions: [], tuning: null };
 const $ = (selector) => document.querySelector(selector);
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char]));
 
@@ -29,6 +29,7 @@ $('#tabs').addEventListener('click', async (event) => {
   document.querySelectorAll('#tabs [data-tab]').forEach((button) => button.classList.toggle('active', button.dataset.tab === name));
   document.querySelectorAll('.tab').forEach((tab) => tab.classList.toggle('active', tab.id === `tab-${name}`));
   if (name === 'players') await loadWallets();
+  if (name === 'tuning') await loadTuning();
   if (name === 'rewards') await loadRewards();
   if (name === 'arena') await loadArenaAdmin();
   if (name === 'audit') await loadAudit();
@@ -106,7 +107,7 @@ $('#wallet-search').addEventListener('submit', async (event) => {
 async function loadWallets() {
   const data = await api(`/api/admin/wallets?query=${encodeURIComponent($('#wallet-query').value)}`);
   $('#wallet-rows').innerHTML = data.wallets.map((wallet) => `<tr>
-    <td><button class="wallet-link" data-wallet="${wallet.address}">${short(wallet.address)}</button></td>
+    <td><button class="wallet-link" data-wallet="${wallet.address}">${escapeHtml(wallet.identity?.name || 'Unnamed')}<br><small>${short(wallet.address)}</small></button></td>
     <td><span class="badge ${wallet.suspended ? 'suspended' : ''}">${wallet.suspended ? 'Suspended' : 'Active'}</span></td>
     <td>${wallet.profile.bankedNuggets.toLocaleString()}</td><td>${wallet.finishedRuns}</td><td>${wallet.unusedPaidCredits}</td>
     <td><button class="ghost" data-wallet="${wallet.address}">Inspect</button></td></tr>`).join('') || '<tr><td colspan="6">No wallets found.</td></tr>';
@@ -127,6 +128,18 @@ async function loadWallet(address) {
       <button class="ghost" data-wallet-action="expire_active_runs">Expire active runs</button>
       <button class="ghost" data-wallet-action="restore_free_run">Restore today’s free run</button>
     </div>`;
+  panel.insertAdjacentHTML('beforeend', `
+    <h3>Award this player</h3>
+    <div class="grid two">
+      <label>Award<select id="award-type"><option value="nuggets">Banked nuggets</option><option value="pass_xp">Pass XP</option><option value="chest">Pass chest</option><option value="cosmetic">Cosmetic ID</option></select></label>
+      <label>Amount<input id="award-amount" type="number" min="1" value="1"></label>
+      <label>Cosmetic ID<input id="award-cosmetic" placeholder="gold_pickaxe"></label>
+      <label>Required reason<input id="award-reason" maxlength="240" placeholder="Why is this award being granted?"></label>
+    </div>
+    <button id="grant-award">Grant audited award</button>
+    <h3>Player activity</h3>
+    <div class="timeline activity-list">${(data.activity || []).map((entry) => `<article><strong>${escapeHtml(words(entry.action))}</strong><p>${escapeHtml(entry.details)}</p><time>${new Date(entry.timestamp).toLocaleString()}</time></article>`).join('') || '<p>No activity recorded yet.</p>'}</div>
+  `);
   panel.querySelectorAll('[data-wallet-action]').forEach((button) => button.addEventListener('click', async () => {
     const reason = $('#wallet-reason').value;
     if (!await confirmAction('Confirm player action?', `${button.textContent} for ${short(address)}. This is audit logged.`)) return;
@@ -139,8 +152,74 @@ async function loadWallet(address) {
     await loadWallets();
     showAlert('Player action completed.');
   }));
+  $('#grant-award').addEventListener('click', async () => {
+    if (!await confirmAction('Grant player award?', 'This immediately changes the player profile and creates an audit entry.')) return;
+    await api(`/api/admin/wallets/${address}/awards`, {
+      method: 'POST',
+      body: {
+        type: $('#award-type').value,
+        amount: Number($('#award-amount').value),
+        cosmeticId: $('#award-cosmetic').value,
+        reason: $('#award-reason').value
+      }
+    });
+    await loadWallet(address);
+    showAlert('Player award granted and audited.');
+  });
   panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
+
+async function loadTuning() {
+  if (!state.tuning) state.tuning = await api('/api/admin/game-tuning');
+  renderTuning();
+}
+
+function renderTuning() {
+  if (!state.tuning) return;
+  const lobby = $('#tuning-lobby').value;
+  const preset = state.tuning.presets[lobby];
+  const needle = $('#tuning-search').value.trim().toLowerCase();
+  const visible = state.tuning.schema.filter((entry) =>
+    !needle || `${entry.category} ${entry.label} ${entry.description || ''}`.toLowerCase().includes(needle)
+  );
+  const groups = visible.reduce((map, entry) => {
+    if (!map.has(entry.category)) map.set(entry.category, []);
+    map.get(entry.category).push(entry);
+    return map;
+  }, new Map());
+  $('#tuning-fields').innerHTML = [...groups].map(([category, entries]) => `<article class="panel">
+    <h2>${escapeHtml(category)}</h2><div class="tuning-grid">${entries.map((entry) => `<label class="tuning-field">${escapeHtml(entry.label)}
+      ${entry.type === 'boolean'
+        ? `<input data-tuning="${entry.id}" type="checkbox" ${preset[entry.id] ? 'checked' : ''}>`
+        : `<input data-tuning="${entry.id}" type="number" min="${entry.min}" max="${entry.max}" step="any" value="${preset[entry.id]}">`}
+      ${entry.description ? `<small>${escapeHtml(entry.description)}</small>` : ''}</label>`).join('')}</div>
+  </article>`).join('');
+}
+
+$('#tuning-lobby').addEventListener('change', renderTuning);
+$('#tuning-search').addEventListener('input', renderTuning);
+$('#tuning-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const lobby = $('#tuning-lobby').value;
+  const patch = {};
+  document.querySelectorAll('[data-tuning]').forEach((input) => {
+    patch[input.dataset.tuning] = input.type === 'checkbox' ? input.checked : Number(input.value);
+  });
+  const timing = lobby === 'arena'
+    ? 'Daily Arena changes begin with the next UTC day. Today keeps the same rules for every player.'
+    : 'New runs in this lobby will use these values immediately.';
+  if (!await confirmAction(`Save ${words(lobby)} tuning?`, timing)) return;
+  const result = await api(`/api/admin/game-tuning/${lobby}`, {
+    method: 'PUT',
+    body: { patch, reason: $('#tuning-reason').value }
+  });
+  state.tuning.presets[lobby] = result.preset;
+  $('#tuning-reason').value = '';
+  renderTuning();
+  showAlert(result.effectiveDay
+    ? `${words(lobby)} tuning saved for ${result.effectiveDay} UTC.`
+    : `${words(lobby)} tuning saved.`);
+});
 
 $('#refresh-rewards').addEventListener('click', loadRewards);
 $('#reward-create-form').addEventListener('submit', async (event) => {

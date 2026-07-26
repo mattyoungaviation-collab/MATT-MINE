@@ -636,3 +636,4 @@ button,
     scroll-behavior: auto;
   }
 }
+.keybind-editor{margin-top:22px;padding-top:18px;border-top:1px solid rgba(255,255,255,.12)}.keybind-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0}.keybind-button{display:flex;justify-content:space-between;gap:10px;align-items:center;font-size:.8rem}.keybind-button strong{color:#ffd34e}.keybind-button.listening{outline:2px solid #ffd34e}@media(max-width:700px){.keybind-grid{grid-template-columns:1fr 1fr}}

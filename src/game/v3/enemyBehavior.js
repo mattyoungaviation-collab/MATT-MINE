@@ -22,7 +22,9 @@ export const enemyBehaviorMethods = {
       }
 
       const enemyRoom = roomAt(this.layout, enemy.x, enemy.y);
-      const awarenessRange = enemy.isBoss ? CONFIG.guardianAwarenessRange : 440;
+      const awarenessRange = enemy.isBoss
+        ? this.runContext?.tuning?.bossAwarenessRange || CONFIG.guardianAwarenessRange
+        : 440;
       const active = enemy.isBoss
         ? enemy.engaged === true ||
           distance(enemy, this.player) < awarenessRange ||

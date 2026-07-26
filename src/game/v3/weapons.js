@@ -57,7 +57,7 @@ export const weaponsMethods = {
 
     const { target } = candidates[0];
     const critical = random() < this.player.critChance;
-    const damage = this.player.damage * CONFIG.pickaxeDamageScale * (critical ? 2 : 1);
+    const damage = this.player.damage * (this.runContext?.tuning?.pickaxeDamageMultiplier || CONFIG.pickaxeDamageScale) * (critical ? 2 : 1);
     this.damageTarget(target, damage, critical, angleTo(this.player, target));
     this.run.attackCounter += 1;
 
@@ -89,15 +89,16 @@ export const weaponsMethods = {
       radius: 10,
       life: 0.68,
       travelled: 0,
-      maxRange: CONFIG.dynamiteRange,
-      damage: CONFIG.dynamiteDamage,
-      explosionRadius: 155,
+      maxRange: this.runContext?.tuning?.dynamiteThrowRange || CONFIG.dynamiteRange,
+      damage: this.runContext?.tuning?.dynamiteDamage || CONFIG.dynamiteDamage,
+      explosionRadius: this.runContext?.tuning?.dynamiteBlastRadius || 155,
       color: '#ffb342'
     });
     this.audio.play('throw');
   },
   fireBlaster() {
-    if (this.player.blasterEnergy < CONFIG.blasterEnergyCost) {
+    const energyCost = this.runContext?.tuning?.blasterEnergyCost || CONFIG.blasterEnergyCost;
+    if (this.player.blasterEnergy < energyCost) {
       if (this.player.emptyWeaponToast <= 0) {
         this.hooks.onToast?.('Crystal Blaster is recharging');
         this.player.emptyWeaponToast = 0.8;
@@ -106,9 +107,9 @@ export const weaponsMethods = {
     }
     this.player.attackTimer = Math.max(0.13, this.player.attackCooldown * 0.48);
     this.player.swingTimer = Math.max(this.player.swingTimer, 0.14);
-    this.player.blasterEnergy -= CONFIG.blasterEnergyCost;
+    this.player.blasterEnergy -= energyCost;
     const speed = 760;
-    const count = clamp(this.player.blasterVolley || 1, 1, 2);
+    const count = clamp(this.player.blasterVolley || 1, 1, this.runContext?.tuning?.blasterBeams || 2);
     for (let index = 0; index < count; index += 1) {
       const offset = count === 1
         ? 0
@@ -125,7 +126,7 @@ export const weaponsMethods = {
         radius: 7,
         life: 0.82,
         travelled: 0,
-        maxRange: CONFIG.blasterRange,
+        maxRange: this.runContext?.tuning?.blasterRange || CONFIG.blasterRange,
         damage: this.player.damage * this.player.blasterDamageScale,
         color: CONFIG.colors.crystal
       });

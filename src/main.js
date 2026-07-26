@@ -2,6 +2,7 @@ import { MattMineGame } from './game/GameV4.js';
 import { apiClient } from './game/apiClient.js';
 import { META_UPGRADES, metaUpgradeCost } from './game/config.js';
 import { prepareProfileImage } from './game/profileImage.js';
+import { KEYBIND_ACTIONS, defaultKeybindings, normalizeKeybindings } from './game/keybindings.js';
 import {
   ADMIN_ROLES,
   LocalEconomyStore,
@@ -59,6 +60,7 @@ let toastTimer;
 let activeBoard = RUN_MODES.FREE;
 let serverConfig = null;
 let serverPlayer = null;
+let pendingKeybindings = defaultKeybindings();
 let activeServerRun = null;
 let paymentStatus = null;
 let publicPaymentStatus = null;
@@ -320,6 +322,8 @@ function openMinerProfile(forceSetup = false) {
     ? 'Finish this one-time setup before entering ranked games.'
     : 'Your name and picture appear on every MATT Mine leaderboard.';
   renderProfileAvatar(identity.avatarUrl || '');
+  pendingKeybindings = { ...(serverPlayer.keybindings || defaultKeybindings()) };
+  renderKeybindings();
   showScreen('miner-profile');
   if (requiresSetup) $('#profile-name').focus();
 }
@@ -392,6 +396,7 @@ async function connectWallet() {
     profile = serverPlayer.profile;
     saveProfile(profile);
     game.setProfile(profile);
+    game.input.setKeybindings(serverPlayer.keybindings || defaultKeybindings());
     await refreshPaymentStatus(true);
     if (serverPlayer.identity?.requiresSetup) {
       openMinerProfile(true);
@@ -420,6 +425,7 @@ async function refreshServerPlayer() {
     profile = serverPlayer.profile;
     saveProfile(profile);
     game.setProfile(profile);
+    game.input.setKeybindings(serverPlayer.keybindings || defaultKeybindings());
     await refreshPaymentStatus(true);
     await refreshArena(true);
     updateMenu();
@@ -568,7 +574,8 @@ async function startRunMode(mode) {
         seed: run.seed,
         day: run.day,
         week: run.week,
-        rewardWeight: run.rewardWeight
+        rewardWeight: run.rewardWeight,
+        tuning: run.tuning
       });
       updateMenu();
     } catch (error) {
@@ -585,12 +592,14 @@ async function startRunMode(mode) {
     updateMenu();
     return;
   }
+  const tuning = await apiClient.gameTuning(mode).catch(() => ({}));
   game.startRun({
     mode: result.mode,
     seed: result.seed,
     day: result.day,
     week: result.week,
-    rewardWeight: result.rewardWeight
+    rewardWeight: result.rewardWeight,
+    tuning
   });
   updateMenu();
 }
@@ -817,6 +826,7 @@ $('#shake-toggle-button').addEventListener('click', () => {
 $('#profile-button').addEventListener('click', () => openMinerProfile(false));
 $('#save-profile-button').addEventListener('click', () => void saveMinerIdentity());
 $('#update-avatar-button').addEventListener('click', () => void updateMinerAvatar());
+$('#save-keybinds-button').addEventListener('click', () => void savePlayerKeybindings());
 $('#profile-name').addEventListener('input', () => renderProfileAvatar(pendingAvatarDataUrl || serverPlayer?.identity?.avatarUrl || ''));
 $('#profile-avatar-input').addEventListener('change', async (event) => {
   const file = event.target.files?.[0];
@@ -1320,7 +1330,8 @@ async function startArenaRun() {
       mode: 'arena',
       seed: run.dailySeed || run.seed,
       day: run.day,
-      rewardWeight: 0
+      rewardWeight: 0,
+      tuning: run.challenge?.tuning || {}
     });
   } catch (error) {
     activeArenaRun = null;
@@ -1847,6 +1858,33 @@ function renderAudioSettings() {
   $('#effects-volume').value = effectsPercent;
   $('#music-volume-value').textContent = `${musicPercent}%`;
   $('#effects-volume-value').textContent = `${effectsPercent}%`;
+}
+
+function renderKeybindings() {
+  $('#keybind-grid').innerHTML = KEYBIND_ACTIONS.map((action) =>
+    `<button type="button" class="secondary-button keybind-button" data-keybind="${action.id}"><span>${escapeHtml(action.label)}</span><strong>${escapeHtml(pendingKeybindings[action.id])}</strong></button>`
+  ).join('');
+  document.querySelectorAll('[data-keybind]').forEach((button) => button.addEventListener('click', () => {
+    button.classList.add('listening');
+    button.querySelector('strong').textContent = 'PRESS KEY';
+    window.addEventListener('keydown', (event) => {
+      event.preventDefault();
+      pendingKeybindings[button.dataset.keybind] = event.code;
+      renderKeybindings();
+    }, { once: true, capture: true });
+  }));
+}
+
+async function savePlayerKeybindings() {
+  if (!serverPlayer) return toast('Connect Ronin Wallet first');
+  try {
+    const saved = await apiClient.updateKeybindings(normalizeKeybindings(pendingKeybindings));
+    serverPlayer.keybindings = saved;
+    game.input.setKeybindings(saved);
+    toast('Controls saved to your profile');
+  } catch (error) {
+    $('#profile-status').textContent = error.message;
+  }
 }
 
 function renderGameplayPreferences() {

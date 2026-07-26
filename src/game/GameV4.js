@@ -20,7 +20,8 @@ export class MattMineGame extends V3MattMineGame {
       seed: context.seed || `MATT-PRACTICE-${Date.now()}`,
       day: context.day || '',
       week: context.week || '',
-      rewardWeight: Number(context.rewardWeight || 0)
+      rewardWeight: Number(context.rewardWeight || 0),
+      tuning: context.tuning && typeof context.tuning === 'object' ? { ...context.tuning } : {}
     };
     this.arenaAccumulator = 0;
     this.arenaFinishRecorded = false;

@@ -20,7 +20,7 @@ export const enemySpawnMethods = {
     let position = randomPointInRoom(room, isBoss ? 92 : 54);
     let attempts = 0;
     const minimumPlayerDistance = this.run.elapsed < this.run.safeStartUntil
-      ? CONFIG.safeStartEnemyDistance
+      ? this.runContext?.tuning?.safeStartDistance ?? CONFIG.safeStartEnemyDistance
       : 170;
     while (distance(position, this.player) < minimumPlayerDistance && attempts < 20) {
       position = randomPointInRoom(room, isBoss ? 92 : 54);
@@ -30,9 +30,19 @@ export const enemySpawnMethods = {
     const depthScale = 1 + (this.run.depth - 1) * 0.28;
     const arenaMode = this.runContext?.mode === 'arena';
     const roll = isBoss || forcedType ? 0 : random();
-    const type = isBoss
+    let type = isBoss
       ? 'guardian'
       : forcedType || (arenaMode ? legacyArenaArchetype(roll, this.run.depth) : enemyArchetypeForRoll(roll, this.run.depth));
+    const tuning = this.runContext?.tuning || {};
+    const enabledTypes = [
+      ['slime', tuning.spawnSlimes !== false],
+      ['bat', tuning.spawnBats !== false],
+      ['crawler', tuning.spawnCrawlers !== false],
+      ['beetle', tuning.spawnBeetles !== false],
+      ['exploder', tuning.spawnExploders !== false],
+      ['spitter', tuning.spawnRanged !== false]
+    ].filter(([, enabled]) => enabled).map(([id]) => id);
+    if (!isBoss && !enabledTypes.includes(type)) type = enabledTypes[0] || 'slime';
     const configuredStats = ENEMY_STATS[type];
     const stats = arenaMode && isBoss
       ? { ...configuredStats, health: 620, speed: 56, damage: 24, xp: 160 }
@@ -50,10 +60,10 @@ export const enemySpawnMethods = {
       knockbackX: 0,
       knockbackY: 0,
       radius: stats.radius * (isBoss ? 1 + (this.run.depth - 1) * 0.05 : 1),
-      hp: stats.health * depthScale,
-      maxHp: stats.health * depthScale,
-      speed: stats.speed * (1 + (this.run.depth - 1) * 0.06),
-      damage: stats.damage * depthScale,
+      hp: stats.health * depthScale * (tuning.enemyHealthMultiplier || 1) * (tuning[`${type}HealthMultiplier`] || 1) * (isBoss ? tuning.bossHealthMultiplier || 1 : 1),
+      maxHp: stats.health * depthScale * (tuning.enemyHealthMultiplier || 1) * (tuning[`${type}HealthMultiplier`] || 1) * (isBoss ? tuning.bossHealthMultiplier || 1 : 1),
+      speed: stats.speed * (1 + (this.run.depth - 1) * 0.06) * (tuning.enemySpeedMultiplier || 1) * (isBoss ? tuning.bossSpeedMultiplier || 1 : 1),
+      damage: stats.damage * depthScale * (tuning.enemyDamageMultiplier ?? 1) * (isBoss ? tuning.bossDamageMultiplier ?? 1 : 1),
       xp: Math.round(stats.xp * depthScale),
       color: stats.color,
       hitFlash: 0,
@@ -74,8 +84,12 @@ export const enemySpawnMethods = {
     return enemy;
   },
   killEnemy(enemy) {
+    const tuning = this.runContext?.tuning || {};
     this.enemies = this.enemies.filter((entry) => entry.id !== enemy.id);
     this.run.kills += 1;
+    this.run.rawNuggets += enemy.isBoss
+      ? Math.max(0, Math.round(tuning.bossPointValue || 0))
+      : Math.max(0, Math.round(tuning.killPointValue || 0));
     this.hooks.onArenaEvent?.({
       type: enemy.isBoss ? 'guardian_defeated' : 'enemy_killed',
       tick: Math.round(this.run.elapsed * 1_000),
