@@ -497,6 +497,10 @@ button,
 }
 
 @media (max-width: 1180px) {
+  #menu.menu-v4:not(.active) {
+    display: none;
+  }
+
   #menu.menu-v4 {
     display: block;
     overflow: auto;

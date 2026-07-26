@@ -1,4 +1,8 @@
 import { TAU, roundRect } from './drawHelpers.js';
+import { imageIsReady } from './visualAssets.js';
+
+const MATT_DYNO_FRAME_COUNT = 6;
+const MATT_DYNO_WALK_FRAMES = 4;
 
 export const renderPlayerMethods = {
   drawPlayer(ctx) {
@@ -28,6 +32,59 @@ export const renderPlayerMethods = {
     ctx.filter = 'blur(2px)';
     ctx.beginPath(); ctx.ellipse(3, 24, 27, 10, 0, 0, TAU); ctx.fill();
     ctx.filter = 'none';
+
+    const mattDyno = this.visualAssets?.mattDyno;
+    if (imageIsReady(mattDyno)) {
+      const moving = movement > 22;
+      const frame = player.swingTimer > 0
+        ? 5
+        : moving
+          ? 1 + Math.floor(this.run.elapsed * (player.dashTimer > 0 ? 14 : 8)) % MATT_DYNO_WALK_FRAMES
+          : 0;
+      const frameWidth = mattDyno.naturalWidth / MATT_DYNO_FRAME_COUNT;
+      const breathing = moving ? 1 : 1 + Math.sin(this.run.elapsed * 3.4) * 0.018;
+      const stepBob = moving
+        ? Math.abs(Math.sin(this.run.elapsed * (player.dashTimer > 0 ? 14 : 8) * Math.PI)) * 2.2
+        : Math.sin(this.run.elapsed * 3.4) * 1.1;
+      const facesRight = Math.cos(player.angle) >= 0;
+
+      ctx.save();
+      ctx.translate(0, -stepBob);
+      ctx.scale(facesRight ? -breathing : breathing, breathing);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.filter = player.hitFlash > 0
+        ? 'sepia(1) saturate(8) hue-rotate(310deg) brightness(1.2)'
+        : cosmetics.skin === 'crystal_skin'
+          ? 'hue-rotate(145deg) saturate(1.25) brightness(1.12) drop-shadow(0 0 8px rgba(112,217,255,.75))'
+          : player.dashTimer > 0
+            ? 'brightness(1.18) drop-shadow(0 0 9px rgba(112,217,255,.8))'
+            : 'drop-shadow(0 3px 4px rgba(0,0,0,.78)) drop-shadow(0 0 2px rgba(245,209,66,.28))';
+      ctx.drawImage(
+        mattDyno,
+        frame * frameWidth,
+        0,
+        frameWidth,
+        mattDyno.naturalHeight,
+        -63,
+        -148,
+        126,
+        210
+      );
+      ctx.restore();
+      ctx.restore();
+
+      if (player.weapon === 'pickaxe' && player.swingTimer > 0) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(245,209,66,0.5)';
+        ctx.lineWidth = 10;
+        ctx.beginPath();
+        ctx.arc(player.x, player.y, player.attackRange * 0.84, player.angle - 0.72, player.angle + 0.72);
+        ctx.stroke();
+        ctx.restore();
+      }
+      return;
+    }
 
     ctx.strokeStyle = '#181b23';
     ctx.lineWidth = 9;

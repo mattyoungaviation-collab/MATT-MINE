@@ -4,6 +4,14 @@
 
 MATT Mine is a standalone browser action roguelite and daily Web3 competition on Ronin. It has its own launch website, wallet identity, separate Free and Pass leaderboards, live Pass and paid-run payments, verified contracts, and a production persistence path independent from MATT Hub.
 
+## v2.4 official MATT Dyno and Safe Start
+
+- Replace the placeholder miner with the official MATT Dyno, animated across idle, walking, dashing, and attacking poses.
+- Give MATT Dyno moving legs, a visible tail, directional facing, breathing motion, and a real two-handed Pickaxe.
+- Start every run with the Pickaxe equipped while preserving unlocked weapon access.
+- Give Free, Pass, and Practice runs a Safe Start grace period before enemies can attack while preserving deterministic Arena replay rules.
+- Guarantee zero start-room enemies and keep nearby enemies from attacking through the sanctuary boundary.
+
 ## v2.3 production lobby experience
 
 - Replace the mixed run-selection layout with four equal, clearly explained play lobbies: Free Daily Mine, Pass Mine, MATT Arena, and Practice Mine.

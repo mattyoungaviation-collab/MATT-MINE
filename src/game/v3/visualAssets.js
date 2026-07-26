@@ -1,6 +1,7 @@
 const VISUAL_ASSET_PATHS = Object.freeze({
   floor: '/assets/game/mine-floor-cinematic.webp',
-  guardian: '/assets/game/guardian-cinematic.webp'
+  guardian: '/assets/game/guardian-cinematic.webp',
+  mattDyno: '/assets/game/matt-dyno-spritesheet.png'
 });
 
 export function loadVisualAssets(ImageConstructor = globalThis.Image) {

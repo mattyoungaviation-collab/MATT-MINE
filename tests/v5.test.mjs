@@ -195,12 +195,12 @@ test('pickaxe, dynamite, and crystal blaster damage their intended targets', asy
   assert.equal(game.projectiles.some((projectile) => projectile.kind === 'crystalBolt'), false);
 });
 
-test('Practice starts with the Blaster while the live deterministic Arena rules stay unchanged', async () => {
+test('every mode starts with the Pickaxe while Practice keeps the Blaster available', async () => {
   const { MattMineGame } = await import('../src/game/GameV4.js');
   const stubs = installBrowserStubs();
   const practice = new MattMineGame(stubs.canvas, stubs.profile);
   practice.startRun({ mode: RUN_MODES.PRACTICE, seed: 'STARTING-BLASTER' });
-  assert.equal(practice.player.weapon, 'blaster');
+  assert.equal(practice.player.weapon, 'pickaxe');
   assert.equal(practice.player.unlockedWeapons.blaster, true);
   assert.ok(practice.layout.guardianRoom.width >= 520);
   assert.ok(practice.layout.guardianRoom.height >= 390);
@@ -213,6 +213,50 @@ test('Practice starts with the Blaster while the live deterministic Arena rules 
   assert.equal(arena.player.unlockedWeapons.blaster, false);
   assert.equal(arena.layout.guardianRoom.width, CONFIG.roomWidth);
   assert.equal(arena.layout.guardianRoom.height, CONFIG.roomHeight);
+});
+
+test('Safe Start keeps nearby enemies away and passive until the miner moves out or the grace period ends', async () => {
+  const { MattMineGame } = await import('../src/game/GameV4.js');
+  const stubs = installBrowserStubs();
+  const game = new MattMineGame(stubs.canvas, stubs.profile);
+  game.startRun({ mode: RUN_MODES.PRACTICE, seed: 'SAFE-START' });
+  assert.equal(game.player.weapon, 'pickaxe');
+  assert.equal(game.isSafeStartActive(), true);
+  assert.equal(game.enemies.some((enemy) => enemy.roomId === game.layout.startRoom.id), false);
+
+  const closeEnemy = enemyTarget(game, {
+    x: game.player.x,
+    y: game.player.y,
+    speed: 100,
+    damage: 15,
+    aiTimer: 0,
+    attackTimer: 0,
+    summonTimer: 0
+  });
+  game.enemies = [closeEnemy];
+  const startingHealth = game.player.health;
+  game.updateEnemies(0.1);
+  assert.equal(game.player.health, startingHealth);
+  assert.equal(closeEnemy.vx, 0);
+  assert.equal(closeEnemy.vy, 0);
+
+  game.run.elapsed = game.run.safeStartUntil;
+  game.updateEnemies(0.1);
+  assert.ok(game.player.health < startingHealth);
+
+  game.player.health = startingHealth;
+  game.run.elapsed = 0;
+  game.run.safeStartUntil = CONFIG.safeStartSeconds;
+  closeEnemy.contactTimer = 0;
+  game.player.invulnerable = 0;
+  const nextRoom = game.layout.rooms.find((room) => room.id !== game.layout.startRoom.id);
+  game.player.x = nextRoom.x;
+  game.player.y = nextRoom.y;
+  closeEnemy.x = nextRoom.x;
+  closeEnemy.y = nextRoom.y;
+  closeEnemy.roomId = nextRoom.id;
+  game.updateEnemies(0.1);
+  assert.ok(game.player.health < startingHealth);
 });
 
 test('the treasure cache offers Blaster tuning and volleys fire up to three bolts', async () => {
@@ -565,6 +609,7 @@ test('the Guardian acquires the player across rooms and stays contained in its v
     lastBossPhase: 1
   });
   game.enemies = [guardian];
+  game.layout.startRoom = { id: 99, x: -500, y: -500, width: 100, height: 100, type: 'start' };
 
   game.updateEnemies(0.1);
 

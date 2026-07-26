@@ -19,7 +19,10 @@ export const enemySpawnMethods = {
 
     let position = randomPointInRoom(room, isBoss ? 92 : 54);
     let attempts = 0;
-    while (distance(position, this.player) < 170 && attempts < 20) {
+    const minimumPlayerDistance = this.run.elapsed < this.run.safeStartUntil
+      ? CONFIG.safeStartEnemyDistance
+      : 170;
+    while (distance(position, this.player) < minimumPlayerDistance && attempts < 20) {
       position = randomPointInRoom(room, isBoss ? 92 : 54);
       attempts += 1;
     }

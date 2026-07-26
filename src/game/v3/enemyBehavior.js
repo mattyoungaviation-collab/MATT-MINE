@@ -6,6 +6,7 @@ import { normalizeAngle } from '../combat.js';
 export const enemyBehaviorMethods = {
   updateEnemies(dt) {
     const playerRoom = roomAt(this.layout, this.player.x, this.player.y);
+    const safeStartActive = this.isSafeStartActive();
     for (const enemy of [...this.enemies]) {
       enemy.hitFlash -= dt;
       enemy.contactTimer -= dt;
@@ -14,6 +15,11 @@ export const enemyBehaviorMethods = {
       enemy.summonTimer -= dt;
       enemy.phase += dt * 3;
       if (!enemy.awake) continue;
+      if (safeStartActive) {
+        enemy.vx *= Math.max(0, 1 - dt * 10);
+        enemy.vy *= Math.max(0, 1 - dt * 10);
+        continue;
+      }
 
       const enemyRoom = roomAt(this.layout, enemy.x, enemy.y);
       const awarenessRange = enemy.isBoss ? CONFIG.guardianAwarenessRange : 440;
