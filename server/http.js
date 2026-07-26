@@ -575,7 +575,7 @@ function applySecurityHeaders(response) {
   response.setHeader('permissions-policy', 'camera=(), microphone=(), geolocation=()');
   response.setHeader(
     'content-security-policy',
-    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
   );
 }
 

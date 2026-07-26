@@ -267,3 +267,21 @@ test('Arena UI closes cleanly for review while already-purchased attempts surviv
   assert.doesNotMatch(startRunSource, /entriesPaused|arenaConfig\.paused/);
   assert.match(startRunSource, /serverPlayer\.suspended/);
 });
+
+test('unscheduled Arena days do not request unavailable leaderboard or player endpoints', () => {
+  const source = fs.readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
+  const refreshSource = source.slice(
+    source.indexOf('async function refreshArena('),
+    source.indexOf('function renderArena()')
+  );
+
+  assert.match(refreshSource, /if \(!arenaConfig\.enabled\)/);
+  assert.ok(
+    refreshSource.indexOf('if (!arenaConfig.enabled)') <
+    refreshSource.indexOf('apiClient.arenaLeaderboard')
+  );
+  assert.ok(
+    refreshSource.indexOf('if (!arenaConfig.enabled)') <
+    refreshSource.indexOf('apiClient.arenaMe')
+  );
+});
