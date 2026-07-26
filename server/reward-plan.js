@@ -11,16 +11,16 @@ export const REWARD_CONTRACT_ADDRESS = '0x6ba468EE15cb3634F4Ea340407E9FD7A752676
 export const MATT_TOKEN_ADDRESS = '0xa5450417BDCa0BDfB058ffE41205400FfDA1174d';
 export const REWARD_CHAIN_ID = 2020;
 export const REWARD_WEIGHTS_BPS = Object.freeze([
-  2_000,
+  3_000,
+  1_800,
   1_200,
   800,
-  286,
-  286,
-  286,
-  286,
-  286,
-  285,
-  285
+  700,
+  600,
+  550,
+  500,
+  450,
+  400
 ]);
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -59,10 +59,19 @@ export function createRewardPlan({
     .sort((left, right) => Number(left.rank) - Number(right.rank));
 
   assertApi(ranked.length > 0, 409, 'reward_recipients_missing', 'The finalized leaderboard has no eligible top-ten recipients.');
+  const eligibleWeight = ranked.reduce(
+    (sum, row) => sum + REWARD_WEIGHTS_BPS[Number(row.rank) - 1],
+    0
+  );
+  let allocatedRaw = 0n;
   const entries = ranked.map((row) => {
     const rank = Number(row.rank);
     const address = getAddress(row.address).toLowerCase();
-    const amountRaw = (requestedRaw * BigInt(REWARD_WEIGHTS_BPS[rank - 1])) / 10_000n;
+    const amountRaw = (
+      requestedRaw *
+      BigInt(REWARD_WEIGHTS_BPS[rank - 1])
+    ) / BigInt(eligibleWeight);
+    allocatedRaw += amountRaw;
     return {
       address,
       rank,
@@ -71,6 +80,11 @@ export function createRewardPlan({
       amountMatt: Number(amountRaw / MATT_SCALE)
     };
   }).filter((entry) => BigInt(entry.amountRaw) > 0n);
+  const roundingRemainder = requestedRaw - allocatedRaw;
+  if (roundingRemainder > 0n) {
+    entries[0].amountRaw = (BigInt(entries[0].amountRaw) + roundingRemainder).toString();
+    entries[0].amountMatt = Number(BigInt(entries[0].amountRaw) / MATT_SCALE);
+  }
 
   const values = entries.map((entry) => [
     String(REWARD_CHAIN_ID),
@@ -85,7 +99,7 @@ export function createRewardPlan({
     ...entry,
     proof: tree.getProof(index)
   }));
-  const allocatedRaw = entriesWithProofs
+  allocatedRaw = entriesWithProofs
     .reduce((sum, entry) => sum + BigInt(entry.amountRaw), 0n);
 
   return {

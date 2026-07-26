@@ -19,13 +19,18 @@ MATT Mine v1.2 completes the path from an immutable weekly leaderboard snapshot 
 
 | Placement | Share of configured board pool |
 |---|---:|
-| 1st | 20% |
-| 2nd | 12% |
-| 3rd | 8% |
-| 4th–10th | 20% combined |
-| Reserved for later quest, streak, random, and community systems | 40% |
+| 1st | 30% |
+| 2nd | 18% |
+| 3rd | 12% |
+| 4th | 8% |
+| 5th | 7% |
+| 6th | 6% |
+| 7th | 5.5% |
+| 8th | 5% |
+| 9th | 4.5% |
+| 10th | 4% |
 
-Only the allocated top-ten portion is funded and published. The unallocated 40% never enters the claim epoch.
+The complete approved board pool is funded and published. If fewer than ten wallets qualify, the same placement weights are normalized across the eligible wallets so the allocation still equals exactly 100% of the approved pool.
 
 ## Lifecycle
 
