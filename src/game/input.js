@@ -1,4 +1,5 @@
 import { clamp } from './utils.js';
+import { defaultKeybindings, normalizeKeybindings } from './keybindings.js';
 
 export class InputController {
   constructor(canvas) {
@@ -11,6 +12,7 @@ export class InputController {
     this.mobileDashQueued = false;
     this.mobileWeaponQueued = null;
     this.joystickPointerId = null;
+    this.keybindings = defaultKeybindings();
     this.bindKeyboard();
     this.bindPointer();
     this.bindMobile();
@@ -123,10 +125,10 @@ export class InputController {
   movement() {
     let x = 0;
     let y = 0;
-    if (this.keys.has('KeyA') || this.keys.has('ArrowLeft')) x -= 1;
-    if (this.keys.has('KeyD') || this.keys.has('ArrowRight')) x += 1;
-    if (this.keys.has('KeyW') || this.keys.has('ArrowUp')) y -= 1;
-    if (this.keys.has('KeyS') || this.keys.has('ArrowDown')) y += 1;
+    if (this.keys.has(this.keybindings.moveLeft)) x -= 1;
+    if (this.keys.has(this.keybindings.moveRight)) x += 1;
+    if (this.keys.has(this.keybindings.moveUp)) y -= 1;
+    if (this.keys.has(this.keybindings.moveDown)) y += 1;
     x += this.mobileMove.x;
     y += this.mobileMove.y;
     const length = Math.hypot(x, y);
@@ -134,7 +136,7 @@ export class InputController {
   }
 
   attacking() {
-    return this.pointer.down || this.mobileAttack || this.keys.has('Space');
+    return this.pointer.down || this.mobileAttack || this.keys.has(this.keybindings.attack);
   }
 
   reset() {
@@ -153,12 +155,9 @@ export class InputController {
     let selected = this.mobileWeaponQueued;
     this.mobileWeaponQueued = null;
     const bindings = [
-      ['Digit1', 'pickaxe'],
-      ['Numpad1', 'pickaxe'],
-      ['Digit2', 'dynamite'],
-      ['Numpad2', 'dynamite'],
-      ['Digit3', 'blaster'],
-      ['Numpad3', 'blaster']
+      [this.keybindings.pickaxe, 'pickaxe'],
+      [this.keybindings.dynamite, 'dynamite'],
+      [this.keybindings.blaster, 'blaster']
     ];
     for (const [code, weapon] of bindings) {
       if (!this.pressed.has(code)) continue;
@@ -169,11 +168,15 @@ export class InputController {
   }
 
   consumeDash() {
-    const keyboardDash = this.pressed.has('ShiftLeft') || this.pressed.has('ShiftRight');
-    this.pressed.delete('ShiftLeft');
-    this.pressed.delete('ShiftRight');
+    const keyboardDash = this.pressed.has(this.keybindings.dash);
+    this.pressed.delete(this.keybindings.dash);
     const result = keyboardDash || this.mobileDashQueued;
     this.mobileDashQueued = false;
     return result;
+  }
+
+  setKeybindings(bindings) {
+    this.keybindings = normalizeKeybindings(bindings);
+    return { ...this.keybindings };
   }
 }

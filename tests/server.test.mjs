@@ -114,6 +114,27 @@ test('wallet identities require one permanent unique name and serve validated le
     () => harness.service.updatePlayerAvatar(first.session.token, 'data:image/png;base64,bm90LWFuLWltYWdl'),
     (error) => error.code === 'avatar_signature'
   );
+  const controls = await harness.service.updatePlayerKeybindings(first.session.token, {
+    moveUp: 'ArrowUp',
+    moveDown: 'ArrowDown',
+    moveLeft: 'ArrowLeft',
+    moveRight: 'ArrowRight',
+    attack: 'KeyF',
+    dash: 'KeyE',
+    pickaxe: 'Digit1',
+    dynamite: 'Digit2',
+    blaster: 'Digit3'
+  });
+  assert.equal(controls.keybindings.attack, 'KeyF');
+  await assert.rejects(
+    () => harness.service.updatePlayerKeybindings(first.session.token, {
+      ...controls.keybindings,
+      dash: 'KeyF'
+    }),
+    (error) => error.code === 'invalid_keybindings'
+  );
+  const savedPlayer = await harness.service.me(first.session.token);
+  assert.equal(savedPlayer.keybindings.moveUp, 'ArrowUp');
 
   const run = await harness.service.startRun(first.session.token, SERVER_RUN_MODES.FREE);
   harness.advance(61_000);

@@ -25,7 +25,7 @@ const NOOP_AUDIO = Object.freeze({
   stopBoss() {}
 });
 
-export function buildArenaChallenge(dailySeed) {
+export function buildArenaChallenge(dailySeed, tuning = {}) {
   assertApi(
     typeof dailySeed === 'string' && /^[a-f0-9]{64}$/.test(dailySeed),
     500,
@@ -38,7 +38,8 @@ export function buildArenaChallenge(dailySeed) {
     tickMs: ARENA_TICK_MS,
     maxTicks: ARENA_MAX_TICKS,
     maxDepth: 5,
-    verificationMode: 'deterministic-input-replay'
+    verificationMode: 'deterministic-input-replay',
+    tuning: tuning && typeof tuning === 'object' ? structuredClone(tuning) : {}
   };
 }
 
@@ -80,7 +81,8 @@ export function replayArenaTranscript(challenge, inputEvents, options = {}) {
   game.startRun({
     mode: 'arena',
     seed: challenge.dailySeed,
-    day: options.day || ''
+    day: options.day || '',
+    tuning: challenge.tuning || {}
   });
 
   let control = decodeArenaControlState({

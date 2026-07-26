@@ -7,6 +7,8 @@ import {
 } from '../src/game/passRewards.js';
 import { SERVER_STATE_VERSION } from './constants.js';
 import { normalizeIdentity } from './identity.js';
+import { defaultGameTuning, normalizeGameTuning } from '../src/game/tuning.js';
+import { defaultKeybindings, normalizeKeybindings } from '../src/game/keybindings.js';
 
 export function defaultServerState() {
   return {
@@ -17,6 +19,8 @@ export function defaultServerState() {
     runs: {},
     passPurchases: {},
     paidEntitlements: {},
+    gameTuning: defaultGameTuning(),
+    arenaTuningSchedule: {},
     operations: defaultOperations(),
     audit: []
   };
@@ -29,6 +33,8 @@ export function defaultWalletState(address, timestamp = Date.now()) {
     profile: defaultProfile(),
     passProgress: defaultPassProgress(),
     passInventory: defaultPassInventory(),
+    keybindings: defaultKeybindings(),
+    activity: [],
     suspended: false,
     daily: {},
     createdAt: timestamp,
@@ -46,6 +52,8 @@ export function normalizeServerState(input = {}) {
     runs: normalizeRecords(source.runs, 25_000),
     passPurchases: normalizePassPurchases(source.passPurchases),
     paidEntitlements: normalizePaidEntitlements(source.paidEntitlements),
+    gameTuning: normalizeGameTuning(source.gameTuning),
+    arenaTuningSchedule: normalizeArenaTuningSchedule(source.arenaTuningSchedule),
     operations: normalizeOperations(source.operations),
     audit: Array.isArray(source.audit)
       ? source.audit.filter(isRecord).slice(-2_000).map((entry) => ({ ...entry }))
@@ -147,12 +155,42 @@ function normalizeWallets(input) {
         profile: normalizeProfile(wallet.profile),
         passProgress: normalizePassProgress(wallet.passProgress),
         passInventory: normalizePassInventory(wallet.passInventory),
+        keybindings: safeKeybindings(wallet.keybindings),
+        activity: normalizeActivity(wallet.activity),
         suspended: wallet.suspended === true,
         daily: normalizeDaily(wallet.daily),
         createdAt: safeTimestamp(wallet.createdAt),
         updatedAt: safeTimestamp(wallet.updatedAt)
       }];
     }));
+}
+
+function normalizeArenaTuningSchedule(input) {
+  if (!isRecord(input)) return {};
+  const arenaDefault = defaultGameTuning().arena;
+  return Object.fromEntries(Object.entries(input)
+    .filter(([day, value]) => /^\d{4}-\d{2}-\d{2}$/.test(day) && isRecord(value))
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(-45)
+    .map(([day, value]) => [day, normalizeGameTuning({ arena: { ...arenaDefault, ...value } }).arena]));
+}
+
+function safeKeybindings(input) {
+  try {
+    return normalizeKeybindings(input);
+  } catch {
+    return defaultKeybindings();
+  }
+}
+
+function normalizeActivity(input) {
+  if (!Array.isArray(input)) return [];
+  return input.filter(isRecord).slice(-500).map((entry) => ({
+    id: typeof entry.id === 'string' ? entry.id.slice(0, 100) : '',
+    action: typeof entry.action === 'string' ? entry.action.slice(0, 80) : 'UNKNOWN',
+    details: typeof entry.details === 'string' ? entry.details.slice(0, 500) : '',
+    timestamp: safeTimestamp(entry.timestamp)
+  }));
 }
 
 function defaultPassProgress() {

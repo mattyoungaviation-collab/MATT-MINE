@@ -13,7 +13,7 @@ const DIRECTIONS = Object.freeze([
   { x: 0, y: -1 }
 ]);
 
-export function createMineLayout(roomCount = CONFIG.roomsPerDepth) {
+export function createMineLayout(roomCount = CONFIG.roomsPerDepth, options = {}) {
   const startCell = { x: 1, y: 1 };
   const cells = [{ ...startCell, parent: null }];
   const seen = new Set([cellKey(startCell)]);
@@ -59,8 +59,8 @@ export function createMineLayout(roomCount = CONFIG.roomsPerDepth) {
     cellY: cell.y,
     x: GRID.columns[cell.x],
     y: GRID.rows[cell.y],
-    width: CONFIG.roomWidth,
-    height: CONFIG.roomHeight,
+    width: Number(options.roomWidth || CONFIG.roomWidth),
+    height: Number(options.roomHeight || CONFIG.roomHeight),
     parent: cell.parent,
     type: 'mixed',
     name: 'Old Workings'
@@ -100,7 +100,7 @@ export function createMineLayout(roomCount = CONFIG.roomsPerDepth) {
     if (!room.parent) continue;
     const parent = rooms.find((entry) => entry.cellX === room.parent.x && entry.cellY === room.parent.y);
     if (!parent) continue;
-    corridors.push(makeCorridor(parent, room));
+    corridors.push(makeCorridor(parent, room, Number(options.corridorWidth || CONFIG.corridorWidth)));
   }
 
   return { rooms, corridors, startRoom, guardianRoom, treasureRoom };
@@ -139,20 +139,20 @@ export function randomPointInRoom(room, margin = 45) {
   };
 }
 
-function makeCorridor(a, b) {
+function makeCorridor(a, b, corridorWidth) {
   if (a.cellY === b.cellY) {
     return {
       x: (a.x + b.x) / 2,
       y: a.y,
       width: Math.abs(a.x - b.x),
-      height: CONFIG.corridorWidth,
+      height: corridorWidth,
       orientation: 'horizontal'
     };
   }
   return {
     x: a.x,
     y: (a.y + b.y) / 2,
-    width: CONFIG.corridorWidth,
+    width: corridorWidth,
     height: Math.abs(a.y - b.y),
     orientation: 'vertical'
   };

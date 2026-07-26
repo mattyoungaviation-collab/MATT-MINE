@@ -82,6 +82,10 @@ const arenaService = arenaEnabled
       receiptSecret: arenaReceiptSecret,
       seedSecret: process.env.MATT_MINE_ARENA_SEED_SECRET || arenaReceiptSecret,
       safeAddress: process.env.MATT_MINE_ARENA_SAFE_ADDRESS || MATT_MINE_ADMIN_CONTRACTS.safe,
+      getTuning: async (day) => {
+        const state = await database.read();
+        return state.arenaTuningSchedule?.[day] || state.gameTuning.arena;
+      },
       liveEnabled: arenaLiveRequested
     }).init()
   : null;

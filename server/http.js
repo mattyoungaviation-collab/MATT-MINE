@@ -184,6 +184,18 @@ async function handleApiRequest({
     sendJson(response, 200, { ok: true, ...result });
     return;
   }
+  const publicTuningMatch = path.match(/^\/api\/game-tuning\/(practice|free|paid|arena)$/);
+  if (method === 'GET' && publicTuningMatch) {
+    const result = await service.publicGameTuning(publicTuningMatch[1]);
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
+  if (method === 'PUT' && path === '/api/profile/keybindings') {
+    const body = await readJson(request, maxRequestBytes);
+    const result = await service.updatePlayerKeybindings(bearerToken(request), body.keybindings);
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
   if (method === 'POST' && path === '/api/arena/runs/abandon') {
     const body = await readJson(request, maxRequestBytes);
     const result = await service.abandonArenaRun(bearerToken(request), body);
@@ -393,6 +405,35 @@ async function handleApiRequest({
       request.headers['x-matt-admin-key'],
       walletActionMatch[1],
       body.action,
+      body.reason
+    );
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
+  const walletAwardMatch = path.match(/^\/api\/admin\/wallets\/(0x[a-fA-F0-9]{40})\/awards$/);
+  if (method === 'POST' && walletAwardMatch) {
+    const body = await readJson(request, maxRequestBytes);
+    const result = await service.adminAwardPlayer(
+      request.headers['x-matt-admin-key'],
+      walletAwardMatch[1],
+      body,
+      body.reason
+    );
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
+  if (method === 'GET' && path === '/api/admin/game-tuning') {
+    const result = await service.adminGameTuning(request.headers['x-matt-admin-key']);
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
+  const gameTuningMatch = path.match(/^\/api\/admin\/game-tuning\/(practice|free|paid|arena)$/);
+  if (method === 'PUT' && gameTuningMatch) {
+    const body = await readJson(request, maxRequestBytes);
+    const result = await service.updateAdminGameTuning(
+      request.headers['x-matt-admin-key'],
+      gameTuningMatch[1],
+      body.patch,
       body.reason
     );
     sendJson(response, 200, { ok: true, ...result });

@@ -101,6 +101,49 @@ test('server operations are authenticated, audited, and gate each production sur
   assert.match(audit.entries[0].details, /Weekly competition review/);
 });
 
+test('game tuning is lobby-specific, audited, and stages Daily Arena changes for the next UTC day', async () => {
+  const harness = serviceHarness();
+  const free = await harness.service.updateAdminGameTuning(
+    'admin-secret',
+    'free',
+    { playerMaxHealth: 175 },
+    'Raise Free lobby survivability'
+  );
+  assert.equal(free.preset.playerMaxHealth, 175);
+  assert.equal(free.effectiveDay, null);
+
+  const arena = await harness.service.updateAdminGameTuning(
+    'admin-secret',
+    'arena',
+    { bossHealthMultiplier: 2.5 },
+    'Prepare tomorrow boss test'
+  );
+  assert.equal(arena.effectiveDay, '2026-07-26');
+  const state = await harness.database.read();
+  assert.equal(state.arenaTuningSchedule['2026-07-25'].bossHealthMultiplier, 1);
+  assert.equal(state.arenaTuningSchedule['2026-07-26'].bossHealthMultiplier, 2.5);
+  assert.equal((await harness.service.publicGameTuning('free')).preset.playerMaxHealth, 175);
+  const audit = await harness.service.adminAudit('admin-secret', { action: 'GAME_TUNING_UPDATED' });
+  assert.equal(audit.entries.length, 2);
+});
+
+test('player search uses permanent names and audited awards appear in individual activity', async () => {
+  const harness = serviceHarness();
+  await signIn(harness.service);
+  const search = await harness.service.adminWallets('admin-secret', 'AdminTester');
+  assert.equal(search.wallets.length, 1);
+  assert.equal(search.wallets[0].address, account.address.toLowerCase());
+  await harness.service.adminAwardPlayer(
+    'admin-secret',
+    account.address,
+    { type: 'nuggets', amount: 250 },
+    'Community event award'
+  );
+  const detail = await harness.service.adminWallet('admin-secret', account.address);
+  assert.equal(detail.wallet.profile.bankedNuggets, 250);
+  assert.ok(detail.activity.some((entry) => entry.action === 'ADMIN_AWARD'));
+});
+
 test('maintenance blocks new play and player controls preserve payment and score records', async () => {
   const harness = serviceHarness();
   const session = await signIn(harness.service);

@@ -48,8 +48,11 @@ export const guardianAIMethods = {
         this.fireEnemyVolley(enemy, 5, 1.28, 345);
       }
       if (enemy.summonTimer <= 0) {
-        enemy.summonTimer = 3.65;
-        for (const type of ['bat', 'slime', 'spitter']) {
+        enemy.summonTimer = this.runContext?.tuning?.bossReinforcementInterval || 3.65;
+        const types = ['bat', 'slime', 'spitter'];
+        const count = Math.round(this.runContext?.tuning?.bossReinforcementCount ?? 3);
+        for (let index = 0; index < count; index += 1) {
+          const type = types[index % types.length];
           const reinforcement = this.spawnEnemy(false, this.layout.guardianRoom, type);
           reinforcement.awake = true;
           reinforcement.guardianReinforcement = true;
@@ -68,8 +71,11 @@ export const guardianAIMethods = {
       }
       const activeReinforcements = this.enemies.filter((entry) => entry.guardianReinforcement).length;
       if (enemy.summonTimer <= 0 && activeReinforcements < 5) {
-        enemy.summonTimer = 2.8;
-        for (const type of ['bat', 'spitter']) {
+        enemy.summonTimer = this.runContext?.tuning?.bossReinforcementInterval || 2.8;
+        const types = ['bat', 'spitter'];
+        const count = Math.round(this.runContext?.tuning?.bossReinforcementCount ?? 2);
+        for (let index = 0; index < count; index += 1) {
+          const type = types[index % types.length];
           const reinforcement = this.spawnEnemy(false, this.layout.guardianRoom, type);
           reinforcement.awake = true;
           reinforcement.guardianReinforcement = true;

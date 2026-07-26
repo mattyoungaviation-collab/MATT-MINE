@@ -1,6 +1,8 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { getAddress, verifyMessage } from 'viem';
 import { META_UPGRADES, metaUpgradeCost } from '../src/game/config.js';
+import { GAMEPLAY_LOBBIES, GAME_TUNING_SCHEMA, normalizeTuningPatch } from '../src/game/tuning.js';
+import { normalizeKeybindings } from '../src/game/keybindings.js';
 import { passLevel, utcDayKey, utcWeekKey } from '../src/game/economy.js';
 import {
   COSMETIC_SLOTS,
@@ -250,6 +252,25 @@ export class MattMineService {
       wallet.updatedAt = timestamp;
       addAudit(state, session.address, 'MINER_AVATAR_UPDATED', `${normalizedAvatar.length} bytes encoded`, timestamp);
       return { identity: publicIdentity(wallet) };
+    });
+  }
+
+  async updatePlayerKeybindings(token, input) {
+    const session = await this.authenticate(token);
+    let keybindings;
+    try {
+      keybindings = normalizeKeybindings(input);
+    } catch (error) {
+      throw new ApiError(422, 'invalid_keybindings', error.message);
+    }
+    const timestamp = this.now();
+    return this.database.transact((state) => {
+      const wallet = requireWallet(state, session.address);
+      wallet.keybindings = keybindings;
+      wallet.updatedAt = timestamp;
+      addPlayerActivity(wallet, 'KEYBINDINGS_UPDATED', 'Custom controls saved', timestamp);
+      addAudit(state, session.address, 'KEYBINDINGS_UPDATED', 'Custom controls saved', timestamp);
+      return { keybindings: structuredClone(keybindings) };
     });
   }
 
@@ -569,11 +590,13 @@ export class MattMineService {
         finishedAt: 0,
         passActiveAtStart,
         passXpAwarded: 0,
-        result: null
+        result: null,
+        tuning: structuredClone(state.gameTuning[normalizedMode] || state.gameTuning.practice)
       };
       state.runs[runId] = serverRun;
       await transaction?.upsertRun(serverRun);
       wallet.updatedAt = timestamp;
+      addPlayerActivity(wallet, 'RUN_STARTED', `${normalizedMode} ${runId}`, timestamp);
       addAudit(state, session.address, 'SERVER_RUN_STARTED', `${normalizedMode} ${runId}`, timestamp);
       return {
         runId,
@@ -587,7 +610,8 @@ export class MattMineService {
           : normalizedMode === SERVER_RUN_MODES.PAID
             ? 2
             : 0,
-        expiresAt: serverRun.expiresAt
+        expiresAt: serverRun.expiresAt,
+        tuning: structuredClone(serverRun.tuning)
       };
     });
   }
@@ -630,13 +654,13 @@ export class MattMineService {
       wallet.profile.bestDepth = Math.max(wallet.profile.bestDepth, result.depth);
       wallet.profile.bestScore = Math.max(wallet.profile.bestScore, result.score);
       wallet.profile.totalRuns += 1;
-      const passXpAwarded = run.passActiveAtStart
+      const passXpAwarded = Math.round((run.passActiveAtStart
         ? run.mode === SERVER_RUN_MODES.PAID
           ? PAID_PASS_XP
           : run.mode === SERVER_RUN_MODES.FREE
             ? FREE_PASS_XP
             : 0
-        : 0;
+        : 0) * (run.tuning?.passXpMultiplier ?? 1));
       run.passXpAwarded = passXpAwarded;
       if (passXpAwarded > 0) {
         wallet.passProgress.xp += passXpAwarded;
@@ -647,6 +671,7 @@ export class MattMineService {
         : [];
       wallet.updatedAt = timestamp;
       await transaction?.recordFinishedRun(run);
+      addPlayerActivity(wallet, 'RUN_FINISHED', `${run.mode} score ${result.score}`, timestamp);
       addAudit(state, session.address, 'SERVER_RUN_VERIFIED', `${run.mode} score ${result.score}`, timestamp);
       return {
         accepted: true,
@@ -866,7 +891,7 @@ export class MattMineService {
     const needle = String(query || '').trim().toLowerCase().slice(0, 80);
     const timestamp = this.now();
     const wallets = Object.values(state.wallets)
-      .filter((wallet) => !needle || wallet.address.includes(needle))
+      .filter((wallet) => !needle || wallet.address.includes(needle) || wallet.identity?.nameKey?.includes(needle))
       .sort((left, right) => right.updatedAt - left.updatedAt)
       .slice(0, 250)
       .map((wallet) => adminWalletSnapshot(state, wallet, timestamp));
@@ -889,8 +914,121 @@ export class MattMineService {
         .filter((entry) => entry.address === normalizedAddress)
         .sort((left, right) => right.confirmedAt - left.confirmedAt)
         .slice(0, 100)
-        .map((entry) => structuredClone(entry))
+        .map((entry) => structuredClone(entry)),
+      activity: [...(wallet.activity || []), ...state.audit
+        .filter((entry) => String(entry.actor).toLowerCase() === normalizedAddress)
+        .map((entry) => ({
+          id: `audit-${entry.id}`,
+          action: entry.action,
+          details: entry.details,
+          timestamp: entry.timestamp
+        }))]
+        .sort((left, right) => right.timestamp - left.timestamp)
+        .filter((entry, index, entries) =>
+          entries.findIndex((candidate) =>
+            candidate.action === entry.action &&
+            candidate.details === entry.details &&
+            candidate.timestamp === entry.timestamp
+          ) === index
+        )
+        .slice(0, 500)
     };
+  }
+
+  async adminGameTuning(adminKey) {
+    this.assertAdminKey(adminKey);
+    const state = await this.database.read();
+    return {
+      lobbies: GAMEPLAY_LOBBIES,
+      schema: GAME_TUNING_SCHEMA,
+      presets: structuredClone(state.gameTuning)
+    };
+  }
+
+  async publicGameTuning(lobby) {
+    assertApi(GAMEPLAY_LOBBIES.includes(lobby), 404, 'tuning_lobby_unknown', 'Unknown gameplay lobby.');
+    const state = await this.database.read();
+    return { lobby, preset: structuredClone(state.gameTuning[lobby]) };
+  }
+
+  async updateAdminGameTuning(adminKey, lobby, input, reason) {
+    this.assertAdminKey(adminKey);
+    assertApi(GAMEPLAY_LOBBIES.includes(lobby), 404, 'tuning_lobby_unknown', 'Unknown gameplay lobby.');
+    const normalizedReason = normalizeAdminReason(reason);
+    let patch;
+    try {
+      patch = normalizeTuningPatch(input);
+    } catch (error) {
+      throw new ApiError(422, 'tuning_invalid', error.message);
+    }
+    assertApi(Object.keys(patch).length > 0, 400, 'tuning_patch_empty', 'Change at least one setting.');
+    const timestamp = this.now();
+    return this.database.transact((state) => {
+      const before = state.gameTuning[lobby];
+      state.gameTuning[lobby] = { ...before, ...patch };
+      const changed = Object.keys(patch).filter((key) => before[key] !== patch[key]);
+      let effectiveDay = null;
+      if (lobby === 'arena') {
+        const currentDay = utcDayKey(timestamp);
+        const nextDay = utcDayKey(timestamp + 86_400_000);
+        state.arenaTuningSchedule ||= {};
+        state.arenaTuningSchedule[currentDay] ||= structuredClone(before);
+        state.arenaTuningSchedule[nextDay] = structuredClone(state.gameTuning.arena);
+        effectiveDay = nextDay;
+      }
+      addAudit(
+        state,
+        'SERVER_ADMIN',
+        'GAME_TUNING_UPDATED',
+        `${lobby}: ${changed.join(', ')}${effectiveDay ? `; effective ${effectiveDay} UTC` : ''}; ${normalizedReason}`,
+        timestamp
+      );
+      return {
+        lobby,
+        preset: structuredClone(state.gameTuning[lobby]),
+        changed,
+        reason: normalizedReason,
+        effectiveDay
+      };
+    });
+  }
+
+  async adminAwardPlayer(adminKey, address, input, reason) {
+    this.assertAdminKey(adminKey);
+    const normalizedAddress = normalizeAddress(address);
+    const normalizedReason = normalizeAdminReason(reason);
+    const type = String(input?.type || '');
+    const timestamp = this.now();
+    return this.database.transact((state) => {
+      const wallet = requireWallet(state, normalizedAddress);
+      let details = '';
+      if (type === 'nuggets') {
+        const amount = strictInteger(Number(input.amount), 'award_amount', 1, 10_000_000);
+        wallet.profile.bankedNuggets += amount;
+        details = `${amount} banked nuggets`;
+      } else if (type === 'pass_xp') {
+        const amount = strictInteger(Number(input.amount), 'award_amount', 1, 1_000_000);
+        wallet.passProgress.xp += amount;
+        wallet.passProgress.updatedAt = timestamp;
+        syncPassRewardsForWallet(wallet, timestamp);
+        details = `${amount} Pass XP`;
+      } else if (type === 'cosmetic') {
+        const cosmeticId = String(input.cosmeticId || '');
+        assertApi(PASS_COSMETICS[cosmeticId], 422, 'cosmetic_unknown', 'Choose a valid cosmetic.');
+        unlockCosmetic(wallet, cosmeticId);
+        details = `cosmetic ${cosmeticId}`;
+      } else if (type === 'chest') {
+        const amount = strictInteger(Number(input.amount), 'award_amount', 1, 25);
+        wallet.passInventory.chests[PASS_CHEST_ID].available += amount;
+        details = `${amount} Pass chest${amount === 1 ? '' : 's'}`;
+      } else {
+        throw new ApiError(422, 'award_type_unknown', 'Choose nuggets, Pass XP, a cosmetic, or a chest.');
+      }
+      wallet.updatedAt = timestamp;
+      addPlayerActivity(wallet, 'ADMIN_AWARD', `${details}; ${normalizedReason}`, timestamp);
+      addAudit(state, 'SERVER_ADMIN', 'PLAYER_AWARDED', `${normalizedAddress}: ${details}; ${normalizedReason}`, timestamp);
+      return { wallet: adminWalletSnapshot(state, wallet, timestamp), type, details, reason: normalizedReason };
+    });
   }
 
   async updateOperations(adminKey, patch, reason) {
@@ -1181,7 +1319,7 @@ export function validateRunResult(input, run, timestamp) {
   if (extracted) {
     assertApi(banked === projected, 422, 'extraction_mismatch', 'Extracted runs must bank the complete projected score.');
   } else {
-    const expectedBanked = Math.floor(projected * 0.35);
+    const expectedBanked = Math.floor(projected * (run.tuning?.deathKeepFraction ?? 0.35));
     assertApi(banked === expectedBanked, 422, 'knockout_mismatch', 'Knockout loot does not match the secured-loot rule.');
   }
 
@@ -1214,6 +1352,7 @@ function publicWalletSnapshot(state, address, timestamp) {
     profile: structuredClone(wallet.profile),
     passProgress: publicPassProgress(wallet),
     passInventory: publicPassInventory(wallet),
+    keybindings: structuredClone(wallet.keybindings),
     suspended: wallet.suspended,
     day,
     week,
@@ -1544,4 +1683,15 @@ function addAudit(state, actor, action, details, timestamp) {
     timestamp
   });
   state.audit = state.audit.slice(-2_000);
+}
+
+function addPlayerActivity(wallet, action, details, timestamp) {
+  wallet.activity ||= [];
+  wallet.activity.push({
+    id: `${timestamp}-${wallet.activity.length + 1}`,
+    action,
+    details: String(details || '').slice(0, 500),
+    timestamp
+  });
+  wallet.activity = wallet.activity.slice(-500);
 }

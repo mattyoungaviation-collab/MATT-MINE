@@ -59,6 +59,7 @@ export class DailyArenaService {
     this.safeAddress = getAddress(options.safeAddress);
     this.liveRequested = options.liveEnabled === true;
     this.liveEnabled = this.liveRequested && ARENA_REPLAY_READY;
+    this.getTuning = options.getTuning || (async () => ({}));
     this.deployment = null;
   }
 
@@ -248,7 +249,8 @@ export class DailyArenaService {
       entryTransactionHash: selected.transactionHash,
       issuedAt: startedAt,
       expiresAt,
-      nonce: this.randomHex(16)
+      nonce: this.randomHex(16),
+      tuning: await this.getTuning(day)
     };
     const receiptSignature = this.#sign('run-receipt', receipt);
     const transcriptHash = createHash('sha256')
@@ -273,7 +275,8 @@ export class DailyArenaService {
       throughSeq: 0,
       throughTick: 0,
       transcriptHash,
-      checkpointSignature: checkpoint.signature
+      checkpointSignature: checkpoint.signature,
+      tuning: receipt.tuning
     });
     return {
       run: {
@@ -287,7 +290,7 @@ export class DailyArenaService {
         expiresAt,
         receipt: { ...receipt, signature: receiptSignature },
         checkpoint,
-        challenge: buildArenaChallenge(contest.deterministicSeed)
+        challenge: buildArenaChallenge(contest.deterministicSeed, receipt.tuning)
       }
     };
   }
@@ -348,7 +351,7 @@ export class DailyArenaService {
     );
     const existingEvents = await this.store.getEvents(run.runId);
     replayArenaTranscript(
-      buildArenaChallenge((await this.store.getDay(run.day)).deterministicSeed),
+      buildArenaChallenge((await this.store.getDay(run.day)).deterministicSeed, run.tuning),
       [...existingEvents, ...receivedEvents].map(publicTranscriptEvent)
     );
     const nextCheckpoint = this.#checkpoint({
@@ -395,7 +398,7 @@ export class DailyArenaService {
       'Finish with the latest server-signed Daily Arena checkpoint.'
     );
     const storedEvents = await this.store.getEvents(run.runId);
-    const challenge = buildArenaChallenge((await this.store.getDay(run.day)).deterministicSeed);
+    const challenge = buildArenaChallenge((await this.store.getDay(run.day)).deterministicSeed, run.tuning);
     const replayed = replayArenaTranscript(
       challenge,
       storedEvents.map(publicTranscriptEvent),
