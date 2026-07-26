@@ -58,11 +58,17 @@ async function handleApiRequest({
   const method = request.method || 'GET';
   const path = requestUrl.pathname;
   if (method === 'GET' && path === '/api/health') {
-    sendJson(response, 200, { ok: true, service: 'matt-mine', version: 9 });
+    const health = await service.health();
+    sendJson(response, 200, { ok: true, service: 'matt-mine', version: 10, ...health });
     return;
   }
   if (method === 'GET' && path === '/api/config') {
     sendJson(response, 200, { ok: true, config: service.config() });
+    return;
+  }
+  if (method === 'GET' && path === '/api/payments/public-status') {
+    const status = await service.publicPaymentStatus();
+    sendJson(response, 200, { ok: true, status });
     return;
   }
   if (method === 'POST' && path === '/api/auth/challenge') {
@@ -166,9 +172,15 @@ async function serveStatic(request, response, pathname, root) {
   if (info?.isDirectory()) filePath = resolve(filePath, 'index.html');
   const body = await readFile(filePath).catch(() => null);
   assertApi(body, 404, 'file_not_found', 'Not found.');
+  const extension = extname(filePath);
+  const cacheControl = requestedPath === 'index.html'
+    ? 'no-cache'
+    : ['.png', '.svg', '.ico'].includes(extension)
+      ? 'public, max-age=86400'
+      : 'no-cache';
   response.writeHead(200, {
-    'content-type': MIME_TYPES[extname(filePath)] || 'application/octet-stream',
-    'cache-control': 'no-store'
+    'content-type': MIME_TYPES[extension] || 'application/octet-stream',
+    'cache-control': cacheControl
   });
   response.end(request.method === 'HEAD' ? undefined : body);
 }
@@ -177,7 +189,12 @@ function requestOrigin(request, configuredOrigin) {
   if (configuredOrigin) return normalizeOrigin(configuredOrigin);
   const host = request.headers.host;
   assertApi(typeof host === 'string' && host.length > 0, 400, 'host_required', 'The HTTP Host header is required.');
-  return normalizeOrigin(`http://${host}`);
+  const forwardedProtocol = String(request.headers['x-forwarded-proto'] || '')
+    .split(',')[0]
+    .trim()
+    .toLowerCase();
+  const protocol = forwardedProtocol === 'https' ? 'https' : 'http';
+  return normalizeOrigin(`${protocol}://${host}`);
 }
 
 function enforceSameOrigin(request, configuredOrigin) {
@@ -240,6 +257,9 @@ function applySecurityHeaders(response) {
   response.setHeader('x-content-type-options', 'nosniff');
   response.setHeader('referrer-policy', 'same-origin');
   response.setHeader('x-frame-options', 'DENY');
+  response.setHeader('cross-origin-opener-policy', 'same-origin');
+  response.setHeader('cross-origin-resource-policy', 'same-origin');
+  response.setHeader('strict-transport-security', 'max-age=31536000; includeSubDomains');
   response.setHeader('permissions-policy', 'camera=(), microphone=(), geolocation=()');
   response.setHeader(
     'content-security-policy',

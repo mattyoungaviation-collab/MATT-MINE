@@ -34,6 +34,7 @@ const canvas = $('#game');
 const screens = [...document.querySelectorAll('.screen')];
 const hud = $('#hud');
 const mobileControls = $('#mobile-controls');
+const isLocalPreview = ['localhost', '127.0.0.1', '[::1]'].includes(globalThis.location?.hostname);
 const economy = new LocalEconomyStore();
 let profile = loadProfile();
 let toastTimer;
@@ -42,6 +43,7 @@ let serverConfig = null;
 let serverPlayer = null;
 let activeServerRun = null;
 let paymentStatus = null;
+let publicPaymentStatus = null;
 let walletBusy = false;
 let paymentBusy = false;
 const wallet = new RoninWalletAdapter({
@@ -77,6 +79,7 @@ const ui = {
 
 function showScreen(id = null) {
   for (const screen of screens) screen.classList.toggle('active', screen.id === id);
+  document.body.classList.toggle('launch-active', id === 'launch');
 }
 
 function setGameplayUi(active) {
@@ -148,11 +151,19 @@ function updateMenu() {
       : 'VIEW PASS';
   $('#paid-run-button').classList.toggle('ready', paidAccess.allowed);
   const passPrice = livePayments
-    ? paymentStatus ? weiToRon(paymentStatus.pass.priceRonWei) : null
-    : state.settings.passPriceRon;
+    ? paymentStatus
+      ? weiToRon(paymentStatus.pass.priceRonWei)
+      : publicPaymentStatus ? weiToRon(publicPaymentStatus.pass.priceRonWei) : null
+    : publicPaymentStatus
+      ? weiToRon(publicPaymentStatus.pass.priceRonWei)
+      : state.settings.passPriceRon;
   const paidRunPrice = livePayments
-    ? paymentStatus ? weiToRon(paymentStatus.paidRuns.priceRonWei) : null
-    : state.settings.paidRunPriceRon;
+    ? paymentStatus
+      ? weiToRon(paymentStatus.paidRuns.priceRonWei)
+      : publicPaymentStatus ? weiToRon(publicPaymentStatus.paidRuns.priceRonWei) : null
+    : publicPaymentStatus
+      ? weiToRon(publicPaymentStatus.paidRuns.priceRonWei)
+      : state.settings.paidRunPriceRon;
   $('#pass-price').textContent = passPrice === null ? '—' : trimNumber(passPrice);
   $('#paid-run-price').textContent = paidRunPrice === null ? '—' : trimNumber(paidRunPrice);
   $('#paid-run-price-copy').textContent = paidRunPrice === null ? 'Connect wallet to load price' : `${trimNumber(paidRunPrice)} RON`;
@@ -160,10 +171,80 @@ function updateMenu() {
   if (transactionNotice) {
     transactionNotice.textContent = livePayments
       ? 'LIVE RONIN MAINNET · WALLET APPROVAL REQUIRED FOR EVERY PURCHASE'
-      : 'SAFE TEST MODE · REAL RON TRANSACTIONS DISABLED';
+      : isLocalPreview
+        ? 'SAFE TEST MODE · REAL RON TRANSACTIONS DISABLED'
+        : 'RANKED PLAY OPEN · PURCHASES TEMPORARILY PAUSED';
     transactionNotice.classList.toggle('live-payments', livePayments);
   }
+  updateLaunch({
+    connected,
+    freeAccess,
+    passPrice,
+    paidRunPrice,
+    livePayments,
+    passActive
+  });
   renderPassProgress();
+}
+
+function updateLaunch({ connected, freeAccess, passPrice, paidRunPrice, livePayments, passActive }) {
+  const walletLabel = $('#launch-wallet-label');
+  const walletButton = $('#launch-wallet-button');
+  const freeStatus = $('#launch-free-status');
+  const serverStatus = $('#launch-live-status');
+  const date = $('#launch-date');
+  const passPriceText = passPrice === null ? '—' : trimNumber(passPrice);
+  const runPriceText = paidRunPrice === null ? '—' : trimNumber(paidRunPrice);
+
+  if (date) {
+    date.textContent = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'UTC',
+      month: 'short',
+      day: 'numeric'
+    }).format(new Date()).toUpperCase();
+  }
+  if (walletLabel) walletLabel.textContent = connected
+    ? abbreviateAddress(serverPlayer.address)
+    : walletBusy ? 'CONNECTING…' : 'CONNECT RONIN';
+  if (walletButton) {
+    walletButton.disabled = walletBusy;
+    walletButton.classList.toggle('connected', connected);
+  }
+  if (freeStatus) {
+    freeStatus.textContent = !connected
+      ? 'READY'
+      : serverPlayer?.suspended
+        ? 'SUSPENDED'
+        : freeAccess.allowed ? 'READY' : 'USED';
+  }
+  if (serverStatus) {
+    const online = Boolean(serverConfig);
+    serverStatus.textContent = online
+      ? livePayments ? 'LIVE PAYMENTS' : 'SERVER ONLINE'
+      : 'CONNECTING';
+    serverStatus.classList.toggle('offline', !online);
+  }
+  for (const selector of ['#launch-pass-price', '#launch-pass-price-card']) {
+    const element = $(selector);
+    if (element) element.textContent = passPriceText;
+  }
+  for (const selector of ['#launch-run-price', '#launch-run-price-card']) {
+    const element = $(selector);
+    if (element) element.textContent = runPriceText;
+  }
+  const livePill = $('.launch-live-pill');
+  if (livePill) {
+    livePill.title = passActive
+      ? 'Your connected wallet has an active MATT Mine Pass.'
+      : 'MATT Mine contracts are deployed and verified on Ronin Mainnet.';
+  }
+}
+
+function openLaunch(scrollToTop = false) {
+  setGameplayUi(false);
+  showScreen('launch');
+  updateMenu();
+  if (scrollToTop) $('#launch-scroll')?.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function toast(message) {
@@ -436,6 +517,40 @@ window.__MATT_MINE_GAME__ = game;
 window.__MATT_MINE_ECONOMY__ = economy;
 window.__MATT_MINE_API__ = apiClient;
 
+for (const button of document.querySelectorAll('[data-launch-action]')) {
+  button.addEventListener('click', () => {
+    const action = button.dataset.launchAction;
+    if (action === 'practice') {
+      void startRunMode(RUN_MODES.PRACTICE);
+      return;
+    }
+    if (action === 'pass') {
+      openPass();
+      return;
+    }
+    showScreen('menu');
+    updateMenu();
+  });
+}
+
+for (const button of document.querySelectorAll('[data-launch-scroll]')) {
+  button.addEventListener('click', () => {
+    document.getElementById(button.dataset.launchScroll)?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start'
+    });
+  });
+}
+
+$('#launch-wallet-button').addEventListener('click', () => {
+  if (serverPlayer) {
+    void refreshServerPlayer().then(() => toast('Ronin session refreshed'));
+  } else {
+    void connectWallet();
+  }
+});
+
+$('#home-button').addEventListener('click', () => openLaunch(true));
 $('#free-run-button').addEventListener('click', () => void startRunMode(RUN_MODES.FREE));
 $('#practice-run-button').addEventListener('click', () => void startRunMode(RUN_MODES.PRACTICE));
 $('#paid-run-button').addEventListener('click', () => {
@@ -898,6 +1013,7 @@ function abbreviateAddress(address) {
 async function bootstrapServer() {
   try {
     serverConfig = await apiClient.config();
+    publicPaymentStatus = await apiClient.publicPaymentStatus();
     const restored = await wallet.restore();
     if (restored) {
       serverPlayer = restored;
@@ -909,9 +1025,12 @@ async function bootstrapServer() {
   } catch (error) {
     console.warn('[MATT Mine] Server bootstrap unavailable.', error);
   }
+  const adminButton = $('#admin-button');
+  adminButton.hidden = !isLocalPreview;
+  adminButton.parentElement?.classList.toggle('public-menu', !isLocalPreview);
   updateMenu();
 }
 
 updateMenu();
-showScreen('menu');
+showScreen('launch');
 void bootstrapServer();

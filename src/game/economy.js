@@ -1,4 +1,4 @@
-export const ECONOMY_STORAGE_KEY = 'matt-mine-economy-v1';
+export const ECONOMY_STORAGE_KEY = 'matt-mine-economy-v2';
 const DAY_MS = 86_400_000;
 const WEEK_MS = DAY_MS * 7;
 const MAX_SAFE_VALUE = Number.MAX_SAFE_INTEGER;
@@ -41,7 +41,7 @@ export function hashSeed(value) {
 
 export function defaultEconomyState() {
   return {
-    version: 1,
+    version: 2,
     walletId: 'TEST-WALLET-01',
     player: {
       passPurchasedAt: 0,
@@ -51,7 +51,7 @@ export function defaultEconomyState() {
       banned: false
     },
     settings: {
-      passPriceRon: 88,
+      passPriceRon: 95,
       paidRunPriceRon: 10,
       maxPaidRunsPerDay: 10,
       mattPerRonQuote: 13_788,
@@ -96,7 +96,7 @@ export function normalizeEconomyState(input = {}) {
   ];
   const validSplit = split.reduce((sum, value) => sum + value, 0) === 100;
   return {
-    version: 1,
+    version: 2,
     walletId: safeString(source.walletId, base.walletId, 80),
     player: {
       passPurchasedAt: safeInteger(player.passPurchasedAt, base.player.passPurchasedAt),

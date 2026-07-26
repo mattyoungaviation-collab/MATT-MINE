@@ -12,6 +12,7 @@ import {
 } from './constants.js';
 import { buildSignInMessage, normalizeOrigin } from './auth-message.js';
 import { ApiError, assertApi } from './errors.js';
+import { MATT_MINE_LAUNCH_PRICES } from './payment-verifier.js';
 import { defaultWalletState } from './state.js';
 
 export class MattMineService {
@@ -48,6 +49,30 @@ export class MattMineService {
       ...(this.mainnetTransactionsEnabled
         ? { payments: this.paymentVerifier.publicConfig() }
         : {})
+    };
+  }
+
+  async health() {
+    const database = await this.database.healthCheck();
+    return {
+      database,
+      chainId: this.chainId,
+      paymentsEnabled: this.mainnetTransactionsEnabled
+    };
+  }
+
+  async publicPaymentStatus() {
+    if (this.mainnetTransactionsEnabled) return this.paymentVerifier.publicStatus();
+    return {
+      live: false,
+      pass: {
+        priceRonWei: MATT_MINE_LAUNCH_PRICES.passPriceRonWei,
+        paused: true
+      },
+      paidRuns: {
+        priceRonWei: MATT_MINE_LAUNCH_PRICES.paidRunPriceRonWei,
+        paused: true
+      }
     };
   }
 

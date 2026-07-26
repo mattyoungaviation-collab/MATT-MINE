@@ -41,7 +41,7 @@ test('pass and paid-run purchases route purchased MATT 70/20/10 with zero burn',
   const pass = purchasePass(defaultEconomyState(), NOW);
   assert.equal(pass.ok, true);
   assert.equal(passIsActive(pass.state, NOW), true);
-  assert.equal(pass.state.accounting.ronFromPasses, 88);
+  assert.equal(pass.state.accounting.ronFromPasses, 95);
   const paid = purchasePaidRun(pass.state, NOW);
   assert.equal(paid.ok, true);
   assert.equal(paid.priceRon, 10);
