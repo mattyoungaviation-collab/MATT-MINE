@@ -1,20 +1,76 @@
+export const AUDIO_SETTINGS_KEY = 'matt-mine-audio-v1';
+
 export class GameAudio {
   constructor({
     musicUrl = '/assets/audio/ore-reactor.mp3',
     musicVolume = 0.32,
-    audioFactory
+    effectsVolume = 1,
+    muted = false,
+    audioFactory,
+    storage = globalThis.localStorage
   } = {}) {
     this.context = null;
     this.master = null;
     this.ambient = null;
     this.bossNodes = [];
     this.musicUrl = musicUrl;
-    this.musicVolume = musicVolume;
+    this.storage = storage;
+    const saved = this.readSettings();
+    this.musicVolume = validVolume(saved?.musicVolume, musicVolume);
+    this.effectsVolume = validVolume(saved?.effectsVolume, effectsVolume);
+    this.muted = typeof saved?.muted === 'boolean' ? saved.muted : muted;
     this.audioFactory = audioFactory || ((url) => {
       const AudioConstructor = globalThis.Audio || globalThis.window?.Audio;
       return AudioConstructor ? new AudioConstructor(url) : null;
     });
     this.music = null;
+  }
+
+  readSettings() {
+    try {
+      const raw = this.storage?.getItem(AUDIO_SETTINGS_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  settings() {
+    return {
+      muted: this.muted,
+      musicVolume: this.musicVolume,
+      effectsVolume: this.effectsVolume
+    };
+  }
+
+  saveSettings() {
+    try {
+      this.storage?.setItem(AUDIO_SETTINGS_KEY, JSON.stringify(this.settings()));
+    } catch {
+      // Audio preferences are optional; gameplay must continue if storage is blocked.
+    }
+  }
+
+  applySettings() {
+    if (this.music) this.music.volume = this.muted ? 0 : this.musicVolume;
+    if (this.master) this.master.gain.value = this.muted ? 0 : 0.22 * this.effectsVolume;
+    this.saveSettings();
+    return this.settings();
+  }
+
+  setMuted(value) {
+    this.muted = Boolean(value);
+    return this.applySettings();
+  }
+
+  setMusicVolume(value) {
+    this.musicVolume = validVolume(value, this.musicVolume);
+    return this.applySettings();
+  }
+
+  setEffectsVolume(value) {
+    this.effectsVolume = validVolume(value, this.effectsVolume);
+    return this.applySettings();
   }
 
   async resume() {
@@ -24,7 +80,7 @@ export class GameAudio {
     if (!this.context) {
       this.context = new AudioContext();
       this.master = this.context.createGain();
-      this.master.gain.value = 0.22;
+      this.master.gain.value = this.muted ? 0 : 0.22 * this.effectsVolume;
       this.master.connect(this.context.destination);
     }
     if (this.context.state === 'suspended') await this.context.resume();
@@ -37,7 +93,7 @@ export class GameAudio {
       if (!this.music) return;
       this.music.loop = true;
       this.music.preload = 'auto';
-      this.music.volume = this.musicVolume;
+      this.music.volume = this.muted ? 0 : this.musicVolume;
     }
 
     const playback = this.music.play?.();
@@ -83,6 +139,8 @@ export class GameAudio {
       throw: [250, 0.08, 'triangle', 0.09],
       boom: [58, 0.28, 'sawtooth', 0.19],
       hurt: [105, 0.13, 'square', 0.14],
+      playerDamage: [92, 0.24, 'sawtooth', 0.2],
+      shield: [170, 0.12, 'square', 0.16],
       roomLock: [155, 0.18, 'square', 0.12],
       roomClear: [520, 0.22, 'triangle', 0.13],
       bossPhase: [240, 0.32, 'sawtooth', 0.14],
@@ -97,6 +155,7 @@ export class GameAudio {
     oscillator.type = type;
     oscillator.frequency.setValueAtTime(frequency, now);
     if (name === 'boom') oscillator.frequency.exponentialRampToValueAtTime(28, now + duration);
+    else if (name === 'playerDamage') oscillator.frequency.exponentialRampToValueAtTime(42, now + duration);
     else oscillator.frequency.exponentialRampToValueAtTime(Math.max(40, frequency * 0.72), now + duration);
     gain.gain.setValueAtTime(volume, now);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
@@ -129,4 +188,9 @@ export class GameAudio {
     }
     this.bossNodes = [];
   }
+}
+
+function validVolume(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 && number <= 1 ? number : fallback;
 }

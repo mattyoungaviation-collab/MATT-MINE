@@ -1,6 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { getAddress, verifyMessage } from 'viem';
-import { META_UPGRADES } from '../src/game/config.js';
+import { META_UPGRADES, metaUpgradeCost } from '../src/game/config.js';
 import { passLevel, utcDayKey, utcWeekKey } from '../src/game/economy.js';
 import {
   COSMETIC_SLOTS,
@@ -717,7 +717,7 @@ export class MattMineService {
       const wallet = requireWallet(state, session.address);
       const rank = wallet.profile.meta[upgrade.id] || 0;
       assertApi(rank < upgrade.max, 409, 'upgrade_maxed', 'This permanent upgrade is already maxed.');
-      const cost = Math.floor(upgrade.baseCost * Math.pow(1.55, rank));
+      const cost = metaUpgradeCost(upgrade, rank);
       assertApi(wallet.profile.bankedNuggets >= cost, 409, 'insufficient_nuggets', 'Not enough banked nuggets.');
       wallet.profile.bankedNuggets -= cost;
       wallet.profile.meta[upgrade.id] = rank + 1;

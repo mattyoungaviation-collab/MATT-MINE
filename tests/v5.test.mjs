@@ -26,7 +26,7 @@ import {
   defaultProfile,
   loadProfile
 } from '../src/game/storage.js';
-import { CONFIG } from '../src/game/config.js';
+import { CONFIG, META_UPGRADES, metaUpgradeCost } from '../src/game/config.js';
 
 const NOW = Date.UTC(2026, 6, 25, 12, 0, 0);
 
@@ -193,6 +193,134 @@ test('pickaxe, dynamite, and crystal blaster damage their intended targets', asy
   game.updateProjectiles(0.1);
   assert.ok(blasterEnemy.hp < blasterEnemy.maxHp);
   assert.equal(game.projectiles.some((projectile) => projectile.kind === 'crystalBolt'), false);
+});
+
+test('Practice starts with the Blaster while the live deterministic Arena rules stay unchanged', async () => {
+  const { MattMineGame } = await import('../src/game/GameV4.js');
+  const stubs = installBrowserStubs();
+  const practice = new MattMineGame(stubs.canvas, stubs.profile);
+  practice.startRun({ mode: RUN_MODES.PRACTICE, seed: 'STARTING-BLASTER' });
+  assert.equal(practice.player.weapon, 'blaster');
+  assert.equal(practice.player.unlockedWeapons.blaster, true);
+  assert.ok(practice.layout.guardianRoom.width >= 520);
+  assert.ok(practice.layout.guardianRoom.height >= 390);
+
+  const arena = new MattMineGame(stubs.canvas, defaultProfile(), { headless: true, audio: {
+    startMusic() {}, resume() {}, play() {}, stopBoss() {}, stopMusic() {}
+  } });
+  arena.startRun({ mode: 'arena', seed: 'ARENA-RULES' });
+  assert.equal(arena.player.weapon, 'pickaxe');
+  assert.equal(arena.player.unlockedWeapons.blaster, false);
+  assert.equal(arena.layout.guardianRoom.width, CONFIG.roomWidth);
+  assert.equal(arena.layout.guardianRoom.height, CONFIG.roomHeight);
+});
+
+test('the treasure cache offers Blaster tuning and volleys fire up to three bolts', async () => {
+  const { MattMineGame } = await import('../src/game/GameV4.js');
+  const stubs = installBrowserStubs();
+  let offered = [];
+  const game = new MattMineGame(stubs.canvas, stubs.profile, {
+    onLevelUp(options) {
+      offered = options;
+    }
+  });
+  game.startRun({ mode: RUN_MODES.PRACTICE, seed: 'BLASTER-CACHE' });
+  const cache = oreTarget(game, { kind: 'cache', hp: 1, maxHp: 1, xp: 0 });
+  game.ores = [cache];
+  game.damageTarget(cache, 10);
+  assert.equal(game.state, 'levelup');
+  assert.equal(offered.length, 3);
+  assert.equal(offered.every((option) => option.id.startsWith('blaster')), true);
+
+  game.chooseRunUpgrade(offered[0].id);
+  game.player.blasterVolley = 3;
+  game.player.angle = 0;
+  game.projectiles = [];
+  game.fireBlaster();
+  assert.equal(game.projectiles.filter((projectile) => projectile.kind === 'crystalBolt').length, 3);
+});
+
+test('shield beetles recoil frontal pickaxe attacks, resist bolts and drones, and are weak to dynamite', async () => {
+  const { MattMineGame } = await import('../src/game/GameV4.js');
+  const stubs = installBrowserStubs();
+  const game = new MattMineGame(stubs.canvas, stubs.profile);
+  game.startRun({ mode: RUN_MODES.PRACTICE, seed: 'BEETLE-BALANCE' });
+  const beetle = enemyTarget(game, { type: 'beetle', hp: 500, maxHp: 500, facing: 0 });
+
+  game.damageTarget(beetle, 100, false, Math.PI, 'pick');
+  const pickDamage = 500 - beetle.hp;
+  assert.ok(pickDamage <= 10);
+  assert.ok(game.player.attackTimer >= 0.5);
+
+  const beforeBolt = beetle.hp;
+  game.damageTarget(beetle, 100, false, 0, 'blaster');
+  const boltDamage = beforeBolt - beetle.hp;
+  assert.ok(boltDamage <= 22);
+
+  const beforeDrone = beetle.hp;
+  game.damageTarget(beetle, 100, false, 0, 'drone');
+  const droneDamage = beforeDrone - beetle.hp;
+  assert.ok(droneDamage <= 22);
+
+  const beforeExplosion = beetle.hp;
+  game.damageTarget(beetle, 100, false, 0, 'explosion');
+  assert.equal(Math.round(beforeExplosion - beetle.hp), 180);
+});
+
+test('ranged enemies fire at the player and run endings clear all camera shake', async () => {
+  const { MattMineGame } = await import('../src/game/GameV4.js');
+  const stubs = installBrowserStubs();
+  const game = new MattMineGame(stubs.canvas, stubs.profile);
+  game.startRun({ mode: RUN_MODES.PRACTICE, seed: 'SPITTER-SHAKE' });
+  const spitter = enemyTarget(game, {
+    type: 'spitter',
+    x: game.player.x + 250,
+    attackTimer: 0,
+    speed: 74,
+    damage: 22,
+    phase: 1
+  });
+  game.enemies = [spitter];
+  game.projectiles = [];
+  game.updateEnemyBehavior(spitter, 0.02);
+  assert.equal(game.projectiles.filter((projectile) => projectile.owner === 'enemy').length, 3);
+
+  game.camera.shake = 15;
+  game.endRun(false);
+  assert.equal(game.camera.shake, 0);
+});
+
+test('the stronger Guardian fires evasive spreads and summons fast relentless reinforcements', async () => {
+  const { MattMineGame } = await import('../src/game/GameV4.js');
+  const stubs = installBrowserStubs();
+  const game = new MattMineGame(stubs.canvas, stubs.profile);
+  game.startRun({ mode: RUN_MODES.PRACTICE, seed: 'GUARDIAN-PRESSURE' });
+  const guardian = game.spawnEnemy(true, game.layout.guardianRoom);
+  guardian.hp = guardian.maxHp * 0.6;
+  guardian.lastBossPhase = 2;
+  guardian.attackTimer = 0;
+  guardian.summonTimer = 0;
+  game.enemies = [guardian];
+  game.projectiles = [];
+
+  game.updateGuardian(guardian, 0.02);
+
+  const reinforcements = game.enemies.filter((enemy) => enemy.guardianReinforcement);
+  assert.equal(guardian.maxHp, 820);
+  assert.equal(game.projectiles.length, 5);
+  assert.equal(reinforcements.length, 3);
+  assert.equal(reinforcements.every((enemy) => enemy.awake && enemy.speed > 74), true);
+  const projectileAngles = game.projectiles.map((projectile) => Math.atan2(projectile.vy, projectile.vx));
+  assert.ok(Math.max(...projectileAngles) - Math.min(...projectileAngles) > 1);
+});
+
+test('the expanded nugget workshop keeps legacy ranks and scales into long-term costs', () => {
+  const profile = defaultProfile();
+  assert.deepEqual(Object.keys(profile.meta), META_UPGRADES.map((upgrade) => upgrade.id));
+  assert.equal(META_UPGRADES.every((upgrade) => upgrade.max >= 15), true);
+  const health = META_UPGRADES.find((upgrade) => upgrade.id === 'health');
+  assert.equal(metaUpgradeCost(health, 0), 110);
+  assert.ok(metaUpgradeCost(health, 10) > metaUpgradeCost(health, 5));
 });
 
 test('player, enemy, expired, and wall projectile paths resolve without throwing', async () => {
@@ -399,7 +527,16 @@ test('profile saves recover invalid JSON and sanitize unsafe numeric fields', ()
   assert.equal(recovered.bankedNuggets, 0);
   assert.equal(recovered.bestDepth, 0);
   assert.equal(recovered.totalRuns, 2);
-  assert.deepEqual(recovered.meta, { health: 10, damage: 0, speed: 0, luck: 7 });
+  assert.deepEqual(recovered.meta, {
+    health: 25,
+    damage: 0,
+    speed: 0,
+    luck: 7,
+    magnet: 0,
+    armor: 0,
+    dash: 0,
+    blaster: 0
+  });
   assert.deepEqual(JSON.parse(invalidSchema.value(PROFILE_STORAGE_KEY)), recovered);
 });
 

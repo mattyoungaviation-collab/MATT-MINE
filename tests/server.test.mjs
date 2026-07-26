@@ -751,9 +751,9 @@ test('permanent upgrades spend only server-owned banked nuggets', async () => {
   harness.advance(60_000);
   await finish(harness.service, session, run, extractedResult());
   const upgraded = await harness.service.purchaseUpgrade(session.token, 'health');
-  assert.equal(upgraded.cost, 75);
+  assert.equal(upgraded.cost, 110);
   assert.equal(upgraded.rank, 1);
-  assert.equal(upgraded.profile.bankedNuggets, 925);
+  assert.equal(upgraded.profile.bankedNuggets, 890);
   assert.equal(upgraded.profile.meta.health, 1);
 });
 

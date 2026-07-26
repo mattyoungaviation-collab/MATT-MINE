@@ -26,6 +26,8 @@ export const CONFIG = Object.freeze({
   blasterEnergyMax: 100,
   blasterEnergyRegen: 17,
   blasterEnergyCost: 12,
+  blasterDamageScale: 0.56,
+  blasterVolleySpread: 0.2,
   blasterRange: 480,
   dynamiteRange: 285,
   guardianProjectileRange: 560,
@@ -90,6 +92,13 @@ export const ORE_TYPES = Object.freeze({
   cache: { name: 'Treasure Cache', color: CONFIG.colors.treasure, hp: 145, nuggets: 95, xp: 38, weight: 0 }
 });
 
+export const BLASTER_RUN_UPGRADES = Object.freeze([
+  { id: 'blastercap', name: 'Crystal Battery', description: '+30 maximum Blaster energy and refill it', icon: '▰' },
+  { id: 'blasterregen', name: 'Flux Charger', description: '+35% Blaster recharge speed', icon: '↻' },
+  { id: 'blasterpower', name: 'Focused Core', description: '+25% Blaster damage', icon: '✦' },
+  { id: 'blastervolley', name: 'Split Prism', description: 'Fire one additional bolt per volley, up to three', icon: '⋔' }
+]);
+
 export const RUN_UPGRADES = Object.freeze([
   { id: 'power', name: 'Heavy Pick', description: '+25% attack and mining damage', icon: '⛏' },
   { id: 'speed', name: 'Fast Boots', description: '+12% movement speed', icon: '⚡' },
@@ -106,8 +115,18 @@ export const RUN_UPGRADES = Object.freeze([
 ]);
 
 export const META_UPGRADES = Object.freeze([
-  { id: 'health', name: 'Base Health', description: '+8 starting health per rank', baseCost: 75, max: 10 },
-  { id: 'damage', name: 'Pick Power', description: '+5% starting damage per rank', baseCost: 90, max: 10 },
-  { id: 'speed', name: 'Boot Speed', description: '+2% starting movement speed per rank', baseCost: 70, max: 10 },
-  { id: 'luck', name: 'Crystal Luck', description: '+1% rich ore chance per rank', baseCost: 125, max: 8 }
+  { id: 'health', name: 'Base Health', description: '+8 starting health per rank', baseCost: 110, max: 25 },
+  { id: 'damage', name: 'Pick Power', description: '+5% starting damage per rank', baseCost: 135, max: 25 },
+  { id: 'speed', name: 'Boot Speed', description: '+2% starting movement speed per rank', baseCost: 105, max: 25 },
+  { id: 'luck', name: 'Crystal Luck', description: '+1% rich ore chance per rank', baseCost: 175, max: 20 },
+  { id: 'magnet', name: 'Magnet Coil', description: '+6 starting pickup range per rank', baseCost: 145, max: 20 },
+  { id: 'armor', name: 'Reinforced Plates', description: '+1% starting damage reduction per rank', baseCost: 220, max: 15 },
+  { id: 'dash', name: 'Dash Capacitor', description: '+2% faster starting dash recharge per rank', baseCost: 240, max: 15 },
+  { id: 'blaster', name: 'Blaster Tuning', description: '+3% starting Blaster damage per rank', baseCost: 260, max: 20 }
 ]);
+
+export function metaUpgradeCost(upgrade, rank) {
+  const normalizedRank = Math.max(0, Math.floor(Number(rank) || 0));
+  const tierMultiplier = 1 + Math.floor(normalizedRank / 5) * 0.35;
+  return Math.floor(upgrade.baseCost * Math.pow(1.65, normalizedRank) * tierMultiplier);
+}

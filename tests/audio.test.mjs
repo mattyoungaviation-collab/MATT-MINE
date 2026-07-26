@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, stat } from 'node:fs/promises';
 
-import { GameAudio } from '../src/game/audio.js';
+import { AUDIO_SETTINGS_KEY, GameAudio } from '../src/game/audio.js';
 
 test('Ore Reactor is packaged as a non-empty MP3 gameplay asset', async () => {
   const assetUrl = new URL('../assets/audio/ore-reactor.mp3', import.meta.url);
@@ -66,4 +66,36 @@ test('gameplay music stops and resets when a run ends', () => {
 
   assert.equal(track.pauseCalls, 1);
   assert.equal(track.currentTime, 0);
+});
+
+test('sound controls persist mute, music, and combat-effect levels', () => {
+  const values = new Map();
+  const storage = {
+    getItem(key) {
+      return values.get(key) || null;
+    },
+    setItem(key, value) {
+      values.set(key, value);
+    }
+  };
+  const track = { volume: 0, play() {}, pause() {} };
+  const audio = new GameAudio({ storage, audioFactory: () => track });
+  audio.startMusic();
+  audio.setMusicVolume(0.45);
+  audio.setEffectsVolume(0.6);
+  audio.setMuted(true);
+
+  assert.equal(track.volume, 0);
+  assert.deepEqual(JSON.parse(values.get(AUDIO_SETTINGS_KEY)), {
+    muted: true,
+    musicVolume: 0.45,
+    effectsVolume: 0.6
+  });
+
+  const restored = new GameAudio({ storage });
+  assert.deepEqual(restored.settings(), {
+    muted: true,
+    musicVolume: 0.45,
+    effectsVolume: 0.6
+  });
 });

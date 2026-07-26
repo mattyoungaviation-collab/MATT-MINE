@@ -1,4 +1,4 @@
-import { CONFIG, ORE_TYPES, RUN_UPGRADES } from './config.js';
+import { BLASTER_RUN_UPGRADES, CONFIG, ORE_TYPES, RUN_UPGRADES } from './config.js';
 import { InputController } from './input.js';
 import { createMineLayout, pointInLayout, randomPointInRoom, roomAt } from './layout.js';
 import {
@@ -606,7 +606,7 @@ export class MattMineGame {
   }
 
   chooseRunUpgrade(id) {
-    const upgrade = RUN_UPGRADES.find((entry) => entry.id === id);
+    const upgrade = [...RUN_UPGRADES, ...BLASTER_RUN_UPGRADES].find((entry) => entry.id === id);
     if (
       !upgrade ||
       this.state !== 'levelup' ||
@@ -626,11 +626,34 @@ export class MattMineGame {
     if (id === 'armor') this.player.armor = Math.min(0.6, this.player.armor + 0.12);
     if (id === 'dash') this.player.dashCooldownMax = Math.max(0.65, this.player.dashCooldownMax * 0.75);
     if (id === 'dynamite') this.player.dynamiteEvery = this.player.dynamiteEvery ? Math.max(3, this.player.dynamiteEvery - 1) : 5;
-    if (id === 'drone') this.player.droneCount = Math.min(3, this.player.droneCount + 1);
+    if (id === 'drone') this.player.droneCount = Math.min(4, this.player.droneCount + 1);
     if (id === 'fortune') this.run.lootMultiplier *= 1.15;
+    if (id === 'blastercap') {
+      this.player.blasterEnergyMax += 30;
+      this.player.blasterEnergy = this.player.blasterEnergyMax;
+    }
+    if (id === 'blasterregen') this.player.blasterEnergyRegen *= 1.35;
+    if (id === 'blasterpower') this.player.blasterDamageScale *= 1.25;
+    if (id === 'blastervolley') this.player.blasterVolley = Math.min(3, this.player.blasterVolley + 1);
     this.pendingUpgradeIds = [];
     this.state = 'playing';
     this.hooks.onUpgradeChosen?.(upgrade);
+    if (this.pendingBlasterUpgrade) {
+      this.pendingBlasterUpgrade = false;
+      this.offerBlasterUpgrade();
+    }
+  }
+
+  offerBlasterUpgrade() {
+    if (this.state === 'levelup') {
+      this.pendingBlasterUpgrade = true;
+      return;
+    }
+    const offered = pickUnique(BLASTER_RUN_UPGRADES, 3);
+    this.pendingUpgradeIds = offered.map((upgrade) => upgrade.id);
+    this.state = 'levelup';
+    this.hooks.onLevelUp?.(offered);
+    this.hooks.onToast?.('Treasure cache opened — tune your Crystal Blaster');
   }
 
   updateDrone() {
@@ -655,9 +678,10 @@ export class MattMineGame {
 
   dronePosition(index) {
     const angle = this.run.elapsed * 2.4 + (index / Math.max(1, this.player.droneCount)) * TAU;
+    const orbitRadius = this.player.droneCount >= 4 ? 62 : 48;
     return {
-      x: this.player.x + Math.cos(angle) * 48,
-      y: this.player.y + Math.sin(angle) * 48
+      x: this.player.x + Math.cos(angle) * orbitRadius,
+      y: this.player.y + Math.sin(angle) * orbitRadius
     };
   }
 

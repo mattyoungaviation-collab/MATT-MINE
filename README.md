@@ -4,6 +4,15 @@
 
 MATT Mine is a standalone browser action roguelite and daily Web3 competition on Ronin. It has its own launch website, wallet identity, separate Free and Pass leaderboards, live Pass and paid-run payments, verified contracts, and a production persistence path independent from MATT Hub.
 
+## v2.1 combat and progression balance
+
+- Start Free, Pass, and Practice miners with the Crystal Blaster; keep the live deterministic Arena rules unchanged for replay compatibility.
+- Turn the Prospector Cache into a three-choice Blaster tuning reward covering capacity, recharge, damage, and multi-bolt volleys.
+- Add ranged Spitters, stronger shield-beetle flanking rules, frontal pickaxe recoil, Blaster/drone resistance, and dynamite weakness.
+- Expand and strengthen the Guardian encounter with a larger vault, wider evasive volleys, faster pressure, and relentless reinforcements.
+- Add persistent music/effects volume controls, mute, a distinct player-damage sound, red hit feedback, clean post-run camera shake, and a four-drone orbit.
+- Expand permanent progression to eight upgrade tracks with substantially longer rank caps and escalating server-authoritative nugget costs.
+
 ## v2.0 deterministic Daily Arena
 
 - Record normalized movement, aim, attack, dash, weapon, upgrade, descend, and extraction controls at fixed 20ms simulation boundaries.

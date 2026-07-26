@@ -67,6 +67,22 @@ export function drawEnemyBody(ctx, enemy, visualAssets = {}) {
     ctx.beginPath(); ctx.arc(0, 0, enemy.radius * 0.36, 0, TAU); ctx.fill();
     ctx.shadowBlur = 0;
   }
+  if (enemy.type === 'spitter') {
+    ctx.strokeStyle = '#9ffff0';
+    ctx.lineWidth = 4;
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(side * enemy.radius * 0.5, enemy.radius * 0.42);
+      ctx.lineTo(side * enemy.radius * 1.15, enemy.radius * 0.72);
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#172f38';
+    ctx.strokeStyle = '#9ffff0';
+    ctx.beginPath();
+    ctx.ellipse(0, enemy.radius * 0.34, enemy.radius * 0.34, enemy.radius * 0.22, 0, 0, TAU);
+    ctx.fill();
+    ctx.stroke();
+  }
   if (enemy.type !== 'beetle') {
     ctx.fillStyle = enemy.type === 'exploder' ? '#ffdb7a' : '#e3f4ff';
     ctx.shadowColor = enemy.type === 'exploder' ? '#ff7b31' : '#8e4fd8';

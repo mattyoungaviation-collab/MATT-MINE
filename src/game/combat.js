@@ -6,12 +6,14 @@ export const ENEMY_STATS = Object.freeze({
   crawler: { radius: 25, health: 74, speed: 66, damage: 13, xp: 20, color: '#d94b9d' },
   beetle: { radius: 27, health: 96, speed: 58, damage: 16, xp: 25, color: '#5dbb84' },
   exploder: { radius: 22, health: 44, speed: 86, damage: 24, xp: 18, color: '#ffb342' },
-  guardian: { radius: 56, health: 620, speed: 56, damage: 24, xp: 160, color: '#b843f0' }
+  spitter: { radius: 20, health: 58, speed: 74, damage: 22, xp: 22, color: '#55d7c8' },
+  guardian: { radius: 56, health: 820, speed: 62, damage: 25, xp: 180, color: '#b843f0' }
 });
 
 export function enemyArchetypeForRoll(roll, depth = 1) {
   const normalized = Math.max(0, Math.min(0.999999, roll));
-  if (depth >= 2 && normalized >= 0.87) return 'exploder';
+  if (depth >= 2 && normalized >= 0.93) return 'exploder';
+  if (normalized >= 0.82) return 'spitter';
   if (normalized >= 0.7) return 'beetle';
   if (normalized >= 0.47) return 'crawler';
   if (normalized >= 0.24) return 'bat';
@@ -28,7 +30,7 @@ export function bossPhaseForHealth(hp, maxHp) {
 export function frontArmorMultiplier(enemyFacing, impactAngle) {
   const attackerDirection = normalizeAngle(impactAngle + Math.PI);
   const difference = Math.abs(normalizeAngle(attackerDirection - enemyFacing));
-  return difference < 0.9 ? 0.22 : 1;
+  return difference < 0.9 ? 0.08 : 1;
 }
 
 export function roomRequiresLock(type) {

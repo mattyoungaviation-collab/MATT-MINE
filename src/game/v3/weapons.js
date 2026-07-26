@@ -106,21 +106,28 @@ export const weaponsMethods = {
     this.player.attackTimer = Math.max(0.13, this.player.attackCooldown * 0.48);
     this.player.blasterEnergy -= CONFIG.blasterEnergyCost;
     const speed = 760;
-    this.projectiles.push({
-      id: this.entityId++,
-      kind: 'crystalBolt',
-      owner: 'player',
-      x: this.player.x + Math.cos(this.player.angle) * 34,
-      y: this.player.y + Math.sin(this.player.angle) * 34,
-      vx: Math.cos(this.player.angle) * speed,
-      vy: Math.sin(this.player.angle) * speed,
-      radius: 7,
-      life: 0.82,
-      travelled: 0,
-      maxRange: CONFIG.blasterRange,
-      damage: this.player.damage * 0.56,
-      color: CONFIG.colors.crystal
-    });
+    const count = clamp(this.player.blasterVolley || 1, 1, 3);
+    for (let index = 0; index < count; index += 1) {
+      const offset = count === 1
+        ? 0
+        : (index - (count - 1) / 2) * CONFIG.blasterVolleySpread;
+      const angle = this.player.angle + offset;
+      this.projectiles.push({
+        id: this.entityId++,
+        kind: 'crystalBolt',
+        owner: 'player',
+        x: this.player.x + Math.cos(angle) * 34,
+        y: this.player.y + Math.sin(angle) * 34,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        radius: 7,
+        life: 0.82,
+        travelled: 0,
+        maxRange: CONFIG.blasterRange,
+        damage: this.player.damage * this.player.blasterDamageScale,
+        color: CONFIG.colors.crystal
+      });
+    }
     this.audio.play('blaster');
   },
   updateProjectiles(dt) {
@@ -196,10 +203,28 @@ export const weaponsMethods = {
     if (!('kind' in target)) {
       target.awake = true;
       target.hidden = false;
-      if (target.type === 'beetle' && !['explosion', 'drone'].includes(source)) {
-        const armor = frontArmorMultiplier(target.facing, impactAngle);
-        blocked = armor < 1;
-        resolvedDamage *= armor;
+      if (target.type === 'beetle') {
+        if (this.runContext?.mode === 'arena') {
+          if (!['explosion', 'drone'].includes(source)) {
+            const armor = frontArmorMultiplier(target.facing, impactAngle);
+            blocked = armor < 1;
+            resolvedDamage *= armor < 1 ? 0.22 : 1;
+          }
+        } else if (source === 'explosion') resolvedDamage *= 1.8;
+        else {
+          const armor = frontArmorMultiplier(target.facing, impactAngle);
+          blocked = armor < 1;
+          resolvedDamage *= armor;
+          if (['blaster', 'drone'].includes(source)) resolvedDamage *= 0.22;
+          if (blocked && source === 'pick') {
+            this.player.attackTimer = Math.max(this.player.attackTimer, 0.5);
+            this.player.swingTimer = 0;
+            this.player.vx -= Math.cos(impactAngle) * 180;
+            this.player.vy -= Math.sin(impactAngle) * 180;
+            this.audio.play('shield');
+            this.addFloater(this.player.x, this.player.y - 32, 'RECOIL', '#9df0bd');
+          }
+        }
       }
       if (target.isBoss && bossPhaseForHealth(target.hp, target.maxHp) === 3) resolvedDamage *= 1.22;
     }
@@ -228,7 +253,7 @@ export const weaponsMethods = {
     }
   },
   explode(x, y, radius, damage) {
-    this.camera.shake = Math.max(this.camera.shake, 12);
+    this.camera.shake = Math.max(this.camera.shake, 9);
     this.audio.play('boom');
     this.burst(x, y, '#ffb342', 28);
     this.addFloater(x, y - 30, 'BOOM', '#ffcf73');
@@ -267,9 +292,11 @@ export const weaponsMethods = {
       });
     }
     if (ore.kind === 'cache') {
-      this.unlockWeapon('blaster');
       this.player.blasterEnergy = this.player.blasterEnergyMax;
-      this.hooks.onToast?.('Crystal Blaster recovered from the cache');
+      if (this.runContext?.mode === 'arena') {
+        this.unlockWeapon('blaster');
+        this.hooks.onToast?.('Crystal Blaster recovered from the cache');
+      } else this.offerBlasterUpgrade();
     }
     else if (ore.rich) this.addFloater(ore.x, ore.y - 36, 'RICH VEIN', '#ffe88c');
   }

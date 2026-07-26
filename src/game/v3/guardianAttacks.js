@@ -29,7 +29,7 @@ export const guardianAttackMethods = {
         y: enemy.y + Math.sin(angle) * enemy.radius,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
-        radius: 9,
+        radius: this.runContext?.mode === 'arena' ? 9 : enemy.isBoss ? 7 : 8,
         life: 2.2,
         travelled: 0,
         maxRange: CONFIG.guardianProjectileRange,

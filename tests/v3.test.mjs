@@ -44,6 +44,7 @@ test('combat helpers resolve enemy roles, armor, boss phases, and locked rooms',
   assert.equal(enemyArchetypeForRoll(0.3, 1), 'bat');
   assert.equal(enemyArchetypeForRoll(0.55, 1), 'crawler');
   assert.equal(enemyArchetypeForRoll(0.75, 1), 'beetle');
+  assert.equal(enemyArchetypeForRoll(0.85, 1), 'spitter');
   assert.equal(enemyArchetypeForRoll(0.95, 2), 'exploder');
   assert.equal(bossPhaseForHealth(90, 100), 1);
   assert.equal(bossPhaseForHealth(60, 100), 2);

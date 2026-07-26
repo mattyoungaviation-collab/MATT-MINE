@@ -7,10 +7,9 @@ export const stateMethods = {
   startRun() {
     this.runtimeError = null;
     this.entityId = 1;
-    const meta = this.runContext?.mode === 'arena'
-      ? { health: 0, damage: 0, speed: 0, luck: 0 }
-      : this.profile.meta;
-    const maxHealth = CONFIG.basePlayerHealth + meta.health * 8;
+    const isArena = this.runContext?.mode === 'arena';
+    const meta = isArena ? {} : this.profile.meta;
+    const maxHealth = CONFIG.basePlayerHealth + (meta.health || 0) * 8;
     this.run = {
       depth: 1,
       rawNuggets: 0,
@@ -34,14 +33,14 @@ export const stateMethods = {
       radius: CONFIG.playerRadius,
       maxHealth,
       health: maxHealth,
-      speed: CONFIG.basePlayerSpeed * (1 + meta.speed * 0.02),
-      damage: CONFIG.baseDamage * (1 + meta.damage * 0.05),
+      speed: CONFIG.basePlayerSpeed * (1 + (meta.speed || 0) * 0.02),
+      damage: CONFIG.baseDamage * (1 + (meta.damage || 0) * 0.05),
       attackCooldown: CONFIG.baseAttackCooldown,
       attackTimer: 0,
       attackRange: CONFIG.baseAttackRange,
       critChance: CONFIG.baseCritChance,
-      magnetRange: CONFIG.baseMagnetRange,
-      armor: 0,
+      magnetRange: CONFIG.baseMagnetRange + (meta.magnet || 0) * 6,
+      armor: Math.min(0.25, (meta.armor || 0) * 0.01),
       level: 1,
       xp: 0,
       nextXp: 45,
@@ -50,7 +49,7 @@ export const stateMethods = {
       invulnerable: 0,
       swingTimer: 0,
       dashCooldown: 0,
-      dashCooldownMax: CONFIG.baseDashCooldown,
+      dashCooldownMax: CONFIG.baseDashCooldown / (1 + (meta.dash || 0) * 0.02),
       dashTimer: 0,
       dashSpeed: CONFIG.baseDashSpeed,
       lastMoveX: 1,
@@ -59,11 +58,14 @@ export const stateMethods = {
       droneCount: 0,
       droneTimer: 0,
       trailTimer: 0,
-      weapon: 'pickaxe',
-      unlockedWeapons: { pickaxe: true, dynamite: false, blaster: false },
+      weapon: isArena ? 'pickaxe' : 'blaster',
+      unlockedWeapons: { pickaxe: true, dynamite: false, blaster: !isArena },
       dynamiteAmmo: CONFIG.dynamiteStartAmmo,
       blasterEnergy: CONFIG.blasterEnergyMax,
       blasterEnergyMax: CONFIG.blasterEnergyMax,
+      blasterEnergyRegen: CONFIG.blasterEnergyRegen,
+      blasterDamageScale: CONFIG.blasterDamageScale * (1 + (meta.blaster || 0) * 0.03),
+      blasterVolley: 1,
       emptyWeaponToast: 0
     };
     this.enemies = [];
@@ -84,6 +86,10 @@ export const stateMethods = {
   },
   generateDepth() {
     this.layout = createMineLayout();
+    if (this.runContext?.mode !== 'arena' && this.layout.guardianRoom) {
+      this.layout.guardianRoom.width = Math.max(this.layout.guardianRoom.width, 520);
+      this.layout.guardianRoom.height = Math.max(this.layout.guardianRoom.height, 390);
+    }
     this.decor = this.makeDepthDecor();
     this.enemies = [];
     this.ores = [];
@@ -106,7 +112,7 @@ export const stateMethods = {
     this.player.vy = 0;
     this.player.health = Math.min(this.player.maxHealth, this.player.health + this.player.maxHealth * 0.3);
 
-    const luck = this.profile.meta.luck || 0;
+    const luck = this.runContext?.mode === 'arena' ? 0 : this.profile.meta.luck || 0;
     const oreEntries = Object.entries(ORE_TYPES)
       .filter(([id]) => id !== 'cache')
       .map(([id, ore]) => ({ id, ...ore }));
@@ -163,7 +169,7 @@ export const stateMethods = {
     this.player.emptyWeaponToast -= dt;
     this.player.blasterEnergy = Math.min(
       this.player.blasterEnergyMax,
-      this.player.blasterEnergy + CONFIG.blasterEnergyRegen * dt
+      this.player.blasterEnergy + this.player.blasterEnergyRegen * dt
     );
     this.camera.shake = Math.max(0, this.camera.shake - dt * 27);
 
@@ -265,8 +271,8 @@ export const stateMethods = {
     this.player.vx += Math.cos(sourceAngle) * 250;
     this.player.vy += Math.sin(sourceAngle) * 250;
     this.moveEntity(this.player, Math.cos(sourceAngle) * 24, Math.sin(sourceAngle) * 24);
-    this.camera.shake = 11;
-    this.audio.play('hurt');
+    this.camera.shake = 9;
+    this.audio.play('playerDamage');
     this.addFloater(this.player.x, this.player.y - 35, `-${Math.round(finalDamage)}`, '#ff8292');
     this.hooks.onArenaEvent?.({
       type: 'damage_taken',
@@ -324,6 +330,7 @@ export const stateMethods = {
     }
     this.run.displayedScore = projected;
     this.state = 'ended';
+    this.camera.shake = 0;
     this.audio.stopBoss();
     this.audio.stopMusic();
     if (extracted) this.audio.play('extract');
