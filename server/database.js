@@ -6,7 +6,6 @@ import { defaultServerState, normalizeServerState } from './state.js';
 
 const { Pool } = pg;
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
-const LEADERBOARD_MODERATION_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 export class MemoryDatabase {
   constructor(initialState = defaultServerState()) {
@@ -627,10 +626,7 @@ async function finalizeClosedLeaderboards(client, currentWeek, timestamp, suspen
   );
   for (const candidate of candidates.rows) {
     const weekStartedAt = Date.parse(`${candidate.week_key}T00:00:00.000Z`);
-    if (
-      !Number.isFinite(weekStartedAt) ||
-      timestamp < weekStartedAt + WEEK_MS + LEADERBOARD_MODERATION_WINDOW_MS
-    ) {
+    if (!Number.isFinite(weekStartedAt) || timestamp < weekStartedAt + WEEK_MS) {
       continue;
     }
     const inserted = await client.query(
@@ -656,16 +652,9 @@ async function finalizeClosedLeaderboards(client, currentWeek, timestamp, suspen
          AND mode = $2
          AND NOT (address = ANY($3::TEXT[]))
          AND weekly_score > 0
-       HAVING NOT EXISTS (
-           SELECT 1
-           FROM matt_mine_runs
-           WHERE week_key = $1
-             AND status = 'active'
-             AND expires_at_ms > $4
-         )
        ON CONFLICT (week_key, mode) DO NOTHING
        RETURNING week_key`,
-      [candidate.week_key, candidate.mode, suspended, timestamp]
+      [candidate.week_key, candidate.mode, suspended]
     );
     if (!inserted.rows.length) continue;
     await client.query(

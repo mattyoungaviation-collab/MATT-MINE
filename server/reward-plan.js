@@ -9,6 +9,7 @@ import { createStandardMerkleTree } from './merkle.js';
 
 export const REWARD_CONTRACT_ADDRESS = '0x6ba468EE15cb3634F4Ea340407E9FD7A75267619';
 export const MATT_TOKEN_ADDRESS = '0xa5450417BDCa0BDfB058ffE41205400FfDA1174d';
+export const REWARD_TREASURY_ADDRESS = '0xBacE355D23d378a6E1adD986E53a18Dd12E6EeAc';
 export const REWARD_CHAIN_ID = 2020;
 export const REWARD_WEIGHTS_BPS = Object.freeze([
   3_000,

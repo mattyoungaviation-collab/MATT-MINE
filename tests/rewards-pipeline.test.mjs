@@ -330,6 +330,9 @@ test('Safe publication funds only the vault shortfall and never double-funds ava
       async readContract(request) {
         if (request.functionName === 'balanceOf') return 11_000n * 10n ** 18n;
         if (request.functionName === 'totalReservedMatt') return 1_000n * 10n ** 18n;
+        if (request.functionName === 'allowance') return 0n;
+        if (request.functionName === 'paused') return false;
+        if (request.functionName === 'getEpoch') return { published: false };
         throw new Error(`Unexpected ${request.functionName}`);
       }
     }
@@ -342,8 +345,15 @@ test('Safe publication funds only the vault shortfall and never double-funds ava
   const shortFunding = new RoninRewardChain({
     client: {
       async readContract(request) {
-        if (request.functionName === 'balanceOf') return 2_000n * 10n ** 18n;
+        if (request.functionName === 'balanceOf') {
+          return request.args[0].toLowerCase() === REWARD_CONTRACT_ADDRESS.toLowerCase()
+            ? 2_000n * 10n ** 18n
+            : 20_000n * 10n ** 18n;
+        }
         if (request.functionName === 'totalReservedMatt') return 1_000n * 10n ** 18n;
+        if (request.functionName === 'allowance') return 0n;
+        if (request.functionName === 'paused') return false;
+        if (request.functionName === 'getEpoch') return { published: false };
         throw new Error(`Unexpected ${request.functionName}`);
       }
     }
@@ -354,6 +364,43 @@ test('Safe publication funds only the vault shortfall and never double-funds ava
   assert.match(shortPackage.transactions[0].purpose, /Approve/);
   assert.match(shortPackage.transactions[1].purpose, /Fund/);
   assert.match(shortPackage.transactions[2].purpose, /Publish/);
+});
+
+test('reward publication preflight blocks paused, duplicate, and underfunded Safe packages', async () => {
+  const plan = createRewardPlan({
+    snapshot: finalizedSnapshot(),
+    poolMatt: 10_000,
+    claimDeadline: Math.floor(NOW / 1000) + 30 * 86_400,
+    maxBoardMatt: 100_000
+  });
+  const chain = (overrides = {}) => new RoninRewardChain({
+    client: {
+      async readContract(request) {
+        if (request.functionName === 'balanceOf') {
+          const isVault = request.args[0].toLowerCase() === REWARD_CONTRACT_ADDRESS.toLowerCase();
+          return isVault ? 1_000n * 10n ** 18n : (overrides.treasuryBalance ?? 20_000n * 10n ** 18n);
+        }
+        if (request.functionName === 'totalReservedMatt') return 1_000n * 10n ** 18n;
+        if (request.functionName === 'allowance') return 0n;
+        if (request.functionName === 'paused') return overrides.paused === true;
+        if (request.functionName === 'getEpoch') return { published: overrides.published === true };
+        throw new Error(`Unexpected ${request.functionName}`);
+      }
+    }
+  });
+
+  await assert.rejects(
+    () => chain({ paused: true }).publicationTransactions(plan),
+    (error) => error.code === 'reward_vault_paused'
+  );
+  await assert.rejects(
+    () => chain({ published: true }).publicationTransactions(plan),
+    (error) => error.code === 'reward_epoch_exists'
+  );
+  await assert.rejects(
+    () => chain({ treasuryBalance: 1n }).publicationTransactions(plan),
+    (error) => error.code === 'reward_treasury_insufficient'
+  );
 });
 
 test('authenticated HTTP routes carry a capped draft through approval, sync, and claim preparation', async () => {

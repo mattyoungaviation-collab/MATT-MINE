@@ -5,6 +5,7 @@ import { utcDayKey, utcWeekKey } from '../src/game/economy.js';
 import {
   AUTH_CHALLENGE_TTL_MS,
   MAX_RUN_SCORE,
+  MIN_RANKED_RUN_WINDOW_MS,
   RONIN_CHAINS,
   RUN_TTL_MS,
   SERVER_RUN_MODES,
@@ -18,7 +19,7 @@ import {
   createAdminSafeTransactionFile,
   listAdminContractActions,
   MATT_MINE_ADMIN_CONTRACTS,
-  prepareAdminContractTransaction
+  prepareAdminContractTransactions
 } from './admin-controls.js';
 
 export class MattMineService {
@@ -301,6 +302,15 @@ export class MattMineService {
 
       const day = utcDayKey(timestamp);
       const week = utcWeekKey(timestamp);
+      const weekEndsAt = Date.parse(`${week}T00:00:00.000Z`) + 7 * 24 * 60 * 60 * 1000;
+      if (normalizedMode !== SERVER_RUN_MODES.PRACTICE) {
+        assertApi(
+          weekEndsAt - timestamp >= MIN_RANKED_RUN_WINDOW_MS,
+          409,
+          'ranked_window_closing',
+          'Ranked entries are closed for the final five minutes so the leaderboard can finalize exactly at zero.'
+        );
+      }
       if (normalizedMode === SERVER_RUN_MODES.FREE) {
         const daily = wallet.daily[day] || { freeRunUsed: false, freeRunId: '' };
         assertApi(!daily.freeRunUsed, 409, 'free_run_used', 'Today’s free ranked run has already been used.');
@@ -328,7 +338,9 @@ export class MattMineService {
         week,
         status: 'active',
         startedAt: timestamp,
-        expiresAt: timestamp + RUN_TTL_MS,
+        expiresAt: normalizedMode === SERVER_RUN_MODES.PRACTICE
+          ? timestamp + RUN_TTL_MS
+          : Math.min(timestamp + RUN_TTL_MS, weekEndsAt),
         finishedAt: 0,
         result: null
       };
@@ -348,7 +360,7 @@ export class MattMineService {
           : normalizedMode === SERVER_RUN_MODES.PAID
             ? 2
             : 0,
-        expiresAt: timestamp + RUN_TTL_MS
+        expiresAt: serverRun.expiresAt
       };
     });
   }
@@ -689,14 +701,16 @@ export class MattMineService {
   async prepareAdminContractAction(adminKey, input, reason) {
     this.assertAdminKey(adminKey);
     const normalizedReason = normalizeAdminReason(reason);
-    const transaction = prepareAdminContractTransaction(input);
+    const transactions = prepareAdminContractTransactions(input);
+    const transaction = transactions.at(-1);
     const timestamp = this.now();
     await this.database.transact((state) => {
       addAudit(state, 'SERVER_ADMIN', 'CONTRACT_TRANSACTION_PREPARED', `${transaction.action}: ${normalizedReason}`, timestamp);
     });
     return {
       transaction,
-      safeTransactionBuilderFile: createAdminSafeTransactionFile(transaction, timestamp),
+      transactions,
+      safeTransactionBuilderFile: createAdminSafeTransactionFile(transactions, timestamp),
       safeFileName: `matt-mine-${transaction.action}-${new Date(timestamp).toISOString().replace(/[:.]/g, '-')}.json`,
       reason: normalizedReason
     };

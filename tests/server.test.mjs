@@ -280,6 +280,20 @@ test('the server owns the free entitlement, run token, replay protection, profil
   assert.equal(player.scores.free, 1_000);
 });
 
+test('ranked entries close before weekly zero while Practice remains available', async () => {
+  const harness = createHarness({
+    timestamp: Date.UTC(2026, 6, 26, 23, 56, 0)
+  });
+  const { session } = await signIn(harness);
+
+  await assert.rejects(
+    () => harness.service.startRun(session.token, SERVER_RUN_MODES.FREE),
+    (error) => error.code === 'ranked_window_closing'
+  );
+  const practice = await harness.service.startRun(session.token, SERVER_RUN_MODES.PRACTICE);
+  assert.equal(practice.mode, SERVER_RUN_MODES.PRACTICE);
+});
+
 test('paid server runs stay disabled while authenticated Practice remains unlimited', async () => {
   const harness = createHarness();
   const { session } = await signIn(harness);
