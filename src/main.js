@@ -601,7 +601,7 @@ const game = new MattMineGame(canvas, profile, {
     updateMenu();
     toast(`Run stopped safely: ${error.message}`);
   },
-  onArenaEvent(event) {
+  onArenaInput(event) {
     activeArenaTranscript?.record(event);
   },
   onToast: toast

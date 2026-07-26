@@ -1,6 +1,6 @@
 import { CONFIG, WEAPONS } from '../config.js';
 import { pointInLayout } from '../layout.js';
-import { angleTo, clamp, distance, randomRange } from '../utils.js';
+import { angleTo, clamp, distance, random, randomRange } from '../utils.js';
 import { frontArmorMultiplier, bossPhaseForHealth, normalizeAngle } from '../combat.js';
 
 export const weaponsMethods = {
@@ -56,7 +56,7 @@ export const weaponsMethods = {
     if (!candidates.length) return;
 
     const { target } = candidates[0];
-    const critical = Math.random() < this.player.critChance;
+    const critical = random() < this.player.critChance;
     const damage = this.player.damage * (critical ? 2 : 1);
     this.damageTarget(target, damage, critical, angleTo(this.player, target));
     this.run.attackCounter += 1;

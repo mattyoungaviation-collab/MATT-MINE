@@ -7,7 +7,9 @@ export const stateMethods = {
   startRun() {
     this.runtimeError = null;
     this.entityId = 1;
-    const meta = this.profile.meta;
+    const meta = this.runContext?.mode === 'arena'
+      ? { health: 0, damage: 0, speed: 0, luck: 0 }
+      : this.profile.meta;
     const maxHealth = CONFIG.basePlayerHealth + meta.health * 8;
     this.run = {
       depth: 1,
@@ -314,10 +316,12 @@ export const stateMethods = {
     if (!this.run || ['ended', 'menu'].includes(this.state)) return;
     const projected = this.projectedPayout();
     const banked = extracted ? projected : Math.floor(projected * CONFIG.deathKeepFraction);
-    this.profile.bankedNuggets += banked;
-    this.profile.bestDepth = Math.max(this.profile.bestDepth, this.run.depth);
-    this.profile.bestScore = Math.max(this.profile.bestScore, projected);
-    this.profile.totalRuns += 1;
+    if (this.runContext?.mode !== 'arena' && !this.headless) {
+      this.profile.bankedNuggets += banked;
+      this.profile.bestDepth = Math.max(this.profile.bestDepth, this.run.depth);
+      this.profile.bestScore = Math.max(this.profile.bestScore, projected);
+      this.profile.totalRuns += 1;
+    }
     this.run.displayedScore = projected;
     this.state = 'ended';
     this.audio.stopBoss();
@@ -327,7 +331,9 @@ export const stateMethods = {
       type: extracted ? 'extract' : 'knockout',
       tick: Math.round(this.run.elapsed * 1_000)
     });
-    this.hooks.onProfileChanged?.(this.profile);
+    if (this.runContext?.mode !== 'arena' && !this.headless) {
+      this.hooks.onProfileChanged?.(this.profile);
+    }
     this.hooks.onRunEnd?.({
       extracted,
       banked,

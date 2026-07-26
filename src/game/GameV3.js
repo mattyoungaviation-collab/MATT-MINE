@@ -11,8 +11,8 @@ import { loadVisualAssets } from './v3/visualAssets.js';
 export class MattMineGame extends BaseMattMineGame {
   constructor(canvas, profile, hooks = {}) {
     super(canvas, profile, hooks);
-    this.audio = new GameAudio();
-    this.visualAssets = loadVisualAssets();
+    this.audio = hooks.audio || new GameAudio();
+    this.visualAssets = this.headless ? {} : loadVisualAssets();
   }
 }
 

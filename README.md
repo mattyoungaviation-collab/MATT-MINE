@@ -4,6 +4,18 @@
 
 MATT Mine is a standalone browser action roguelite and daily Web3 competition on Ronin. It has its own launch website, wallet identity, separate Free and Pass leaderboards, live Pass and paid-run payments, verified contracts, and a production persistence path independent from MATT Hub.
 
+## v2.0 deterministic Daily Arena
+
+- Record normalized movement, aim, attack, dash, weapon, upgrade, descend, and extraction controls at fixed 20ms simulation boundaries.
+- Replay those controls through the same deterministic game engine on the server.
+- Reject browser milestone events, browser score summaries, unaligned clocks, skipped game boundaries, unavailable upgrades, and premature finish markers.
+- Use a canonical zero-upgrade Arena profile so browser-local progression cannot affect competition results.
+- Bind every run to one confirmed onchain MATT entry, wallet session, one-time run token, signed checkpoint chain, daily seed, and UTC deadline.
+- Enable the Render Arena service while leaving the verified contract entry pause as the final independent activation control.
+- Unlock future-day schedule, optional seed, and emergency-pauser transaction generation in the admin command center.
+
+See [`docs/ARENA_ACTIVATION_V20.md`](docs/ARENA_ACTIVATION_V20.md).
+
 ## v1.9 verified Arena production wiring
 
 The isolated MATT Daily Arena is deployed and exact-match verified on Ronin

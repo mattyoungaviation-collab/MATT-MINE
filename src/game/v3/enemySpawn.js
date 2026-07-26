@@ -1,6 +1,6 @@
 import { CONFIG } from '../config.js';
 import { randomPointInRoom, roomAt } from '../layout.js';
-import { distance, randomInt, randomRange } from '../utils.js';
+import { distance, random, randomInt, randomRange } from '../utils.js';
 import { ENEMY_STATS, enemyArchetypeForRoll, roomRequiresLock } from '../combat.js';
 
 const TAU = Math.PI * 2;
@@ -25,7 +25,7 @@ export const enemySpawnMethods = {
     }
 
     const depthScale = 1 + (this.run.depth - 1) * 0.28;
-    const type = isBoss ? 'guardian' : forcedType || enemyArchetypeForRoll(Math.random(), this.run.depth);
+    const type = isBoss ? 'guardian' : forcedType || enemyArchetypeForRoll(random(), this.run.depth);
     const stats = ENEMY_STATS[type];
     const dormant = roomRequiresLock(room.type) && !isBoss;
 

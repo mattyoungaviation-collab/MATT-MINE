@@ -60,7 +60,7 @@ async function handleApiRequest({
   const path = requestUrl.pathname;
   if (method === 'GET' && path === '/api/health') {
     const health = await service.health();
-    sendJson(response, 200, { ok: true, service: 'matt-mine', version: 15, ...health });
+    sendJson(response, 200, { ok: true, service: 'matt-mine', version: 16, ...health });
     return;
   }
   if (method === 'GET' && path === '/api/config') {
