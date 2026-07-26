@@ -757,10 +757,10 @@
 }
 
 .launch-tier-grid {
-  width: min(100%, 980px);
+  width: min(100%, 1180px);
   margin: 58px auto 0;
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 16px;
 }
 
@@ -777,6 +777,14 @@
   border-color: rgba(155, 103, 255, 0.42);
   background: linear-gradient(150deg, rgba(34, 25, 54, 0.94), #0c0f16 64%);
   box-shadow: 0 24px 90px rgba(79, 43, 146, 0.16);
+}
+
+.arena-tier-card {
+  border-color: rgba(244, 201, 75, 0.38);
+  background:
+    radial-gradient(circle at 90% 0%, rgba(144, 76, 238, 0.18), transparent 42%),
+    linear-gradient(150deg, rgba(49, 38, 18, 0.96), #0c0f16 68%);
+  box-shadow: 0 24px 90px rgba(195, 143, 31, 0.12);
 }
 
 .tier-glow {
@@ -797,6 +805,11 @@
 
 .pass-tier-card .tier-topline span {
   color: #c39cff;
+}
+
+.arena-tier-card .tier-topline span,
+.arena-tier-card h3 {
+  color: #f6ca4c;
 }
 
 .launch-tier-card h3 {
@@ -845,6 +858,10 @@
   color: #b48aff;
 }
 
+.arena-tier-card li::before {
+  color: #f6ca4c;
+}
+
 .launch-tier-card > button {
   margin: 0;
 }
@@ -853,6 +870,12 @@
   border-color: rgba(177, 129, 255, 0.35);
   background: rgba(155, 103, 255, 0.13);
   color: #d6bfff;
+}
+
+.arena-tier-card > button {
+  border-color: rgba(244, 201, 75, 0.35);
+  background: rgba(244, 201, 75, 0.1);
+  color: #f7d869;
 }
 
 .launch-flywheel {

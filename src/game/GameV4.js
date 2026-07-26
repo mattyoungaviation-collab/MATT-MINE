@@ -43,6 +43,18 @@ export class MattMineGame extends V3MattMineGame {
     }
   }
 
+  descend() {
+    const previousDepth = this.run?.depth || 0;
+    super.descend();
+    if ((this.run?.depth || 0) > previousDepth) {
+      this.hooks.onArenaEvent?.({
+        type: 'descend',
+        tick: Math.round((this.run?.elapsed || 0) * 1_000),
+        amount: this.run.depth
+      });
+    }
+  }
+
   endRun(extracted) {
     const original = this.hooks.onRunEnd;
     this.hooks.onRunEnd = (result) => original?.({

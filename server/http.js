@@ -105,6 +105,68 @@ async function handleApiRequest({
     sendJson(response, 200, { ok: true, status });
     return;
   }
+  if (method === 'GET' && path === '/api/arena/config') {
+    const arena = await service.arenaConfig(requestUrl.searchParams.get('day') || '');
+    sendJson(response, 200, { ok: true, arena });
+    return;
+  }
+  if (method === 'POST' && path === '/api/arena/entries/quote') {
+    const body = await readJson(request, maxRequestBytes);
+    const result = await service.quoteArenaEntry(bearerToken(request), body);
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
+  if (method === 'POST' && path === '/api/arena/entries/confirm') {
+    const body = await readJson(request, maxRequestBytes);
+    const result = await service.confirmArenaEntry(
+      bearerToken(request),
+      body.enterTransactionHash || body.transactionHash
+    );
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
+  if (method === 'GET' && path === '/api/arena/me') {
+    const player = await service.arenaMe(
+      bearerToken(request),
+      requestUrl.searchParams.get('day') || ''
+    );
+    sendJson(response, 200, { ok: true, player });
+    return;
+  }
+  if (method === 'GET' && path === '/api/arena/leaderboard') {
+    const leaderboard = await service.arenaLeaderboard(
+      requestUrl.searchParams.get('day') || ''
+    );
+    sendJson(response, 200, { ok: true, leaderboard });
+    return;
+  }
+  if (method === 'POST' && path === '/api/arena/runs/start') {
+    const body = await readJson(request, maxRequestBytes);
+    const result = await service.startArenaRun(bearerToken(request), body);
+    sendJson(response, 201, { ok: true, ...result });
+    return;
+  }
+  if (method === 'POST' && path === '/api/arena/runs/events') {
+    const body = await readJson(request, maxRequestBytes);
+    const result = await service.appendArenaEvents(bearerToken(request), body);
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
+  if (method === 'POST' && path === '/api/arena/runs/finish') {
+    const body = await readJson(request, maxRequestBytes);
+    const result = await service.finishArenaRun(bearerToken(request), body);
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
+  if (method === 'POST' && path === '/api/arena/refunds/prepare') {
+    const body = await readJson(request, maxRequestBytes);
+    const result = await service.prepareArenaRefund(
+      bearerToken(request),
+      body.day || ''
+    );
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
   if (method === 'POST' && path === '/api/payments/pass/confirm') {
     const body = await readJson(request, maxRequestBytes);
     const result = await service.confirmPassPurchase(bearerToken(request), body.transactionHash);
@@ -200,6 +262,70 @@ async function handleApiRequest({
       body.reason
     );
     sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
+
+  if (method === 'GET' && path === '/api/admin/arena') {
+    const arena = await service.adminArenaOverview(
+      request.headers['x-matt-admin-key'],
+      requestUrl.searchParams.get('day') || ''
+    );
+    sendJson(response, 200, { ok: true, arena });
+    return;
+  }
+  const arenaDayMatch = path.match(/^\/api\/admin\/arena\/days\/(\d{4}-\d{2}-\d{2})$/);
+  if (method === 'PUT' && arenaDayMatch) {
+    const body = await readJson(request, maxRequestBytes);
+    const arena = await service.prepareArenaDay(
+      request.headers['x-matt-admin-key'],
+      arenaDayMatch[1],
+      body
+    );
+    sendJson(response, 200, { ok: true, arena });
+    return;
+  }
+  const arenaSettlementMatch = path.match(/^\/api\/admin\/arena\/days\/(\d{4}-\d{2}-\d{2})\/settlement$/);
+  if (method === 'POST' && arenaSettlementMatch) {
+    const body = await readJson(request, maxRequestBytes);
+    const settlement = await service.prepareArenaSettlement(
+      request.headers['x-matt-admin-key'],
+      arenaSettlementMatch[1],
+      body
+    );
+    sendJson(response, 200, { ok: true, settlement });
+    return;
+  }
+  const arenaSeedMatch = path.match(/^\/api\/admin\/arena\/days\/(\d{4}-\d{2}-\d{2})\/seed$/);
+  if (method === 'POST' && arenaSeedMatch) {
+    const body = await readJson(request, maxRequestBytes);
+    const seed = await service.prepareArenaSeedTopUp(
+      request.headers['x-matt-admin-key'],
+      arenaSeedMatch[1],
+      body
+    );
+    sendJson(response, 200, { ok: true, seed });
+    return;
+  }
+  const arenaCancelMatch = path.match(/^\/api\/admin\/arena\/days\/(\d{4}-\d{2}-\d{2})\/cancel$/);
+  if (method === 'POST' && arenaCancelMatch) {
+    const body = await readJson(request, maxRequestBytes);
+    const cancellation = await service.prepareArenaCancellation(
+      request.headers['x-matt-admin-key'],
+      arenaCancelMatch[1],
+      body
+    );
+    sendJson(response, 200, { ok: true, cancellation });
+    return;
+  }
+  const arenaControlMatch = path.match(/^\/api\/admin\/arena\/controls\/(pause-entries|unpause-entries|pause-settlement|unpause-settlement)$/);
+  if (method === 'POST' && arenaControlMatch) {
+    const body = await readJson(request, maxRequestBytes);
+    const control = await service.prepareArenaControl(
+      request.headers['x-matt-admin-key'],
+      arenaControlMatch[1],
+      body
+    );
+    sendJson(response, 200, { ok: true, control });
     return;
   }
 

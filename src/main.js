@@ -33,6 +33,14 @@ import {
   PASS_REWARD_LEVELS,
   cosmeticById
 } from './game/passRewards.js';
+import {
+  arenaTimeRemaining,
+  formatMattRaw,
+  normalizeArenaConfig,
+  normalizeArenaLeaderboard,
+  normalizeArenaPlayer
+} from './game/arena.js';
+import { ArenaTranscript } from './game/arenaTranscript.js';
 import { loadProfile, saveProfile } from './game/storage.js';
 import { RoninWalletAdapter } from './game/walletAdapter.js';
 
@@ -55,11 +63,21 @@ let walletBusy = false;
 let paymentBusy = false;
 let activeServerClaim = null;
 let passRewardsBusy = false;
+let arenaConfig = normalizeArenaConfig();
+let arenaPlayer = normalizeArenaPlayer();
+let arenaLeaderboard = normalizeArenaLeaderboard();
+let arenaBusy = false;
+let arenaCountdownTimer = null;
+let activeArenaRun = null;
+let activeArenaTranscript = null;
 const wallet = new RoninWalletAdapter({
   api: apiClient,
   onInvalidated(reason) {
     serverPlayer = null;
     activeServerRun = null;
+    activeArenaRun = null;
+    activeArenaTranscript = null;
+    arenaPlayer = normalizeArenaPlayer();
     profile = loadProfile();
     game?.setProfile(profile);
     updateMenu();
@@ -200,6 +218,7 @@ function updateMenu() {
     livePayments,
     passActive
   });
+  renderArenaMenuStatus();
   renderPassProgress();
 }
 
@@ -304,6 +323,7 @@ async function refreshServerPlayer() {
     saveProfile(profile);
     game.setProfile(profile);
     await refreshPaymentStatus(true);
+    await refreshArena(true);
     updateMenu();
     return serverPlayer;
   } catch (error) {
@@ -384,6 +404,42 @@ async function submitServerRun(serverRun, result) {
     `;
     toast(error.message);
     await refreshServerPlayer();
+  }
+}
+
+async function submitArenaRun(run) {
+  const transcript = activeArenaTranscript;
+  activeArenaRun = null;
+  activeArenaTranscript = null;
+  $('#economy-result').innerHTML =
+    '<strong>ARENA REPLAY IN PROGRESS</strong><span>The server is replaying the signed event transcript and calculating the authoritative score…</span>';
+  try {
+    const checkpoint = await transcript?.close();
+    if (!checkpoint) throw new Error('The Arena transcript was not checkpointed.');
+    const accepted = await apiClient.finishArenaRun(run.runId, run.runToken, checkpoint);
+    const result = accepted.result || {};
+    const leaderboard = accepted.leaderboard || {};
+    arenaPlayer = normalizeArenaPlayer({
+      ...arenaPlayer,
+      unusedAttempts: Math.max(0, arenaPlayer.unusedAttempts - 1),
+      bestScore: leaderboard.playerScore ?? result.score ?? arenaPlayer.bestScore,
+      rank: leaderboard.playerRank ?? arenaPlayer.rank
+    });
+    $('#economy-result').innerHTML = `
+      <strong>ARENA SCORE VERIFIED${arenaPlayer.rank ? ` · #${arenaPlayer.rank}` : ''}</strong>
+      <span>Authoritative score: ${formatNumber(result.score || arenaPlayer.bestScore)}</span>
+      <small>The signed transcript was replayed against today's deterministic challenge. Browser-reported score totals were not trusted.</small>
+    `;
+    toast('Daily Arena score verified');
+    await refreshArena(true);
+  } catch (error) {
+    $('#economy-result').innerHTML = `
+      <strong>ARENA RUN REJECTED</strong>
+      <span>${escapeHtml(error.message || 'The server could not verify this run.')}</span>
+      <small>No Arena leaderboard score was recorded.</small>
+    `;
+    toast(error.message || 'Arena verification failed.');
+    await refreshArena(true);
   }
 }
 
@@ -505,7 +561,8 @@ const game = new MattMineGame(canvas, profile, {
   onRunEnd(result) {
     const mode = result.mode || RUN_MODES.PRACTICE;
     const serverRun = activeServerRun && activeServerRun.mode === mode ? activeServerRun : null;
-    const recorded = serverRun
+    const arenaRun = activeArenaRun && mode === 'arena' ? activeArenaRun : null;
+    const recorded = serverRun || arenaRun
       ? { ok: true, serverPending: true }
       : economy.apply(recordRun(economy.state, result));
     $('#end-kicker').textContent = result.extracted ? 'EXTRACTION SUCCESSFUL' : 'THE MINE TOOK ITS CUT';
@@ -525,7 +582,8 @@ const game = new MattMineGame(canvas, profile, {
     showScreen('run-end');
     setGameplayUi(false);
     updateMenu();
-    if (serverRun) void submitServerRun(serverRun, result);
+    if (arenaRun) void submitArenaRun(arenaRun);
+    else if (serverRun) void submitServerRun(serverRun, result);
   },
   onProfileChanged(nextProfile) {
     profile = nextProfile;
@@ -543,6 +601,9 @@ const game = new MattMineGame(canvas, profile, {
     updateMenu();
     toast(`Run stopped safely: ${error.message}`);
   },
+  onArenaEvent(event) {
+    activeArenaTranscript?.record(event);
+  },
   onToast: toast
 });
 
@@ -559,6 +620,10 @@ for (const button of document.querySelectorAll('[data-launch-action]')) {
     }
     if (action === 'pass') {
       openPass();
+      return;
+    }
+    if (action === 'arena') {
+      void openArena();
       return;
     }
     showScreen('menu');
@@ -617,6 +682,7 @@ $('#upgrades-button').addEventListener('click', () => {
 $('#pass-button').addEventListener('click', openPass);
 $('#manage-cosmetics-button').addEventListener('click', () => void openCosmetics());
 $('#leaderboards-button').addEventListener('click', () => openLeaderboards(RUN_MODES.FREE));
+$('#arena-button').addEventListener('click', () => void openArena());
 $('#admin-button').addEventListener('click', openAdmin);
 
 for (const button of document.querySelectorAll('[data-close]')) {
@@ -647,6 +713,10 @@ $('#buy-paid-run-button').addEventListener('click', () => {
     : result.error);
   openPass();
 });
+
+$('#buy-arena-entry-button').addEventListener('click', () => void purchaseArenaEntry());
+$('#start-arena-run-button').addEventListener('click', () => void startArenaRun());
+$('#arena-refund-button').addEventListener('click', () => void claimArenaRefund());
 
 for (const tab of document.querySelectorAll('.leaderboard-tab')) {
   tab.addEventListener('click', () => openLeaderboards(tab.dataset.board === 'paid' ? RUN_MODES.PAID : RUN_MODES.FREE));
@@ -793,6 +863,302 @@ async function purchaseLivePaidRun() {
   } finally {
     paymentBusy = false;
     openPass();
+  }
+}
+
+function renderArenaMenuStatus() {
+  const pool = $('#arena-menu-pool');
+  if (!pool) return;
+  pool.textContent = arenaConfig.enabled
+    ? formatMattRaw(arenaConfig.prizePoolRaw)
+    : arenaConfig.previewAvailable
+      ? 'SECURITY PREVIEW'
+      : 'COMING SOON';
+  const launchEntry = $('#launch-arena-entry');
+  if (launchEntry) {
+    launchEntry.textContent = arenaConfig.enabled && arenaConfig.feeRaw > 0n
+      ? formatMattRaw(arenaConfig.feeRaw)
+      : 'MATT ENTRY';
+  }
+  const launchState = $('#launch-arena-state');
+  if (launchState) launchState.textContent = arenaConfig.enabled ? '24-HOUR POOL' : 'SECURITY PREVIEW';
+  const menuAction = $('#arena-menu-action');
+  if (menuAction) menuAction.textContent = arenaConfig.enabled ? 'ENTER ARENA →' : 'VIEW PREVIEW →';
+}
+
+async function openArena() {
+  showScreen('daily-arena');
+  renderArena();
+  await refreshArena();
+}
+
+async function refreshArena(silent = false) {
+  try {
+    const config = await apiClient.arenaConfig();
+    arenaConfig = normalizeArenaConfig(config);
+    const requests = [apiClient.arenaLeaderboard(arenaConfig.day)];
+    if (serverPlayer) requests.push(apiClient.arenaMe(arenaConfig.day));
+    const [leaderboardResult, playerResult] = await Promise.allSettled(requests);
+    if (leaderboardResult.status === 'fulfilled') {
+      arenaLeaderboard = normalizeArenaLeaderboard(leaderboardResult.value);
+    }
+    if (playerResult?.status === 'fulfilled') {
+      arenaPlayer = normalizeArenaPlayer(playerResult.value);
+    } else if (!serverPlayer) {
+      arenaPlayer = normalizeArenaPlayer();
+    }
+  } catch (error) {
+    arenaConfig = normalizeArenaConfig({ status: 'disabled', enabled: false });
+    arenaLeaderboard = normalizeArenaLeaderboard();
+    if (!silent && error?.status !== 404) toast(error.message || 'Daily Arena status is unavailable.');
+  }
+  renderArenaMenuStatus();
+  if ($('#daily-arena').classList.contains('active')) renderArena();
+  return arenaConfig;
+}
+
+function renderArena() {
+  const config = arenaConfig;
+  const player = arenaPlayer;
+  const leaderboard = arenaLeaderboard;
+  const now = Date.now();
+  const runWindowOpen = !config.snapshotAt || now < config.snapshotAt;
+  const entryWindowOpen = !config.entryCutoffAt || now <= config.entryCutoffAt;
+  const canceled =
+    config.chainStatus === 3 ||
+    ['canceled', 'cancelled'].includes(config.status);
+  const settled = config.chainStatus === 2;
+  const awaitingSafeSettlement = leaderboard.finalized && !settled && !canceled;
+  const awaitingSettlement =
+    !canceled &&
+    !settled &&
+    (!runWindowOpen || leaderboard.status === 'closed');
+  const stateLabel = config.enabled
+    ? settled
+      ? 'SETTLED'
+      : canceled
+        ? 'CANCELED'
+        : awaitingSafeSettlement
+          ? 'AWAITING SAFE'
+          : awaitingSettlement
+            ? 'AWAITING REVIEW'
+            : config.entriesPaused
+              ? 'ENTRIES PAUSED'
+              : config.status === 'open'
+                ? 'OPEN'
+                : config.status.toUpperCase()
+    : config.previewAvailable
+      ? 'SECURITY LOCKED'
+      : 'NOT DEPLOYED';
+  const badge = $('#arena-state-badge');
+  badge.textContent = stateLabel;
+  badge.dataset.state = config.status;
+  $('#arena-entry-pool').textContent = formatMattRaw(config.entryPoolRaw);
+  $('#arena-seed-pool').textContent = formatMattRaw(config.seedRaw);
+  $('#arena-total-pool').textContent = formatMattRaw(config.prizePoolRaw);
+  $('#arena-entry-price').textContent = formatMattRaw(config.feeRaw);
+  $('#arena-entry-count').textContent = formatNumber(player.entries);
+  $('#arena-attempt-count').textContent = formatNumber(player.unusedAttempts);
+  $('#arena-best-score').textContent = player.bestScore ? formatNumber(player.bestScore) : '—';
+  $('#arena-day-label').textContent = `${config.day} UTC · MATT entry closes 23:35 UTC · official runs close 00:00 UTC.`;
+
+  const canEnter =
+    Boolean(serverPlayer) &&
+    config.enabled &&
+    !config.entriesPaused &&
+    entryWindowOpen &&
+    config.status === 'open' &&
+    !serverPlayer?.suspended;
+  const buyButton = $('#buy-arena-entry-button');
+  buyButton.disabled = arenaBusy || !canEnter;
+  buyButton.textContent = arenaBusy
+    ? 'WAITING FOR RONIN WALLET…'
+    : !serverPlayer
+      ? 'CONNECT RONIN TO ENTER'
+      : serverPlayer.suspended
+        ? 'WALLET SUSPENDED'
+        : !config.enabled
+          ? 'ARENA CONTRACT NOT ACTIVE'
+          : config.entriesPaused
+            ? 'ENTRIES PAUSED'
+            : !entryWindowOpen
+              ? 'ENTRY WINDOW CLOSED'
+              : config.status !== 'open'
+                ? 'ENTRY WINDOW CLOSED'
+                : `BUY ENTRY · ${formatMattRaw(config.feeRaw)}`;
+
+  const startButton = $('#start-arena-run-button');
+  const canStart =
+    Boolean(serverPlayer) &&
+    !serverPlayer.suspended &&
+    config.enabled &&
+    runWindowOpen &&
+    config.status === 'open' &&
+    player.unusedAttempts > 0;
+  startButton.disabled = arenaBusy || !canStart;
+  startButton.textContent = !serverPlayer
+    ? 'CONNECT RONIN TO PLAY'
+    : serverPlayer.suspended
+      ? 'WALLET SUSPENDED'
+      : !config.enabled
+        ? 'ARENA SECURITY LOCKED'
+        : !runWindowOpen
+          ? 'COMPETITION CLOSED'
+          : player.unusedAttempts > 0
+            ? `START ARENA RUN · ${player.unusedAttempts} READY`
+            : 'BUY AN ENTRY FIRST';
+
+  const rows = leaderboard.rows;
+  $('#arena-leaderboard-body').innerHTML = rows.length
+    ? rows.map((row) => `
+        <tr class="${row.isPlayer ? 'player-row' : ''}">
+          <td>#${row.rank}</td>
+          <td>${abbreviateAddress(row.address || row.walletId)}${row.isPlayer ? ' · YOU' : ''}</td>
+          <td>${formatNumber(row.score)}</td>
+          <td>${formatNumber(row.entries)}</td>
+          <td>${formatMattRaw(row.payoutRaw || row.projectedRaw)}</td>
+        </tr>
+      `).join('')
+    : '<tr><td colspan="5">No verified Arena scores yet today.</td></tr>';
+
+  $('#arena-settlement-status').textContent = canceled
+    ? 'Competition canceled'
+    : settled
+      ? 'Pool distributed'
+      : awaitingSafeSettlement
+        ? 'Awaiting Safe settlement'
+        : awaitingSettlement
+          ? 'Awaiting reviewed settlement'
+          : 'Competition open';
+  $('#arena-settlement-note').textContent = canceled
+    ? 'Every paid entry is refundable. Treasury seed returns only under the contract cancellation rules.'
+    : settled
+      ? `The full ${formatMattRaw(config.prizePoolRaw)} pool was assigned by the verified settlement.`
+      : awaitingSafeSettlement
+        ? 'The reviewed rankings are frozen. The pool remains in the Arena contract until two Treasury Safe signers approve and execute the exact settlement.'
+        : awaitingSettlement
+          ? 'Entries are closed. Rankings remain provisional until anti-cheat review is complete and the Treasury Safe approves the immutable settlement.'
+          : 'The Treasury Safe settles the verified daily result and the contract distributes the complete pool.';
+  const refundButton = $('#arena-refund-button');
+  refundButton.hidden = !player.refundable;
+  refundButton.disabled = arenaBusy || !player.refundable;
+  refundButton.textContent = player.refundRaw
+    ? `CLAIM ${formatMattRaw(player.refundRaw)} REFUND`
+    : 'CLAIM CANCELED ENTRY REFUND';
+  $('#arena-note').textContent = !config.enabled
+    ? config.liveBlocker === 'input_replay_not_ready'
+      ? 'Daily Arena preview is ready, but paid entry is security-locked until the server can replay raw player inputs. No MATT can be accepted by this build.'
+      : 'Daily Arena is safely disabled until its isolated Ronin contract is deployed, verified, and configured.'
+    : `Unlimited entries · ${formatNumber(config.entryCount || leaderboard.entryCount)} total entries · ${formatNumber(config.uniquePlayers || leaderboard.participantCount)} unique miners · Best verified score per wallet.`;
+
+  clearInterval(arenaCountdownTimer);
+  updateArenaCountdown();
+  if ($('#daily-arena').classList.contains('active') && config.snapshotAt > Date.now()) {
+    arenaCountdownTimer = setInterval(updateArenaCountdown, 1_000);
+  }
+}
+
+function updateArenaCountdown() {
+  const countdown = arenaTimeRemaining(arenaConfig.snapshotAt);
+  const element = $('#arena-countdown');
+  if (element) element.textContent = countdown.complete ? 'CLOSED' : countdown.label;
+}
+
+async function purchaseArenaEntry() {
+  if (arenaBusy) return;
+  if (!serverPlayer) {
+    const connected = await connectWallet();
+    if (!connected) return;
+  }
+  if (
+    !arenaConfig.enabled ||
+    arenaConfig.status !== 'open' ||
+    arenaConfig.entriesPaused ||
+    (arenaConfig.entryCutoffAt && Date.now() > arenaConfig.entryCutoffAt)
+  ) {
+    toast('Daily Arena entries are not open.');
+    return;
+  }
+  const approved = window.confirm(
+    `Enter today's MATT Arena for ${formatMattRaw(arenaConfig.feeRaw)}? Every accepted MATT enters the player prize pool. Ronin Wallet may request an approval transaction followed by the Arena entry transaction.`
+  );
+  if (!approved) return;
+  arenaBusy = true;
+  renderArena();
+  try {
+    const quote = await apiClient.arenaEntryQuote(arenaConfig.day);
+    const transactions = quote.transactions || quote.transaction;
+    const transactionHashes = await wallet.purchaseArenaEntry(transactions);
+    const entryTransactionHash = transactionHashes.at(-1);
+    toast('Arena entry mined · server confirming');
+    const confirmation = await apiClient.confirmArenaEntry(entryTransactionHash);
+    arenaPlayer = normalizeArenaPlayer({
+      ...arenaPlayer,
+      entries: arenaPlayer.entries + (confirmation.alreadyConfirmed ? 0 : 1),
+      unusedAttempts: confirmation.unusedAttempts
+    });
+    toast(`Arena attempt ready · ${abbreviateHash(entryTransactionHash)}`);
+    await refreshArena(true);
+  } catch (error) {
+    toast(error.message || 'Arena entry failed.');
+  } finally {
+    arenaBusy = false;
+    renderArena();
+  }
+}
+
+async function startArenaRun() {
+  if (
+    arenaBusy ||
+    !serverPlayer ||
+    serverPlayer.suspended ||
+    !arenaConfig.enabled ||
+    arenaConfig.status !== 'open' ||
+    (arenaConfig.snapshotAt && Date.now() >= arenaConfig.snapshotAt) ||
+    arenaPlayer.unusedAttempts <= 0
+  ) {
+    return;
+  }
+  arenaBusy = true;
+  renderArena();
+  try {
+    const run = await apiClient.startArenaRun();
+    activeArenaRun = run;
+    activeArenaTranscript = new ArenaTranscript(apiClient, run);
+    arenaPlayer = normalizeArenaPlayer({
+      ...arenaPlayer,
+      unusedAttempts: Math.max(0, arenaPlayer.unusedAttempts - 1)
+    });
+    game.startRun({
+      mode: 'arena',
+      seed: run.dailySeed || run.seed,
+      day: run.day,
+      rewardWeight: 0
+    });
+  } catch (error) {
+    activeArenaRun = null;
+    activeArenaTranscript = null;
+    toast(error.message || 'Arena run could not start.');
+    await refreshArena(true);
+  } finally {
+    arenaBusy = false;
+  }
+}
+
+async function claimArenaRefund() {
+  if (arenaBusy || !arenaPlayer.refundable) return;
+  arenaBusy = true;
+  renderArena();
+  try {
+    const prepared = await apiClient.prepareArenaRefund(arenaConfig.day);
+    const transactionHash = await wallet.claimArenaRefund(prepared.transaction);
+    toast(`Arena refund claimed · ${abbreviateHash(transactionHash)}`);
+    await refreshArena(true);
+  } catch (error) {
+    toast(error.message || 'Arena refund failed.');
+  } finally {
+    arenaBusy = false;
+    renderArena();
   }
 }
 
@@ -1274,6 +1640,7 @@ function renderShop() {
 function modeLabel(mode, rewardWeight = 0) {
   if (mode === RUN_MODES.FREE) return 'FREE RANKED · 1×';
   if (mode === RUN_MODES.PAID) return `PASS RANKED · ${rewardWeight || 2}×`;
+  if (mode === 'arena') return 'MATT DAILY ARENA';
   return 'PRACTICE · NO REWARD';
 }
 
@@ -1336,6 +1703,7 @@ async function bootstrapServer() {
       game.setProfile(profile);
       await refreshPaymentStatus(true);
     }
+    await refreshArena(true);
   } catch (error) {
     console.warn('[MATT Mine] Server bootstrap unavailable.', error);
   }

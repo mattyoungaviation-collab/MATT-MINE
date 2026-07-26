@@ -32,6 +32,14 @@ services:
         value: "true"
       - key: MATT_MINE_PAYMENT_CONFIRMATIONS
         value: "3"
+      - key: MATT_MINE_ARENA_CONTRACT_ADDRESS
+        sync: false
+      - key: MATT_MINE_ARENA_RECEIPT_SECRET
+        generateValue: true
+      - key: MATT_MINE_ARENA_SEED_SECRET
+        generateValue: true
+      - key: MATT_MINE_ARENA_LIVE
+        value: "false"
       - key: MATT_MINE_DATABASE_POOL_SIZE
         value: "10"
 

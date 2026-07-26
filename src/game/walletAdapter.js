@@ -76,8 +76,28 @@ export class RoninWalletAdapter {
     return this.sendPreparedTransaction(transaction);
   }
 
+  async purchaseArenaEntry(transactions) {
+    return this.sendPreparedTransactions(transactions, { allowZeroValue: true });
+  }
+
+  async claimArenaRefund(transaction) {
+    return this.sendPreparedTransaction(transaction, { allowZeroValue: true });
+  }
+
   async claimReward(transaction) {
     return this.sendPreparedTransaction(transaction, { allowZeroValue: true });
+  }
+
+  async sendPreparedTransactions(transactions, options = {}) {
+    const prepared = Array.isArray(transactions) ? transactions : [transactions];
+    if (!prepared.length || prepared.length > 3) {
+      throw new Error('The server did not provide a valid Arena transaction sequence.');
+    }
+    const hashes = [];
+    for (const transaction of prepared) {
+      hashes.push(await this.sendPreparedTransaction(transaction, options));
+    }
+    return hashes;
   }
 
   async sendPreparedTransaction(transaction, options = {}) {

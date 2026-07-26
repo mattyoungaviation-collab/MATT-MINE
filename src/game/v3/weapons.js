@@ -244,6 +244,11 @@ export const weaponsMethods = {
   breakOre(ore) {
     this.ores = this.ores.filter((entry) => entry.id !== ore.id);
     this.run.oreBroken += 1;
+    this.hooks.onArenaEvent?.({
+      type: 'ore_broken',
+      tick: Math.round(this.run.elapsed * 1_000),
+      targetId: ore.id
+    });
     this.gainXp(ore.xp);
     const drops = Math.max(1, Math.ceil(ore.nuggets / (ore.kind === 'cache' ? 9 : 6)));
     const baseDropValue = Math.floor(ore.nuggets / drops);

@@ -63,6 +63,11 @@ export const enemySpawnMethods = {
   killEnemy(enemy) {
     this.enemies = this.enemies.filter((entry) => entry.id !== enemy.id);
     this.run.kills += 1;
+    this.hooks.onArenaEvent?.({
+      type: enemy.isBoss ? 'guardian_defeated' : 'enemy_killed',
+      tick: Math.round(this.run.elapsed * 1_000),
+      targetId: enemy.id
+    });
     this.gainXp(enemy.xp);
     const payout = enemy.isBoss ? 180 + this.run.depth * 45 : randomInt(2, 8);
     const count = enemy.isBoss ? 16 : 1;

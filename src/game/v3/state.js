@@ -6,6 +6,7 @@ import { bossPhaseForHealth, roomRequiresLock } from '../combat.js';
 export const stateMethods = {
   startRun() {
     this.runtimeError = null;
+    this.entityId = 1;
     const meta = this.profile.meta;
     const maxHealth = CONFIG.basePlayerHealth + meta.health * 8;
     this.run = {
@@ -265,6 +266,11 @@ export const stateMethods = {
     this.camera.shake = 11;
     this.audio.play('hurt');
     this.addFloater(this.player.x, this.player.y - 35, `-${Math.round(finalDamage)}`, '#ff8292');
+    this.hooks.onArenaEvent?.({
+      type: 'damage_taken',
+      tick: Math.round(this.run.elapsed * 1_000),
+      amount: finalDamage
+    });
     if (this.player.health <= 0) this.endRun(false);
   },
   updatePickups(dt) {
@@ -317,6 +323,10 @@ export const stateMethods = {
     this.audio.stopBoss();
     this.audio.stopMusic();
     if (extracted) this.audio.play('extract');
+    this.hooks.onArenaEvent?.({
+      type: extracted ? 'extract' : 'knockout',
+      tick: Math.round(this.run.elapsed * 1_000)
+    });
     this.hooks.onProfileChanged?.(this.profile);
     this.hooks.onRunEnd?.({
       extracted,

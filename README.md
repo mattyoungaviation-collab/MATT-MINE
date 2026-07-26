@@ -4,6 +4,24 @@
 
 MATT Mine is a standalone browser action roguelite and daily Web3 competition on Ronin. It has its own launch website, wallet identity, separate Free and Pass leaderboards, live Pass and paid-run payments, verified contracts, and a production persistence path independent from MATT Hub.
 
+## v1.8 MATT Daily Arena preview
+
+- Add an isolated daily MATT-entry competition without changing the four existing live contracts.
+- Let the Treasury Safe schedule a fixed daily entry price from 25,000 to 1,000,000 MATT.
+- Allow unlimited entries with no ceiling on the player-funded pool.
+- Route 100% of every accepted entry into the immutable daily prize pool: no burn, house fee, or Treasury cut.
+- Let the Treasury seed each UTC day with up to 10,000,000 MATT.
+- Require each day to be scheduled before it begins and close onchain entry 25 minutes before 00:00 UTC so every accepted payment has time for confirmation and a full run.
+- Count only each wallet's best valid daily score and pay at most one top-ten position per wallet.
+- Allocate the complete pool using 30% / 18% / 12% / 8% / 7% / 6% / 5.5% / 5% / 4.5% / 4%, normalized when fewer than ten wallets qualify.
+- Implement schedule, seed, settlement, and cancellation Safe Transaction Builder JSON generators behind the replay-readiness gate.
+- Return the Treasury seed and make every entry refundable if a day is canceled.
+- Keep real paid entry hard-disabled at the server release gate until input-only deterministic replay replaces preview milestone telemetry.
+- Deploy the isolated Arena contract with player entries paused and block schedule/unpause preparation in this release.
+- Keep post-close rankings provisional until an administrator completes moderation and intentionally creates the immutable settlement draft.
+
+See [`docs/DAILY_ARENA_V18.md`](docs/DAILY_ARENA_V18.md).
+
 ## v1.7 cinematic mine
 
 - Replace flat arena fills with a detailed top-down mine material built from dark stone, broken rails, amber ore, and violet crystal deposits.
@@ -215,14 +233,16 @@ Pass and paid-run transactions require the player to click the purchase button a
 
 Before real value is enabled, the production build still requires:
 
-1. Server-authoritative gameplay simulation or equivalent signed event validation.
-2. Ongoing monitoring and incident response for the deployed contracts and payment server.
-3. A controlled purchase smoke test with complete treasury and token reconciliation.
-4. Production database hosting, backups, observability, and distributed rate limiting.
-5. Anti-cheat review and payout moderation.
-6. Formal security review before materially increasing contract balances or public reward pools.
-7. A full dry run and deliberately small pilot reward epoch before increasing the configured cap.
-8. Continued 2-of-3 multisig control for treasury and major contract administration, with no timelock.
+1. Input-only deterministic server replay; signed browser outcome events are not sufficient for paid competition.
+2. Jurisdiction, age, and eligibility controls approved by counsel for the paid Arena.
+3. Independent security review of the isolated Arena contract and replay server.
+4. Ongoing monitoring and incident response for the deployed contracts and payment server.
+5. A controlled purchase smoke test with complete treasury and token reconciliation.
+6. Production database hosting, backups, observability, and distributed rate limiting.
+7. Anti-cheat review and payout moderation.
+8. Formal security review before materially increasing contract balances or public reward pools.
+9. A full dry run and deliberately small pilot reward epoch before increasing the configured cap.
+10. Continued 2-of-3 multisig control for treasury and major contract administration, with no timelock.
 
 See [`docs/LEADERBOARD_STORAGE_V11.md`](docs/LEADERBOARD_STORAGE_V11.md), [`docs/STANDALONE_LAUNCH_V10.md`](docs/STANDALONE_LAUNCH_V10.md), [`docs/LIVE_PAYMENTS_V09.md`](docs/LIVE_PAYMENTS_V09.md), [`docs/CONTRACT_DEPLOYMENT_V08.md`](docs/CONTRACT_DEPLOYMENT_V08.md), [`docs/SECURITY_V07.md`](docs/SECURITY_V07.md), [`docs/ECONOMY_V1.md`](docs/ECONOMY_V1.md), and [`contracts/README.md`](contracts/README.md).
 Production operators use the separate, unlinked `/admin.html` command center. See [Admin Command Center](docs/ADMIN_COMMAND_CENTER.md) for permissions, protected fields, and emergency procedures.
