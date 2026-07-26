@@ -4,6 +4,15 @@
 
 MATT Mine is a standalone browser action roguelite and daily Web3 competition on Ronin. It has its own launch website, wallet identity, separate Free and Pass leaderboards, live Pass and paid-run payments, verified contracts, and a production persistence path independent from MATT Hub.
 
+## v1.7 cinematic mine
+
+- Replace flat arena fills with a detailed top-down mine material built from dark stone, broken rails, amber ore, and violet crystal deposits.
+- Render the Mine Guardian as a full cinematic rock-and-crystal creature with phase-aware core lighting and hit feedback.
+- Add deeper cave walls, soot-darkened room edges, metal lantern housings, warm flame bloom, crystal bounce light, and drifting atmospheric particles.
+- Rebuild the miner with dimensional workwear, helmet lighting, backpack equipment, and clearer weapon silhouettes.
+- Upgrade enemy materials, shadows, eye glow, ore clusters, treasure caches, combat gates, and room markings while preserving gameplay readability.
+- Package optimized WebP art assets with lazy browser loading and safe fallbacks.
+
 ## v1.6 permanent Pass collection
 
 - Deliver all eight Pass levels from server-owned XP into a permanent wallet inventory.
