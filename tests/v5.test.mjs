@@ -314,6 +314,37 @@ test('the stronger Guardian fires evasive spreads and summons fast relentless re
   assert.ok(Math.max(...projectileAngles) - Math.min(...projectileAngles) > 1);
 });
 
+test('Guardian slam aura cannot damage the player through mine walls', async () => {
+  const { MattMineGame } = await import('../src/game/GameV4.js');
+  const stubs = installBrowserStubs();
+  const game = new MattMineGame(stubs.canvas, stubs.profile);
+  game.startRun({ mode: RUN_MODES.PRACTICE, seed: 'GUARDIAN-WALL-AURA' });
+  const guardianRoom = { id: 1, x: 100, y: 100, width: 180, height: 180, type: 'guardian' };
+  const playerRoom = { id: 2, x: 300, y: 100, width: 180, height: 180, type: 'combat' };
+  game.layout = {
+    rooms: [guardianRoom, playerRoom],
+    corridors: [],
+    startRoom: playerRoom,
+    guardianRoom
+  };
+  const guardian = game.spawnEnemy(true, guardianRoom);
+  guardian.x = 180;
+  guardian.y = 100;
+  game.player.x = 220;
+  game.player.y = 100;
+  game.player.invulnerability = 0;
+  const healthBehindWall = game.player.health;
+
+  game.guardianSlam(guardian, 235, 30);
+  assert.equal(game.player.health, healthBehindWall);
+
+  game.layout.rooms = [guardianRoom];
+  game.player.x = 170;
+  game.player.invulnerability = 0;
+  game.guardianSlam(guardian, 235, 30);
+  assert.ok(game.player.health < healthBehindWall);
+});
+
 test('the expanded nugget workshop keeps legacy ranks and scales into long-term costs', () => {
   const profile = defaultProfile();
   assert.deepEqual(Object.keys(profile.meta), META_UPGRADES.map((upgrade) => upgrade.id));
