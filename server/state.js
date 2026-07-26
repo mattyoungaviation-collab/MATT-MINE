@@ -8,6 +8,7 @@ export function defaultServerState() {
     challenges: {},
     sessions: {},
     runs: {},
+    passPurchases: {},
     paidEntitlements: {},
     operations: defaultOperations(),
     audit: []
@@ -18,6 +19,7 @@ export function defaultWalletState(address, timestamp = Date.now()) {
   return {
     address,
     profile: defaultProfile(),
+    passProgress: defaultPassProgress(),
     suspended: false,
     daily: {},
     createdAt: timestamp,
@@ -33,6 +35,7 @@ export function normalizeServerState(input = {}) {
     challenges: normalizeRecords(source.challenges, 2_000),
     sessions: normalizeRecords(source.sessions, 10_000),
     runs: normalizeRecords(source.runs, 25_000),
+    passPurchases: normalizePassPurchases(source.passPurchases),
     paidEntitlements: normalizePaidEntitlements(source.paidEntitlements),
     operations: normalizeOperations(source.operations),
     audit: Array.isArray(source.audit)
@@ -99,6 +102,29 @@ function normalizePaidEntitlements(input) {
     }]));
 }
 
+function normalizePassPurchases(input) {
+  if (!isRecord(input)) return {};
+  return Object.fromEntries(Object.entries(input)
+    .filter(([, value]) =>
+      isRecord(value) &&
+      /^0x[a-fA-F0-9]{64}$/.test(value.transactionHash || '') &&
+      isHexAddress(value.address) &&
+      Number.isSafeInteger(value.logIndex) &&
+      value.logIndex >= 0
+    )
+    .slice(-20_000)
+    .map(([key, value]) => [String(key).slice(0, 200).toLowerCase(), {
+      key: String(value.key || key).slice(0, 200).toLowerCase(),
+      transactionHash: value.transactionHash.toLowerCase(),
+      logIndex: value.logIndex,
+      blockNumber: safeUnsignedString(value.blockNumber),
+      address: value.address.toLowerCase(),
+      priceRon: safeUnsignedString(value.priceRon),
+      expiresAt: safeTimestamp(value.expiresAt),
+      confirmedAt: safeTimestamp(value.confirmedAt)
+    }]));
+}
+
 function normalizeWallets(input) {
   if (!isRecord(input)) return {};
   return Object.fromEntries(Object.entries(input)
@@ -109,12 +135,28 @@ function normalizeWallets(input) {
       return [normalizedAddress, {
         address: normalizedAddress,
         profile: normalizeProfile(wallet.profile),
+        passProgress: normalizePassProgress(wallet.passProgress),
         suspended: wallet.suspended === true,
         daily: normalizeDaily(wallet.daily),
         createdAt: safeTimestamp(wallet.createdAt),
         updatedAt: safeTimestamp(wallet.updatedAt)
       }];
     }));
+}
+
+function defaultPassProgress() {
+  return {
+    xp: 0,
+    updatedAt: 0
+  };
+}
+
+function normalizePassProgress(input) {
+  const source = isRecord(input) ? input : {};
+  return {
+    xp: safeBoundedInteger(source.xp, 1_000_000_000),
+    updatedAt: safeTimestamp(source.updatedAt)
+  };
 }
 
 function normalizeDaily(input) {
@@ -139,6 +181,10 @@ function normalizeRecords(input, limit) {
 
 function safeTimestamp(value) {
   return Number.isSafeInteger(value) && value >= 0 ? value : 0;
+}
+
+function safeBoundedInteger(value, max) {
+  return Number.isSafeInteger(value) && value >= 0 ? Math.min(value, max) : 0;
 }
 
 function safeUnsignedString(value) {

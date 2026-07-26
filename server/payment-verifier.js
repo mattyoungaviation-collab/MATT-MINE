@@ -17,7 +17,7 @@ export const RONIN_PAYMENT_CONTRACTS = Object.freeze({
   router: '0x7D0556D55ca1a92708681e2e231733EBd922597D'
 });
 
-const PASS_ABI = [
+export const MATT_MINE_PASS_ABI = [
   {
     type: 'function',
     name: 'hasActivePass',
@@ -52,6 +52,15 @@ const PASS_ABI = [
     stateMutability: 'payable',
     inputs: [],
     outputs: []
+  },
+  {
+    type: 'event',
+    name: 'PassPurchased',
+    inputs: [
+      { name: 'player', type: 'address', indexed: true },
+      { name: 'priceRon', type: 'uint256', indexed: false },
+      { name: 'expiresAt', type: 'uint64', indexed: false }
+    ]
   }
 ];
 
@@ -154,8 +163,8 @@ export class RoninPaymentVerifier {
 
   async publicStatus() {
     const [passPriceRon, passPaused, paidRunPriceRon, runsPaused] = await Promise.all([
-      this.read(this.contracts.pass, PASS_ABI, 'passPriceRon'),
-      this.read(this.contracts.pass, PASS_ABI, 'paused'),
+      this.read(this.contracts.pass, MATT_MINE_PASS_ABI, 'passPriceRon'),
+      this.read(this.contracts.pass, MATT_MINE_PASS_ABI, 'paused'),
       this.read(this.contracts.runs, MATT_MINE_RUNS_ABI, 'paidRunPriceRon'),
       this.read(this.contracts.runs, MATT_MINE_RUNS_ABI, 'paused')
     ]);
@@ -176,10 +185,10 @@ export class RoninPaymentVerifier {
     const player = getAddress(address);
     const [passActive, passExpiresAt, passPriceRon, passPaused, paidRunPriceRon, paidRunsToday, runsPaused] =
       await Promise.all([
-        this.read(this.contracts.pass, PASS_ABI, 'hasActivePass', [player]),
-        this.read(this.contracts.pass, PASS_ABI, 'passExpiresAt', [player]),
-        this.read(this.contracts.pass, PASS_ABI, 'passPriceRon'),
-        this.read(this.contracts.pass, PASS_ABI, 'paused'),
+        this.read(this.contracts.pass, MATT_MINE_PASS_ABI, 'hasActivePass', [player]),
+        this.read(this.contracts.pass, MATT_MINE_PASS_ABI, 'passExpiresAt', [player]),
+        this.read(this.contracts.pass, MATT_MINE_PASS_ABI, 'passPriceRon'),
+        this.read(this.contracts.pass, MATT_MINE_PASS_ABI, 'paused'),
         this.read(this.contracts.runs, MATT_MINE_RUNS_ABI, 'paidRunPriceRon'),
         this.read(this.contracts.runs, MATT_MINE_RUNS_ABI, 'paidRunsToday', [player]),
         this.read(this.contracts.runs, MATT_MINE_RUNS_ABI, 'paused')
@@ -194,7 +203,7 @@ export class RoninPaymentVerifier {
         transaction: {
           to: this.contracts.pass,
           value: toQuantityHex(passPriceRon),
-          data: encodeFunctionData({ abi: PASS_ABI, functionName: 'purchasePass' })
+          data: encodeFunctionData({ abi: MATT_MINE_PASS_ABI, functionName: 'purchasePass' })
         }
       },
       paidRuns: {
@@ -306,6 +315,65 @@ export class RoninPaymentVerifier {
       currentPoolMatt: String(event.args.currentPoolMatt),
       futureRewardsMatt: String(event.args.futureRewardsMatt),
       reserveMatt: String(event.args.reserveMatt)
+    };
+  }
+
+  async verifyPassPurchase(transactionHash, expectedAddress) {
+    assertApi(
+      typeof transactionHash === 'string' && TRANSACTION_HASH_PATTERN.test(transactionHash),
+      400,
+      'invalid_transaction_hash',
+      'A valid Ronin transaction hash is required.'
+    );
+    const hash = transactionHash.toLowerCase();
+    const expectedPlayer = getAddress(expectedAddress);
+    let receipt;
+    try {
+      receipt = await this.client.waitForTransactionReceipt({
+        hash,
+        confirmations: this.confirmations,
+        timeout: this.receiptTimeoutMs
+      });
+    } catch {
+      throw new ApiError(409, 'transaction_confirming', 'The Pass transaction is not confirmed yet. Try again shortly.');
+    }
+    assertApi(receipt.status === 'success', 422, 'transaction_reverted', 'The Pass transaction reverted.');
+    assertApi(
+      receipt.to && sameAddress(receipt.to, this.contracts.pass),
+      422,
+      'wrong_payment_contract',
+      'The transaction was not sent to the approved MATT Mine Pass contract.'
+    );
+
+    const transaction = await this.client.getTransaction({ hash });
+    assertApi(sameAddress(transaction.from, expectedPlayer), 403, 'payment_wallet_mismatch', 'The Pass was purchased by another wallet.');
+    assertApi(sameAddress(transaction.to, this.contracts.pass), 422, 'wrong_payment_contract', 'The transaction target is not approved.');
+    let decoded;
+    try {
+      decoded = decodeFunctionData({ abi: MATT_MINE_PASS_ABI, data: transaction.input });
+    } catch {
+      throw new ApiError(422, 'invalid_payment_call', 'The transaction did not call purchasePass.');
+    }
+    assertApi(decoded.functionName === 'purchasePass', 422, 'invalid_payment_call', 'The transaction did not call purchasePass.');
+
+    const events = parseEventLogs({
+      abi: MATT_MINE_PASS_ABI,
+      logs: receipt.logs.filter((log) => sameAddress(log.address, this.contracts.pass)),
+      eventName: 'PassPurchased',
+      strict: true
+    });
+    const event = events.find((entry) => sameAddress(entry.args.player, expectedPlayer));
+    assertApi(event, 422, 'pass_event_missing', 'The confirmed transaction did not activate a Pass for this wallet.');
+    assertApi(event.args.priceRon === transaction.value, 422, 'payment_event_mismatch', 'The Pass event does not match the RON payment.');
+
+    return {
+      key: `${hash}:${event.logIndex}`,
+      transactionHash: hash,
+      logIndex: event.logIndex,
+      blockNumber: String(receipt.blockNumber),
+      address: expectedPlayer.toLowerCase(),
+      priceRon: String(event.args.priceRon),
+      expiresAt: Number(event.args.expiresAt) * 1000
     };
   }
 

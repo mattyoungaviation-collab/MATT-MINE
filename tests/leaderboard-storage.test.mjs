@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { PostgresDatabase } from '../server/database.js';
+import { SERVER_STATE_VERSION } from '../server/constants.js';
 import { defaultServerState, defaultWalletState } from '../server/state.js';
 
 const START = Date.UTC(2026, 6, 25, 12, 0, 0);
@@ -56,7 +57,7 @@ test('PostgreSQL initialization migrates legacy finished runs into normalized ru
   ]);
   assert.equal(persisted.runs[legacyRunId].result.score, 1_250);
   assert.equal(persisted.runs.corrupt.id, 'bad-run');
-  assert.equal(persisted.version, 5);
+  assert.equal(persisted.version, SERVER_STATE_VERSION);
   assert.equal(
     pool.queries.some(({ normalized }) =>
       normalized.includes('CREATE TABLE IF NOT EXISTS MATT_MINE_WEEKLY_SNAPSHOT_ENTRIES')

@@ -336,12 +336,22 @@ async function submitServerRun(serverRun, result) {
     const leaderboard = accepted.leaderboard;
     if (serverPlayer) {
       serverPlayer.profile = accepted.profile;
+      serverPlayer.passProgress = accepted.passProgress;
       serverPlayer.scores[serverRun.mode] = leaderboard.playerScore;
     }
+    if (paymentStatus && accepted.passProgress) paymentStatus.passProgress = accepted.passProgress;
+    const boardName = serverRun.mode === RUN_MODES.FREE
+      ? 'Free'
+      : serverRun.mode === RUN_MODES.PAID
+        ? 'Pass'
+        : 'Practice';
+    const passXpCopy = accepted.run?.passXpAwarded
+      ? ` · +${accepted.run.passXpAwarded} Pass XP`
+      : '';
     $('#economy-result').innerHTML = `
       <strong>SERVER VERIFIED${leaderboard.playerRank ? ` · #${leaderboard.playerRank}` : ''}</strong>
-      <span>Weekly ${serverRun.mode === RUN_MODES.FREE ? 'Free' : 'Practice'} score: ${formatNumber(leaderboard.playerScore)}</span>
-      <small>Entitlement, one-time run token, telemetry limits, secured-loot rule, and duplicate submission checks passed.</small>
+      <span>Weekly ${boardName} score: ${formatNumber(leaderboard.playerScore)}${passXpCopy}</span>
+      <small>Entitlement, Pass status, one-time run token, telemetry limits, secured-loot rule, and duplicate submission checks passed.</small>
     `;
     toast('Run accepted by the MATT Mine server');
     await refreshServerPlayer();
@@ -710,6 +720,10 @@ async function purchaseLivePass() {
   openPass();
   try {
     const transactionHash = await wallet.purchasePass(paymentStatus.pass.transaction);
+    const confirmation = await apiClient.confirmPassPurchase(transactionHash);
+    if (paymentStatus && confirmation.passProgress) {
+      paymentStatus.passProgress = confirmation.passProgress;
+    }
     toast(`Pass transaction confirmed · ${abbreviateHash(transactionHash)}`);
     await refreshPaymentStatus();
   } catch (error) {
@@ -796,20 +810,29 @@ function openPass() {
   $('#buy-pass-button').textContent = active ? `EXTEND 30 DAYS · ${trimNumber(state.settings.passPriceRon)} RON` : `ACTIVATE TEST PASS · ${trimNumber(state.settings.passPriceRon)} RON`;
   $('#buy-paid-run-button').disabled = !active || state.settings.paidRunsPaused;
   $('#buy-paid-run-button').textContent = active ? `BUY TEST RUN · ${trimNumber(state.settings.paidRunPriceRon)} RON` : 'PASS REQUIRED';
+  const passNote = $('#pass-purchase-note');
+  if (passNote) passNote.textContent = 'Local test mode models the Pass without sending a real transaction.';
   updateMenu();
   showScreen('mine-pass');
 }
 
 function renderPassProgress() {
   const state = economy.state;
-  const level = passLevel(state.player.passXp);
+  const liveProgress = serverConfig?.realPaymentsEnabled === true
+    ? paymentStatus?.passProgress || serverPlayer?.passProgress
+    : null;
+  const xp = liveProgress?.xp ?? state.player.passXp;
+  const level = liveProgress || passLevel(xp);
+  const passActive = serverConfig?.realPaymentsEnabled === true
+    ? paymentStatus?.pass?.active === true
+    : passIsActive(state);
   $('#pass-level').textContent = String(level.level);
-  $('#pass-xp-text').textContent = `${formatNumber(state.player.passXp)} XP`;
+  $('#pass-xp-text').textContent = `${formatNumber(xp)} XP`;
   $('#pass-xp-fill').style.width = `${Math.round(level.progress * 100)}%`;
-  const rewards = ['Starter Badge', '250K MATT Draw', 'Gold Trail', 'Pass Chest', 'Crystal Skin', 'Founder Frame', 'Guardian Aura', 'Season Trophy'];
+  const rewards = ['Starter Badge', 'Gold Trail', 'Pass Chest', 'Crystal Skin', 'Founder Frame', 'Guardian Aura', 'Ore Reactor Title', 'Season Trophy'];
   $('#pass-track').innerHTML = rewards.map((reward, index) => `
-    <div class="pass-node ${index + 1 <= level.level ? 'unlocked' : ''}">
-      <span>${index + 1}</span><small>${reward}</small>
+    <div class="pass-node ${passActive && index + 1 <= level.level ? 'unlocked' : ''}">
+      <span>${index + 1}</span><small>${reward}${passActive && index + 1 <= level.level ? ' · UNLOCKED' : ''}</small>
     </div>
   `).join('');
 }
