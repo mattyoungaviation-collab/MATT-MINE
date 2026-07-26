@@ -97,6 +97,21 @@ export class MattMineApiClient {
     return response.leaderboard;
   }
 
+  async rewardClaims() {
+    const response = await this.request('/api/rewards/claims', {
+      authenticated: true
+    });
+    return response.claims;
+  }
+
+  async prepareRewardClaim(draftId) {
+    return this.request(`/api/rewards/claims/${encodeURIComponent(draftId)}/prepare`, {
+      method: 'POST',
+      authenticated: true,
+      body: {}
+    });
+  }
+
   async purchaseUpgrade(upgradeId) {
     return this.request('/api/profile/upgrades', {
       method: 'POST',

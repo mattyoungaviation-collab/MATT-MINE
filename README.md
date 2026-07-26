@@ -4,6 +4,18 @@
 
 MATT Mine is a standalone browser action roguelite and daily Web3 competition on Ronin. It has its own launch website, wallet identity, separate Free and Pass leaderboards, live Pass and paid-run payments, verified contracts, and a production persistence path independent from MATT Hub.
 
+## v1.2 dry-run reward settlement
+
+- Convert immutable weekly snapshots into deterministic OpenZeppelin Merkle reward proofs.
+- Preserve the approved 20% / 12% / 8% / 20%-combined leaderboard allocation while leaving the remaining 40% unfunded for later reward categories.
+- Require separate primary and independent approval secrets.
+- Prepare exact approve, fund, and publish transactions for the existing 2-of-3 Safe without storing a publisher key on the server.
+- Verify the exact root, allocation, and deadline on Ronin before exposing claims.
+- Give included players a server-prepared, player-signed Ronin Wallet claim transaction.
+- Deploy with publication disabled, a 100,000 MATT configured pilot cap, and a non-adjustable 1,000,000 MATT code ceiling.
+
+See [`docs/REWARD_PIPELINE_V12.md`](docs/REWARD_PIPELINE_V12.md).
+
 ## v1.1 permanent leaderboard storage
 
 - Store every server-issued run in a dedicated PostgreSQL run table.
@@ -150,7 +162,7 @@ See [`docs/STANDALONE_LAUNCH_V10.md`](docs/STANDALONE_LAUNCH_V10.md) for the dep
 
 ## Important live-payment boundary
 
-v0.9 can prepare real Pass and paid-run transactions only when the server operator explicitly enables the Mainnet transaction switch. Every purchase still requires the player to click the purchase button and approve the exact transaction in Ronin Wallet. MATT claims remain disabled. Ranked validation remains a hardened product foundation, not yet a sufficient anti-cheat system for public token payouts.
+Pass and paid-run transactions require the player to click the purchase button and approve the exact transaction in Ronin Wallet. v1.2 adds player-signed MATT claims, but only after an immutable snapshot, capped allocation, independent approval, Safe publication, and exact on-chain verification. Production reward publication remains disabled by default.
 
 Before real value is enabled, the production build still requires:
 
@@ -160,7 +172,7 @@ Before real value is enabled, the production build still requires:
 4. Production database hosting, backups, observability, and distributed rate limiting.
 5. Anti-cheat review and payout moderation.
 6. Formal security review before materially increasing contract balances or public reward pools.
-7. Immutable weekly reward publication and onchain claims.
-8. 2-of-3 multisig control for treasury and major contract administration, with no timelock.
+7. A full dry run and deliberately small pilot reward epoch before increasing the configured cap.
+8. Continued 2-of-3 multisig control for treasury and major contract administration, with no timelock.
 
 See [`docs/LEADERBOARD_STORAGE_V11.md`](docs/LEADERBOARD_STORAGE_V11.md), [`docs/STANDALONE_LAUNCH_V10.md`](docs/STANDALONE_LAUNCH_V10.md), [`docs/LIVE_PAYMENTS_V09.md`](docs/LIVE_PAYMENTS_V09.md), [`docs/CONTRACT_DEPLOYMENT_V08.md`](docs/CONTRACT_DEPLOYMENT_V08.md), [`docs/SECURITY_V07.md`](docs/SECURITY_V07.md), [`docs/ECONOMY_V1.md`](docs/ECONOMY_V1.md), and [`contracts/README.md`](contracts/README.md).

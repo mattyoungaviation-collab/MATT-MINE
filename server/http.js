@@ -59,7 +59,7 @@ async function handleApiRequest({
   const path = requestUrl.pathname;
   if (method === 'GET' && path === '/api/health') {
     const health = await service.health();
-    sendJson(response, 200, { ok: true, service: 'matt-mine', version: 11, ...health });
+    sendJson(response, 200, { ok: true, service: 'matt-mine', version: 12, ...health });
     return;
   }
   if (method === 'GET' && path === '/api/config') {
@@ -138,6 +138,21 @@ async function handleApiRequest({
     sendJson(response, 200, { ok: true, leaderboard: result });
     return;
   }
+  if (method === 'GET' && path === '/api/rewards/claims') {
+    const claims = await service.rewardClaims(bearerToken(request));
+    sendJson(response, 200, { ok: true, claims });
+    return;
+  }
+  const claimPrepareMatch = path.match(/^\/api\/rewards\/claims\/(reward_\d{4}-\d{2}-\d{2}_(?:free|paid))\/prepare$/);
+  if (method === 'POST' && claimPrepareMatch) {
+    await readJson(request, maxRequestBytes);
+    const result = await service.prepareRewardClaim(
+      bearerToken(request),
+      claimPrepareMatch[1]
+    );
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
   if (method === 'POST' && path === '/api/profile/upgrades') {
     const body = await readJson(request, maxRequestBytes);
     const result = await service.purchaseUpgrade(bearerToken(request), body.upgradeId);
@@ -152,6 +167,42 @@ async function handleApiRequest({
       request.headers['x-matt-admin-key'],
       suspensionMatch[1],
       body.suspended
+    );
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
+
+  if (method === 'GET' && path === '/api/admin/rewards/drafts') {
+    const result = await service.listRewardDrafts(request.headers['x-matt-admin-key']);
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
+  if (method === 'POST' && path === '/api/admin/rewards/drafts') {
+    const body = await readJson(request, maxRequestBytes);
+    const draft = await service.createRewardDraft(
+      request.headers['x-matt-admin-key'],
+      body
+    );
+    sendJson(response, 201, { ok: true, draft });
+    return;
+  }
+  const rewardApprovalMatch = path.match(/^\/api\/admin\/rewards\/drafts\/(reward_\d{4}-\d{2}-\d{2}_(?:free|paid))\/approve$/);
+  if (method === 'POST' && rewardApprovalMatch) {
+    await readJson(request, maxRequestBytes);
+    const result = await service.approveRewardDraft(
+      request.headers['x-matt-reward-approver-key'],
+      rewardApprovalMatch[1]
+    );
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
+  const rewardSyncMatch = path.match(/^\/api\/admin\/rewards\/drafts\/(reward_\d{4}-\d{2}-\d{2}_(?:free|paid))\/sync$/);
+  if (method === 'POST' && rewardSyncMatch) {
+    const body = await readJson(request, maxRequestBytes);
+    const result = await service.syncRewardDraft(
+      request.headers['x-matt-admin-key'],
+      rewardSyncMatch[1],
+      body.transactionHash
     );
     sendJson(response, 200, { ok: true, ...result });
     return;
