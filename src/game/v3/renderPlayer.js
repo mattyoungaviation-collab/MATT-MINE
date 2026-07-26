@@ -7,6 +7,8 @@ const MATT_DYNO_FRAME_HEIGHT = 241;
 const MATT_DYNO_SHEET_EDGE = 2;
 const MATT_DYNO_DRAW_WIDTH = 108;
 const MATT_DYNO_DRAW_HEIGHT = 180;
+const MATT_DYNO_VERTICAL_DRAW_HEIGHT = 134;
+const MATT_DYNO_VERTICAL_DRAW_Y = [-102, -97];
 
 export const renderPlayerMethods = {
   drawPlayer(ctx) {
@@ -71,6 +73,12 @@ export const renderPlayerMethods = {
         ? mattDyno.naturalHeight / 2
         : mattDyno.naturalHeight);
       const frameRow = usesVerticalSheet && Math.sin(visualAngle) < 0 ? 1 : 0;
+      const drawHeight = usesVerticalSheet
+        ? MATT_DYNO_VERTICAL_DRAW_HEIGHT
+        : MATT_DYNO_DRAW_HEIGHT;
+      const drawY = usesVerticalSheet
+        ? MATT_DYNO_VERTICAL_DRAW_Y[frameRow]
+        : -127;
       const breathing = moving ? 1 : 1 + Math.sin(this.run.elapsed * 3.4) * 0.018;
       const stepBob = moving
         ? Math.abs(Math.sin(this.run.elapsed * (player.dashTimer > 0 ? 14 : 8) * Math.PI)) * 2.2
@@ -113,9 +121,9 @@ export const renderPlayerMethods = {
         frameWidth,
         frameHeight,
         -MATT_DYNO_DRAW_WIDTH / 2,
-        -127,
+        drawY,
         MATT_DYNO_DRAW_WIDTH,
-        MATT_DYNO_DRAW_HEIGHT
+        drawHeight
       );
       ctx.restore();
       ctx.restore();
