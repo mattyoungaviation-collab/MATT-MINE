@@ -28,10 +28,10 @@ export const renderPlayerMethods = {
       ctx.restore();
     }
 
-    ctx.fillStyle = 'rgba(0,0,0,0.62)';
-    ctx.filter = 'blur(2px)';
-    ctx.beginPath(); ctx.ellipse(3, 24, 27, 10, 0, 0, TAU); ctx.fill();
-    ctx.filter = 'none';
+    ctx.fillStyle = 'rgba(0,0,0,0.26)';
+    ctx.beginPath(); ctx.ellipse(3, 23, 29, 11, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,0.46)';
+    ctx.beginPath(); ctx.ellipse(3, 23, 21, 7, 0, 0, TAU); ctx.fill();
 
     const sideAssets = {
       pickaxe: this.visualAssets?.mattDyno,
@@ -89,14 +89,16 @@ export const renderPlayerMethods = {
       ctx.rotate(actionTilt);
       ctx.scale(!usesVerticalSheet && facesRight ? -breathing : breathing, breathing);
       ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
+      ctx.imageSmoothingQuality = 'medium';
+      // Canvas filters are especially expensive on mobile GPUs. The new
+      // sprites are pre-lit, so normal movement needs no live filter pass.
       ctx.filter = player.hitFlash > 0
-        ? 'sepia(1) saturate(8) hue-rotate(310deg) brightness(1.2)'
+        ? 'sepia(1) saturate(6) hue-rotate(310deg) brightness(1.15)'
         : cosmetics.skin === 'crystal_skin'
-          ? 'hue-rotate(145deg) saturate(1.25) brightness(1.12) drop-shadow(0 0 8px rgba(112,217,255,.75))'
+          ? 'hue-rotate(145deg) saturate(1.2) brightness(1.08)'
           : player.dashTimer > 0
-            ? 'brightness(1.18) drop-shadow(0 0 9px rgba(112,217,255,.8))'
-            : 'drop-shadow(0 3px 4px rgba(0,0,0,.78)) drop-shadow(0 0 2px rgba(245,209,66,.28))';
+            ? 'brightness(1.12)'
+            : 'none';
       ctx.drawImage(
         mattDyno,
         frame * frameWidth,
