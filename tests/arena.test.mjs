@@ -402,7 +402,12 @@ test('PostgreSQL reconciliation preserves a finalized snapshot until onchain Saf
 
   assert.match(
     updateSql,
-    /WHEN \$5=1 AND status='finalized' THEN 'finalized'/
+    /WHEN \$5::smallint=1 AND status='finalized' THEN 'finalized'/
+  );
+  assert.equal(
+    [...updateSql.matchAll(/\$5(?!::smallint)/g)].length,
+    0,
+    'chain status must be explicitly typed as smallint at every use'
   );
   assert.equal(result.status, 'finalized');
   assert.equal(result.chainStatus, 1);

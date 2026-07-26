@@ -380,13 +380,13 @@ export class PostgresArenaStore {
       `UPDATE matt_mine_arena.days SET
          entry_pool_raw=$2::numeric,seed_raw=$3::numeric,
          entry_count=GREATEST(entry_count,$4),
-         chain_status=$5,
-         configuration_state=CASE WHEN $5>0 THEN 'confirmed' ELSE configuration_state END,
+         chain_status=$5::smallint,
+         configuration_state=CASE WHEN $5::smallint>0 THEN 'confirmed' ELSE configuration_state END,
          status=CASE
-           WHEN $5=2 THEN 'settled'
-           WHEN $5=3 THEN 'cancelled'
-           WHEN $5=1 AND status='finalized' THEN 'finalized'
-           WHEN $5=1 AND $6 IN ('scheduled','open') THEN $6
+           WHEN $5::smallint=2 THEN 'settled'
+           WHEN $5::smallint=3 THEN 'cancelled'
+           WHEN $5::smallint=1 AND status='finalized' THEN 'finalized'
+           WHEN $5::smallint=1 AND $6 IN ('scheduled','open') THEN $6
            ELSE status
          END
        WHERE day_key=$1 AND entry_pool_raw <= $2::numeric
