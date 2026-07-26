@@ -4,6 +4,14 @@
 
 MATT Mine is a standalone browser action roguelite and daily Web3 competition on Ronin. It has its own launch website, wallet identity, separate Free and Pass leaderboards, live Pass and paid-run payments, verified contracts, and a production persistence path independent from MATT Hub.
 
+## v2.5 combat clarity and run control
+
+- Render the official MATT Dyno at a smaller gameplay scale and sample exact sprite cells so adjacent frame fragments never bleed into view.
+- Increase base Pickaxe range by 20% and Pickaxe damage by 14%.
+- Give the Crystal Blaster 15% more stored charge and set direct Dynamite damage to 75.
+- Keep the Guardian hidden until the miner has enough crystals and physically enters the Guardian Vault.
+- Add a two-step Abandon Run control that releases server and Daily Arena active-run locks without submitting a score.
+
 ## v2.4 official MATT Dyno and Safe Start
 
 - Replace the placeholder miner with the official MATT Dyno, animated across idle, walking, dashing, and attacking poses.

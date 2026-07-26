@@ -4,6 +4,18 @@ import { clamp } from '../utils.js';
 import { roomRequiresLock } from '../combat.js';
 
 export const roomsMethods = {
+  awakenGuardian(room) {
+    if (
+      room?.type !== 'guardian' ||
+      !this.run.bossReady ||
+      this.run.bossSpawned
+    ) return null;
+    this.run.bossSpawned = true;
+    const guardian = this.spawnEnemy(true, room);
+    if (guardian) guardian.awake = true;
+    this.hooks.onToast?.('THE GUARDIAN AWAKENS');
+    return guardian;
+  },
   moveEntity(entity, dx, dy) {
     const padding = Math.max(8, entity.radius * 0.68);
     let boundsRoom = null;
@@ -79,6 +91,7 @@ export const roomsMethods = {
       this.lastRoomId = room.id;
       if (room.type !== 'start') this.hooks.onToast?.(room.name);
     }
+    if (room.type === 'guardian') this.awakenGuardian(room);
     if (roomRequiresLock(room.type)) {
       const state = this.roomStates?.[room.id];
       if (state && !state.triggered && !state.cleared) this.lockRoom(room);

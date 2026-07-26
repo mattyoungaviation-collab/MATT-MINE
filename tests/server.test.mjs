@@ -346,6 +346,36 @@ test('the server owns the free entitlement, run token, replay protection, profil
   assert.equal(player.scores.free, 1_000);
 });
 
+test('abandoning a server run releases it without recording profile or leaderboard progress', async () => {
+  const harness = createHarness();
+  const { session } = await signIn(harness);
+  const run = await harness.service.startRun(session.token, SERVER_RUN_MODES.PRACTICE);
+  const abandoned = await harness.service.abandonRun(session.token, {
+    runId: run.runId,
+    runToken: run.runToken
+  });
+  assert.equal(abandoned.abandoned, true);
+  assert.equal(abandoned.run.status, 'expired');
+
+  const state = await harness.database.read();
+  assert.equal(state.runs[run.runId].status, 'expired');
+  assert.equal(state.runs[run.runId].result, null);
+  const player = await harness.service.me(session.token);
+  assert.equal(player.profile.totalRuns, 0);
+  assert.equal(player.scores.free, 0);
+
+  await assert.rejects(
+    () => harness.service.finishRun(session.token, {
+      runId: run.runId,
+      runToken: run.runToken,
+      result: extractedResult()
+    }),
+    (error) => error.code === 'run_already_finished'
+  );
+  const replacement = await harness.service.startRun(session.token, SERVER_RUN_MODES.PRACTICE);
+  assert.notEqual(replacement.runId, run.runId);
+});
+
 test('ranked entries close before weekly zero while Practice remains available', async () => {
   const harness = createHarness({
     timestamp: Date.UTC(2026, 6, 26, 23, 56, 0)

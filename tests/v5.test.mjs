@@ -201,6 +201,76 @@ test('pickaxe, dynamite, and crystal blaster damage their intended targets', asy
   assert.equal(game.projectiles.some((projectile) => projectile.kind === 'crystalBolt'), false);
 });
 
+test('v2.5 weapon tuning strengthens Pickaxe reach and damage, Dynamite, and Blaster capacity', async () => {
+  const { MattMineGame } = await import('../src/game/GameV4.js');
+  const stubs = installBrowserStubs();
+  const game = new MattMineGame(stubs.canvas, stubs.profile);
+  game.startRun({ mode: RUN_MODES.PRACTICE, seed: 'V25-WEAPON-TUNING' });
+  game.player.angle = 0;
+  assert.equal(game.player.attackRange, 120);
+  assert.equal(game.player.blasterEnergyMax, 115);
+
+  const ore = oreTarget(game, {
+    x: game.player.x + 138,
+    hp: 100,
+    maxHp: 100,
+    radius: 20
+  });
+  game.ores = [ore];
+  game.enemies = [];
+  game.swingPickaxe();
+  assert.ok(Math.abs(ore.hp - (100 - CONFIG.baseDamage * 1.14)) < 0.001);
+
+  game.unlockWeapon('dynamite', 1);
+  game.throwDynamite();
+  const dynamite = game.projectiles.find((projectile) => projectile.kind === 'dynamite');
+  assert.equal(dynamite.damage, 75);
+});
+
+test('the Guardian appears only when an eligible miner enters the Guardian Vault', async () => {
+  const { MattMineGame } = await import('../src/game/GameV4.js');
+  const stubs = installBrowserStubs();
+  const game = new MattMineGame(stubs.canvas, stubs.profile);
+  game.startRun({ mode: RUN_MODES.PRACTICE, seed: 'GUARDIAN-ROOM-ENTRY' });
+  game.run.crystals = game.crystalGoal();
+  game.updatePickups(0);
+
+  assert.equal(game.run.bossReady, true);
+  assert.equal(game.run.bossSpawned, false);
+  assert.equal(game.enemies.some((enemy) => enemy.isBoss), false);
+
+  game.player.x = game.layout.guardianRoom.x;
+  game.player.y = game.layout.guardianRoom.y;
+  game.updateCurrentRoom();
+  assert.equal(game.run.bossSpawned, true);
+  assert.equal(game.enemies.filter((enemy) => enemy.isBoss).length, 1);
+  assert.equal(game.activeLockedRoomId, game.layout.guardianRoom.id);
+});
+
+test('an active run can be abandoned without producing a result', async () => {
+  const { MattMineGame } = await import('../src/game/GameV4.js');
+  const stubs = installBrowserStubs();
+  let abandoned = null;
+  let ended = false;
+  const game = new MattMineGame(stubs.canvas, stubs.profile, {
+    onRunAbandoned(context) {
+      abandoned = context;
+    },
+    onRunEnd() {
+      ended = true;
+    }
+  });
+  game.startRun({ mode: RUN_MODES.PRACTICE, seed: 'ABANDON-RUN' });
+  game.projectiles.push({ kind: 'crystalBolt' });
+
+  assert.equal(game.abandonRun(), true);
+  assert.equal(game.state, 'menu');
+  assert.equal(game.projectiles.length, 0);
+  assert.equal(abandoned.mode, RUN_MODES.PRACTICE);
+  assert.equal(ended, false);
+  assert.equal(game.abandonRun(), false);
+});
+
 test('every mode starts with the Pickaxe while Practice keeps the Blaster available', async () => {
   const { MattMineGame } = await import('../src/game/GameV4.js');
   const stubs = installBrowserStubs();

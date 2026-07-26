@@ -73,6 +73,8 @@ let arenaCountdownTimer = null;
 let activeArenaRun = null;
 let activeArenaTranscript = null;
 let pendingAvatarDataUrl = '';
+let abandonConfirmUntil = 0;
+let abandonResetTimer = null;
 const wallet = new RoninWalletAdapter({
   api: apiClient,
   onInvalidated(reason) {
@@ -636,6 +638,7 @@ async function startRunMode(mode) {
 
 const game = new MattMineGame(canvas, profile, {
   onRunStart() {
+    resetAbandonButton();
     showScreen();
     setGameplayUi(true);
   },
@@ -737,6 +740,9 @@ const game = new MattMineGame(canvas, profile, {
     setGameplayUi(false);
     updateMenu();
   },
+  onRunAbandoned(context) {
+    abandonIssuedRun(context);
+  },
   onFatalError(error) {
     showScreen('menu');
     setGameplayUi(false);
@@ -816,6 +822,20 @@ $('#wallet-button').addEventListener('click', () => {
 });
 $('#play-again-button').addEventListener('click', () => game.backToMenu());
 $('#menu-button').addEventListener('click', () => game.backToMenu());
+$('#abandon-run-button').addEventListener('click', () => {
+  const now = Date.now();
+  if (now > abandonConfirmUntil) {
+    abandonConfirmUntil = now + 6_000;
+    const button = $('#abandon-run-button');
+    button.textContent = 'PRESS AGAIN TO LEAVE';
+    button.classList.add('confirming');
+    clearTimeout(abandonResetTimer);
+    abandonResetTimer = setTimeout(resetAbandonButton, 6_000);
+    return;
+  }
+  resetAbandonButton();
+  game.abandonRun();
+});
 $('#extract-button').addEventListener('click', () => game.extract());
 $('#descend-button').addEventListener('click', () => game.descend());
 $('#upgrades-button').addEventListener('click', () => {
@@ -1861,6 +1881,45 @@ function renderGameplayPreferences() {
   button.title = gameplayPreferences.screenShake
     ? 'Turn off screen shake'
     : 'Turn on screen shake';
+}
+
+function resetAbandonButton() {
+  abandonConfirmUntil = 0;
+  clearTimeout(abandonResetTimer);
+  abandonResetTimer = null;
+  const button = $('#abandon-run-button');
+  if (!button) return;
+  button.textContent = 'ABANDON RUN';
+  button.classList.remove('confirming');
+}
+
+function abandonIssuedRun(context = {}) {
+  const serverRun = activeServerRun;
+  const arenaRun = activeArenaRun;
+  const transcript = activeArenaTranscript;
+  activeServerRun = null;
+  activeArenaRun = null;
+  activeArenaTranscript = null;
+  const transcriptDiscard = transcript?.discard() || Promise.resolve();
+  toast('Run abandoned - no score was submitted');
+
+  void (async () => {
+    try {
+      await transcriptDiscard;
+      if (arenaRun) {
+        await apiClient.abandonArenaRun(arenaRun.runId, arenaRun.runToken);
+        await refreshArena(true);
+      } else if (serverRun) {
+        await apiClient.abandonRun(serverRun.runId, serverRun.runToken);
+        await refreshServerPlayer();
+      }
+    } catch (error) {
+      console.warn('[MATT Mine] Run abandonment could not be confirmed.', error);
+      toast(context.mode === 'practice'
+        ? 'Practice run closed'
+        : 'Run closed locally; server release is pending');
+    }
+  })();
 }
 
 function formatTime(seconds) {

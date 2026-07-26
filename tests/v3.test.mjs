@@ -186,7 +186,11 @@ test('MATT Dyno swaps weapon sheets and uses front and back walking rows', async
   game.player.swingTimer = 0.1;
   game.drawPlayer(context);
   assert.equal(draws.at(-1)[0].id, 'blaster-vertical');
+  assert.equal(draws.at(-1)[1], 602);
   assert.equal(draws.at(-1)[2], 0);
+  assert.equal(draws.at(-1)[3], 120);
+  assert.equal(draws.at(-1)[7], 108);
+  assert.equal(draws.at(-1)[8], 180);
 
   game.player.weapon = 'dynamite';
   game.player.swingTimer = 0;
@@ -196,6 +200,7 @@ test('MATT Dyno swaps weapon sheets and uses front and back walking rows', async
   game.drawPlayer(context);
   assert.equal(draws.at(-1)[0].id, 'dynamite-vertical');
   assert.equal(draws.at(-1)[2], 241);
+  assert.equal(Number.isInteger(draws.at(-1)[1]), true);
 
   game.player.weapon = 'pickaxe';
   game.player.vx = 80;

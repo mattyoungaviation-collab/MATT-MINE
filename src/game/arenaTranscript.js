@@ -52,6 +52,17 @@ export class ArenaTranscript {
     this.closed = true;
     return this.flush();
   }
+
+  async discard() {
+    this.closed = true;
+    this.pending = [];
+    try {
+      await this.queue;
+    } catch {
+      // A forfeited run can still close cleanly if an earlier transcript
+      // write failed.
+    }
+  }
 }
 
 function normalizeClientEvent(event) {

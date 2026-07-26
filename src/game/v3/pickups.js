@@ -1,5 +1,4 @@
 import { CONFIG } from '../config.js';
-import { roomAt } from '../layout.js';
 import { angleTo, distance } from '../utils.js';
 
 export const pickupMethods = {
@@ -32,14 +31,9 @@ export const pickupMethods = {
     this.pickups = this.pickups.filter((pickup) => !pickup.collected);
 
     const goal = this.crystalGoal();
-    if (this.run.crystals >= goal && !this.run.bossSpawned) {
-      this.run.bossSpawned = true;
-      this.spawnEnemy(true);
-      const guardian = this.enemies.find((enemy) => enemy.isBoss);
-      if (guardian) guardian.awake = true;
-      const currentRoom = roomAt(this.layout, this.player.x, this.player.y);
-      if (currentRoom?.id === this.layout.guardianRoom.id) this.lockRoom(currentRoom);
-      this.hooks.onToast?.(`Guardian awakened in ${this.layout.guardianRoom.name}`);
+    if (this.run.crystals >= goal && !this.run.bossReady) {
+      this.run.bossReady = true;
+      this.hooks.onToast?.(`${this.layout.guardianRoom.name} unlocked`);
     }
 
     this.updateObjective();
