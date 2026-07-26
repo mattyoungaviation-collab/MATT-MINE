@@ -824,9 +824,15 @@ $('#shake-toggle-button').addEventListener('click', () => {
   toast(gameplayPreferences.screenShake ? 'Screen shake on' : 'Screen shake off');
 });
 $('#profile-button').addEventListener('click', () => openMinerProfile(false));
+$('#controls-button').addEventListener('click', () => void openPlayerControls());
 $('#save-profile-button').addEventListener('click', () => void saveMinerIdentity());
 $('#update-avatar-button').addEventListener('click', () => void updateMinerAvatar());
 $('#save-keybinds-button').addEventListener('click', () => void savePlayerKeybindings());
+$('#reset-keybinds-button').addEventListener('click', () => {
+  pendingKeybindings = defaultKeybindings();
+  renderKeybindings();
+  toast('Default controls restored — press Save Controls to keep them');
+});
 $('#profile-name').addEventListener('input', () => renderProfileAvatar(pendingAvatarDataUrl || serverPlayer?.identity?.avatarUrl || ''));
 $('#profile-avatar-input').addEventListener('change', async (event) => {
   const file = event.target.files?.[0];
@@ -1862,7 +1868,7 @@ function renderAudioSettings() {
 
 function renderKeybindings() {
   $('#keybind-grid').innerHTML = KEYBIND_ACTIONS.map((action) =>
-    `<button type="button" class="secondary-button keybind-button" data-keybind="${action.id}"><span>${escapeHtml(action.label)}</span><strong>${escapeHtml(pendingKeybindings[action.id])}</strong></button>`
+    `<button type="button" class="secondary-button keybind-button" data-keybind="${action.id}"><span>${escapeHtml(action.label)}</span><strong>${escapeHtml(keyName(pendingKeybindings[action.id]))}</strong></button>`
   ).join('');
   document.querySelectorAll('[data-keybind]').forEach((button) => button.addEventListener('click', () => {
     button.classList.add('listening');
@@ -1873,6 +1879,34 @@ function renderKeybindings() {
       renderKeybindings();
     }, { once: true, capture: true });
   }));
+}
+
+async function openPlayerControls() {
+  if (!serverPlayer) {
+    const connected = await connectWallet();
+    if (!connected) return;
+  }
+  openMinerProfile(false);
+  requestAnimationFrame(() => {
+    const editor = $('#keybind-editor');
+    editor.classList.add('keybind-highlight');
+    editor.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(() => editor.classList.remove('keybind-highlight'), 1_600);
+  });
+}
+
+function keyName(code) {
+  if (code === 'Space') return 'SPACE';
+  if (code === 'ShiftLeft') return 'LEFT SHIFT';
+  if (code === 'ShiftRight') return 'RIGHT SHIFT';
+  if (code === 'ControlLeft') return 'LEFT CTRL';
+  if (code === 'ControlRight') return 'RIGHT CTRL';
+  if (code === 'AltLeft') return 'LEFT ALT';
+  if (code === 'AltRight') return 'RIGHT ALT';
+  if (code?.startsWith('Key')) return code.slice(3);
+  if (code?.startsWith('Digit')) return code.slice(5);
+  if (code?.startsWith('Arrow')) return code.slice(5).toUpperCase();
+  return String(code || '').toUpperCase();
 }
 
 async function savePlayerKeybindings() {

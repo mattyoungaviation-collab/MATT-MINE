@@ -268,6 +268,14 @@ test('Arena UI closes cleanly for review while already-purchased attempts surviv
   assert.match(startRunSource, /serverPlayer\.suspended/);
 });
 
+test('production lobby exposes wallet-saved custom gameplay controls', () => {
+  const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  assert.match(html, /id="controls-button"[^>]*>CONTROLS</);
+  assert.match(html, /id="keybind-editor"/);
+  assert.match(html, /id="reset-keybinds-button"/);
+  assert.match(html, /id="save-keybinds-button"/);
+});
+
 test('unscheduled Arena days do not request unavailable leaderboard or player endpoints', () => {
   const source = fs.readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
   const refreshSource = source.slice(
