@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { stat } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
 import { imageIsReady, loadVisualAssets } from '../src/game/v3/visualAssets.js';
@@ -16,6 +16,22 @@ test('cinematic mine and Guardian assets are packaged as optimized WebP files', 
   assert.ok(guardian.size < 1_000_000);
 });
 
+test('the official animated MATT Dyno sprite sheet is packaged for gameplay', async () => {
+  const assetNames = [
+    'matt-dyno-spritesheet.png',
+    'matt-dyno-blaster-spritesheet.png',
+    'matt-dyno-dynamite-spritesheet.png',
+    'matt-dyno-pickaxe-vertical-spritesheet.png',
+    'matt-dyno-blaster-vertical-spritesheet.png',
+    'matt-dyno-dynamite-vertical-spritesheet.png'
+  ];
+  for (const assetName of assetNames) {
+    const dyno = await stat(`${root}assets/game/${assetName}`);
+    assert.ok(dyno.size > 80_000);
+    assert.ok(dyno.size < 500_000);
+  }
+});
+
 test('cinematic assets load lazily in browsers and remain safe in test environments', () => {
   class FakeImage {
     complete = true;
@@ -25,6 +41,17 @@ test('cinematic assets load lazily in browsers and remain safe in test environme
   const assets = loadVisualAssets(FakeImage);
   assert.equal(assets.floor.src, '/assets/game/mine-floor-cinematic.webp');
   assert.equal(assets.guardian.src, '/assets/game/guardian-cinematic.webp');
+  assert.equal(assets.mattDyno.src, '/assets/game/matt-dyno-spritesheet.png');
+  assert.equal(assets.mattDynoBlaster.src, '/assets/game/matt-dyno-blaster-spritesheet.png');
+  assert.equal(assets.mattDynoDynamite.src, '/assets/game/matt-dyno-dynamite-spritesheet.png');
+  assert.equal(assets.mattDynoPickaxeVertical.src, '/assets/game/matt-dyno-pickaxe-vertical-spritesheet.png');
+  assert.equal(assets.mattDynoBlasterVertical.src, '/assets/game/matt-dyno-blaster-vertical-spritesheet.png');
+  assert.equal(assets.mattDynoDynamiteVertical.src, '/assets/game/matt-dyno-dynamite-vertical-spritesheet.png');
   assert.equal(imageIsReady(assets.floor), true);
   assert.deepEqual(loadVisualAssets(null), {});
+});
+
+test('responsive production lobby stays hidden while gameplay is active', async () => {
+  const css = await readFile(`${root}src/production.css`, 'utf8');
+  assert.match(css, /#menu\.menu-v4:not\(\.active\)\s*\{\s*display:\s*none;/);
 });

@@ -26,7 +26,13 @@ import {
   defaultProfile,
   loadProfile
 } from '../src/game/storage.js';
-import { CONFIG, META_UPGRADES, metaUpgradeCost } from '../src/game/config.js';
+import {
+  BLASTER_RUN_UPGRADES,
+  CONFIG,
+  META_UPGRADES,
+  RUN_UPGRADES,
+  metaUpgradeCost
+} from '../src/game/config.js';
 
 const NOW = Date.UTC(2026, 6, 25, 12, 0, 0);
 
@@ -195,12 +201,12 @@ test('pickaxe, dynamite, and crystal blaster damage their intended targets', asy
   assert.equal(game.projectiles.some((projectile) => projectile.kind === 'crystalBolt'), false);
 });
 
-test('Practice starts with the Blaster while the live deterministic Arena rules stay unchanged', async () => {
+test('every mode starts with the Pickaxe while Practice keeps the Blaster available', async () => {
   const { MattMineGame } = await import('../src/game/GameV4.js');
   const stubs = installBrowserStubs();
   const practice = new MattMineGame(stubs.canvas, stubs.profile);
   practice.startRun({ mode: RUN_MODES.PRACTICE, seed: 'STARTING-BLASTER' });
-  assert.equal(practice.player.weapon, 'blaster');
+  assert.equal(practice.player.weapon, 'pickaxe');
   assert.equal(practice.player.unlockedWeapons.blaster, true);
   assert.ok(practice.layout.guardianRoom.width >= 520);
   assert.ok(practice.layout.guardianRoom.height >= 390);
@@ -215,7 +221,51 @@ test('Practice starts with the Blaster while the live deterministic Arena rules 
   assert.equal(arena.layout.guardianRoom.height, CONFIG.roomHeight);
 });
 
-test('the treasure cache offers Blaster tuning and volleys fire up to three bolts', async () => {
+test('Safe Start keeps nearby enemies away and passive until the miner moves out or the grace period ends', async () => {
+  const { MattMineGame } = await import('../src/game/GameV4.js');
+  const stubs = installBrowserStubs();
+  const game = new MattMineGame(stubs.canvas, stubs.profile);
+  game.startRun({ mode: RUN_MODES.PRACTICE, seed: 'SAFE-START' });
+  assert.equal(game.player.weapon, 'pickaxe');
+  assert.equal(game.isSafeStartActive(), true);
+  assert.equal(game.enemies.some((enemy) => enemy.roomId === game.layout.startRoom.id), false);
+
+  const closeEnemy = enemyTarget(game, {
+    x: game.player.x,
+    y: game.player.y,
+    speed: 100,
+    damage: 15,
+    aiTimer: 0,
+    attackTimer: 0,
+    summonTimer: 0
+  });
+  game.enemies = [closeEnemy];
+  const startingHealth = game.player.health;
+  game.updateEnemies(0.1);
+  assert.equal(game.player.health, startingHealth);
+  assert.equal(closeEnemy.vx, 0);
+  assert.equal(closeEnemy.vy, 0);
+
+  game.run.elapsed = game.run.safeStartUntil;
+  game.updateEnemies(0.1);
+  assert.ok(game.player.health < startingHealth);
+
+  game.player.health = startingHealth;
+  game.run.elapsed = 0;
+  game.run.safeStartUntil = CONFIG.safeStartSeconds;
+  closeEnemy.contactTimer = 0;
+  game.player.invulnerable = 0;
+  const nextRoom = game.layout.rooms.find((room) => room.id !== game.layout.startRoom.id);
+  game.player.x = nextRoom.x;
+  game.player.y = nextRoom.y;
+  closeEnemy.x = nextRoom.x;
+  closeEnemy.y = nextRoom.y;
+  closeEnemy.roomId = nextRoom.id;
+  game.updateEnemies(0.1);
+  assert.ok(game.player.health < startingHealth);
+});
+
+test('the treasure cache offers Blaster tuning and volleys never exceed two beams', async () => {
   const { MattMineGame } = await import('../src/game/GameV4.js');
   const stubs = installBrowserStubs();
   let offered = [];
@@ -233,11 +283,69 @@ test('the treasure cache offers Blaster tuning and volleys fire up to three bolt
   assert.equal(offered.every((option) => option.id.startsWith('blaster')), true);
 
   game.chooseRunUpgrade(offered[0].id);
-  game.player.blasterVolley = 3;
+  game.player.blasterVolley = 99;
   game.player.angle = 0;
   game.projectiles = [];
   game.fireBlaster();
-  assert.equal(game.projectiles.filter((projectile) => projectile.kind === 'crystalBolt').length, 3);
+  assert.equal(game.projectiles.filter((projectile) => projectile.kind === 'crystalBolt').length, 2);
+});
+
+test('maxed run upgrades leave the selection pool and drones are hard-capped at four', async () => {
+  const { MattMineGame } = await import('../src/game/GameV4.js');
+  const stubs = installBrowserStubs();
+  let offered = [];
+  const game = new MattMineGame(stubs.canvas, stubs.profile, {
+    onLevelUp(options) {
+      offered = options;
+    }
+  });
+  game.startRun({ mode: RUN_MODES.PRACTICE, seed: 'MAX-UPGRADE-FILTER' });
+
+  game.player.runUpgradeCounts = Object.fromEntries(
+    RUN_UPGRADES.map((upgrade) => [upgrade.id, upgrade.max])
+  );
+  const power = RUN_UPGRADES.find((upgrade) => upgrade.id === 'power');
+  game.player.runUpgradeCounts.power = power.max - 1;
+  game.gainXp(game.player.nextXp);
+  assert.deepEqual(offered.map((upgrade) => upgrade.id), ['power']);
+  game.chooseRunUpgrade('power');
+  assert.equal(game.availableRunUpgrades(RUN_UPGRADES).some((upgrade) => upgrade.id === 'power'), false);
+
+  game.player.runUpgradeCounts = Object.fromEntries(
+    BLASTER_RUN_UPGRADES.map((upgrade) => [upgrade.id, upgrade.max])
+  );
+  assert.deepEqual(game.availableRunUpgrades(BLASTER_RUN_UPGRADES), []);
+
+  game.player.droneCount = 99;
+  game.player.droneTimer = 1;
+  game.updateDrone();
+  assert.equal(game.player.droneCount, 4);
+});
+
+test('damage floaters use the larger outlined combat font', async () => {
+  const { MattMineGame } = await import('../src/game/GameV4.js');
+  const stubs = installBrowserStubs();
+  const game = new MattMineGame(stubs.canvas, stubs.profile);
+  game.startRun({ mode: RUN_MODES.PRACTICE, seed: 'DAMAGE-FONT' });
+  const fonts = [];
+  const context = new Proxy({}, {
+    get(target, property) {
+      if (property in target) return target[property];
+      return () => {};
+    },
+    set(target, property, value) {
+      target[property] = value;
+      if (property === 'font') fonts.push(value);
+      return true;
+    }
+  });
+  game.floaters = [
+    { text: 'CRIT 42', x: 10, y: 10, color: '#fff', life: 1, maxLife: 1 },
+    { text: 'BOOM', x: 20, y: 20, color: '#fff', life: 1, maxLife: 1 }
+  ];
+  game.drawFloaters(context);
+  assert.equal(fonts.includes('950 24px system-ui, sans-serif'), true);
+  assert.equal(fonts.includes('800 16px system-ui, sans-serif'), true);
 });
 
 test('shield beetles recoil frontal pickaxe attacks, resist bolts and drones, and are weak to dynamite', async () => {
@@ -565,6 +673,7 @@ test('the Guardian acquires the player across rooms and stays contained in its v
     lastBossPhase: 1
   });
   game.enemies = [guardian];
+  game.layout.startRoom = { id: 99, x: -500, y: -500, width: 100, height: 100, type: 'start' };
 
   game.updateEnemies(0.1);
 

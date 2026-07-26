@@ -36,7 +36,7 @@ function installBrowserStubs(rendering = false) {
     totalRuns: 0,
     meta: { health: 0, damage: 0, speed: 0, luck: 0 }
   };
-  return { canvas, profile };
+  return { canvas, profile, context };
 }
 
 test('combat helpers resolve enemy roles, armor, boss phases, and locked rooms', () => {
@@ -157,4 +157,50 @@ test('cinematic floor and Guardian assets render without breaking the combat fra
   game.player.x = game.layout.guardianRoom.x;
   game.player.y = game.layout.guardianRoom.y;
   assert.doesNotThrow(() => game.render());
+});
+
+test('MATT Dyno swaps weapon sheets and uses front and back walking rows', async () => {
+  const { canvas, profile, context } = installBrowserStubs(true);
+  const { MattMineGame } = await import('../src/game/GameV3.js');
+  const game = new MattMineGame(canvas, profile);
+  const draws = [];
+  context.drawImage = (...args) => draws.push(args);
+  const image = (id, height = 482) => ({
+    id,
+    complete: true,
+    naturalWidth: 724,
+    naturalHeight: height
+  });
+  game.visualAssets = {
+    mattDyno: image('pickaxe-side', 241),
+    mattDynoBlaster: image('blaster-side', 241),
+    mattDynoDynamite: image('dynamite-side', 241),
+    mattDynoPickaxeVertical: image('pickaxe-vertical'),
+    mattDynoBlasterVertical: image('blaster-vertical'),
+    mattDynoDynamiteVertical: image('dynamite-vertical')
+  };
+  game.startRun();
+
+  game.player.weapon = 'blaster';
+  game.player.angle = Math.PI / 2;
+  game.player.swingTimer = 0.1;
+  game.drawPlayer(context);
+  assert.equal(draws.at(-1)[0].id, 'blaster-vertical');
+  assert.equal(draws.at(-1)[2], 0);
+
+  game.player.weapon = 'dynamite';
+  game.player.swingTimer = 0;
+  game.player.angle = 0;
+  game.player.vx = 0;
+  game.player.vy = -80;
+  game.drawPlayer(context);
+  assert.equal(draws.at(-1)[0].id, 'dynamite-vertical');
+  assert.equal(draws.at(-1)[2], 241);
+
+  game.player.weapon = 'pickaxe';
+  game.player.vx = 80;
+  game.player.vy = 0;
+  game.player.angle = 0;
+  game.drawPlayer(context);
+  assert.equal(draws.at(-1)[0].id, 'pickaxe-side');
 });

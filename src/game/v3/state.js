@@ -23,7 +23,8 @@ export const stateMethods = {
       runLevelUps: 0,
       startedAt: Date.now(),
       lootMultiplier: 1,
-      attackCounter: 0
+      attackCounter: 0,
+      safeStartUntil: 0
     };
     this.player = {
       x: CONFIG.worldWidth / 2,
@@ -58,7 +59,8 @@ export const stateMethods = {
       droneCount: 0,
       droneTimer: 0,
       trailTimer: 0,
-      weapon: isArena ? 'pickaxe' : 'blaster',
+      runUpgradeCounts: {},
+      weapon: 'pickaxe',
       unlockedWeapons: { pickaxe: true, dynamite: false, blaster: !isArena },
       dynamiteAmmo: CONFIG.dynamiteStartAmmo,
       blasterEnergy: CONFIG.blasterEnergyMax,
@@ -82,11 +84,14 @@ export const stateMethods = {
     this.audio.resume();
     this.generateDepth();
     this.hooks.onRunStart?.();
-    this.hooks.onToast?.('Depth 1: Search the connected chambers');
+    this.hooks.onToast?.(isArena
+      ? 'Pickaxe ready - Daily Arena live'
+      : 'SAFE START - Pickaxe ready');
   },
   generateDepth() {
+    const arenaMode = this.runContext?.mode === 'arena';
     this.layout = createMineLayout();
-    if (this.runContext?.mode !== 'arena' && this.layout.guardianRoom) {
+    if (!arenaMode && this.layout.guardianRoom) {
       this.layout.guardianRoom.width = Math.max(this.layout.guardianRoom.width, 520);
       this.layout.guardianRoom.height = Math.max(this.layout.guardianRoom.height, 390);
     }
@@ -111,6 +116,8 @@ export const stateMethods = {
     this.player.vx = 0;
     this.player.vy = 0;
     this.player.health = Math.min(this.player.maxHealth, this.player.health + this.player.maxHealth * 0.3);
+    this.run.safeStartUntil = this.run.elapsed +
+      (arenaMode ? CONFIG.arenaSafeStartSeconds : CONFIG.safeStartSeconds);
 
     const luck = this.runContext?.mode === 'arena' ? 0 : this.profile.meta.luck || 0;
     const oreEntries = Object.entries(ORE_TYPES)
@@ -136,13 +143,13 @@ export const stateMethods = {
       }
 
       const enemyCount = {
-        start: 0,
+        start: arenaMode ? 2 : 0,
         mining: 1,
         combat: 5,
         mixed: 3,
         treasure: 2,
         guardian: 0
-      }[room.type] || 2;
+      }[room.type] ?? 2;
       for (let index = 0; index < enemyCount; index += 1) this.spawnEnemy(false, room);
     }
 
@@ -156,8 +163,15 @@ export const stateMethods = {
     this.updateObjective();
     this.updateHud();
   },
+  isSafeStartActive() {
+    if (!this.layout?.startRoom) return false;
+    const currentRoom = roomAt(this.layout, this.player.x, this.player.y);
+    return this.run.elapsed < this.run.safeStartUntil &&
+      currentRoom?.id === this.layout.startRoom.id;
+  },
   update(dt) {
     this.run.elapsed += dt;
+    this.player.droneCount = clamp(Math.floor(Number(this.player.droneCount) || 0), 0, 4);
     this.player.attackTimer -= dt;
     this.player.invulnerable -= dt;
     this.player.hitFlash -= dt;
@@ -362,7 +376,9 @@ export const stateMethods = {
   updateObjective() {
     const goal = this.crystalGoal();
     let text;
-    if (this.activeLockedRoomId) {
+    if (this.isSafeStartActive()) {
+      text = `SAFE START - Pickaxe ready - Move when you are ready`;
+    } else if (this.activeLockedRoomId) {
       const room = this.layout.rooms.find((entry) => entry.id === this.activeLockedRoomId);
       const remaining = this.enemies.filter((enemy) => enemy.roomId === this.activeLockedRoomId && enemy.awake).length;
       if (room?.type === 'guardian') {
