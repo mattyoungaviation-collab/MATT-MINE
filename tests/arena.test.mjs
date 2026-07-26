@@ -191,68 +191,61 @@ test('Arena tie sorting follows all six fields in the specified order', () => {
   }
 });
 
-test('daily encounter manifests are deterministic and day-seed-specific', () => {
+test('daily replay challenges are deterministic and bind the exact day seed', () => {
   const first = buildArenaChallenge('a'.repeat(64));
   const again = buildArenaChallenge('a'.repeat(64));
   const different = buildArenaChallenge('b'.repeat(64));
   assert.deepEqual(first, again);
   assert.notDeepEqual(first, different);
   assert.equal(first.version, ARENA_TRANSCRIPT_VERSION);
-  assert.equal(first.depths.length, 5);
+  assert.equal(first.tickMs, 20);
+  assert.equal(first.verificationMode, 'deterministic-input-replay');
 });
 
-test('preview replay derives the score from stored events and never accepts a summary', () => {
-  const challenge = buildArenaChallenge('c'.repeat(64));
+test('input-only replay deterministically derives a knockout without browser outcomes', () => {
+  const challenge = buildArenaChallenge('a'.repeat(64));
   const events = [
-    { seq: 1, tick: 150, type: 'ore_broken', targetId: 11 },
-    { seq: 2, tick: 300, type: 'ore_broken', targetId: 12 },
-    { seq: 3, tick: 450, type: 'ore_broken', targetId: 13 },
-    { seq: 4, tick: 600, type: 'enemy_killed', targetId: 20 },
-    { seq: 5, tick: 750, type: 'damage_taken', amount: 4.4 },
-    { seq: 6, tick: 900, type: 'guardian_defeated', targetId: 99 },
-    { seq: 7, tick: 1_050, type: 'extract' }
+    inputEvent(1, 0),
+    { seq: 2, tick: 7_240, type: 'finish' }
   ];
-  const result = replayArenaTranscript(challenge, events, { requireTerminal: true });
-  const expected = challenge.depths[0].ores.slice(0, 3).reduce((sum, ore) => sum + ore.value, 0) +
-    challenge.depths[0].enemies[0].value +
-    challenge.depths[0].guardian.value;
-  assert.equal(result.score, expected);
-  assert.equal(result.projected, expected);
-  assert.equal(result.extracted, true);
-  assert.equal(result.damageTaken, 4);
-  assert.equal(result.elapsedMs, 1_050);
+  const first = replayArenaTranscript(challenge, events, { requireTerminal: true });
+  const again = replayArenaTranscript(challenge, events, { requireTerminal: true });
+  assert.deepEqual(first, again);
+  assert.equal(first.terminal, true);
+  assert.equal(first.extracted, false);
+  assert.equal(first.elapsedMs, 7_240);
+  assert.equal(first.damageTaken, 112);
 });
 
-test('preview replay rejects duplicated targets, impossible clocks, and post-terminal events', () => {
+test('input replay rejects milestones, unaligned clocks, premature finishes, and post-finish input', () => {
   const challenge = buildArenaChallenge('d'.repeat(64));
   assert.throws(
     () => replayArenaTranscript(challenge, [
-      { seq: 1, tick: 100, type: 'ore_broken', targetId: 1 },
-      { seq: 2, tick: 250, type: 'enemy_killed', targetId: 1 }
+      { seq: 1, tick: 0, type: 'ore_broken', targetId: 1 }
     ]),
-    (error) => error.code === 'arena_target_reused'
+    (error) => error.code === 'arena_event_type_invalid'
   );
   assert.throws(
     () => replayArenaTranscript(challenge, [
-      { seq: 1, tick: 100, type: 'knockout' },
-      { seq: 2, tick: 250, type: 'damage_taken', amount: 1 }
+      inputEvent(1, 10)
     ]),
-    (error) => error.code === 'arena_event_after_terminal'
+    (error) => error.code === 'arena_tick_invalid'
   );
   assert.throws(
     () => replayArenaTranscript(challenge, [
-      { seq: 1, tick: 2_000_000, type: 'knockout' }
-    ]),
-    (error) => error.code === 'arena_event_field_invalid'
+      inputEvent(1, 0),
+      { seq: 2, tick: 20, type: 'finish' }
+    ], { requireTerminal: true }),
+    (error) => error.code === 'arena_run_not_terminal'
   );
 });
 
 test('transcript hashes bind ordering and normalized event contents', () => {
   const start = 'e'.repeat(64);
-  const event = { seq: 1, tick: 100, type: 'knockout' };
+  const event = inputEvent(1, 0, { attack: true });
   const first = hashArenaEvent(start, event);
   assert.equal(first, hashArenaEvent(start, event));
-  assert.notEqual(first, hashArenaEvent(start, { ...event, tick: 101 }));
+  assert.notEqual(first, hashArenaEvent(start, { ...event, attack: false }));
 });
 
 test('Memory Arena storage confirms unlimited one-payment attempts idempotently', async () => {
@@ -541,8 +534,8 @@ test('settlement draft is one exact settleDay Safe call and preserves raw sum', 
   );
 });
 
-test('paid Arena entry is hard-disabled even when environment asks for live mode', async () => {
-  assert.equal(ARENA_REPLAY_READY, false);
+test('reviewed input replay enables paid Arena only when live mode is explicitly requested', async () => {
+  assert.equal(ARENA_REPLAY_READY, true);
   const store = await new MemoryArenaStore().init();
   const chain = {
     contractAddress: ARENA,
@@ -558,9 +551,7 @@ test('paid Arena entry is hard-disabled even when environment asks for live mode
       entryPoolRaw: '0',
       seededRaw: '0'
     }),
-    quoteEntry: async () => {
-      throw new Error('must not reach chain quote');
-    }
+    quoteEntry: async () => ({ transactions: [{ to: ARENA, data: '0x', value: '0' }] })
   };
   const arena = await new DailyArenaService({
     store,
@@ -571,15 +562,14 @@ test('paid Arena entry is hard-disabled even when environment asks for live mode
     liveEnabled: true,
     now: () => Date.parse(`${DAY}T12:00:00Z`)
   }).init();
-  assert.equal(arena.publicConfig().enabled, false);
-  assert.equal(arena.publicConfig().liveBlocker, 'input_replay_not_ready');
-  await assert.rejects(
-    () => arena.quoteEntry(PLAYER, {}),
-    (error) => error.code === 'arena_live_disabled'
-  );
+  assert.equal(arena.publicConfig().enabled, true);
+  assert.equal(arena.publicConfig().replayReady, true);
+  assert.equal(arena.publicConfig().verificationMode, 'deterministic-input-replay');
+  const quote = await arena.quoteEntry(PLAYER, {});
+  assert.equal(quote.quote.transactions.length, 1);
 });
 
-test('all executable Arena configuration paths stay blocked behind the replay release gate', async () => {
+test('reviewed replay release unlocks schedule and emergency unpause preparation', async () => {
   const store = await new MemoryArenaStore().init();
   const chain = fakeArenaAdapter(() => unscheduledChainDay());
   const arena = await new DailyArenaService({
@@ -589,35 +579,26 @@ test('all executable Arena configuration paths stay blocked behind the replay re
     safeAddress: SAFE,
     now: () => Date.parse(`${DAY}T12:00:00Z`)
   }).init();
-  await assert.rejects(
-    () => arena.prepareDay({
-      day: NEXT_DAY,
-      feeMatt: '25000',
-      seedMatt: '0',
-      reason: 'Unsafe zero-seed schedule'
-    }),
-    (error) => error.code === 'arena_schedule_security_gate'
-  );
-  await assert.rejects(
-    () => arena.prepareDay({
-      day: NEXT_DAY,
-      feeMatt: '25000',
-      seedMatt: '1',
-      reason: 'Unsafe seeded schedule'
-    }),
-    (error) => error.code === 'arena_schedule_security_gate'
-  );
-  await assert.rejects(
-    () => arena.prepareSeedTopUp(NEXT_DAY, {
-      seedMatt: '1',
-      reason: 'Unsafe seed top-up'
-    }),
-    (error) => error.code === 'arena_seed_security_gate'
-  );
-  await assert.rejects(
-    () => arena.prepareControl('unpause-entries', 'Unsafe activation'),
-    (error) => error.code === 'arena_unpause_security_gate'
-  );
+  const prepared = await arena.prepareDay({
+    day: NEXT_DAY,
+    feeMatt: '25000',
+    seedMatt: '1',
+    reason: 'First deterministic replay Arena'
+  });
+  assert.equal(prepared.transactions.length, 3);
+
+  const controlStore = await new MemoryArenaStore().init();
+  const controlArena = new DailyArenaService({
+    store: controlStore,
+    chain: fakeArenaAdapter(() => scheduledChainDay({ entriesPaused: true })),
+    receiptSecret: 'r'.repeat(64),
+    safeAddress: SAFE,
+    now: () => Date.parse(`${DAY}T12:00:00Z`)
+  });
+  await controlArena.init();
+  const unpause = await controlArena.prepareControl('unpause-entries', 'Activate deterministic replay');
+  assert.equal(unpause.transaction.to, ARENA);
+  assert.equal(unpause.requiredSigner, 'Daily Arena emergency pauser EOA');
 });
 
 test('current prepared configuration becomes open when status 1 is confirmed, then syncs settled/cancelled distinctly', async () => {
@@ -673,7 +654,7 @@ test('unscheduled current day returns a configured security-preview document ins
   assert.equal(config.status, 'unscheduled');
   assert.equal(config.enabled, false);
   assert.equal(config.previewAvailable, true);
-  assert.equal(config.liveBlocker, 'input_replay_not_ready');
+  assert.equal(config.liveBlocker, 'arena_live_not_requested');
   assert.equal(config.feeRaw, '0');
 });
 
@@ -705,6 +686,64 @@ test('stale active run from a prior UTC day expires before a new attempt consume
   assert.match(started.run.runId, /^arena_run_/);
   assert.equal((await store.getRun('arena_run_previous')).status, 'expired');
   assert.equal((await store.activeRun(PLAYER)).runId, started.run.runId);
+});
+
+test('paid entry, one-time run token, raw controls, server replay, and leaderboard finish end to end', async () => {
+  const store = await new MemoryArenaStore().init();
+  await store.ensureDay(dayRecord({ chainStatus: 1, configurationState: 'confirmed' }));
+  await store.confirmEntry(entryRecord(1, HASH_A));
+  let timestamp = Date.parse(`${DAY}T12:00:00Z`);
+  const arena = await new DailyArenaService({
+    store,
+    chain: fakeArenaAdapter(() => scheduledChainDay()),
+    receiptSecret: 'r'.repeat(64),
+    seedSecret: 's'.repeat(64),
+    safeAddress: SAFE,
+    liveEnabled: true,
+    now: () => timestamp
+  }).init();
+
+  const started = await arena.startRun(PLAYER);
+  await assert.rejects(
+    () => arena.appendEvents(PLAYER, {
+      runId: started.run.runId,
+      runToken: started.run.runToken,
+      previousCheckpoint: started.run.checkpoint,
+      events: [{ seq: 1, tick: 0, type: 'ore_broken', targetId: 999 }]
+    }),
+    (error) => error.code === 'arena_event_type_invalid'
+  );
+
+  timestamp += 7_360;
+  const appended = await arena.appendEvents(PLAYER, {
+    runId: started.run.runId,
+    runToken: started.run.runToken,
+    previousCheckpoint: started.run.checkpoint,
+    events: [
+      inputEvent(1, 0),
+      { seq: 2, tick: 7_360, type: 'finish' }
+    ]
+  });
+  assert.equal(appended.acceptedEvents, 2);
+
+  const finished = await arena.finishRun(PLAYER, {
+    runId: started.run.runId,
+    runToken: started.run.runToken,
+    checkpoint: appended.checkpoint
+  });
+  assert.equal(finished.accepted, true);
+  assert.equal(finished.result.terminal, true);
+  assert.equal(finished.result.extracted, false);
+  assert.equal(finished.result.elapsedMs, 7_360);
+  assert.equal(finished.result.replayVersion, ARENA_TRANSCRIPT_VERSION);
+  assert.equal((await store.getRun(started.run.runId)).status, 'finished');
+
+  const retry = await arena.finishRun(PLAYER, {
+    runId: started.run.runId,
+    runToken: started.run.runToken,
+    checkpoint: appended.checkpoint
+  });
+  assert.equal(retry.alreadyFinished, true);
 });
 
 test('entry cutoff reserves run TTL plus confirmation buffer and confirmation stays bound to its event day across midnight', async () => {
@@ -1020,11 +1059,22 @@ function arenaService(store, chain, timestamp) {
 }
 
 assert.deepEqual(ARENA_EVENT_TYPES, [
-  'ore_broken',
-  'enemy_killed',
-  'damage_taken',
-  'guardian_defeated',
-  'descend',
-  'extract',
-  'knockout'
+  'input',
+  'command',
+  'finish'
 ]);
+
+function inputEvent(seq, tick, overrides = {}) {
+  return {
+    seq,
+    tick,
+    type: 'input',
+    moveX: 0,
+    moveY: 0,
+    aim: null,
+    attack: false,
+    dash: false,
+    weapon: '',
+    ...overrides
+  };
+}

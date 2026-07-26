@@ -96,7 +96,7 @@ const service = new MattMineService(database, {
 const server = createMattMineHttpServer({ root, service });
 
 server.listen(port, '0.0.0.0', () => {
-  console.log(`MATT Mine v1.9 running at http://localhost:${port}`);
+  console.log(`MATT Mine v2.0 running at http://localhost:${port}`);
   console.log(`Ranked wallet network: ${service.config().chainName} (${service.config().chainId})`);
   console.log(`Mainnet transaction mode: ${mainnetTransactionsEnabled ? 'ENABLED (real RON)' : 'disabled'}`);
   console.log(`Reward publication: ${rewardManager.publicationEnabled ? 'PILOT ENABLED' : 'DRY RUN'}`);

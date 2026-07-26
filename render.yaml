@@ -51,7 +51,7 @@ services:
       - key: MATT_MINE_ARENA_SEED_SECRET
         generateValue: true
       - key: MATT_MINE_ARENA_LIVE
-        value: "false"
+        value: "true"
       - key: MATT_MINE_DATABASE_POOL_SIZE
         value: "10"
 

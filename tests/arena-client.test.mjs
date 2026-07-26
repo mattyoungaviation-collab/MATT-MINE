@@ -102,26 +102,27 @@ test('Arena player and leaderboard normalization keep one row per wallet shape',
   assert.equal(board.rows[0].projectedRaw, 1_800n * MATT_SCALE);
 });
 
-test('Arena security preview remains configured but cannot be mistaken for live paid entry', () => {
+test('Arena client recognizes deterministic input replay readiness', () => {
   const config = normalizeArenaConfig({
     configured: true,
     previewAvailable: true,
-    enabled: false,
+    enabled: true,
+    replayReady: true,
     status: 'open',
-    verificationMode: 'preview-milestone-transcript',
-    liveBlocker: 'input_replay_not_ready',
-    transcriptVersion: 'matt-arena-transcript-v1'
+    verificationMode: 'deterministic-input-replay',
+    liveBlocker: '',
+    transcriptVersion: 'matt-arena-input-v2'
   });
 
   assert.equal(config.configured, true);
   assert.equal(config.previewAvailable, true);
-  assert.equal(config.enabled, false);
-  assert.equal(config.replayReady, false);
-  assert.equal(config.liveBlocker, 'input_replay_not_ready');
-  assert.equal(config.transcriptVersion, 'matt-arena-transcript-v1');
+  assert.equal(config.enabled, true);
+  assert.equal(config.replayReady, true);
+  assert.equal(config.verificationMode, 'deterministic-input-replay');
+  assert.equal(config.transcriptVersion, 'matt-arena-input-v2');
 });
 
-test('Render pins the exact verified Arena deployment while paid entry remains disabled', () => {
+test('Render pins the exact verified Arena deployment and requests live replay mode', () => {
   const blueprint = fs.readFileSync(new URL('../render.yaml', import.meta.url), 'utf8');
   assert.match(blueprint, /MATT_MINE_ARENA_CONTRACT_ADDRESS[\s\S]*0x506f969279F8264fd629BBB0Df861Ab91343b12C/);
   assert.match(blueprint, /MATT_MINE_ARENA_RUNTIME_CODE_HASH[\s\S]*0xbe675f45747d267318291cad7295374ad5c65fa06063fe3b8cc111b8fa27453a/);
@@ -130,7 +131,7 @@ test('Render pins the exact verified Arena deployment while paid entry remains d
   assert.match(blueprint, /MATT_MINE_ARENA_DEPLOYER_ADDRESS[\s\S]*0xeED0491B506C78EA7fD10988B1E98A3C88e1C630/);
   assert.match(blueprint, /MATT_MINE_ARENA_RECEIPT_SECRET\s*\n\s*generateValue: true/);
   assert.match(blueprint, /MATT_MINE_ARENA_SEED_SECRET\s*\n\s*generateValue: true/);
-  assert.match(blueprint, /MATT_MINE_ARENA_LIVE\s*\n\s*value: "false"/);
+  assert.match(blueprint, /MATT_MINE_ARENA_LIVE\s*\n\s*value: "true"/);
 });
 
 test('Arena leaderboard derives an exact projected full-pool split when the server returns scores only', () => {
@@ -160,7 +161,7 @@ test('Arena countdown is UTC snapshot based and never negative', () => {
   );
 });
 
-test('Arena transcript sends ordered signed checkpoint batches and never client totals', async () => {
+test('Arena transcript sends only changed raw controls and commands with ordered checkpoints', async () => {
   const calls = [];
   const api = {
     async appendArenaEvents(runId, runToken, checkpoint, events) {
@@ -178,19 +179,29 @@ test('Arena transcript sends ordered signed checkpoint batches and never client 
     checkpoint: { throughSeq: 0, transcriptHash: 'genesis', signature: 'start' }
   }, { flushSize: 2 });
 
-  transcript.record({ type: 'ore_broken', tick: 120, targetId: 8 });
-  transcript.record({ type: 'enemy_killed', tick: 320, targetId: 12 });
-  transcript.record({ type: 'extract', tick: 950 });
+  transcript.record({
+    type: 'input', tick: 0, moveX: 0, moveY: -1_000,
+    aim: null, attack: true, dash: false, weapon: ''
+  });
+  transcript.record({
+    type: 'input', tick: 20, moveX: 0, moveY: -1_000,
+    aim: null, attack: true, dash: false, weapon: ''
+  });
+  transcript.record({
+    type: 'command', tick: 200, command: 'upgrade', value: 'power'
+  });
+  transcript.record({ type: 'finish', tick: 7_240 });
   transcript.record({ type: 'fake_score_total', tick: 951, amount: 99_999_999 });
   const checkpoint = await transcript.close();
 
   assert.equal(checkpoint.throughSeq, 3);
   assert.deepEqual(calls.flatMap((call) => call.events).map((event) => event.type), [
-    'ore_broken',
-    'enemy_killed',
-    'extract'
+    'input',
+    'command',
+    'finish'
   ]);
   assert.deepEqual(calls.flatMap((call) => call.events).map((event) => event.seq), [1, 2, 3]);
+  assert.equal(Object.hasOwn(calls[0].events[0], 'score'), false);
 });
 
 test('Arena screen promises the locked economic rules without test-token copy', () => {

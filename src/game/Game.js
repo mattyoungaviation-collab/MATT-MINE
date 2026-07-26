@@ -7,6 +7,7 @@ import {
   distance,
   formatNumber,
   pickUnique,
+  random,
   randomInt,
   randomRange,
   weightedChoice
@@ -17,11 +18,12 @@ const TAU = Math.PI * 2;
 export class MattMineGame {
   constructor(canvas, profile, hooks = {}) {
     this.canvas = canvas;
-    this.ctx = canvas.getContext('2d');
+    this.headless = hooks.headless === true;
+    this.ctx = this.headless ? null : canvas.getContext('2d');
     this.profile = profile;
     this.cosmetics = {};
     this.hooks = hooks;
-    this.input = new InputController(canvas);
+    this.input = hooks.input || (this.headless ? null : new InputController(canvas));
     this.state = 'menu';
     this.lastTime = performance.now();
     this.camera = { x: 0, y: 0, shake: 0 };
@@ -31,9 +33,14 @@ export class MattMineGame {
     this.lastRoomId = null;
     this.runtimeError = null;
     this.frameHandle = null;
-    this.resize();
-    window.addEventListener('resize', () => this.resize());
-    this.frameHandle = requestAnimationFrame((time) => this.loop(time));
+    if (this.headless) {
+      this.viewportWidth = CONFIG.width;
+      this.viewportHeight = CONFIG.height;
+    } else {
+      this.resize();
+      window.addEventListener('resize', () => this.resize());
+      this.frameHandle = requestAnimationFrame((time) => this.loop(time));
+    }
   }
 
   resize() {
@@ -209,7 +216,7 @@ export class MattMineGame {
     const position = randomPointInRoom(room, 52);
     const scale = type.id === 'cache' ? 1.25 : randomRange(0.86, 1.2);
     const richChance = 0.07 + luck * 0.01;
-    const rich = forceRich || type.id === 'cache' || (type.id !== 'stone' && Math.random() < richChance);
+    const rich = forceRich || type.id === 'cache' || (type.id !== 'stone' && random() < richChance);
     const depthHealth = 1 + (this.run.depth - 1) * 0.11;
     const hp = type.hp * depthHealth * (rich ? 1.22 : 1);
     this.ores.push({
@@ -248,7 +255,7 @@ export class MattMineGame {
     }
 
     const depthScale = 1 + (this.run.depth - 1) * 0.28;
-    const roll = Math.random();
+    const roll = random();
     let type = roll < 0.2 ? 'bat' : roll < 0.42 ? 'crawler' : 'slime';
     if (isBoss) type = 'guardian';
     const stats = {
@@ -483,7 +490,7 @@ export class MattMineGame {
     if (!candidates.length) return;
 
     const { target } = candidates[0];
-    const critical = Math.random() < this.player.critChance;
+    const critical = random() < this.player.critChance;
     const damage = this.player.damage * (critical ? 2 : 1);
     this.damageTarget(target, damage, critical, angleTo(this.player, target));
     this.run.attackCounter += 1;
@@ -592,13 +599,20 @@ export class MattMineGame {
       this.player.nextXp = Math.round(this.player.nextXp * 1.28 + 12);
       this.run.runLevelUps += 1;
       this.state = 'levelup';
-      this.hooks.onLevelUp?.(pickUnique(RUN_UPGRADES, 3));
+      const offered = pickUnique(RUN_UPGRADES, 3);
+      this.pendingUpgradeIds = offered.map((upgrade) => upgrade.id);
+      this.hooks.onLevelUp?.(offered);
     }
   }
 
   chooseRunUpgrade(id) {
     const upgrade = RUN_UPGRADES.find((entry) => entry.id === id);
-    if (!upgrade || this.state !== 'levelup') return;
+    if (
+      !upgrade ||
+      this.state !== 'levelup' ||
+      !Array.isArray(this.pendingUpgradeIds) ||
+      !this.pendingUpgradeIds.includes(id)
+    ) return;
     if (id === 'power') this.player.damage *= 1.25;
     if (id === 'speed') this.player.speed *= 1.12;
     if (id === 'health') {
@@ -614,6 +628,7 @@ export class MattMineGame {
     if (id === 'dynamite') this.player.dynamiteEvery = this.player.dynamiteEvery ? Math.max(3, this.player.dynamiteEvery - 1) : 5;
     if (id === 'drone') this.player.droneCount = Math.min(3, this.player.droneCount + 1);
     if (id === 'fortune') this.run.lootMultiplier *= 1.15;
+    this.pendingUpgradeIds = [];
     this.state = 'playing';
     this.hooks.onUpgradeChosen?.(upgrade);
   }

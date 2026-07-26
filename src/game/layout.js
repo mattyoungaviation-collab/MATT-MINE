@@ -1,5 +1,5 @@
 import { CONFIG } from './config.js';
-import { randomInt } from './utils.js';
+import { random, randomInt } from './utils.js';
 
 const GRID = Object.freeze({
   columns: [300, 900, 1500, 2100],
@@ -119,8 +119,8 @@ export function randomPointInRoom(room, margin = 45) {
   const halfWidth = room.width / 2 - margin;
   const halfHeight = room.height / 2 - margin;
   return {
-    x: room.x + (Math.random() * 2 - 1) * Math.max(10, halfWidth),
-    y: room.y + (Math.random() * 2 - 1) * Math.max(10, halfHeight)
+    x: room.x + (random() * 2 - 1) * Math.max(10, halfWidth),
+    y: room.y + (random() * 2 - 1) * Math.max(10, halfHeight)
   };
 }
 

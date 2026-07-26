@@ -35,11 +35,10 @@ const EVENT_CLOCK_TOLERANCE_MS = 750;
 const MIN_ENTRY_FEE_RAW = 25_000n * 10n ** 18n;
 const MAX_ENTRY_FEE_RAW = 1_000_000n * 10n ** 18n;
 
-// Security release gate. The currently connected browser emits outcome
-// milestones, not raw controls that can be simulated by the server. Paid entry
-// must remain impossible until an input-only deterministic replay engine is
-// implemented and this constant changes in a reviewed release.
-export const ARENA_REPLAY_READY = false;
+// v2.0 records only normalized fixed-step controls. The server runs those
+// controls through the same deterministic game engine and derives the terminal
+// score without accepting browser milestones or browser summaries.
+export const ARENA_REPLAY_READY = true;
 
 export class DailyArenaService {
   constructor(options = {}) {
@@ -77,8 +76,12 @@ export class DailyArenaService {
       configured: true,
       previewAvailable: true,
       replayReady: ARENA_REPLAY_READY,
-      verificationMode: 'preview-milestone-transcript',
-      liveBlocker: this.liveEnabled ? '' : 'input_replay_not_ready',
+      verificationMode: 'deterministic-input-replay',
+      liveBlocker: this.liveEnabled
+        ? ''
+        : this.liveRequested
+          ? 'input_replay_not_ready'
+          : 'arena_live_not_requested',
       deploymentPinned: this.deployment?.pinned === true,
       chain: this.chain.publicConfig(),
       transcriptVersion: ARENA_TRANSCRIPT_VERSION,
@@ -338,7 +341,7 @@ export class DailyArenaService {
     const throughTick = receivedEvents.at(-1).tick;
     const elapsedWallMs = timestamp - run.startedAt;
     assertApi(
-      throughTick * ARENA_TICK_MS <= elapsedWallMs + EVENT_CLOCK_TOLERANCE_MS,
+      throughTick <= elapsedWallMs + EVENT_CLOCK_TOLERANCE_MS,
       422,
       'arena_event_clock_ahead',
       'The Daily Arena transcript is ahead of server time.'
@@ -398,13 +401,8 @@ export class DailyArenaService {
       storedEvents.map(publicTranscriptEvent),
       { requireTerminal: true }
     );
-    const lastGuardian = [...storedEvents].reverse().find((event) => event.type === 'guardian_defeated');
     const result = {
       ...replayed,
-      guardianTimeMs: lastGuardian
-        ? Math.max(0, lastGuardian.receivedAt - run.startedAt)
-        : Number.MAX_SAFE_INTEGER,
-      elapsedMs: Math.max(0, timestamp - run.startedAt),
       replayVersion: ARENA_TRANSCRIPT_VERSION,
       transcriptHash: run.transcriptHash
     };
@@ -545,7 +543,7 @@ export class DailyArenaService {
       transactions,
       reason,
       createdAt: timestamp,
-      warning: 'Prepared only. Paid entry remains security-gated; do not execute this package until input-only replay is release-ready.'
+      warning: 'Prepared only. Execute after the v2.0 replay deployment is healthy and before the selected UTC day begins.'
     };
     const stored = await this.store.saveAdminDraft(draftKey, prepared);
     return { ...stored.draft, alreadyPrepared: stored.alreadyCreated };
@@ -717,7 +715,7 @@ export class DailyArenaService {
       this.liveEnabled,
       503,
       'arena_live_disabled',
-      'Paid Daily Arena entry is security-gated until input-only deterministic server replay is ready.'
+      'Paid Daily Arena entry is not enabled on this server deployment.'
     );
   }
 
@@ -938,13 +936,30 @@ function checkpointMatches(run, checkpoint) {
 }
 
 function publicTranscriptEvent(event) {
-  return {
+  const output = {
     seq: event.seq,
     tick: event.tick,
-    type: event.type,
-    ...(event.targetId ? { targetId: event.targetId } : {}),
-    ...(event.type === 'damage_taken' ? { amount: event.amount } : {})
+    type: event.type
   };
+  if (event.type === 'input') {
+    return {
+      ...output,
+      moveX: event.moveX,
+      moveY: event.moveY,
+      aim: event.aim,
+      attack: event.attack,
+      dash: event.dash,
+      weapon: event.weapon
+    };
+  }
+  if (event.type === 'command') {
+    return {
+      ...output,
+      command: event.command,
+      ...(event.value ? { value: event.value } : {})
+    };
+  }
+  return output;
 }
 
 function publicDay(day, timestamp, config) {

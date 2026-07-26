@@ -1,12 +1,4 @@
-const ALLOWED_EVENT_TYPES = new Set([
-  'ore_broken',
-  'enemy_killed',
-  'damage_taken',
-  'guardian_defeated',
-  'descend',
-  'extract',
-  'knockout'
-]);
+const ALLOWED_EVENT_TYPES = new Set(['input', 'command', 'finish']);
 
 export class ArenaTranscript {
   constructor(api, run, options = {}) {
@@ -16,22 +8,28 @@ export class ArenaTranscript {
     this.checkpoint = run.checkpoint || null;
     this.nextSequence = Math.max(1, Number(this.checkpoint?.throughSeq || 0) + 1);
     this.pending = [];
-    this.flushSize = Math.max(1, Number(options.flushSize || 8));
+    this.flushSize = Math.max(1, Number(options.flushSize || 64));
     this.queue = Promise.resolve();
     this.closed = false;
+    this.lastInput = '';
   }
 
   record(event) {
     if (this.closed || !ALLOWED_EVENT_TYPES.has(event?.type)) return;
-    const targetId = Number(event.targetId);
-    const amount = Number(event.amount);
-    this.pending.push({
-      seq: this.nextSequence++,
-      tick: Math.max(0, Math.floor(Number(event.tick || 0))),
-      type: event.type,
-      ...(Number.isSafeInteger(targetId) && targetId > 0 ? { targetId } : {}),
-      ...(Number.isFinite(amount) && amount >= 0 ? { amount: Math.round(amount * 1_000) / 1_000 } : {})
-    });
+    const normalized = normalizeClientEvent(event);
+    if (normalized.type === 'input') {
+      const signature = JSON.stringify({
+        moveX: normalized.moveX,
+        moveY: normalized.moveY,
+        aim: normalized.aim,
+        attack: normalized.attack,
+        dash: normalized.dash,
+        weapon: normalized.weapon
+      });
+      if (signature === this.lastInput) return;
+      this.lastInput = signature;
+    }
+    this.pending.push({ seq: this.nextSequence++, ...normalized });
     if (this.pending.length >= this.flushSize) void this.flush();
   }
 
@@ -54,6 +52,34 @@ export class ArenaTranscript {
     this.closed = true;
     return this.flush();
   }
+}
+
+function normalizeClientEvent(event) {
+  const base = {
+    tick: Math.max(0, Math.floor(Number(event.tick || 0))),
+    type: event.type
+  };
+  if (event.type === 'input') {
+    return {
+      ...base,
+      moveX: Math.max(-1_000, Math.min(1_000, Math.round(Number(event.moveX || 0)))),
+      moveY: Math.max(-1_000, Math.min(1_000, Math.round(Number(event.moveY || 0)))),
+      aim: event.aim === null ? null : Math.max(-31_416, Math.min(31_416, Math.round(Number(event.aim || 0)))),
+      attack: event.attack === true,
+      dash: event.dash === true,
+      weapon: ['', 'pickaxe', 'dynamite', 'blaster'].includes(String(event.weapon || ''))
+        ? String(event.weapon || '')
+        : ''
+    };
+  }
+  if (event.type === 'command') {
+    return {
+      ...base,
+      command: String(event.command || ''),
+      ...(event.value ? { value: String(event.value) } : {})
+    };
+  }
+  return base;
 }
 
 export { ALLOWED_EVENT_TYPES };
