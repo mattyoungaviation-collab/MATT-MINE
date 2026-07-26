@@ -75,6 +75,7 @@ test('clearing a sealed combat room unlocks dynamite and reopens the room', asyn
   assert.equal(game.activeLockedRoomId, null);
   assert.equal(game.player.unlockedWeapons.dynamite, true);
   assert.ok(game.player.dynamiteAmmo >= 3);
+  assert.equal(game.player.weapon, 'pickaxe');
 });
 
 test('an already-cleared combat room stays open when the player enters it', async () => {
