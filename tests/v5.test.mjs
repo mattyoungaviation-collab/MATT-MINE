@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { prepareProfileImage } from '../src/game/profileImage.js';
 
 import {
   ADMIN_ROLES,
@@ -245,6 +246,50 @@ test('the Guardian appears only when an eligible miner enters the Guardian Vault
   assert.equal(game.run.bossSpawned, true);
   assert.equal(game.enemies.filter((enemy) => enemy.isBoss).length, 1);
   assert.equal(game.activeLockedRoomId, game.layout.guardianRoom.id);
+});
+
+test('profile pictures accept Windows PNG files, resize cleanly, and prefer a crisp PNG output', async () => {
+  const drawCalls = [];
+  let revokedUrl = '';
+  class FakeImage {
+    constructor() {
+      this.naturalWidth = 1_000;
+      this.naturalHeight = 1_000;
+    }
+
+    set src(value) {
+      this.source = value;
+      queueMicrotask(() => this.onload());
+    }
+  }
+  const runtime = {
+    Image: FakeImage,
+    URL: {
+      createObjectURL: () => 'blob:matt-profile',
+      revokeObjectURL: (value) => {
+        revokedUrl = value;
+      }
+    },
+    document: {
+      createElement: () => ({
+        getContext: () => ({
+          drawImage: (...args) => drawCalls.push(args)
+        }),
+        toDataURL: (type) => `data:${type};base64,${Buffer.from('matt-avatar').toString('base64')}`
+      })
+    }
+  };
+
+  const result = await prepareProfileImage({
+    name: 'MATT.PNG',
+    type: '',
+    size: 8_975
+  }, runtime);
+
+  assert.match(result, /^data:image\/png;base64,/);
+  assert.equal(drawCalls.length, 1);
+  assert.deepEqual(drawCalls[0].slice(1), [0, 0, 1_000, 1_000, 0, 0, 160, 160]);
+  assert.equal(revokedUrl, 'blob:matt-profile');
 });
 
 test('an active run can be abandoned without producing a result', async () => {

@@ -1,6 +1,7 @@
 import { MattMineGame } from './game/GameV4.js';
 import { apiClient } from './game/apiClient.js';
 import { META_UPGRADES, metaUpgradeCost } from './game/config.js';
+import { prepareProfileImage } from './game/profileImage.js';
 import {
   ADMIN_ROLES,
   LocalEconomyStore,
@@ -379,48 +380,6 @@ async function updateMinerAvatar() {
     walletBusy = false;
     button.disabled = false;
     button.textContent = 'UPDATE PROFILE PICTURE';
-  }
-}
-
-async function prepareProfileImage(file) {
-  if (!file || !['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
-    throw new Error('Choose a PNG, JPEG, or WebP image.');
-  }
-  if (file.size > 5 * 1024 * 1024) throw new Error('Choose an image smaller than 5 MB.');
-  const objectUrl = URL.createObjectURL(file);
-  try {
-    const image = await new Promise((resolve, reject) => {
-      const element = new Image();
-      element.onload = () => resolve(element);
-      element.onerror = () => reject(new Error('The selected image could not be opened.'));
-      element.src = objectUrl;
-    });
-    const sourceSize = Math.min(image.naturalWidth, image.naturalHeight);
-    const sourceX = (image.naturalWidth - sourceSize) / 2;
-    const sourceY = (image.naturalHeight - sourceSize) / 2;
-    for (const [size, quality] of [[160, 0.82], [144, 0.7], [128, 0.6]]) {
-      const output = document.createElement('canvas');
-      output.width = size;
-      output.height = size;
-      output.getContext('2d').drawImage(
-        image,
-        sourceX,
-        sourceY,
-        sourceSize,
-        sourceSize,
-        0,
-        0,
-        size,
-        size
-      );
-      const dataUrl = output.toDataURL('image/webp', quality);
-      const encoded = dataUrl.split(',')[1] || '';
-      const decodedBytes = Math.floor(encoded.length * 3 / 4);
-      if (decodedBytes <= 48 * 1024) return dataUrl;
-    }
-    throw new Error('That picture is too detailed. Try a simpler or smaller image.');
-  } finally {
-    URL.revokeObjectURL(objectUrl);
   }
 }
 
@@ -866,10 +825,15 @@ $('#profile-avatar-input').addEventListener('change', async (event) => {
   try {
     pendingAvatarDataUrl = await prepareProfileImage(file);
     renderProfileAvatar(pendingAvatarDataUrl);
-    $('#update-avatar-button').hidden = Boolean(serverPlayer?.identity?.requiresSetup);
-    $('#profile-status').textContent = serverPlayer?.identity?.requiresSetup
-      ? 'Picture ready. Lock in your name to save the complete profile.'
-      : 'Picture ready. Select Update Profile Picture to publish it.';
+    const requiresSetup = Boolean(serverPlayer?.identity?.requiresSetup);
+    $('#update-avatar-button').hidden = requiresSetup;
+    if (requiresSetup) {
+      $('#profile-status').textContent = 'Picture ready. Lock in your name to save the complete profile.';
+    } else {
+      $('#update-avatar-button').hidden = false;
+      $('#profile-status').textContent = 'Publishing your profile picture…';
+      await updateMinerAvatar();
+    }
   } catch (error) {
     pendingAvatarDataUrl = '';
     renderProfileAvatar(serverPlayer?.identity?.avatarUrl || '');
