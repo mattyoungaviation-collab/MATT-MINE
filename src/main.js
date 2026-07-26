@@ -42,6 +42,7 @@ import {
 } from './game/arena.js';
 import { ArenaTranscript } from './game/arenaTranscript.js';
 import { loadProfile, saveProfile } from './game/storage.js';
+import { loadGameplayPreferences, saveGameplayPreferences } from './game/preferences.js';
 import { RoninWalletAdapter } from './game/walletAdapter.js';
 
 const $ = (selector) => document.querySelector(selector);
@@ -52,6 +53,7 @@ const mobileControls = $('#mobile-controls');
 const isLocalPreview = ['localhost', '127.0.0.1', '[::1]'].includes(globalThis.location?.hostname);
 const economy = new LocalEconomyStore();
 let profile = loadProfile();
+let gameplayPreferences = loadGameplayPreferences();
 let toastTimer;
 let activeBoard = RUN_MODES.FREE;
 let serverConfig = null;
@@ -214,6 +216,7 @@ function updateMenu() {
   });
   renderArenaMenuStatus();
   renderPassProgress();
+  renderGameplayPreferences();
 }
 
 function updateLaunch({ connected, freeAccess, passPrice, paidRunPrice, livePayments, passActive }) {
@@ -745,6 +748,7 @@ const game = new MattMineGame(canvas, profile, {
   },
   onToast: toast
 });
+game.setScreenShakeEnabled(gameplayPreferences.screenShake);
 
 window.__MATT_MINE_GAME__ = game;
 window.__MATT_MINE_ECONOMY__ = economy;
@@ -821,6 +825,15 @@ $('#upgrades-button').addEventListener('click', () => {
 $('#sound-button').addEventListener('click', () => {
   renderAudioSettings();
   showScreen('sound-settings');
+});
+$('#shake-toggle-button').addEventListener('click', () => {
+  gameplayPreferences = saveGameplayPreferences({
+    ...gameplayPreferences,
+    screenShake: !gameplayPreferences.screenShake
+  });
+  game.setScreenShakeEnabled(gameplayPreferences.screenShake);
+  renderGameplayPreferences();
+  toast(gameplayPreferences.screenShake ? 'Screen shake on' : 'Screen shake off');
 });
 $('#profile-button').addEventListener('click', () => openMinerProfile(false));
 $('#save-profile-button').addEventListener('click', () => void saveMinerIdentity());
@@ -1838,6 +1851,16 @@ function renderAudioSettings() {
   $('#effects-volume').value = effectsPercent;
   $('#music-volume-value').textContent = `${musicPercent}%`;
   $('#effects-volume-value').textContent = `${effectsPercent}%`;
+}
+
+function renderGameplayPreferences() {
+  const button = $('#shake-toggle-button');
+  if (!button) return;
+  button.textContent = gameplayPreferences.screenShake ? 'SHAKE ON' : 'SHAKE OFF';
+  button.setAttribute('aria-pressed', String(gameplayPreferences.screenShake));
+  button.title = gameplayPreferences.screenShake
+    ? 'Turn off screen shake'
+    : 'Turn on screen shake';
 }
 
 function formatTime(seconds) {

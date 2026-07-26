@@ -9,7 +9,9 @@ export const renderFrameMethods = {
     ctx.restore();
 
     ctx.save();
-    const activeShake = this.state === 'playing' ? this.camera.shake : 0;
+    const activeShake = this.state === 'playing' && this.screenShakeEnabled
+      ? this.camera.shake
+      : 0;
     const shakeX = activeShake ? randomRange(-activeShake, activeShake) : 0;
     const shakeY = activeShake ? randomRange(-activeShake, activeShake) : 0;
     ctx.translate(-this.camera.x + shakeX, -this.camera.y + shakeY);
