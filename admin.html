@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>MATT Mine Command Center</title>
+  <link rel="stylesheet" href="/admin.css">
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div>
+        <p class="eyebrow">PRIVATE OPERATIONS</p>
+        <h1>MATT Mine Command Center</h1>
+        <p class="muted">Production controls, player moderation, rewards, contracts, and audit history.</p>
+      </div>
+      <div class="connection"><span id="status-dot"></span><span id="connection-label">Locked</span></div>
+    </header>
+
+    <section id="unlock-panel" class="panel unlock">
+      <div>
+        <h2>Unlock admin controls</h2>
+        <p>Your key stays in this browser tab and is never placed in the URL.</p>
+      </div>
+      <form id="unlock-form">
+        <label>Primary admin key<input id="admin-key" type="password" autocomplete="off" required></label>
+        <button type="submit">Unlock command center</button>
+      </form>
+    </section>
+
+    <main id="dashboard" hidden>
+      <nav id="tabs" aria-label="Admin sections">
+        <button class="active" data-tab="overview">Overview</button>
+        <button data-tab="operations">Operations</button>
+        <button data-tab="players">Players</button>
+        <button data-tab="rewards">Rewards</button>
+        <button data-tab="contracts">Contracts</button>
+        <button data-tab="audit">Audit</button>
+        <button id="lock-button" class="ghost">Lock</button>
+      </nav>
+
+      <section id="tab-overview" class="tab active">
+        <div id="alert" class="alert" hidden></div>
+        <div id="metrics" class="metrics"></div>
+        <div class="grid two">
+          <article class="panel"><h2>Live systems</h2><div id="systems"></div></article>
+          <article class="panel"><h2>Protected foundations</h2><div id="immutable"></div></article>
+        </div>
+      </section>
+
+      <section id="tab-operations" class="tab">
+        <div class="section-heading">
+          <div><p class="eyebrow">SERVER LAYER</p><h2>Immediate controls</h2></div>
+          <p>These controls take effect immediately and create an audit entry.</p>
+        </div>
+        <form id="operations-form" class="panel">
+          <div id="operation-toggles" class="toggle-grid"></div>
+          <label>Player announcement<textarea id="announcement" maxlength="280" rows="3" placeholder="Optional status message shown during maintenance"></textarea></label>
+          <label>Required reason<input id="operations-reason" maxlength="240" placeholder="Why are these settings changing?" required></label>
+          <button type="submit">Apply server controls</button>
+        </form>
+      </section>
+
+      <section id="tab-players" class="tab">
+        <div class="section-heading">
+          <div><p class="eyebrow">MODERATION</p><h2>Players and wallets</h2></div>
+          <form id="wallet-search"><input id="wallet-query" placeholder="Search wallet address"><button>Search</button></form>
+        </div>
+        <div class="panel table-wrap"><table><thead><tr><th>Wallet</th><th>Status</th><th>Nuggets</th><th>Runs</th><th>Credits</th><th>Action</th></tr></thead><tbody id="wallet-rows"></tbody></table></div>
+        <div id="wallet-detail" class="panel" hidden></div>
+      </section>
+
+      <section id="tab-rewards" class="tab">
+        <div class="section-heading"><div><p class="eyebrow">MATT PAYOUTS</p><h2>Reward pipeline</h2></div><button id="refresh-rewards" class="ghost">Refresh</button></div>
+        <div class="notice">Reward drafts still require the independent approver. Published roots and player claims cannot be edited here.</div>
+        <form id="reward-create-form" class="panel">
+          <h2>Create reward draft</h2>
+          <div class="grid two">
+            <label>Leaderboard<select id="reward-mode"><option value="free">Free</option><option value="paid">Pass</option></select></label>
+            <label>Finalized week (Monday UTC)<input id="reward-week" type="date" required></label>
+            <label>Pool (MATT, maximum 5,000,000)<input id="reward-pool" type="number" min="1" max="5000000" step="1" required></label>
+            <label>Claim window (days)<input id="reward-claim-days" type="number" min="1" max="90" value="30" required></label>
+          </div>
+          <button type="submit">Create immutable draft</button>
+        </form>
+        <div id="reward-transaction-result" class="panel" hidden></div>
+        <div id="reward-drafts" class="cards"></div>
+      </section>
+
+      <section id="tab-contracts" class="tab">
+        <div class="section-heading"><div><p class="eyebrow">RONIN MAINNET</p><h2>Prepare contract transaction</h2></div></div>
+        <div class="notice warning">This page prepares calldata only. It never signs or broadcasts. Use the wallet shown as “Required signer.”</div>
+        <form id="contract-form" class="panel">
+          <label>Action<select id="contract-action"></select></label>
+          <div id="contract-arguments" class="grid two"></div>
+          <label>Required reason<input id="contract-reason" maxlength="240" placeholder="Why is this on-chain action needed?" required></label>
+          <button type="submit">Prepare transaction</button>
+        </form>
+        <div id="transaction-result" class="panel" hidden></div>
+      </section>
+
+      <section id="tab-audit" class="tab">
+        <div class="section-heading">
+          <div><p class="eyebrow">ACCOUNTABILITY</p><h2>Audit trail</h2></div>
+          <form id="audit-filter"><input id="audit-action" placeholder="Filter action"><button>Filter</button></form>
+        </div>
+        <div id="audit-list" class="timeline"></div>
+      </section>
+    </main>
+  </div>
+  <dialog id="confirm-dialog">
+    <form method="dialog">
+      <h2 id="confirm-title">Confirm action</h2>
+      <p id="confirm-copy"></p>
+      <div class="dialog-actions"><button value="cancel" class="ghost">Cancel</button><button value="confirm" class="danger">Confirm</button></div>
+    </form>
+  </dialog>
+  <script type="module" src="/src/admin.js"></script>
+</body>
+</html>

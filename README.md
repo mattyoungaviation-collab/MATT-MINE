@@ -176,3 +176,4 @@ Before real value is enabled, the production build still requires:
 8. Continued 2-of-3 multisig control for treasury and major contract administration, with no timelock.
 
 See [`docs/LEADERBOARD_STORAGE_V11.md`](docs/LEADERBOARD_STORAGE_V11.md), [`docs/STANDALONE_LAUNCH_V10.md`](docs/STANDALONE_LAUNCH_V10.md), [`docs/LIVE_PAYMENTS_V09.md`](docs/LIVE_PAYMENTS_V09.md), [`docs/CONTRACT_DEPLOYMENT_V08.md`](docs/CONTRACT_DEPLOYMENT_V08.md), [`docs/SECURITY_V07.md`](docs/SECURITY_V07.md), [`docs/ECONOMY_V1.md`](docs/ECONOMY_V1.md), and [`contracts/README.md`](contracts/README.md).
+Production operators use the separate, unlinked `/admin.html` command center. See [Admin Command Center](docs/ADMIN_COMMAND_CENTER.md) for permissions, protected fields, and emergency procedures.

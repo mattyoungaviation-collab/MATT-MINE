@@ -9,6 +9,7 @@ export function defaultServerState() {
     sessions: {},
     runs: {},
     paidEntitlements: {},
+    operations: defaultOperations(),
     audit: []
   };
 }
@@ -33,9 +34,39 @@ export function normalizeServerState(input = {}) {
     sessions: normalizeRecords(source.sessions, 10_000),
     runs: normalizeRecords(source.runs, 25_000),
     paidEntitlements: normalizePaidEntitlements(source.paidEntitlements),
+    operations: normalizeOperations(source.operations),
     audit: Array.isArray(source.audit)
       ? source.audit.filter(isRecord).slice(-2_000).map((entry) => ({ ...entry }))
       : []
+  };
+}
+
+export function defaultOperations() {
+  return {
+    maintenanceMode: false,
+    freeRankedPaused: false,
+    passRankedPaused: false,
+    purchasesPaused: false,
+    claimsPaused: false,
+    announcement: '',
+    updatedAt: 0,
+    updatedBy: ''
+  };
+}
+
+function normalizeOperations(input) {
+  const source = isRecord(input) ? input : {};
+  return {
+    maintenanceMode: source.maintenanceMode === true,
+    freeRankedPaused: source.freeRankedPaused === true,
+    passRankedPaused: source.passRankedPaused === true,
+    purchasesPaused: source.purchasesPaused === true,
+    claimsPaused: source.claimsPaused === true,
+    announcement: typeof source.announcement === 'string'
+      ? source.announcement.trim().slice(0, 280)
+      : '',
+    updatedAt: safeTimestamp(source.updatedAt),
+    updatedBy: typeof source.updatedBy === 'string' ? source.updatedBy.slice(0, 80) : ''
   };
 }
 

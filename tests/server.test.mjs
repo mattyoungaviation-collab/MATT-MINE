@@ -613,7 +613,7 @@ test('the HTTP server exposes same-origin APIs, security headers, and authentica
   const healthResponse = await fetch(`${baseUrl}/api/health`);
   assert.equal(healthResponse.status, 200);
   const healthPayload = await healthResponse.json();
-  assert.equal(healthPayload.version, 12);
+  assert.equal(healthPayload.version, 13);
   assert.equal(healthPayload.database.kind, 'memory');
 
   const launchResponse = await fetch(baseUrl);
