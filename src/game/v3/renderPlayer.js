@@ -33,24 +33,61 @@ export const renderPlayerMethods = {
     ctx.beginPath(); ctx.ellipse(3, 24, 27, 10, 0, 0, TAU); ctx.fill();
     ctx.filter = 'none';
 
-    const mattDyno = this.visualAssets?.mattDyno;
+    const sideAssets = {
+      pickaxe: this.visualAssets?.mattDyno,
+      blaster: this.visualAssets?.mattDynoBlaster,
+      dynamite: this.visualAssets?.mattDynoDynamite
+    };
+    const verticalAssets = {
+      pickaxe: this.visualAssets?.mattDynoPickaxeVertical,
+      blaster: this.visualAssets?.mattDynoBlasterVertical,
+      dynamite: this.visualAssets?.mattDynoDynamiteVertical
+    };
+    const moving = movement > 22;
+    const visualAngle = player.swingTimer > 0 || !moving
+      ? player.angle
+      : Math.atan2(player.vy, player.vx);
+    const verticalFacing = Math.abs(Math.sin(visualAngle)) > Math.abs(Math.cos(visualAngle));
+    const requestedAsset = verticalFacing
+      ? verticalAssets[player.weapon]
+      : sideAssets[player.weapon];
+    const mattDyno = imageIsReady(requestedAsset)
+      ? requestedAsset
+      : sideAssets.pickaxe;
     if (imageIsReady(mattDyno)) {
-      const moving = movement > 22;
-      const frame = player.swingTimer > 0
+      const attacking = player.swingTimer > 0;
+      const frame = attacking
         ? 5
         : moving
           ? 1 + Math.floor(this.run.elapsed * (player.dashTimer > 0 ? 14 : 8)) % MATT_DYNO_WALK_FRAMES
           : 0;
       const frameWidth = mattDyno.naturalWidth / MATT_DYNO_FRAME_COUNT;
+      const usesVerticalSheet = verticalFacing && mattDyno === verticalAssets[player.weapon];
+      const frameHeight = usesVerticalSheet
+        ? mattDyno.naturalHeight / 2
+        : mattDyno.naturalHeight;
+      const frameRow = usesVerticalSheet && Math.sin(visualAngle) < 0 ? 1 : 0;
       const breathing = moving ? 1 : 1 + Math.sin(this.run.elapsed * 3.4) * 0.018;
       const stepBob = moving
         ? Math.abs(Math.sin(this.run.elapsed * (player.dashTimer > 0 ? 14 : 8) * Math.PI)) * 2.2
         : Math.sin(this.run.elapsed * 3.4) * 1.1;
-      const facesRight = Math.cos(player.angle) >= 0;
+      const facesRight = Math.cos(visualAngle) >= 0;
+      const actionDuration = player.weapon === 'dynamite' ? 0.24 : player.weapon === 'blaster' ? 0.14 : 0.16;
+      const actionProgress = attacking
+        ? Math.max(0, Math.min(1, 1 - player.swingTimer / actionDuration))
+        : 0;
+      const actionLunge = attacking ? Math.sin(actionProgress * Math.PI) * 5 : 0;
+      const actionTilt = attacking && !usesVerticalSheet
+        ? Math.sin(actionProgress * Math.PI) * (facesRight ? -0.08 : 0.08)
+        : 0;
 
       ctx.save();
-      ctx.translate(0, -stepBob);
-      ctx.scale(facesRight ? -breathing : breathing, breathing);
+      ctx.translate(
+        Math.cos(visualAngle) * actionLunge,
+        -stepBob + Math.sin(visualAngle) * actionLunge
+      );
+      ctx.rotate(actionTilt);
+      ctx.scale(!usesVerticalSheet && facesRight ? -breathing : breathing, breathing);
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
       ctx.filter = player.hitFlash > 0
@@ -63,9 +100,9 @@ export const renderPlayerMethods = {
       ctx.drawImage(
         mattDyno,
         frame * frameWidth,
-        0,
+        frameRow * frameHeight,
         frameWidth,
-        mattDyno.naturalHeight,
+        frameHeight,
         -63,
         -148,
         126,

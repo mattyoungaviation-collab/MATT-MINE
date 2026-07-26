@@ -96,25 +96,25 @@ export const ORE_TYPES = Object.freeze({
 });
 
 export const BLASTER_RUN_UPGRADES = Object.freeze([
-  { id: 'blastercap', name: 'Crystal Battery', description: '+30 maximum Blaster energy and refill it', icon: '▰' },
-  { id: 'blasterregen', name: 'Flux Charger', description: '+35% Blaster recharge speed', icon: '↻' },
-  { id: 'blasterpower', name: 'Focused Core', description: '+25% Blaster damage', icon: '✦' },
-  { id: 'blastervolley', name: 'Split Prism', description: 'Fire one additional bolt per volley, up to three', icon: '⋔' }
+  { id: 'blastercap', name: 'Crystal Battery', description: '+30 maximum Blaster energy and refill it', icon: '▰', max: 4 },
+  { id: 'blasterregen', name: 'Flux Charger', description: '+35% Blaster recharge speed', icon: '↻', max: 4 },
+  { id: 'blasterpower', name: 'Focused Core', description: '+25% Blaster damage', icon: '✦', max: 4 },
+  { id: 'blastervolley', name: 'Split Prism', description: 'Split each shot into two crystal beams', icon: '⋔', max: 1 }
 ]);
 
 export const RUN_UPGRADES = Object.freeze([
-  { id: 'power', name: 'Heavy Pick', description: '+25% attack and mining damage', icon: '⛏' },
-  { id: 'speed', name: 'Fast Boots', description: '+12% movement speed', icon: '⚡' },
-  { id: 'health', name: 'Reinforced Vest', description: '+25 max health and heal 25', icon: '❤' },
-  { id: 'haste', name: 'Quick Hands', description: 'Attack 15% faster', icon: '✦' },
-  { id: 'range', name: 'Long Handle', description: '+20% attack range', icon: '↔' },
-  { id: 'crit', name: 'Lucky Strike', description: '+8% critical chance', icon: '★' },
-  { id: 'magnet', name: 'Ore Magnet', description: '+45 pickup range', icon: '◉' },
-  { id: 'armor', name: 'Rock Armor', description: 'Take 12% less damage', icon: '⬢' },
-  { id: 'dash', name: 'Blast Boots', description: 'Dash recharges 25% faster', icon: '➤' },
-  { id: 'dynamite', name: 'Pocket Dynamite', description: 'Every fifth hit explodes nearby targets', icon: '🧨' },
-  { id: 'drone', name: 'Mining Drone', description: 'A drone automatically attacks nearby threats', icon: '◆' },
-  { id: 'fortune', name: 'Prospector Luck', description: '+15% value from all collected loot', icon: '♛' }
+  { id: 'power', name: 'Heavy Pick', description: '+25% attack and mining damage', icon: '⛏', max: 6 },
+  { id: 'speed', name: 'Fast Boots', description: '+12% movement speed', icon: '⚡', max: 5 },
+  { id: 'health', name: 'Reinforced Vest', description: '+25 max health and heal 25', icon: '❤', max: 6 },
+  { id: 'haste', name: 'Quick Hands', description: 'Attack 15% faster', icon: '✦', max: 6 },
+  { id: 'range', name: 'Long Handle', description: '+20% attack range', icon: '↔', max: 4 },
+  { id: 'crit', name: 'Lucky Strike', description: '+8% critical chance', icon: '★', max: 5 },
+  { id: 'magnet', name: 'Ore Magnet', description: '+45 pickup range', icon: '◉', max: 5 },
+  { id: 'armor', name: 'Rock Armor', description: 'Take 12% less damage', icon: '⬢', max: 5 },
+  { id: 'dash', name: 'Blast Boots', description: 'Dash recharges 25% faster', icon: '➤', max: 5 },
+  { id: 'dynamite', name: 'Pocket Dynamite', description: 'Every fifth hit explodes nearby targets', icon: '🧨', max: 3 },
+  { id: 'drone', name: 'Mining Drone', description: 'A drone automatically attacks nearby threats', icon: '◆', max: 4 },
+  { id: 'fortune', name: 'Prospector Luck', description: '+15% value from all collected loot', icon: '♛', max: 6 }
 ]);
 
 export const META_UPGRADES = Object.freeze([

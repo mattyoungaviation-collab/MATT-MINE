@@ -75,6 +75,7 @@ export const weaponsMethods = {
       return;
     }
     this.player.attackTimer = 0.62;
+    this.player.swingTimer = 0.24;
     this.player.dynamiteAmmo -= 1;
     const speed = 430;
     this.projectiles.push({
@@ -104,9 +105,10 @@ export const weaponsMethods = {
       return;
     }
     this.player.attackTimer = Math.max(0.13, this.player.attackCooldown * 0.48);
+    this.player.swingTimer = Math.max(this.player.swingTimer, 0.14);
     this.player.blasterEnergy -= CONFIG.blasterEnergyCost;
     const speed = 760;
-    const count = clamp(this.player.blasterVolley || 1, 1, 3);
+    const count = clamp(this.player.blasterVolley || 1, 1, 2);
     for (let index = 0; index < count; index += 1) {
       const offset = count === 1
         ? 0

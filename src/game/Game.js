@@ -116,7 +116,8 @@ export class MattMineGame {
       dynamiteEvery: 0,
       droneCount: 0,
       droneTimer: 0,
-      trailTimer: 0
+      trailTimer: 0,
+      runUpgradeCounts: {}
     };
     this.enemies = [];
     this.ores = [];
@@ -599,7 +600,12 @@ export class MattMineGame {
       this.player.nextXp = Math.round(this.player.nextXp * 1.28 + 12);
       this.run.runLevelUps += 1;
       this.state = 'levelup';
-      const offered = pickUnique(RUN_UPGRADES, 3);
+      const available = this.availableRunUpgrades(RUN_UPGRADES);
+      if (!available.length) {
+        this.hooks.onToast?.('Run build fully upgraded');
+        return;
+      }
+      const offered = pickUnique(available, Math.min(3, available.length));
       this.pendingUpgradeIds = offered.map((upgrade) => upgrade.id);
       this.hooks.onLevelUp?.(offered);
     }
@@ -634,7 +640,8 @@ export class MattMineGame {
     }
     if (id === 'blasterregen') this.player.blasterEnergyRegen *= 1.35;
     if (id === 'blasterpower') this.player.blasterDamageScale *= 1.25;
-    if (id === 'blastervolley') this.player.blasterVolley = Math.min(3, this.player.blasterVolley + 1);
+    if (id === 'blastervolley') this.player.blasterVolley = Math.min(2, this.player.blasterVolley + 1);
+    this.player.runUpgradeCounts[id] = (this.player.runUpgradeCounts[id] || 0) + 1;
     this.pendingUpgradeIds = [];
     this.state = 'playing';
     this.hooks.onUpgradeChosen?.(upgrade);
@@ -649,14 +656,27 @@ export class MattMineGame {
       this.pendingBlasterUpgrade = true;
       return;
     }
-    const offered = pickUnique(BLASTER_RUN_UPGRADES, 3);
+    const available = this.availableRunUpgrades(BLASTER_RUN_UPGRADES);
+    if (!available.length) {
+      this.hooks.onToast?.('Crystal Blaster fully tuned');
+      return;
+    }
+    const offered = pickUnique(available, Math.min(3, available.length));
     this.pendingUpgradeIds = offered.map((upgrade) => upgrade.id);
     this.state = 'levelup';
     this.hooks.onLevelUp?.(offered);
     this.hooks.onToast?.('Treasure cache opened — tune your Crystal Blaster');
   }
 
+  availableRunUpgrades(pool) {
+    const counts = this.player?.runUpgradeCounts || {};
+    return pool.filter((upgrade) =>
+      (counts[upgrade.id] || 0) < (upgrade.max ?? Number.POSITIVE_INFINITY)
+    );
+  }
+
   updateDrone() {
+    this.player.droneCount = clamp(Math.floor(Number(this.player.droneCount) || 0), 0, 4);
     if (this.player.droneCount <= 0 || this.player.droneTimer > 0) return;
     const orbit = this.dronePosition(0);
     const target = this.enemies
@@ -683,8 +703,9 @@ export class MattMineGame {
   }
 
   dronePosition(index) {
-    const angle = this.run.elapsed * 2.4 + (index / Math.max(1, this.player.droneCount)) * TAU;
-    const orbitRadius = this.player.droneCount >= 4 ? 62 : 48;
+    const droneCount = clamp(Math.floor(Number(this.player.droneCount) || 0), 0, 4);
+    const angle = this.run.elapsed * 2.4 + (index / Math.max(1, droneCount)) * TAU;
+    const orbitRadius = droneCount >= 4 ? 62 : 48;
     return {
       x: this.player.x + Math.cos(angle) * orbitRadius,
       y: this.player.y + Math.sin(angle) * orbitRadius
@@ -1223,7 +1244,8 @@ export class MattMineGame {
   }
 
   drawDrones(ctx) {
-    for (let index = 0; index < this.player.droneCount; index += 1) {
+    const droneCount = clamp(Math.floor(Number(this.player.droneCount) || 0), 0, 4);
+    for (let index = 0; index < droneCount; index += 1) {
       const point = this.dronePosition(index);
       ctx.save();
       ctx.translate(point.x, point.y);
@@ -1311,10 +1333,16 @@ export class MattMineGame {
 
   drawFloaters(ctx) {
     ctx.textAlign = 'center';
-    ctx.font = '800 16px system-ui, sans-serif';
     for (const floater of this.floaters) {
       ctx.globalAlpha = clamp(floater.life / floater.maxLife, 0, 1);
+      const damageNumber = /^(?:-?\d+|(?:CRIT|BLOCK)\s+\d+)$/.test(floater.text);
+      ctx.font = damageNumber
+        ? '950 24px system-ui, sans-serif'
+        : '800 16px system-ui, sans-serif';
+      ctx.lineWidth = damageNumber ? 5 : 3;
+      ctx.strokeStyle = 'rgba(4, 6, 10, 0.88)';
       ctx.fillStyle = floater.color;
+      ctx.strokeText(floater.text, floater.x, floater.y);
       ctx.fillText(floater.text, floater.x, floater.y);
     }
     ctx.globalAlpha = 1;

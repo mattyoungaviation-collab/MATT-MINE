@@ -59,6 +59,7 @@ export const stateMethods = {
       droneCount: 0,
       droneTimer: 0,
       trailTimer: 0,
+      runUpgradeCounts: {},
       weapon: 'pickaxe',
       unlockedWeapons: { pickaxe: true, dynamite: false, blaster: !isArena },
       dynamiteAmmo: CONFIG.dynamiteStartAmmo,
@@ -170,6 +171,7 @@ export const stateMethods = {
   },
   update(dt) {
     this.run.elapsed += dt;
+    this.player.droneCount = clamp(Math.floor(Number(this.player.droneCount) || 0), 0, 4);
     this.player.attackTimer -= dt;
     this.player.invulnerable -= dt;
     this.player.hitFlash -= dt;

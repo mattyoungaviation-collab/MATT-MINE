@@ -1,7 +1,12 @@
 const VISUAL_ASSET_PATHS = Object.freeze({
   floor: '/assets/game/mine-floor-cinematic.webp',
   guardian: '/assets/game/guardian-cinematic.webp',
-  mattDyno: '/assets/game/matt-dyno-spritesheet.png'
+  mattDyno: '/assets/game/matt-dyno-spritesheet.png',
+  mattDynoBlaster: '/assets/game/matt-dyno-blaster-spritesheet.png',
+  mattDynoDynamite: '/assets/game/matt-dyno-dynamite-spritesheet.png',
+  mattDynoPickaxeVertical: '/assets/game/matt-dyno-pickaxe-vertical-spritesheet.png',
+  mattDynoBlasterVertical: '/assets/game/matt-dyno-blaster-vertical-spritesheet.png',
+  mattDynoDynamiteVertical: '/assets/game/matt-dyno-dynamite-vertical-spritesheet.png'
 });
 
 export function loadVisualAssets(ImageConstructor = globalThis.Image) {
