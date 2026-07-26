@@ -274,6 +274,8 @@ test('production lobby exposes wallet-saved custom gameplay controls', () => {
   assert.match(html, /id="keybind-editor"/);
   assert.match(html, /id="reset-keybinds-button"/);
   assert.match(html, /id="save-keybinds-button"/);
+  assert.match(html, /id="profile-close-button"[^>]*>&times;<\/button>/);
+  assert.doesNotMatch(html, /Ã—/);
 });
 
 test('unscheduled Arena days do not request unavailable leaderboard or player endpoints', () => {
