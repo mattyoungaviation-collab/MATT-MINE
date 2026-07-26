@@ -4,6 +4,12 @@
 
 MATT Mine is a standalone browser action roguelite and daily Web3 competition on Ronin. It has its own launch website, wallet identity, separate Free and Pass leaderboards, live Pass and paid-run payments, verified contracts, and a production persistence path independent from MATT Hub.
 
+## v1.4.2 gameplay soundtrack
+
+- Play `Ore Reactor` as looping background music during every Free, Pass, and Practice run.
+- Keep menu screens quiet and stop/reset the track on extraction, knockout, runtime failure, or return to menu.
+- Preserve generated combat effects and Guardian audio over the soundtrack.
+
 ## v1.4.1 combat and live-copy polish
 
 - Remove test-reward language from the production leaderboard and require a connected Ronin Wallet for live claims.
