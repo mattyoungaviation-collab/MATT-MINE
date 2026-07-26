@@ -25,11 +25,18 @@ export const enemySpawnMethods = {
     }
 
     const depthScale = 1 + (this.run.depth - 1) * 0.28;
-    const type = isBoss ? 'guardian' : forcedType || enemyArchetypeForRoll(random(), this.run.depth);
-    const stats = ENEMY_STATS[type];
+    const arenaMode = this.runContext?.mode === 'arena';
+    const roll = isBoss || forcedType ? 0 : random();
+    const type = isBoss
+      ? 'guardian'
+      : forcedType || (arenaMode ? legacyArenaArchetype(roll, this.run.depth) : enemyArchetypeForRoll(roll, this.run.depth));
+    const configuredStats = ENEMY_STATS[type];
+    const stats = arenaMode && isBoss
+      ? { ...configuredStats, health: 620, speed: 56, damage: 24, xp: 160 }
+      : configuredStats;
     const dormant = roomRequiresLock(room.type) && !isBoss;
 
-    this.enemies.push({
+    const enemy = {
       id: this.entityId++,
       type,
       isBoss,
@@ -57,8 +64,11 @@ export const enemySpawnMethods = {
       attackTimer: randomRange(0.6, 1.4),
       summonTimer: 4.5,
       fuseTimer: 0,
-      lastBossPhase: 1
-    });
+      lastBossPhase: 1,
+      guardianReinforcement: false
+    };
+    this.enemies.push(enemy);
+    return enemy;
   },
   killEnemy(enemy) {
     this.enemies = this.enemies.filter((entry) => entry.id !== enemy.id);
@@ -102,3 +112,11 @@ export const enemySpawnMethods = {
     this.checkRoomClear(enemy.roomId);
   },
 };
+
+function legacyArenaArchetype(roll, depth) {
+  if (depth >= 2 && roll >= 0.87) return 'exploder';
+  if (roll >= 0.7) return 'beetle';
+  if (roll >= 0.47) return 'crawler';
+  if (roll >= 0.24) return 'bat';
+  return 'slime';
+}

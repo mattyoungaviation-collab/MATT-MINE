@@ -10,7 +10,7 @@ export function defaultProfile() {
     bestDepth: 0,
     bestScore: 0,
     totalRuns: 0,
-    meta: { health: 0, damage: 0, speed: 0, luck: 0 }
+    meta: Object.fromEntries(META_UPGRADES.map((upgrade) => [upgrade.id, 0]))
   };
 }
 
@@ -23,9 +23,9 @@ export function normalizeProfile(input = {}) {
     bestDepth: safeInteger(source.bestDepth, base.bestDepth),
     bestScore: safeInteger(source.bestScore, base.bestScore),
     totalRuns: safeInteger(source.totalRuns, base.totalRuns),
-    meta: Object.fromEntries(Object.keys(base.meta).map((key) => [
-      key,
-      safeInteger(meta[key], base.meta[key], META_LIMITS[key] ?? 100)
+    meta: Object.fromEntries(META_UPGRADES.map(({ id }) => [
+      id,
+      safeInteger(meta[id], base.meta[id], META_LIMITS[id] ?? 100)
     ]))
   };
 }

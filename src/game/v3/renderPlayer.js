@@ -61,7 +61,7 @@ export const renderPlayerMethods = {
       coat.addColorStop(0.62, '#27303a');
       coat.addColorStop(1, '#11151c');
     }
-    ctx.fillStyle = player.hitFlash > 0 ? '#ffffff' : coat;
+    ctx.fillStyle = player.hitFlash > 0 ? '#ff304e' : coat;
     ctx.strokeStyle = player.dashTimer > 0 ? '#8be9ff' : crystalSkin ? '#d8fbff' : '#6d421e';
     ctx.lineWidth = player.dashTimer > 0 ? 7 : 3;
     ctx.shadowColor = player.dashTimer > 0 || crystalSkin ? '#70d9ff' : 'transparent';

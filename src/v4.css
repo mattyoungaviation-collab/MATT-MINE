@@ -213,7 +213,7 @@
 }
 
 .menu-nav-grid {
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
 }
 
 .menu-nav-grid .secondary-button {
@@ -224,6 +224,41 @@
 
 .admin-nav {
   border-color: rgba(240,90,107,0.35) !important;
+}
+
+.audio-settings-panel {
+  width: min(520px, calc(100vw - 32px));
+}
+
+.audio-mute-button {
+  width: 100%;
+  margin: 18px 0 12px;
+}
+
+.audio-mute-button.active {
+  border-color: rgba(240,90,107,0.65);
+  color: #ff8292;
+}
+
+.audio-control {
+  display: grid;
+  gap: 10px;
+  padding: 16px 0;
+}
+
+.audio-control span {
+  display: flex;
+  justify-content: space-between;
+  color: #dce5f2;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.audio-control input {
+  width: 100%;
+  accent-color: #f7d35c;
 }
 
 .test-mode-notice {

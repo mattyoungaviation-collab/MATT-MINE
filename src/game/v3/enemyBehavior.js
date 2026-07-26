@@ -1,6 +1,7 @@
 import { CONFIG } from '../config.js';
 import { roomAt } from '../layout.js';
 import { angleTo, distance, randomRange } from '../utils.js';
+import { normalizeAngle } from '../combat.js';
 
 export const enemyBehaviorMethods = {
   updateEnemies(dt) {
@@ -48,7 +49,11 @@ export const enemyBehaviorMethods = {
   updateEnemyBehavior(enemy, dt) {
     const dist = distance(enemy, this.player);
     const angle = angleTo(enemy, this.player);
-    enemy.facing = angle;
+    if (enemy.type === 'beetle' && this.runContext?.mode !== 'arena') {
+      const turn = normalizeAngle(angle - enemy.facing);
+      const maxTurn = dt * 1.25;
+      enemy.facing += Math.max(-maxTurn, Math.min(maxTurn, turn));
+    } else enemy.facing = angle;
 
     if (enemy.type === 'crawler' && enemy.hidden) {
       enemy.vx = 0;
@@ -75,6 +80,21 @@ export const enemyBehaviorMethods = {
         this.addFloater(enemy.x, enemy.y - 30, 'FUSE!', '#ffcf73');
         return;
       }
+    }
+
+    if (enemy.type === 'spitter') {
+      const preferredRange = 285;
+      const direction = dist < preferredRange - 35 ? -1 : dist > preferredRange + 45 ? 1 : 0;
+      const strafeAngle = angle + Math.PI / 2 * (Math.sin(enemy.phase * 0.72) >= 0 ? 1 : -1);
+      const targetVx = Math.cos(angle) * enemy.speed * direction + Math.cos(strafeAngle) * enemy.speed * 0.72;
+      const targetVy = Math.sin(angle) * enemy.speed * direction + Math.sin(strafeAngle) * enemy.speed * 0.72;
+      enemy.vx += (targetVx - enemy.vx) * Math.min(1, dt * 4);
+      enemy.vy += (targetVy - enemy.vy) * Math.min(1, dt * 4);
+      if (enemy.attackTimer <= 0 && dist < 440) {
+        enemy.attackTimer = randomRange(1.15, 1.35);
+        this.fireEnemyVolley(enemy, 3, 0.46, 300);
+      }
+      return;
     }
 
     let speedScale = 1;

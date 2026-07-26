@@ -1,6 +1,6 @@
 import { MattMineGame } from './game/GameV4.js';
 import { apiClient } from './game/apiClient.js';
-import { META_UPGRADES } from './game/config.js';
+import { META_UPGRADES, metaUpgradeCost } from './game/config.js';
 import {
   ADMIN_ROLES,
   LocalEconomyStore,
@@ -678,6 +678,23 @@ $('#descend-button').addEventListener('click', () => game.descend());
 $('#upgrades-button').addEventListener('click', () => {
   renderShop();
   showScreen('upgrade-shop');
+});
+$('#sound-button').addEventListener('click', () => {
+  renderAudioSettings();
+  showScreen('sound-settings');
+});
+$('#sound-mute-button').addEventListener('click', () => {
+  game.audio.setMuted(!game.audio.settings().muted);
+  renderAudioSettings();
+});
+$('#music-volume').addEventListener('input', (event) => {
+  game.audio.setMusicVolume(Number(event.target.value) / 100);
+  renderAudioSettings();
+});
+$('#effects-volume').addEventListener('input', (event) => {
+  game.audio.setEffectsVolume(Number(event.target.value) / 100);
+  game.audio.play('weapon');
+  renderAudioSettings();
 });
 $('#pass-button').addEventListener('click', openPass);
 $('#manage-cosmetics-button').addEventListener('click', () => void openCosmetics());
@@ -1589,7 +1606,7 @@ function renderShop() {
   grid.innerHTML = '';
   for (const upgrade of META_UPGRADES) {
     const rank = profile.meta[upgrade.id] || 0;
-    const cost = upgradeCost(upgrade, rank);
+    const cost = metaUpgradeCost(upgrade, rank);
     const maxed = rank >= upgrade.max;
     const card = document.createElement('article');
     card.className = 'shop-card';
@@ -1644,8 +1661,16 @@ function modeLabel(mode, rewardWeight = 0) {
   return 'PRACTICE · NO REWARD';
 }
 
-function upgradeCost(upgrade, rank) {
-  return Math.floor(upgrade.baseCost * Math.pow(1.55, rank));
+function renderAudioSettings() {
+  const settings = game.audio.settings();
+  const musicPercent = Math.round(settings.musicVolume * 100);
+  const effectsPercent = Math.round(settings.effectsVolume * 100);
+  $('#sound-mute-button').textContent = settings.muted ? 'UNMUTE ALL' : 'MUTE ALL';
+  $('#sound-mute-button').classList.toggle('active', settings.muted);
+  $('#music-volume').value = musicPercent;
+  $('#effects-volume').value = effectsPercent;
+  $('#music-volume-value').textContent = `${musicPercent}%`;
+  $('#effects-volume-value').textContent = `${effectsPercent}%`;
 }
 
 function formatTime(seconds) {

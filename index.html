@@ -367,6 +367,7 @@
             <button id="leaderboards-button" class="secondary-button">LEADERBOARDS</button>
             <button id="pass-button" class="secondary-button">MINE PASS</button>
             <button id="upgrades-button" class="secondary-button">UPGRADES</button>
+            <button id="sound-button" class="secondary-button">SOUND</button>
             <button id="admin-button" class="secondary-button admin-nav" hidden>ADMIN TEST</button>
           </div>
           <p class="controls-copy">Move: WASD / arrows · Dash: Shift · Weapons: 1 / 2 / 3 · Aim: mouse · Attack: hold click or Space</p>
@@ -598,6 +599,24 @@
           <h2 id="shop-title">Permanent Upgrades</h2>
           <p class="panel-copy">Signed-in upgrades are saved by the server. Offline Practice upgrades remain in this browser.</p>
           <div id="shop-grid" class="shop-grid"></div>
+        </div>
+      </section>
+
+      <section id="sound-settings" class="screen" aria-labelledby="sound-title">
+        <div class="panel audio-settings-panel">
+          <button class="close-button" data-close="sound-settings" aria-label="Close">×</button>
+          <p class="eyebrow">AUDIO CONTROL</p>
+          <h2 id="sound-title">Mine Sound</h2>
+          <p class="panel-copy">Tune the Ore Reactor music and combat effects independently. Your settings stay saved on this device.</p>
+          <button id="sound-mute-button" class="secondary-button audio-mute-button" type="button">MUTE ALL</button>
+          <label class="audio-control" for="music-volume">
+            <span>Music <strong id="music-volume-value">32%</strong></span>
+            <input id="music-volume" type="range" min="0" max="100" step="1" value="32">
+          </label>
+          <label class="audio-control" for="effects-volume">
+            <span>Combat effects <strong id="effects-volume-value">100%</strong></span>
+            <input id="effects-volume" type="range" min="0" max="100" step="1" value="100">
+          </label>
         </div>
       </section>
 
