@@ -59,7 +59,7 @@ async function handleApiRequest({
   const path = requestUrl.pathname;
   if (method === 'GET' && path === '/api/health') {
     const health = await service.health();
-    sendJson(response, 200, { ok: true, service: 'matt-mine', version: 12, ...health });
+    sendJson(response, 200, { ok: true, service: 'matt-mine', version: 13, ...health });
     return;
   }
   if (method === 'GET' && path === '/api/config') {
@@ -166,7 +166,69 @@ async function handleApiRequest({
     const result = await service.setWalletSuspension(
       request.headers['x-matt-admin-key'],
       suspensionMatch[1],
-      body.suspended
+      body.suspended,
+      body.reason
+    );
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
+
+  if (method === 'GET' && path === '/api/admin/overview') {
+    const result = await service.adminOverview(request.headers['x-matt-admin-key']);
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
+  if (method === 'GET' && path === '/api/admin/wallets') {
+    const result = await service.adminWallets(
+      request.headers['x-matt-admin-key'],
+      requestUrl.searchParams.get('query') || ''
+    );
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
+  const adminWalletMatch = path.match(/^\/api\/admin\/wallets\/(0x[a-fA-F0-9]{40})$/);
+  if (method === 'GET' && adminWalletMatch) {
+    const result = await service.adminWallet(request.headers['x-matt-admin-key'], adminWalletMatch[1]);
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
+  const walletActionMatch = path.match(/^\/api\/admin\/wallets\/(0x[a-fA-F0-9]{40})\/actions$/);
+  if (method === 'POST' && walletActionMatch) {
+    const body = await readJson(request, maxRequestBytes);
+    const result = await service.adminWalletAction(
+      request.headers['x-matt-admin-key'],
+      walletActionMatch[1],
+      body.action,
+      body.reason
+    );
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
+  if (method === 'PUT' && path === '/api/admin/operations') {
+    const body = await readJson(request, maxRequestBytes);
+    const result = await service.updateOperations(
+      request.headers['x-matt-admin-key'],
+      body.patch,
+      body.reason
+    );
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
+  if (method === 'GET' && path === '/api/admin/audit') {
+    const result = await service.adminAudit(request.headers['x-matt-admin-key'], {
+      action: requestUrl.searchParams.get('action'),
+      actor: requestUrl.searchParams.get('actor'),
+      limit: requestUrl.searchParams.get('limit')
+    });
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
+  if (method === 'POST' && path === '/api/admin/contracts/prepare') {
+    const body = await readJson(request, maxRequestBytes);
+    const result = await service.prepareAdminContractAction(
+      request.headers['x-matt-admin-key'],
+      body,
+      body.reason
     );
     sendJson(response, 200, { ok: true, ...result });
     return;

@@ -14,6 +14,11 @@ import { buildSignInMessage, normalizeOrigin } from './auth-message.js';
 import { ApiError, assertApi } from './errors.js';
 import { MATT_MINE_LAUNCH_PRICES } from './payment-verifier.js';
 import { defaultWalletState } from './state.js';
+import {
+  listAdminContractActions,
+  MATT_MINE_ADMIN_CONTRACTS,
+  prepareAdminContractTransaction
+} from './admin-controls.js';
 
 export class MattMineService {
   constructor(database, options = {}) {
@@ -47,6 +52,7 @@ export class MattMineService {
       realPaymentsEnabled: this.mainnetTransactionsEnabled,
       mattClaimsEnabled: Boolean(this.rewardManager),
       mainnetTransactionsEnabled: this.mainnetTransactionsEnabled,
+      operations: awaitlessPublicOperations(this.cachedOperations),
       ...(this.rewardManager
         ? { rewards: this.rewardManager.publicConfig() }
         : {}),
@@ -58,6 +64,8 @@ export class MattMineService {
 
   async health() {
     const database = await this.database.healthCheck();
+    const state = await this.database.read();
+    this.cachedOperations = state.operations;
     return {
       database,
       chainId: this.chainId,
@@ -201,6 +209,7 @@ export class MattMineService {
     const session = await this.authenticate(token);
     this.assertPaymentsEnabled();
     const state = await this.database.read();
+    assertApi(!state.operations.purchasesPaused, 503, 'server_purchases_paused', 'Paid-run purchases are temporarily paused by MATT Mine.');
     const wallet = requireWallet(state, session.address);
     assertApi(!wallet.suspended, 403, 'wallet_suspended', 'This wallet is suspended from paid-run purchases.');
     return this.paymentVerifier.quotePaidRun(session.address);
@@ -210,6 +219,7 @@ export class MattMineService {
     const session = await this.authenticate(token);
     this.assertPaymentsEnabled();
     const before = await this.database.read();
+    assertApi(!before.operations.purchasesPaused, 503, 'server_purchases_paused', 'Paid-run purchases are temporarily paused by MATT Mine.');
     const wallet = requireWallet(before, session.address);
     assertApi(!wallet.suspended, 403, 'wallet_suspended', 'This wallet is suspended from paid-run purchases.');
     const verified = await this.paymentVerifier.verifyPaidRunPurchase(transactionHash, session.address);
@@ -251,6 +261,14 @@ export class MattMineService {
     const session = await this.authenticate(token);
     const normalizedMode = String(mode || '');
     assertApi(Object.values(SERVER_RUN_MODES).includes(normalizedMode), 400, 'invalid_run_mode', 'Unknown run mode.');
+    const operationState = await this.database.read();
+    assertApi(!operationState.operations.maintenanceMode, 503, 'maintenance_mode', operationState.operations.announcement || 'MATT Mine is temporarily under maintenance.');
+    if (normalizedMode === SERVER_RUN_MODES.FREE) {
+      assertApi(!operationState.operations.freeRankedPaused, 503, 'free_ranked_paused', 'Free ranked runs are temporarily paused.');
+    }
+    if (normalizedMode === SERVER_RUN_MODES.PAID) {
+      assertApi(!operationState.operations.passRankedPaused, 503, 'pass_ranked_paused', 'Pass ranked runs are temporarily paused.');
+    }
     if (normalizedMode === SERVER_RUN_MODES.PAID) {
       assertApi(
         this.mainnetTransactionsEnabled,
@@ -446,6 +464,8 @@ export class MattMineService {
   async prepareRewardClaim(token, draftId) {
     const session = await this.authenticate(token);
     assertApi(this.rewardManager, 503, 'reward_pipeline_unavailable', 'MATT reward claims are not configured.');
+    const state = await this.database.read();
+    assertApi(!state.operations.claimsPaused, 503, 'server_claims_paused', 'MATT reward claims are temporarily paused.');
     return this.rewardManager.prepareClaim(session.address, draftId);
   }
 
@@ -500,18 +520,180 @@ export class MattMineService {
     });
   }
 
-  async setWalletSuspension(adminKey, address, suspended) {
+  async setWalletSuspension(adminKey, address, suspended, reason = 'Administrative review') {
     this.assertAdminKey(adminKey);
     const normalizedAddress = normalizeAddress(address);
     assertApi(typeof suspended === 'boolean', 400, 'invalid_suspension', 'Suspension must be true or false.');
+    const normalizedReason = normalizeAdminReason(reason);
     const timestamp = this.now();
     return this.database.transact((state) => {
       if (!state.wallets[normalizedAddress]) state.wallets[normalizedAddress] = defaultWalletState(normalizedAddress, timestamp);
       state.wallets[normalizedAddress].suspended = suspended;
       state.wallets[normalizedAddress].updatedAt = timestamp;
-      addAudit(state, 'SERVER_ADMIN', suspended ? 'WALLET_SUSPENDED' : 'WALLET_RESTORED', normalizedAddress, timestamp);
-      return { address: normalizedAddress, suspended };
+      addAudit(state, 'SERVER_ADMIN', suspended ? 'WALLET_SUSPENDED' : 'WALLET_RESTORED', `${normalizedAddress}: ${normalizedReason}`, timestamp);
+      return { address: normalizedAddress, suspended, reason: normalizedReason };
     });
+  }
+
+  async adminOverview(adminKey) {
+    this.assertAdminKey(adminKey);
+    const state = await this.database.read();
+    const timestamp = this.now();
+    const wallets = Object.values(state.wallets);
+    const runs = Object.values(state.runs);
+    const entitlements = Object.values(state.paidEntitlements);
+    const paymentStatus = await this.publicPaymentStatus().catch(() => ({ live: false, unavailable: true }));
+    return {
+      generatedAt: timestamp,
+      operations: structuredClone(state.operations),
+      immutable: {
+        chainId: this.chainId,
+        contracts: MATT_MINE_ADMIN_CONTRACTS,
+        hardMaxBoardMatt: 5_000_000,
+        publishedRewardsEditable: false,
+        confirmedPaymentsEditable: false,
+        finishedScoresEditable: false
+      },
+      counts: {
+        wallets: wallets.length,
+        suspendedWallets: wallets.filter((wallet) => wallet.suspended).length,
+        activeSessions: Object.values(state.sessions).filter((session) => session.expiresAt > timestamp).length,
+        activeRuns: runs.filter((run) => run.status === 'active' && run.expiresAt > timestamp).length,
+        finishedRuns: runs.filter((run) => run.status === 'finished').length,
+        expiredRuns: runs.filter((run) => run.status === 'expired' || (run.status === 'active' && run.expiresAt <= timestamp)).length,
+        paidEntitlements: entitlements.length,
+        unusedPaidCredits: entitlements.filter((entry) => !entry.consumedAt && !entry.usedRunId).length,
+        auditEntries: state.audit.length
+      },
+      payments: paymentStatus,
+      rewards: this.rewardManager?.publicConfig?.() || { available: false },
+      contractActions: listAdminContractActions()
+    };
+  }
+
+  async adminWallets(adminKey, query = '') {
+    this.assertAdminKey(adminKey);
+    const state = await this.database.read();
+    const needle = String(query || '').trim().toLowerCase().slice(0, 80);
+    const timestamp = this.now();
+    const wallets = Object.values(state.wallets)
+      .filter((wallet) => !needle || wallet.address.includes(needle))
+      .sort((left, right) => right.updatedAt - left.updatedAt)
+      .slice(0, 250)
+      .map((wallet) => adminWalletSnapshot(state, wallet, timestamp));
+    return { query: needle, wallets, total: wallets.length };
+  }
+
+  async adminWallet(adminKey, address) {
+    this.assertAdminKey(adminKey);
+    const normalizedAddress = normalizeAddress(address);
+    const state = await this.database.read();
+    const wallet = requireWallet(state, normalizedAddress);
+    return {
+      wallet: adminWalletSnapshot(state, wallet, this.now()),
+      runs: Object.values(state.runs)
+        .filter((run) => run.address === normalizedAddress)
+        .sort((left, right) => right.startedAt - left.startedAt)
+        .slice(0, 100)
+        .map(publicAdminRun),
+      entitlements: Object.values(state.paidEntitlements)
+        .filter((entry) => entry.address === normalizedAddress)
+        .sort((left, right) => right.confirmedAt - left.confirmedAt)
+        .slice(0, 100)
+        .map((entry) => structuredClone(entry))
+    };
+  }
+
+  async updateOperations(adminKey, patch, reason) {
+    this.assertAdminKey(adminKey);
+    assertApi(patch && typeof patch === 'object' && !Array.isArray(patch), 400, 'operations_patch_invalid', 'Operations changes must be an object.');
+    const allowed = new Set(['maintenanceMode', 'freeRankedPaused', 'passRankedPaused', 'purchasesPaused', 'claimsPaused', 'announcement']);
+    assertApi(Object.keys(patch).length > 0, 400, 'operations_patch_empty', 'Choose at least one operations setting.');
+    assertApi(Object.keys(patch).every((key) => allowed.has(key)), 400, 'operations_field_locked', 'One or more operations fields are unknown or protected.');
+    const normalizedReason = normalizeAdminReason(reason);
+    const timestamp = this.now();
+    return this.database.transact((state) => {
+      const next = { ...state.operations };
+      for (const [key, value] of Object.entries(patch)) {
+        if (key === 'announcement') {
+          assertApi(typeof value === 'string', 400, 'announcement_invalid', 'Announcement must be text.');
+          next.announcement = value.trim().slice(0, 280);
+        } else {
+          assertApi(typeof value === 'boolean', 400, 'operations_value_invalid', `${key} must be true or false.`);
+          next[key] = value;
+        }
+      }
+      next.updatedAt = timestamp;
+      next.updatedBy = 'SERVER_ADMIN';
+      state.operations = next;
+      this.cachedOperations = next;
+      addAudit(state, 'SERVER_ADMIN', 'OPERATIONS_UPDATED', `${normalizedReason}: ${JSON.stringify(patch)}`, timestamp);
+      return { operations: structuredClone(next), reason: normalizedReason };
+    });
+  }
+
+  async adminWalletAction(adminKey, address, action, reason) {
+    this.assertAdminKey(adminKey);
+    const normalizedAddress = normalizeAddress(address);
+    const normalizedAction = String(action || '');
+    assertApi(['revoke_sessions', 'expire_active_runs', 'restore_free_run'].includes(normalizedAction), 400, 'wallet_action_invalid', 'Unknown wallet administration action.');
+    const normalizedReason = normalizeAdminReason(reason);
+    const timestamp = this.now();
+    return this.database.transact(async (state, transaction) => {
+      requireWallet(state, normalizedAddress);
+      let affected = 0;
+      if (normalizedAction === 'revoke_sessions') {
+        for (const [key, session] of Object.entries(state.sessions)) {
+          if (session.address !== normalizedAddress) continue;
+          delete state.sessions[key];
+          affected += 1;
+        }
+      }
+      if (normalizedAction === 'expire_active_runs') {
+        for (const run of Object.values(state.runs)) {
+          if (run.address !== normalizedAddress || run.status !== 'active') continue;
+          run.status = 'expired';
+          run.expiresAt = Math.min(run.expiresAt, timestamp);
+          await transaction?.upsertRun(run);
+          affected += 1;
+        }
+      }
+      if (normalizedAction === 'restore_free_run') {
+        const daily = state.wallets[normalizedAddress].daily[utcDayKey(timestamp)];
+        if (daily?.freeRunUsed) {
+          delete state.wallets[normalizedAddress].daily[utcDayKey(timestamp)];
+          affected = 1;
+        }
+      }
+      addAudit(state, 'SERVER_ADMIN', `WALLET_${normalizedAction.toUpperCase()}`, `${normalizedAddress}: ${normalizedReason}; affected ${affected}`, timestamp);
+      return { address: normalizedAddress, action: normalizedAction, affected, reason: normalizedReason };
+    });
+  }
+
+  async adminAudit(adminKey, options = {}) {
+    this.assertAdminKey(adminKey);
+    const state = await this.database.read();
+    const action = String(options.action || '').trim().toUpperCase().slice(0, 80);
+    const actor = String(options.actor || '').trim().toLowerCase().slice(0, 80);
+    const limit = Math.min(500, Math.max(1, Number.parseInt(options.limit, 10) || 100));
+    const entries = state.audit
+      .filter((entry) => !action || String(entry.action).toUpperCase().includes(action))
+      .filter((entry) => !actor || String(entry.actor).toLowerCase().includes(actor))
+      .slice(-limit)
+      .reverse()
+      .map((entry) => structuredClone(entry));
+    return { entries, limit, total: entries.length };
+  }
+
+  async prepareAdminContractAction(adminKey, input, reason) {
+    this.assertAdminKey(adminKey);
+    const normalizedReason = normalizeAdminReason(reason);
+    const transaction = prepareAdminContractTransaction(input);
+    const timestamp = this.now();
+    await this.database.transact((state) => {
+      addAudit(state, 'SERVER_ADMIN', 'CONTRACT_TRANSACTION_PREPARED', `${transaction.action}: ${normalizedReason}`, timestamp);
+    });
+    return { transaction, reason: normalizedReason };
   }
 
   async authenticate(token) {
@@ -676,6 +858,47 @@ function publicRun(run) {
   };
 }
 
+function publicAdminRun(run) {
+  return {
+    ...publicRun(run),
+    expiresAt: run.expiresAt,
+    address: run.address
+  };
+}
+
+function adminWalletSnapshot(state, wallet, timestamp) {
+  const sessions = Object.values(state.sessions).filter((session) =>
+    session.address === wallet.address && session.expiresAt > timestamp
+  );
+  const runs = Object.values(state.runs).filter((run) => run.address === wallet.address);
+  const entitlements = Object.values(state.paidEntitlements).filter((entry) => entry.address === wallet.address);
+  const today = wallet.daily[utcDayKey(timestamp)] || { freeRunUsed: false };
+  return {
+    address: wallet.address,
+    suspended: wallet.suspended,
+    profile: structuredClone(wallet.profile),
+    freeRunUsedToday: today.freeRunUsed === true,
+    activeSessions: sessions.length,
+    activeRuns: runs.filter((run) => run.status === 'active' && run.expiresAt > timestamp).length,
+    finishedRuns: runs.filter((run) => run.status === 'finished').length,
+    unusedPaidCredits: entitlements.filter((entry) => !entry.consumedAt && !entry.usedRunId).length,
+    createdAt: wallet.createdAt,
+    updatedAt: wallet.updatedAt
+  };
+}
+
+function awaitlessPublicOperations(operations) {
+  const source = operations || {};
+  return {
+    maintenanceMode: source.maintenanceMode === true,
+    freeRankedPaused: source.freeRankedPaused === true,
+    passRankedPaused: source.passRankedPaused === true,
+    purchasesPaused: source.purchasesPaused === true,
+    claimsPaused: source.claimsPaused === true,
+    announcement: typeof source.announcement === 'string' ? source.announcement : ''
+  };
+}
+
 async function expireOldRuns(state, timestamp, transaction) {
   for (const [runId, run] of Object.entries(state.runs)) {
     if (run.status !== 'active' || run.expiresAt > timestamp) continue;
@@ -728,6 +951,13 @@ function normalizeAddress(value) {
   } catch {
     throw new ApiError(400, 'invalid_address', 'The Ronin wallet address is invalid.');
   }
+}
+
+function normalizeAdminReason(value) {
+  assertApi(typeof value === 'string', 400, 'admin_reason_required', 'A written reason is required for this admin action.');
+  const reason = value.trim();
+  assertApi(reason.length >= 5 && reason.length <= 240, 400, 'admin_reason_invalid', 'Admin reason must be 5 to 240 characters.');
+  return reason;
 }
 
 function strictInteger(value, name, min, max) {
