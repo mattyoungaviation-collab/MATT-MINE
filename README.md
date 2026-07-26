@@ -7,7 +7,7 @@ MATT Mine is a standalone browser action roguelite and daily Web3 competition on
 ## v1.2 dry-run reward settlement
 
 - Convert immutable weekly snapshots into deterministic OpenZeppelin Merkle reward proofs.
-- Preserve the approved 20% / 12% / 8% / 20%-combined leaderboard allocation while leaving the remaining 40% unfunded for later reward categories.
+- Allocate the complete approved board pool across eligible top-ten players using a 30% / 18% / 12% / 8% / 7% / 6% / 5.5% / 5% / 4.5% / 4% schedule, normalized when fewer than ten wallets qualify.
 - Require separate primary and independent approval secrets.
 - Prepare exact approve, fund, and publish transactions for the existing 2-of-3 Safe without storing a publisher key on the server.
 - Verify the exact root, allocation, and deadline on Ronin before exposing claims.

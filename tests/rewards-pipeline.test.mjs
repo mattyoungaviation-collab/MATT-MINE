@@ -88,7 +88,7 @@ function fakeChain(options = {}) {
   };
 }
 
-test('reward plans use the approved 20/12/8/20 top-ten split and contract-compatible proofs', () => {
+test('reward plans allocate the full pool across eligible top-ten players with contract-compatible proofs', () => {
   const plan = createRewardPlan({
     snapshot: finalizedSnapshot(),
     poolMatt: 100_000,
@@ -98,11 +98,13 @@ test('reward plans use the approved 20/12/8/20 top-ten split and contract-compat
 
   assert.equal(plan.epoch, String(rewardEpochForWeek(WEEK)));
   assert.equal(plan.entries.length, 10);
-  assert.equal(plan.entries[0].amountMatt, 20_000);
-  assert.equal(plan.entries[1].amountMatt, 12_000);
-  assert.equal(plan.entries[2].amountMatt, 8_000);
-  assert.equal(plan.allocatedMatt, 60_000);
-  assert.equal(plan.unallocatedMatt, 40_000);
+  assert.deepEqual(
+    plan.entries.map((entry) => entry.amountMatt),
+    [30_000, 18_000, 12_000, 8_000, 7_000, 6_000, 5_500, 5_000, 4_500, 4_000]
+  );
+  assert.equal(plan.allocatedMatt, 100_000);
+  assert.equal(plan.allocatedRaw, plan.requestedRaw);
+  assert.equal(plan.unallocatedMatt, 0);
   const first = plan.entries[0];
   const values = plan.entries.map((entry) => [
     String(REWARD_CHAIN_ID),
@@ -130,6 +132,26 @@ test('reward plans use the approved 20/12/8/20 top-ten split and contract-compat
     ],
     first.proof
   ), true);
+});
+
+test('reward plans normalize the full pool when fewer than ten players qualify', () => {
+  const snapshot = finalizedSnapshot();
+  snapshot.rows = snapshot.rows.slice(0, 3);
+  snapshot.participantCount = 3;
+  const plan = createRewardPlan({
+    snapshot,
+    poolMatt: 10_000,
+    claimDeadline: Math.floor(NOW / 1000) + 30 * 86_400,
+    maxBoardMatt: 100_000
+  });
+
+  assert.deepEqual(
+    plan.entries.map((entry) => entry.amountMatt),
+    [5_000, 3_000, 2_000]
+  );
+  assert.equal(plan.allocatedMatt, 10_000);
+  assert.equal(plan.allocatedRaw, plan.requestedRaw);
+  assert.equal(plan.unallocatedMatt, 0);
 });
 
 test('draft creation requires a finalized snapshot and enforces the pilot payout cap', async () => {
@@ -248,7 +270,7 @@ test('an exact on-chain epoch unlocks only the included wallet claim transaction
   assert.equal(synced.draft.status, 'published');
   rewards = await manager.playerRewards(accounts[0].address);
   assert.equal(rewards[0].chain.published, true);
-  assert.equal(rewards[0].amountMatt, 2_000);
+  assert.equal(rewards[0].amountMatt, 3_000);
   const prepared = await manager.prepareClaim(accounts[0].address, draft.id);
   assert.equal(prepared.transaction.to, REWARD_CONTRACT_ADDRESS);
   assert.equal(prepared.transaction.value, '0x0');
@@ -281,7 +303,7 @@ test('Safe publication funds only the vault shortfall and never double-funds ava
   const enoughFunding = new RoninRewardChain({
     client: {
       async readContract(request) {
-        if (request.functionName === 'balanceOf') return 10_000n * 10n ** 18n;
+        if (request.functionName === 'balanceOf') return 11_000n * 10n ** 18n;
         if (request.functionName === 'totalReservedMatt') return 1_000n * 10n ** 18n;
         throw new Error(`Unexpected ${request.functionName}`);
       }
@@ -302,7 +324,7 @@ test('Safe publication funds only the vault shortfall and never double-funds ava
     }
   });
   const shortPackage = await shortFunding.publicationTransactions(plan);
-  assert.equal(shortPackage.vault.fundingShortfallRaw, String(5_000n * 10n ** 18n));
+  assert.equal(shortPackage.vault.fundingShortfallRaw, String(9_000n * 10n ** 18n));
   assert.equal(shortPackage.transactions.length, 3);
   assert.match(shortPackage.transactions[0].purpose, /Approve/);
   assert.match(shortPackage.transactions[1].purpose, /Fund/);
