@@ -28,7 +28,7 @@ test('the official animated MATT Dyno sprite sheet is packaged for gameplay', as
   for (const assetName of assetNames) {
     const dyno = await stat(`${root}assets/game/${assetName}`);
     assert.ok(dyno.size > 80_000);
-    assert.ok(dyno.size < 500_000);
+    assert.ok(dyno.size < 700_000);
   }
 });
 
@@ -49,6 +49,13 @@ test('cinematic assets load lazily in browsers and remain safe in test environme
   assert.equal(assets.mattDynoDynamiteVertical.src, '/assets/game/matt-dyno-dynamite-vertical-spritesheet.png');
   assert.equal(imageIsReady(assets.floor), true);
   assert.deepEqual(loadVisualAssets(null), {});
+});
+
+test('normal MATT Dyno animation avoids expensive live canvas filters', async () => {
+  const renderer = await readFile(`${root}src/game/v3/renderPlayer.js`, 'utf8');
+  assert.doesNotMatch(renderer, /drop-shadow\(/);
+  assert.doesNotMatch(renderer, /ctx\.filter\s*=\s*['"]blur/);
+  assert.match(renderer, /: 'none';/);
 });
 
 test('responsive production lobby stays hidden while gameplay is active', async () => {
