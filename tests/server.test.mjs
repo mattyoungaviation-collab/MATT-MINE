@@ -249,6 +249,22 @@ test('the server owns the free entitlement, run token, replay protection, profil
   assert.equal(accepted.profile.totalRuns, 1);
   assert.equal(accepted.leaderboard.playerRank, 1);
   assert.equal(accepted.leaderboard.playerScore, 1_000);
+  const historical = await harness.service.leaderboard(
+    session.token,
+    SERVER_RUN_MODES.FREE,
+    harness.now(),
+    '2026-07-20'
+  );
+  assert.equal(historical.playerScore, 1_000);
+  await assert.rejects(
+    () => harness.service.leaderboard(
+      session.token,
+      SERVER_RUN_MODES.FREE,
+      harness.now(),
+      '2026-07-21'
+    ),
+    (error) => error.code === 'invalid_leaderboard_week'
+  );
 
   await assert.rejects(
     () => finish(harness.service, session, run, extractedResult()),
@@ -597,7 +613,7 @@ test('the HTTP server exposes same-origin APIs, security headers, and authentica
   const healthResponse = await fetch(`${baseUrl}/api/health`);
   assert.equal(healthResponse.status, 200);
   const healthPayload = await healthResponse.json();
-  assert.equal(healthPayload.version, 10);
+  assert.equal(healthPayload.version, 11);
   assert.equal(healthPayload.database.kind, 'memory');
 
   const launchResponse = await fetch(baseUrl);
@@ -650,7 +666,9 @@ function createFakePostgresPool() {
 
   async function query(sql, params = []) {
     const normalized = sql.replace(/\s+/g, ' ').trim().toUpperCase();
-    if (normalized.startsWith('CREATE TABLE')) return { rows: [] };
+    if (normalized.startsWith('CREATE TABLE') || normalized.startsWith('CREATE INDEX')) {
+      return { rows: [] };
+    }
     if (normalized.startsWith('INSERT INTO MATT_MINE_STATE')) {
       if (!data) data = JSON.parse(params[0]);
       return { rows: [] };
@@ -661,6 +679,10 @@ function createFakePostgresPool() {
     }
     if (normalized.startsWith('UPDATE MATT_MINE_STATE')) {
       data = JSON.parse(params[0]);
+      return { rows: [] };
+    }
+    if (normalized.startsWith('INSERT INTO MATT_MINE_WEEKLY_SCORES')) return { rows: [] };
+    if (normalized.startsWith('SELECT DISTINCT WEEK_KEY, MODE FROM MATT_MINE_WEEKLY_SCORES')) {
       return { rows: [] };
     }
     if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(normalized)) {

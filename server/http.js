@@ -59,7 +59,7 @@ async function handleApiRequest({
   const path = requestUrl.pathname;
   if (method === 'GET' && path === '/api/health') {
     const health = await service.health();
-    sendJson(response, 200, { ok: true, service: 'matt-mine', version: 10, ...health });
+    sendJson(response, 200, { ok: true, service: 'matt-mine', version: 11, ...health });
     return;
   }
   if (method === 'GET' && path === '/api/config') {
@@ -129,7 +129,12 @@ async function handleApiRequest({
     return;
   }
   if (method === 'GET' && path === '/api/leaderboards') {
-    const result = await service.leaderboard(bearerToken(request), requestUrl.searchParams.get('mode'));
+    const result = await service.leaderboard(
+      bearerToken(request),
+      requestUrl.searchParams.get('mode'),
+      service.now(),
+      requestUrl.searchParams.get('week')
+    );
     sendJson(response, 200, { ok: true, leaderboard: result });
     return;
   }

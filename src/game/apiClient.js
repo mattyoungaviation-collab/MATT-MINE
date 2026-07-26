@@ -88,8 +88,10 @@ export class MattMineApiClient {
     });
   }
 
-  async leaderboard(mode) {
-    const response = await this.request(`/api/leaderboards?mode=${encodeURIComponent(mode)}`, {
+  async leaderboard(mode, week = '') {
+    const query = new URLSearchParams({ mode });
+    if (week) query.set('week', week);
+    const response = await this.request(`/api/leaderboards?${query}`, {
       authenticated: true
     });
     return response.leaderboard;
