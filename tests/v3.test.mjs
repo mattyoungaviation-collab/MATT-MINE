@@ -77,6 +77,29 @@ test('clearing a sealed combat room unlocks dynamite and reopens the room', asyn
   assert.ok(game.player.dynamiteAmmo >= 3);
 });
 
+test('an already-cleared combat room stays open when the player enters it', async () => {
+  const { canvas, profile } = installBrowserStubs();
+  const { MattMineGame } = await import('../src/game/GameV3.js');
+  const game = new MattMineGame(canvas, profile);
+  game.startRun();
+  const combatRoom = game.layout.rooms.find((room) => room.type === 'combat');
+  const roomEnemies = game.enemies.filter((enemy) => enemy.roomId === combatRoom.id);
+  assert.ok(roomEnemies.length > 0);
+
+  for (const enemy of [...roomEnemies]) game.killEnemy(enemy);
+  assert.equal(game.roomStates[combatRoom.id].locked, false);
+  assert.equal(game.roomStates[combatRoom.id].cleared, false);
+
+  game.player.x = combatRoom.x;
+  game.player.y = combatRoom.y;
+  game.updateCurrentRoom();
+
+  assert.equal(game.roomStates[combatRoom.id].triggered, true);
+  assert.equal(game.roomStates[combatRoom.id].cleared, true);
+  assert.equal(game.roomStates[combatRoom.id].locked, false);
+  assert.equal(game.activeLockedRoomId, null);
+});
+
 test('v0.3 combat render and weapon loop run without throwing', async () => {
   const { canvas, profile } = installBrowserStubs(true);
   const { MattMineGame } = await import('../src/game/GameV3.js');
