@@ -208,6 +208,7 @@ test('v2.5 weapon tuning strengthens Pickaxe reach and damage, Dynamite, and Bla
   const game = new MattMineGame(stubs.canvas, stubs.profile);
   game.startRun({ mode: RUN_MODES.PRACTICE, seed: 'V25-WEAPON-TUNING' });
   game.player.angle = 0;
+  game.player.critChance = 0;
   assert.equal(game.player.attackRange, 120);
   assert.equal(game.player.blasterEnergyMax, 115);
 

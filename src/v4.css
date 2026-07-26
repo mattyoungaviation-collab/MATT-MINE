@@ -908,6 +908,9 @@
 
 .miner-profile-panel {
   width: min(650px, calc(100vw - 30px));
+  max-height: calc(100dvh - 30px);
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
 
 .miner-profile-panel > p {

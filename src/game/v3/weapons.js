@@ -23,7 +23,7 @@ export const weaponsMethods = {
     this.player.unlockedWeapons[id] = true;
     if (id === 'dynamite') this.player.dynamiteAmmo += ammo;
     if (firstUnlock) {
-      this.player.weapon = id;
+      if (id !== 'dynamite') this.player.weapon = id;
       this.audio.play('weapon');
       this.hooks.onToast?.(`${WEAPONS[id].name} found — press ${id === 'dynamite' ? '2' : '3'} to equip`);
     }

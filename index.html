@@ -425,6 +425,7 @@
             <button id="pass-button" class="secondary-button">MINE PASS</button>
             <button id="upgrades-button" class="secondary-button">UPGRADES</button>
             <button id="profile-button" class="secondary-button">PROFILE</button>
+            <button id="controls-button" class="secondary-button controls-nav-button">CONTROLS</button>
             <button id="sound-button" class="secondary-button">SOUND</button>
             <button id="shake-toggle-button" class="secondary-button preference-toggle" type="button" aria-pressed="true">SHAKE ON</button>
             <button id="admin-button" class="secondary-button admin-nav" hidden>ADMIN TEST</button>
@@ -465,11 +466,15 @@
             <button id="update-avatar-button" class="secondary-button" hidden>UPDATE PROFILE PICTURE</button>
           </div>
           <p id="profile-status" class="preview-note">Sign in with Ronin Wallet to manage your miner profile.</p>
-          <div class="keybind-editor">
-            <h3>Custom controls</h3>
-            <p class="preview-note">Click a control, then press the key you want. Controls save to this wallet.</p>
+          <div id="keybind-editor" class="keybind-editor">
+            <p class="eyebrow">GAMEPLAY CONTROLS</p>
+            <h3>Choose Your Keys</h3>
+            <p class="preview-note">Select an action, press its new key, then save. These controls follow your wallet.</p>
             <div id="keybind-grid" class="keybind-grid"></div>
-            <button id="save-keybinds-button" class="secondary-button">SAVE CONTROLS</button>
+            <div class="keybind-actions">
+              <button id="reset-keybinds-button" class="secondary-button" type="button">RESET DEFAULTS</button>
+              <button id="save-keybinds-button" class="primary-button" type="button">SAVE CONTROLS</button>
+            </div>
           </div>
         </div>
       </section>
