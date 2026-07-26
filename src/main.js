@@ -644,8 +644,12 @@ $('#claim-reward-button').addEventListener('click', async () => {
     }
     return;
   }
+  if (!isLocalPreview) {
+    toast('Connect Ronin Wallet to claim a published MATT reward.');
+    return;
+  }
   const result = economy.apply(claimLatestReward(economy.state));
-  toast(result.ok ? `Test claim recorded · ${formatNumber(result.epoch.totalRewardMatt)} MATT` : result.error);
+  toast(result.ok ? `Local claim preview recorded · ${formatNumber(result.epoch.totalRewardMatt)} MATT` : result.error);
   openLeaderboards(activeBoard);
 });
 
@@ -825,9 +829,18 @@ function openLeaderboards(mode) {
   $('#published-reward-text').textContent = published ? `${formatNumber(published.totalRewardMatt)} MATT` : 'No reward epoch published';
   $('#published-reward-status').textContent = published
     ? published.claimedAt ? `Claim recorded ${new Date(published.claimedAt).toLocaleString('en-US')}` : `Published for week ${published.week}`
-    : 'Admin test publisher has not finalized this week.';
-  $('#claim-reward-button').disabled = !published || Boolean(published.claimedAt) || economy.state.settings.claimsPaused;
-  $('#claim-reward-button').textContent = published?.claimedAt ? 'CLAIMED' : economy.state.settings.claimsPaused ? 'CLAIMS PAUSED' : 'CLAIM TEST MATT';
+    : isLocalPreview
+      ? 'Local reward preview has not been published.'
+      : 'Connect Ronin Wallet to check live MATT rewards.';
+  const localClaimAvailable = isLocalPreview && published && !published.claimedAt && !economy.state.settings.claimsPaused;
+  $('#claim-reward-button').disabled = !localClaimAvailable;
+  $('#claim-reward-button').textContent = published?.claimedAt
+    ? 'CLAIMED'
+    : economy.state.settings.claimsPaused
+      ? 'CLAIMS PAUSED'
+      : isLocalPreview
+        ? 'LOCAL CLAIM PREVIEW'
+        : 'CONNECT WALLET TO CLAIM';
   $('#leaderboard-body').innerHTML = rows.map((row) => `
     <tr class="${row.isPlayer ? 'player-row' : ''}">
       <td>#${row.rank}</td>
@@ -878,7 +891,7 @@ function renderServerClaim(claim) {
   const button = $('#claim-reward-button');
   if (!claim) {
     $('#published-reward-text').textContent = 'No reward ready';
-    $('#published-reward-status').textContent = 'Finalized pilot rewards will appear here.';
+    $('#published-reward-status').textContent = 'Finalized MATT rewards will appear here.';
     button.disabled = true;
     button.textContent = 'CLAIM MATT';
     return;

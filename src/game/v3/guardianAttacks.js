@@ -1,3 +1,4 @@
+import { CONFIG } from '../config.js';
 import { angleTo, distance } from '../utils.js';
 
 const TAU = Math.PI * 2;
@@ -10,7 +11,11 @@ export const guardianAttackMethods = {
     if (distance(enemy, this.player) < radius + this.player.radius) this.damagePlayer(damage, angleTo(enemy, this.player));
   },
   fireEnemyVolley(enemy, count, spread, speed, radial = false) {
-    const centerAngle = angleTo(enemy, this.player);
+    const predictedPlayer = {
+      x: this.player.x + this.player.vx * CONFIG.guardianPredictionSeconds,
+      y: this.player.y + this.player.vy * CONFIG.guardianPredictionSeconds
+    };
+    const centerAngle = angleTo(enemy, predictedPlayer);
     for (let index = 0; index < count; index += 1) {
       const offset = radial
         ? (index / count) * TAU
@@ -26,6 +31,8 @@ export const guardianAttackMethods = {
         vy: Math.sin(angle) * speed,
         radius: 9,
         life: 2.2,
+        travelled: 0,
+        maxRange: CONFIG.guardianProjectileRange,
         damage: enemy.damage * 0.62,
         color: '#d86cff'
       });

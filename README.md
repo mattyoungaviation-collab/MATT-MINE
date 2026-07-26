@@ -4,6 +4,13 @@
 
 MATT Mine is a standalone browser action roguelite and daily Web3 competition on Ronin. It has its own launch website, wallet identity, separate Free and Pass leaderboards, live Pass and paid-run payments, verified contracts, and a production persistence path independent from MATT Hub.
 
+## v1.4.1 combat and live-copy polish
+
+- Remove test-reward language from the production leaderboard and require a connected Ronin Wallet for live claims.
+- Use swept projectile collision so fast Crystal Blaster and Guardian shots cannot tunnel through cave walls during long frames.
+- Give the Crystal Blaster, dynamite, and Guardian projectiles explicit maximum travel ranges.
+- Increase Guardian awareness, keep aggro after detection, predict player movement, and contain the Guardian inside its vault.
+
 ## v1.4 live reward settlement hardening
 
 - Finalize immutable weekly leaderboard snapshots as soon as the UTC countdown reaches zero.
