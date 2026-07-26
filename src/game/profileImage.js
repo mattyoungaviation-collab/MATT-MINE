@@ -69,4 +69,3 @@ function loadImage(source, ImageConstructor) {
     image.src = source;
   });
 }
-
