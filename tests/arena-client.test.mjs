@@ -214,6 +214,27 @@ test('Arena screen promises the locked economic rules without test-token copy', 
   assert.doesNotMatch(html, /TEST MATT/i);
 });
 
+test('production run selection has four clear lobbies, a full mine map, and official Ronin branding', () => {
+  const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const css = fs.readFileSync(new URL('../src/production.css', import.meta.url), 'utf8');
+  const roninLogo = fs.statSync(new URL('../assets/ronin-mark-official.png', import.meta.url));
+
+  assert.match(html, /Choose one of four play lobbies/i);
+  assert.match(html, /FREE DAILY MINE/);
+  assert.match(html, /PASS MINE/);
+  assert.match(html, /MATT ARENA/);
+  assert.match(html, /PRACTICE MINE/);
+  assert.equal((html.match(/class="lobby-number"/g) || []).length, 4);
+  assert.match(html, /TODAY'S MINE MAP/);
+  assert.match(html, /7 rooms → beat the boss → find the exit/);
+  assert.equal((html.match(/class="mine-room /g) || []).length, 14);
+  assert.match(html, /ronin-mark-official\.png/);
+  assert.match(html, /BUILT ON RONIN/);
+  assert.ok(roninLogo.size > 1_000);
+  assert.match(css, /--type-label: 0\.07em/);
+  assert.doesNotMatch(html, /SECURITY PREVIEW|SAFE TEST MODE|VIEW PREVIEW/i);
+});
+
 test('production admin separates Treasury Safe packages from direct emergency-pauser controls', () => {
   const html = fs.readFileSync(new URL('../admin.html', import.meta.url), 'utf8');
   const source = fs.readFileSync(new URL('../src/admin.js', import.meta.url), 'utf8');

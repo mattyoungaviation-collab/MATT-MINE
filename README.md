@@ -4,6 +4,14 @@
 
 MATT Mine is a standalone browser action roguelite and daily Web3 competition on Ronin. It has its own launch website, wallet identity, separate Free and Pass leaderboards, live Pass and paid-run payments, verified contracts, and a production persistence path independent from MATT Hub.
 
+## v2.3 production lobby experience
+
+- Replace the mixed run-selection layout with four equal, clearly explained play lobbies: Free Daily Mine, Pass Mine, MATT Arena, and Practice Mine.
+- Add a seven-room daily mine overview and a three-step how-to-play guide before players enter.
+- Use the official Ronin brand mark in the Built on Ronin lockup.
+- Standardize text spacing, labels, buttons, and responsive layouts for desktop and mobile.
+- Remove public security-preview and local-test language from production-facing screens.
+
 ## v2.2 permanent miner identities
 
 - Require every connected wallet to choose one unique, permanent server-owned miner name before entering ranked play.

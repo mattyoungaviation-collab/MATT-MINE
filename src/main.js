@@ -178,14 +178,14 @@ function updateMenu() {
   const remainingPassDays = livePayments && paymentStatus
     ? Math.max(0, Math.ceil((paymentStatus.pass.expiresAt - Date.now()) / 86_400_000))
     : passDaysRemaining(state);
-  $('#pass-days').textContent = passActive ? `${remainingPassDays} days remaining` : 'Premium locked';
+  $('#pass-days').textContent = passActive ? `${remainingPassDays} days remaining` : 'Pass needed';
   $('#paid-credit-count').textContent = String(paidCredits);
-  $('#paid-daily-status').textContent = `${paidRunsToday} / ${livePayments ? paymentStatus?.paidRuns?.dailyLimit || 10 : state.settings.maxPaidRunsPerDay} purchased today`;
+  $('#paid-daily-status').textContent = `${paidRunsToday} / ${livePayments ? paymentStatus?.paidRuns?.dailyLimit || 10 : state.settings.maxPaidRunsPerDay} bought today`;
   $('#paid-run-cta').textContent = paidAccess.allowed
-    ? 'START PAID RUN'
+    ? 'START PASS RUN'
     : passActive
-      ? paidCredits > 0 ? paidAccess.reason.toUpperCase() : 'BUY A RUN CREDIT'
-      : 'VIEW PASS';
+      ? paidCredits > 0 ? paidAccess.reason.toUpperCase() : 'BUY RUN CREDIT'
+      : 'GET MINE PASS';
   $('#paid-run-button').classList.toggle('ready', paidAccess.allowed);
   const passPrice = livePayments
     ? paymentStatus
@@ -204,15 +204,6 @@ function updateMenu() {
   $('#pass-price').textContent = passPrice === null ? '—' : trimNumber(passPrice);
   $('#paid-run-price').textContent = paidRunPrice === null ? '—' : trimNumber(paidRunPrice);
   $('#paid-run-price-copy').textContent = paidRunPrice === null ? 'Connect wallet to load price' : `${trimNumber(paidRunPrice)} RON`;
-  const transactionNotice = $('#transaction-mode-notice');
-  if (transactionNotice) {
-    transactionNotice.textContent = livePayments
-      ? 'LIVE RONIN MAINNET · WALLET APPROVAL REQUIRED FOR EVERY PURCHASE'
-      : isLocalPreview
-        ? 'SAFE TEST MODE · REAL RON TRANSACTIONS DISABLED'
-        : 'RANKED PLAY OPEN · PURCHASES TEMPORARILY PAUSED';
-    transactionNotice.classList.toggle('live-payments', livePayments);
-  }
   updateLaunch({
     connected,
     freeAccess,
@@ -231,15 +222,18 @@ function updateLaunch({ connected, freeAccess, passPrice, paidRunPrice, livePaym
   const freeStatus = $('#launch-free-status');
   const serverStatus = $('#launch-live-status');
   const date = $('#launch-date');
+  const menuDate = $('#menu-date');
   const passPriceText = passPrice === null ? '—' : trimNumber(passPrice);
   const runPriceText = paidRunPrice === null ? '—' : trimNumber(paidRunPrice);
 
   if (date) {
-    date.textContent = new Intl.DateTimeFormat('en-US', {
+    const todayLabel = new Intl.DateTimeFormat('en-US', {
       timeZone: 'UTC',
       month: 'short',
       day: 'numeric'
     }).format(new Date()).toUpperCase();
+    date.textContent = todayLabel;
+    if (menuDate) menuDate.textContent = todayLabel;
   }
   if (walletLabel) walletLabel.textContent = connected
     ? serverPlayer.identity?.name || abbreviateAddress(serverPlayer.address)
@@ -1061,9 +1055,7 @@ function renderArenaMenuStatus() {
   if (!pool) return;
   pool.textContent = arenaConfig.enabled
     ? formatMattRaw(arenaConfig.prizePoolRaw)
-    : arenaConfig.previewAvailable
-      ? 'SECURITY PREVIEW'
-      : 'COMING SOON';
+    : 'CLOSED TODAY';
   const launchEntry = $('#launch-arena-entry');
   if (launchEntry) {
     launchEntry.textContent = arenaConfig.enabled && arenaConfig.feeRaw > 0n
@@ -1071,9 +1063,9 @@ function renderArenaMenuStatus() {
       : 'MATT ENTRY';
   }
   const launchState = $('#launch-arena-state');
-  if (launchState) launchState.textContent = arenaConfig.enabled ? '24-HOUR POOL' : 'SECURITY PREVIEW';
+  if (launchState) launchState.textContent = arenaConfig.enabled ? '24-HOUR POOL' : 'CLOSED TODAY';
   const menuAction = $('#arena-menu-action');
-  if (menuAction) menuAction.textContent = arenaConfig.enabled ? 'ENTER ARENA →' : 'VIEW PREVIEW →';
+  if (menuAction) menuAction.textContent = arenaConfig.enabled ? 'ENTER ARENA' : 'VIEW ARENA';
 }
 
 async function openArena() {
@@ -1137,9 +1129,7 @@ function renderArena() {
               : config.status === 'open'
                 ? 'OPEN'
                 : config.status.toUpperCase()
-    : config.previewAvailable
-      ? 'SECURITY LOCKED'
-      : 'NOT DEPLOYED';
+    : 'CLOSED';
   const badge = $('#arena-state-badge');
   badge.textContent = stateLabel;
   badge.dataset.state = config.status;
@@ -1168,7 +1158,7 @@ function renderArena() {
       : serverPlayer.suspended
         ? 'WALLET SUSPENDED'
         : !config.enabled
-          ? 'ARENA CONTRACT NOT ACTIVE'
+          ? 'ARENA CLOSED'
           : config.entriesPaused
             ? 'ENTRIES PAUSED'
             : !entryWindowOpen
@@ -1191,7 +1181,7 @@ function renderArena() {
     : serverPlayer.suspended
       ? 'WALLET SUSPENDED'
       : !config.enabled
-        ? 'ARENA SECURITY LOCKED'
+        ? 'ARENA CLOSED'
         : !runWindowOpen
           ? 'COMPETITION CLOSED'
           : player.unusedAttempts > 0
@@ -1236,9 +1226,7 @@ function renderArena() {
     ? `CLAIM ${formatMattRaw(player.refundRaw)} REFUND`
     : 'CLAIM CANCELED ENTRY REFUND';
   $('#arena-note').textContent = !config.enabled
-    ? config.liveBlocker === 'input_replay_not_ready'
-      ? 'Daily Arena preview is ready, but paid entry is security-locked until the server can replay raw player inputs. No MATT can be accepted by this build.'
-      : 'Daily Arena is safely disabled until its isolated Ronin contract is deployed, verified, and configured.'
+    ? 'Today\'s Arena is closed. Check back after the next daily reset.'
     : `Unlimited entries · ${formatNumber(config.entryCount || leaderboard.entryCount)} total entries · ${formatNumber(config.uniquePlayers || leaderboard.participantCount)} unique miners · Best verified score per wallet.`;
 
   clearInterval(arenaCountdownTimer);
