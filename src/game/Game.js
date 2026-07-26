@@ -27,6 +27,7 @@ export class MattMineGame {
     this.state = 'menu';
     this.lastTime = performance.now();
     this.camera = { x: 0, y: 0, shake: 0 };
+    this.screenShakeEnabled = true;
     this.entityId = 1;
     this.layout = null;
     this.decor = [];
@@ -63,6 +64,12 @@ export class MattMineGame {
 
   setCosmetics(cosmetics = {}) {
     this.cosmetics = { ...cosmetics };
+  }
+
+  setScreenShakeEnabled(enabled) {
+    this.screenShakeEnabled = Boolean(enabled);
+    if (!this.screenShakeEnabled) this.camera.shake = 0;
+    return this.screenShakeEnabled;
   }
 
   startRun() {
@@ -968,8 +975,9 @@ export class MattMineGame {
     ctx.restore();
 
     ctx.save();
-    const shakeX = this.camera.shake ? randomRange(-this.camera.shake, this.camera.shake) : 0;
-    const shakeY = this.camera.shake ? randomRange(-this.camera.shake, this.camera.shake) : 0;
+    const activeShake = this.screenShakeEnabled ? this.camera.shake : 0;
+    const shakeX = activeShake ? randomRange(-activeShake, activeShake) : 0;
+    const shakeY = activeShake ? randomRange(-activeShake, activeShake) : 0;
     ctx.translate(-this.camera.x + shakeX, -this.camera.y + shakeY);
     this.drawWorld(ctx);
     if (this.run && this.player) {
