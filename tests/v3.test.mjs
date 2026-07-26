@@ -120,3 +120,17 @@ test('equipped Pass cosmetics render on the miner and emit the gold movement tra
     aura: 'guardian_aura'
   });
 });
+
+test('cinematic floor and Guardian assets render without breaking the combat frame', async () => {
+  const { canvas, profile } = installBrowserStubs(true);
+  const { MattMineGame } = await import('../src/game/GameV3.js');
+  const game = new MattMineGame(canvas, profile);
+  const readyImage = { complete: true, naturalWidth: 1254, naturalHeight: 1254 };
+  game.visualAssets = { floor: readyImage, guardian: readyImage };
+  game.startRun();
+  game.run.bossSpawned = true;
+  game.spawnEnemy(true, game.layout.guardianRoom);
+  game.player.x = game.layout.guardianRoom.x;
+  game.player.y = game.layout.guardianRoom.y;
+  assert.doesNotThrow(() => game.render());
+});

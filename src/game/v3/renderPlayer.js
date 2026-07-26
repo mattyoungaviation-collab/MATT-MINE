@@ -24,30 +24,77 @@ export const renderPlayerMethods = {
       ctx.restore();
     }
 
-    ctx.fillStyle = 'rgba(0,0,0,0.38)';
-    ctx.beginPath(); ctx.ellipse(0, 22, 24, 9, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,0.62)';
+    ctx.filter = 'blur(2px)';
+    ctx.beginPath(); ctx.ellipse(3, 24, 27, 10, 0, 0, TAU); ctx.fill();
+    ctx.filter = 'none';
 
-    ctx.strokeStyle = '#2f3440';
+    ctx.strokeStyle = '#181b23';
     ctx.lineWidth = 9;
     ctx.lineCap = 'round';
     ctx.beginPath(); ctx.moveTo(-8, 12); ctx.lineTo(-11 + stride, 25); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(8, 12); ctx.lineTo(11 - stride, 25); ctx.stroke();
+    ctx.strokeStyle = '#505565';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(-9, 13); ctx.lineTo(-11 + stride, 22); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(9, 13); ctx.lineTo(11 - stride, 22); ctx.stroke();
 
     const crystalSkin = cosmetics.skin === 'crystal_skin';
-    ctx.fillStyle = player.hitFlash > 0 ? '#ffffff' : crystalSkin ? '#62e8ff' : '#f5d142';
-    ctx.strokeStyle = player.dashTimer > 0 ? '#8be9ff' : crystalSkin ? '#d8fbff' : '#fff2a0';
-    ctx.lineWidth = player.dashTimer > 0 ? 7 : 4;
+    ctx.fillStyle = '#222a35';
+    ctx.strokeStyle = '#080a0f';
+    ctx.lineWidth = 3;
+    roundRect(ctx, -25, -10, 18, 32, 7); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#50e3c2';
+    ctx.shadowColor = '#37d7e8';
+    ctx.shadowBlur = 12;
+    ctx.beginPath(); ctx.arc(-20, 7, 3.5, 0, TAU); ctx.fill();
+    ctx.shadowBlur = 0;
+
+    const coat = ctx.createLinearGradient(-18, -14, 20, 24);
+    if (crystalSkin) {
+      coat.addColorStop(0, '#d9fbff');
+      coat.addColorStop(0.3, '#62e8ff');
+      coat.addColorStop(1, '#17638a');
+    } else {
+      coat.addColorStop(0, '#d98732');
+      coat.addColorStop(0.38, '#8b431e');
+      coat.addColorStop(0.62, '#27303a');
+      coat.addColorStop(1, '#11151c');
+    }
+    ctx.fillStyle = player.hitFlash > 0 ? '#ffffff' : coat;
+    ctx.strokeStyle = player.dashTimer > 0 ? '#8be9ff' : crystalSkin ? '#d8fbff' : '#6d421e';
+    ctx.lineWidth = player.dashTimer > 0 ? 7 : 3;
     ctx.shadowColor = player.dashTimer > 0 || crystalSkin ? '#70d9ff' : 'transparent';
     ctx.shadowBlur = player.dashTimer > 0 ? 20 : crystalSkin ? 14 : 0;
-    roundRect(ctx, -19, -13, 38, 38, 13); ctx.fill(); ctx.stroke();
+    roundRect(ctx, -19, -13, 38, 39, 11); ctx.fill(); ctx.stroke();
     ctx.shadowBlur = 0;
+
+    ctx.strokeStyle = crystalSkin ? 'rgba(220,253,255,0.72)' : '#171b23';
+    ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(-13, -6); ctx.lineTo(12, 18); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(13, -6); ctx.lineTo(-12, 18); ctx.stroke();
+    ctx.fillStyle = crystalSkin ? '#a9f4ff' : '#bb6b2b';
+    roundRect(ctx, -16, 13, 32, 7, 3); ctx.fill();
+    ctx.fillStyle = '#151821';
+    ctx.fillRect(-3, 13, 6, 7);
 
     ctx.fillStyle = '#efb684';
     ctx.beginPath(); ctx.arc(0, -18, 15, 0, TAU); ctx.fill();
-    ctx.fillStyle = '#30343d';
-    ctx.beginPath(); ctx.arc(0, -22, 17, Math.PI, TAU); ctx.fill();
-    ctx.fillStyle = crystalSkin ? '#8be9ff' : '#f5d142';
-    ctx.fillRect(-18, -23, 36, 6);
+    const helmet = ctx.createLinearGradient(-18, -35, 18, -13);
+    helmet.addColorStop(0, crystalSkin ? '#e5fdff' : '#f2a943');
+    helmet.addColorStop(0.35, crystalSkin ? '#78e9ff' : '#a75b22');
+    helmet.addColorStop(1, '#242936');
+    ctx.fillStyle = helmet;
+    ctx.strokeStyle = '#11141a';
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(0, -22, 17, Math.PI, TAU); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = crystalSkin ? '#8be9ff' : '#d9852d';
+    roundRect(ctx, -19, -25, 38, 7, 3); ctx.fill();
+    ctx.fillStyle = '#eef7ff';
+    ctx.shadowColor = '#8be9ff';
+    ctx.shadowBlur = 11;
+    ctx.beginPath(); ctx.arc(7 * facing, -27, 4.2, 0, TAU); ctx.fill();
+    ctx.shadowBlur = 0;
     ctx.fillStyle = '#151821';
     ctx.beginPath(); ctx.arc(6 * facing, -18, 2.8, 0, TAU); ctx.fill();
     ctx.fillStyle = '#3a250f';
