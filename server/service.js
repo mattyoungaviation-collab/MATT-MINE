@@ -22,6 +22,7 @@ export class MattMineService {
     this.randomHex = options.randomHex || ((bytes) => randomBytes(bytes).toString('hex'));
     this.verifySignature = options.verifySignature || verifyMessage;
     this.paymentVerifier = options.paymentVerifier || null;
+    this.rewardManager = options.rewardManager || null;
     this.mainnetTransactionsEnabled =
       options.mainnetTransactionsEnabled === true && Boolean(this.paymentVerifier);
     const configuredChainId = Number(options.chainId ?? RONIN_CHAINS.MAINNET);
@@ -44,8 +45,11 @@ export class MattMineService {
       rankedServerEnabled: true,
       paidRunsEnabled: this.mainnetTransactionsEnabled,
       realPaymentsEnabled: this.mainnetTransactionsEnabled,
-      mattClaimsEnabled: false,
+      mattClaimsEnabled: Boolean(this.rewardManager),
       mainnetTransactionsEnabled: this.mainnetTransactionsEnabled,
+      ...(this.rewardManager
+        ? { rewards: this.rewardManager.publicConfig() }
+        : {}),
       ...(this.mainnetTransactionsEnabled
         ? { payments: this.paymentVerifier.publicConfig() }
         : {})
@@ -57,7 +61,9 @@ export class MattMineService {
     return {
       database,
       chainId: this.chainId,
-      paymentsEnabled: this.mainnetTransactionsEnabled
+      paymentsEnabled: this.mainnetTransactionsEnabled,
+      rewardsEnabled: Boolean(this.rewardManager),
+      rewardPublishingEnabled: this.rewardManager?.publicationEnabled === true
     };
   }
 
@@ -429,6 +435,38 @@ export class MattMineService {
       }
     }
     return leaderboardForState(state, mode, week, viewerAddress);
+  }
+
+  async rewardClaims(token) {
+    const session = await this.authenticate(token);
+    assertApi(this.rewardManager, 503, 'reward_pipeline_unavailable', 'MATT reward claims are not configured.');
+    return this.rewardManager.playerRewards(session.address);
+  }
+
+  async prepareRewardClaim(token, draftId) {
+    const session = await this.authenticate(token);
+    assertApi(this.rewardManager, 503, 'reward_pipeline_unavailable', 'MATT reward claims are not configured.');
+    return this.rewardManager.prepareClaim(session.address, draftId);
+  }
+
+  async createRewardDraft(adminKey, input) {
+    assertApi(this.rewardManager, 503, 'reward_pipeline_unavailable', 'The reward pipeline is not configured.');
+    return this.rewardManager.createDraft(adminKey, input);
+  }
+
+  async approveRewardDraft(approverKey, draftId) {
+    assertApi(this.rewardManager, 503, 'reward_pipeline_unavailable', 'The reward pipeline is not configured.');
+    return this.rewardManager.approveDraft(approverKey, draftId);
+  }
+
+  async syncRewardDraft(adminKey, draftId, transactionHash) {
+    assertApi(this.rewardManager, 503, 'reward_pipeline_unavailable', 'The reward pipeline is not configured.');
+    return this.rewardManager.syncDraft(adminKey, draftId, transactionHash);
+  }
+
+  async listRewardDrafts(adminKey) {
+    assertApi(this.rewardManager, 503, 'reward_pipeline_unavailable', 'The reward pipeline is not configured.');
+    return this.rewardManager.listDrafts(adminKey);
   }
 
   async hydratePlayerScores(player) {

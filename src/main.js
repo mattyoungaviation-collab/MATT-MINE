@@ -46,6 +46,7 @@ let paymentStatus = null;
 let publicPaymentStatus = null;
 let walletBusy = false;
 let paymentBusy = false;
+let activeServerClaim = null;
 const wallet = new RoninWalletAdapter({
   api: apiClient,
   onInvalidated(reason) {
@@ -624,7 +625,25 @@ $('#publish-rewards').addEventListener('click', () => {
   openAdmin();
 });
 
-$('#claim-reward-button').addEventListener('click', () => {
+$('#claim-reward-button').addEventListener('click', async () => {
+  if (serverPlayer && activeServerClaim) {
+    if (walletBusy) return;
+    walletBusy = true;
+    $('#claim-reward-button').disabled = true;
+    $('#claim-reward-button').textContent = 'OPENING RONIN WALLET…';
+    try {
+      const prepared = await apiClient.prepareRewardClaim(activeServerClaim.id);
+      const transactionHash = await wallet.claimReward(prepared.transaction);
+      toast(`MATT claimed · ${abbreviateHash(transactionHash)}`);
+      await renderServerLeaderboard(activeBoard);
+    } catch (error) {
+      toast(error.message || 'The MATT claim could not be completed.');
+      await renderServerLeaderboard(activeBoard);
+    } finally {
+      walletBusy = false;
+    }
+    return;
+  }
   const result = economy.apply(claimLatestReward(economy.state));
   toast(result.ok ? `Test claim recorded · ${formatNumber(result.epoch.totalRewardMatt)} MATT` : result.error);
   openLeaderboards(activeBoard);
@@ -840,10 +859,49 @@ async function renderServerLeaderboard(mode) {
           </tr>
         `).join('')
       : `<tr><td colspan="4">No verified ${mode === RUN_MODES.PAID ? 'Pass' : 'Free'} scores yet this week.</td></tr>`;
-    if (note) note.textContent = `Server-authoritative daily-best rankings · Week ${leaderboard.week}`;
+    const claims = await apiClient.rewardClaims();
+    activeServerClaim = claims.find((claim) => claim.mode === mode) || null;
+    renderServerClaim(activeServerClaim);
+    if (note) {
+      note.textContent = leaderboard.finalized
+        ? `Permanent server snapshot · Week ${leaderboard.week}`
+        : `Server-authoritative daily-best rankings · Week ${leaderboard.week}`;
+    }
   } catch (error) {
+    activeServerClaim = null;
+    renderServerClaim(null);
     if (note) note.textContent = `Server leaderboard unavailable: ${error.message}`;
   }
+}
+
+function renderServerClaim(claim) {
+  const button = $('#claim-reward-button');
+  if (!claim) {
+    $('#published-reward-text').textContent = 'No reward ready';
+    $('#published-reward-status').textContent = 'Finalized pilot rewards will appear here.';
+    button.disabled = true;
+    button.textContent = 'CLAIM MATT';
+    return;
+  }
+  const claimed = claim.chain?.claimed === true;
+  const published = claim.chain?.published === true;
+  const paused = claim.chain?.paused === true;
+  $('#published-reward-text').textContent = `${formatNumber(claim.amountMatt)} MATT · Rank #${claim.rank}`;
+  $('#published-reward-status').textContent = claimed
+    ? 'Claim confirmed on Ronin Mainnet.'
+    : paused
+      ? 'Reward claims are temporarily paused.'
+      : published
+        ? `Published for week ${claim.week} · Claim before ${new Date(claim.claimDeadline * 1000).toLocaleDateString('en-US')}.`
+        : 'Reward allocation approved; waiting for Safe publication.';
+  button.disabled = claimed || paused || !published || claim.chain?.unavailable === true;
+  button.textContent = claimed
+    ? 'CLAIMED'
+    : paused
+      ? 'CLAIMS PAUSED'
+      : published
+        ? 'CLAIM MATT'
+        : 'PUBLICATION PENDING';
 }
 
 function openAdmin() {

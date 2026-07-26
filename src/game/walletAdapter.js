@@ -76,11 +76,15 @@ export class RoninWalletAdapter {
     return this.sendPreparedTransaction(transaction);
   }
 
-  async sendPreparedTransaction(transaction) {
+  async claimReward(transaction) {
+    return this.sendPreparedTransaction(transaction, { allowZeroValue: true });
+  }
+
+  async sendPreparedTransaction(transaction, options = {}) {
     if (!this.player || !this.provider?.request) {
       throw new Error('Sign in with Ronin Wallet before making a purchase.');
     }
-    validatePreparedTransaction(transaction);
+    validatePreparedTransaction(transaction, options);
     const chainId = parseChainId(await this.provider.request({ method: 'eth_chainId' }));
     if (chainId !== 2020) throw new Error('Switch Ronin Wallet to Ronin Mainnet.');
     const transactionHash = await this.provider.request({
@@ -136,7 +140,7 @@ export function parseChainId(value) {
   return Number.NaN;
 }
 
-function validatePreparedTransaction(transaction) {
+function validatePreparedTransaction(transaction, options = {}) {
   if (
     !transaction ||
     !/^0x[a-fA-F0-9]{40}$/.test(transaction.to || '') ||
@@ -145,7 +149,9 @@ function validatePreparedTransaction(transaction) {
   ) {
     throw new Error('The server did not provide a valid MATT Mine transaction.');
   }
-  if (BigInt(transaction.value) <= 0n) throw new Error('The transaction value must be greater than zero.');
+  if (!options.allowZeroValue && BigInt(transaction.value) <= 0n) {
+    throw new Error('The transaction value must be greater than zero.');
+  }
 }
 
 async function waitForWalletReceipt(provider, transactionHash, options = {}) {

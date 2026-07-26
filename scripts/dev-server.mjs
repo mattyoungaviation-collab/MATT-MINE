@@ -3,6 +3,9 @@ import { fileURLToPath } from 'node:url';
 import { JsonFileDatabase, PostgresDatabase } from '../server/database.js';
 import { createMattMineHttpServer } from '../server/http.js';
 import { RoninPaymentVerifier } from '../server/payment-verifier.js';
+import { RoninRewardChain } from '../server/reward-chain.js';
+import { RewardManager } from '../server/reward-manager.js';
+import { MemoryRewardStore, PostgresRewardStore } from '../server/reward-store.js';
 import { MattMineService } from '../server/service.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -24,18 +27,31 @@ const database = databaseUrl
       maxConnections: Number(process.env.MATT_MINE_DATABASE_POOL_SIZE || 10)
     }).init()
   : await new JsonFileDatabase(dataFile).init();
+const rewardStore = database.kind === 'postgresql'
+  ? await new PostgresRewardStore(database).init()
+  : await new MemoryRewardStore().init();
+const rewardManager = await new RewardManager({
+  store: rewardStore,
+  chain: new RoninRewardChain({ rpcUrl: process.env.RONIN_RPC_URL }),
+  adminKey: process.env.MATT_MINE_ADMIN_KEY || '',
+  approverKey: process.env.MATT_MINE_REWARD_APPROVER_KEY || '',
+  publicationEnabled: process.env.MATT_MINE_REWARD_PUBLISHING_ENABLED === 'true',
+  maxBoardMatt: Number(process.env.MATT_MINE_REWARD_MAX_BOARD_MATT || 100_000)
+}).init();
 const service = new MattMineService(database, {
   publicOrigin: process.env.MATT_MINE_PUBLIC_ORIGIN || null,
   adminKey: process.env.MATT_MINE_ADMIN_KEY || '',
   mainnetTransactionsEnabled,
-  paymentVerifier
+  paymentVerifier,
+  rewardManager
 });
 const server = createMattMineHttpServer({ root, service });
 
 server.listen(port, '0.0.0.0', () => {
-  console.log(`MATT Mine v1.1 running at http://localhost:${port}`);
+  console.log(`MATT Mine v1.2 running at http://localhost:${port}`);
   console.log(`Ranked wallet network: ${service.config().chainName} (${service.config().chainId})`);
   console.log(`Mainnet transaction mode: ${mainnetTransactionsEnabled ? 'ENABLED (real RON)' : 'disabled'}`);
+  console.log(`Reward publication: ${rewardManager.publicationEnabled ? 'PILOT ENABLED' : 'DRY RUN'}`);
   console.log(`Server data: ${database.kind}${databaseUrl ? '' : ` (${dataFile})`}`);
 });
 
