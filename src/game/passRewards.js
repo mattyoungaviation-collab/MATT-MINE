@@ -17,8 +17,9 @@ export const PASS_COSMETICS = Object.freeze({
     id: 'starter_badge',
     slot: 'badge',
     name: 'Starter Badge',
-    description: 'A permanent Season One MATT Mine badge.',
-    icon: 'M'
+    description: 'The official MATT coin logo, earned permanently in Season One.',
+    icon: 'M',
+    image: '/assets/matt-coin-official.png'
   }),
   gold_trail: Object.freeze({
     id: 'gold_trail',

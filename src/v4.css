@@ -431,6 +431,19 @@
   color: #f4d75e;
   background: rgba(244,215,94,0.1);
   font-size: 28px;
+  overflow: hidden;
+}
+
+.cosmetic-logo {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  image-rendering: pixelated;
+}
+
+.cosmetic-icon .cosmetic-logo {
+  border-radius: 12px;
 }
 
 .cosmetic-card small {
@@ -473,6 +486,22 @@
 .miner-identity em {
   color: #f4d75e;
   font-style: normal;
+}
+
+.miner-identity .miner-badge {
+  width: 24px;
+  height: 24px;
+  display: inline-block;
+  overflow: hidden;
+  flex: 0 0 auto;
+  border: 1px solid rgba(112,217,255,0.75);
+  border-radius: 7px;
+  background: #08aeea;
+  box-shadow: 0 0 9px rgba(112,217,255,0.28);
+}
+
+.miner-identity .miner-badge .cosmetic-logo {
+  border-radius: 6px;
 }
 
 .miner-identity small {

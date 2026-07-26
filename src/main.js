@@ -960,7 +960,7 @@ function renderCosmetics() {
     const isEquipped = equipped[cosmetic.slot] === cosmetic.id;
     return `
       <article class="cosmetic-card ${owned ? 'owned' : 'locked'} ${isEquipped ? 'equipped' : ''}">
-        <span class="cosmetic-icon">${cosmetic.icon}</span>
+        <span class="cosmetic-icon">${renderCosmeticIcon(cosmetic)}</span>
         <div><small>${cosmetic.slot.toUpperCase()}</small><h3>${cosmetic.name}</h3><p>${cosmetic.description}</p></div>
         <button class="secondary-button cosmetic-equip-button" data-slot="${cosmetic.slot}" data-cosmetic-id="${cosmetic.id}" ${!owned || passRewardsBusy ? 'disabled' : ''}>
           ${isEquipped ? 'UNEQUIP' : owned ? 'EQUIP' : 'LOCKED'}
@@ -1099,7 +1099,7 @@ function renderMinerIdentity(row) {
   const trophy = cosmeticById(appearance.trophy);
   return `
     <span class="miner-identity ${appearance.frame === 'founder_frame' ? 'founder-frame' : ''}">
-      ${badge ? `<i title="${escapeHtml(badge.name)}">${badge.icon}</i>` : ''}
+      ${badge ? `<i class="miner-badge" title="${escapeHtml(badge.name)}">${renderCosmeticIcon(badge)}</i>` : ''}
       <b>${escapeHtml(row.walletId)}</b>
       ${title ? `<small>${escapeHtml(title.name)}</small>` : ''}
       ${trophy ? `<em title="${escapeHtml(trophy.name)}">${trophy.icon}</em>` : ''}
@@ -1115,12 +1115,19 @@ function renderRunCosmeticResult() {
   if (!title && !badge && !trophy && equipped.frame !== 'founder_frame') return '';
   return `
     <span class="miner-identity result-identity ${equipped.frame === 'founder_frame' ? 'founder-frame' : ''}">
-      ${badge ? `<i>${badge.icon}</i>` : ''}
+      ${badge ? `<i class="miner-badge" title="${escapeHtml(badge.name)}">${renderCosmeticIcon(badge)}</i>` : ''}
       <b>${serverPlayer ? escapeHtml(abbreviateAddress(serverPlayer.address)) : 'MATT MINER'}</b>
       ${title ? `<small>${escapeHtml(title.name)}</small>` : ''}
       ${trophy ? `<em>${trophy.icon}</em>` : ''}
     </span>
   `;
+}
+
+function renderCosmeticIcon(cosmetic) {
+  if (cosmetic?.image) {
+    return `<img class="cosmetic-logo" src="${escapeHtml(cosmetic.image)}" alt="" aria-hidden="true" />`;
+  }
+  return escapeHtml(cosmetic?.icon || '');
 }
 
 function renderServerClaim(claim) {
