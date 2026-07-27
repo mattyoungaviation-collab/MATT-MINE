@@ -1176,3 +1176,59 @@ test('the Ronin adapter switches to Mainnet, signs the server message, and inval
   assert.match(invalidated, /account changed/i);
   assert.equal(parseChainId('0x7e4'), RONIN_CHAINS.MAINNET);
 });
+
+test('the Ronin adapter submits a zero-value reward claim from the actively selected signed-in account', async () => {
+  const calls = [];
+  const provider = {
+    async request(payload) {
+      calls.push(payload);
+      if (payload.method === 'eth_requestAccounts') return [account.address];
+      if (payload.method === 'eth_chainId') return `0x${RONIN_CHAINS.MAINNET.toString(16)}`;
+      if (payload.method === 'eth_sendTransaction') return `0x${'6'.repeat(64)}`;
+      if (payload.method === 'eth_getTransactionReceipt') return { status: '0x1' };
+      throw new Error(`Unexpected method ${payload.method}`);
+    }
+  };
+  const adapter = new RoninWalletAdapter({
+    api: { hasSession: () => true },
+    window: { ronin: { provider } }
+  });
+  adapter.player = { address: account.address.toLowerCase() };
+  adapter.provider = provider;
+
+  const transactionHash = await adapter.claimReward({
+    to: '0x6ba468EE15cb3634F4Ea340407E9FD7A75267619',
+    value: '0x0',
+    data: '0x12345678'
+  });
+
+  assert.equal(transactionHash, `0x${'6'.repeat(64)}`);
+  const sent = calls.find((entry) => entry.method === 'eth_sendTransaction');
+  assert.equal(sent.params[0].from, account.address.toLowerCase());
+  assert.equal(sent.params[0].to, '0x6ba468EE15cb3634F4Ea340407E9FD7A75267619');
+  assert.equal(sent.params[0].value, '0x0');
+});
+
+test('the Ronin adapter blocks a claim when the wallet account differs from the signed-in account', async () => {
+  const provider = {
+    async request(payload) {
+      if (payload.method === 'eth_requestAccounts') return [otherAccount.address];
+      throw new Error(`Unexpected method ${payload.method}`);
+    }
+  };
+  const adapter = new RoninWalletAdapter({
+    api: { hasSession: () => true },
+    window: { ronin: { provider } }
+  });
+  adapter.player = { address: account.address.toLowerCase() };
+  adapter.provider = provider;
+
+  await assert.rejects(
+    () => adapter.claimReward({
+      to: '0x6ba468EE15cb3634F4Ea340407E9FD7A75267619',
+      value: '0x0',
+      data: '0x12345678'
+    }),
+    /different account/i
+  );
+});

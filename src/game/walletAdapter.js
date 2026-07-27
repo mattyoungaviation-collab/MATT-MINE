@@ -102,20 +102,33 @@ export class RoninWalletAdapter {
 
   async sendPreparedTransaction(transaction, options = {}) {
     if (!this.player || !this.provider?.request) {
-      throw new Error('Sign in with Ronin Wallet before making a purchase.');
+      throw new Error('Sign in with Ronin Wallet before sending this transaction.');
     }
     validatePreparedTransaction(transaction, options);
+    const accounts = await this.provider.request({ method: 'eth_requestAccounts' });
+    const walletAddress = Array.isArray(accounts) ? accounts[0] : '';
+    if (!/^0x[a-fA-F0-9]{40}$/.test(walletAddress || '')) {
+      throw new Error('Ronin Wallet did not return a valid account.');
+    }
+    if (walletAddress.toLowerCase() !== this.player.address?.toLowerCase()) {
+      throw new Error('Ronin Wallet is on a different account. Switch to the wallet signed in to MATT Mine, then try again.');
+    }
     const chainId = parseChainId(await this.provider.request({ method: 'eth_chainId' }));
     if (chainId !== 2020) throw new Error('Switch Ronin Wallet to Ronin Mainnet.');
-    const transactionHash = await this.provider.request({
-      method: 'eth_sendTransaction',
-      params: [{
-        from: this.player.address,
-        to: transaction.to,
-        value: transaction.value,
-        data: transaction.data
-      }]
-    });
+    let transactionHash;
+    try {
+      transactionHash = await this.provider.request({
+        method: 'eth_sendTransaction',
+        params: [{
+          from: this.player.address,
+          to: transaction.to,
+          value: transaction.value,
+          data: transaction.data
+        }]
+      });
+    } catch (error) {
+      throw new Error(walletTransactionError(error));
+    }
     if (!/^0x[a-fA-F0-9]{64}$/.test(transactionHash || '')) {
       throw new Error('Ronin Wallet did not return a valid transaction hash.');
     }
@@ -151,6 +164,24 @@ export class RoninWalletAdapter {
     this.player = null;
     this.onInvalidated(reason);
   }
+}
+
+function walletTransactionError(error) {
+  const code = Number(error?.code);
+  if (code === 4001) return 'The transaction was canceled in Ronin Wallet.';
+  const message = String(
+    error?.shortMessage ||
+    error?.data?.message ||
+    error?.message ||
+    ''
+  ).replace(/^Error:\s*/i, '').trim();
+  if (/insufficient funds/i.test(message)) {
+    return 'This wallet needs a small amount of RON for network gas.';
+  }
+  if (/revert|execution reverted/i.test(message)) {
+    return 'Ronin rejected the claim during its safety check. Refresh the leaderboard and try again.';
+  }
+  return message || 'Ronin Wallet could not send the transaction.';
 }
 
 export function parseChainId(value) {

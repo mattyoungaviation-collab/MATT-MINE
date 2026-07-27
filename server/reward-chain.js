@@ -316,6 +316,26 @@ export class RoninRewardChain {
     assertApi(!status.closed, 410, 'reward_epoch_closed', 'This reward epoch is closed.');
     assertApi(!status.claimed, 409, 'reward_already_claimed', 'This wallet already claimed this reward.');
     assertApi(status.claimDeadline >= Math.floor(Date.now() / 1000), 410, 'reward_claim_expired', 'This reward claim expired.');
+    try {
+      await this.client.simulateContract({
+        account: getAddress(playerAddress),
+        address: this.rewardsAddress,
+        abi: REWARDS_ABI,
+        functionName: 'claim',
+        args: [
+          BigInt(plan.epoch),
+          plan.board,
+          BigInt(plan.amountRaw),
+          plan.proof
+        ]
+      });
+    } catch {
+      throw new ApiError(
+        409,
+        'reward_claim_preflight_failed',
+        'This claim did not pass the Ronin safety check. Refresh the leaderboard and try again.'
+      );
+    }
     return status;
   }
 }

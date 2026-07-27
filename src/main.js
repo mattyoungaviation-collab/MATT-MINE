@@ -932,15 +932,20 @@ $('#claim-reward-button').addEventListener('click', async () => {
     if (walletBusy) return;
     walletBusy = true;
     $('#claim-reward-button').disabled = true;
-    $('#claim-reward-button').textContent = 'OPENING RONIN WALLET…';
+    $('#claim-reward-button').textContent = 'CHECKING CLAIM…';
+    $('#published-reward-status').textContent = 'Checking your proof on Ronin Mainnet…';
     try {
       const prepared = await apiClient.prepareRewardClaim(activeServerClaim.id);
+      $('#claim-reward-button').textContent = 'CONFIRM IN RONIN WALLET';
+      $('#published-reward-status').textContent = 'Approve the claim in Ronin Wallet. You only pay the network gas.';
       const transactionHash = await wallet.claimReward(prepared.transaction);
       toast(`MATT claimed · ${abbreviateHash(transactionHash)}`);
       await renderServerLeaderboard(activeBoard);
     } catch (error) {
-      toast(error.message || 'The MATT claim could not be completed.');
+      const message = error.message || 'The MATT claim could not be completed.';
+      toast(message);
       await renderServerLeaderboard(activeBoard);
+      $('#published-reward-status').textContent = message;
     } finally {
       walletBusy = false;
     }
