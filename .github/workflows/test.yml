@@ -6,7 +6,6 @@ on:
     branches:
       - main
       - agent/v0.3-combat-depth
-      - agent/admin-total-balance-controls
 
 permissions:
   contents: read
@@ -30,27 +29,7 @@ jobs:
         run: npm ci
 
       - name: Run game and contract tests
-        shell: bash
-        run: |
-          set +e
-          npm test > test-output.txt 2>&1
-          status=$?
-          if [ "$status" -ne 0 ]; then
-            echo "::group::Last 100 test-output lines"
-            tail -n 100 test-output.txt
-            echo "::endgroup::"
-            exit "$status"
-          fi
-          cat test-output.txt
-
-      - name: Upload test output
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-output
-          path: test-output.txt
-          if-no-files-found: warn
-          retention-days: 3
+        run: npm test
 
       - name: Compile production contracts
         run: npm run contracts:compile
