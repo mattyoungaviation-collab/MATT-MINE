@@ -72,7 +72,7 @@ export class AdminMattMineService extends MattMineService {
 
       assertApi(changes.length > 0, 400, 'player_state_patch_empty', 'Change or reset at least one player field.');
       wallet.updatedAt = timestamp;
-      const details = `${normalizedAddress}: ${changes.join(', ')}; ${normalizedReason}`.slice(0, 500);
+      const details = `${normalizedReason}; ${normalizedAddress}: ${changes.join(', ')}`.slice(0, 500);
       addPlayerActivity(wallet, 'ADMIN_STATE_EDIT', details, timestamp);
       addAudit(state, 'SERVER_ADMIN', 'PLAYER_STATE_EDITED', details, timestamp);
     });
