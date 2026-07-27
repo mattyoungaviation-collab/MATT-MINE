@@ -11,7 +11,7 @@ import {
   REWARD_CONTRACT_ADDRESS,
   REWARD_TREASURY_ADDRESS
 } from './reward-plan.js';
-import { assertApi } from './errors.js';
+import { ApiError, assertApi } from './errors.js';
 
 export const REWARDS_ABI = [
   {
