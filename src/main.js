@@ -2,6 +2,7 @@ import { MattMineGame } from './game/GameV4.js';
 import { apiClient } from './game/apiClient.js';
 import { META_UPGRADES, metaUpgradeCost } from './game/config.js';
 import { prepareProfileImage } from './game/profileImage.js';
+import { mountDailyMinePreviews } from './game/dailyMapPreview.js';
 import { KEYBIND_ACTIONS, defaultKeybindings, normalizeKeybindings } from './game/keybindings.js';
 import {
   ADMIN_ROLES,
@@ -78,6 +79,7 @@ let activeArenaTranscript = null;
 let pendingAvatarDataUrl = '';
 let abandonConfirmUntil = 0;
 let abandonResetTimer = null;
+let dailyMinePreviewCleanup = null;
 const wallet = new RoninWalletAdapter({
   api: apiClient,
   onInvalidated(reason) {
@@ -2014,9 +2016,15 @@ function abbreviateAddress(address) {
 }
 
 async function bootstrapServer() {
+  const today = new Date().toISOString().slice(0, 10);
+  dailyMinePreviewCleanup?.();
+  dailyMinePreviewCleanup = mountDailyMinePreviews({ day: today });
   try {
     serverConfig = await apiClient.config();
     publicPaymentStatus = await apiClient.publicPaymentStatus();
+    const freeTuning = await apiClient.gameTuning(RUN_MODES.FREE).catch(() => ({}));
+    dailyMinePreviewCleanup?.();
+    dailyMinePreviewCleanup = mountDailyMinePreviews({ day: today, tuning: freeTuning });
     const restored = await wallet.restore();
     if (restored) {
       serverPlayer = restored;
