@@ -403,6 +403,52 @@ test('reward publication preflight blocks paused, duplicate, and underfunded Saf
   );
 });
 
+test('claim preparation simulates the exact proof on Ronin before opening the wallet', async () => {
+  const plan = createRewardPlan({
+    snapshot: finalizedSnapshot(),
+    poolMatt: 10_000,
+    claimDeadline: Math.floor(NOW / 1000) + 30 * 86_400,
+    maxBoardMatt: 100_000
+  });
+  const player = plan.entries[0];
+  let simulation = null;
+  const chain = new RoninRewardChain({
+    client: {
+      async readContract(request) {
+        if (request.functionName === 'getEpoch') {
+          return {
+            merkleRoot: plan.merkleRoot,
+            totalMatt: BigInt(plan.allocatedRaw),
+            claimedMatt: 0n,
+            claimDeadline: BigInt(plan.claimDeadline),
+            published: true,
+            closed: false
+          };
+        }
+        if (request.functionName === 'paused') return false;
+        if (request.functionName === 'isClaimed') return false;
+        throw new Error(`Unexpected ${request.functionName}`);
+      },
+      async simulateContract(request) {
+        simulation = request;
+        return { request };
+      }
+    }
+  });
+
+  await chain.assertClaimable({
+    ...plan,
+    amountRaw: player.amountRaw,
+    proof: player.proof
+  }, player.address);
+
+  assert.equal(simulation.functionName, 'claim');
+  assert.equal(simulation.account.toLowerCase(), player.address.toLowerCase());
+  assert.equal(simulation.args[0], BigInt(plan.epoch));
+  assert.equal(simulation.args[2], BigInt(player.amountRaw));
+  assert.deepEqual(simulation.args[3], player.proof);
+});
+
 test('authenticated HTTP routes carry a capped draft through approval, sync, and claim preparation', async () => {
   const store = new MemoryRewardStore({ snapshots: [finalizedSnapshot()] });
   const chain = fakeChain();
