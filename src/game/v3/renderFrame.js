@@ -20,6 +20,7 @@ export const renderFrameMethods = {
       this.drawPortal(ctx);
       this.drawOres(ctx);
       this.drawPickups(ctx);
+      this.drawGroundTrails(ctx);
       this.drawProjectiles(ctx);
       this.drawEnemies(ctx);
       this.drawPlayer(ctx);
