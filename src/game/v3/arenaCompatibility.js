@@ -6,17 +6,13 @@ export const arenaCompatibilityMethods = {
     if (this.runContext?.mode !== 'arena') {
       return balanceControlMethods.startRun.call(this);
     }
-    const originalTuning = this.runContext.tuning || {};
+    const suppliedTuning = this.runContext.tuning || {};
     this.runContext.tuning = {
       ...defaultTuningPreset('arena'),
-      ...originalTuning,
+      ...suppliedTuning,
       ignorePermanentUpgrades: true,
-      usePerDepthRoomSpawns: originalTuning.usePerDepthRoomSpawns === true
+      usePerDepthRoomSpawns: suppliedTuning.usePerDepthRoomSpawns === true
     };
-    try {
-      return balanceControlMethods.startRun.call(this);
-    } finally {
-      this.runContext.tuning = originalTuning;
-    }
+    return balanceControlMethods.startRun.call(this);
   }
 };
