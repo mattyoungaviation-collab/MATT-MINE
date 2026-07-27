@@ -6,7 +6,7 @@ import { RoninPaymentVerifier, RONIN_PAYMENT_CONTRACTS } from '../server/payment
 import { RoninRewardChain } from '../server/reward-chain.js';
 import { RewardManager } from '../server/reward-manager.js';
 import { MemoryRewardStore, PostgresRewardStore } from '../server/reward-store.js';
-import { MattMineService } from '../server/service.js';
+import { AdminMattMineService } from '../server/admin-service.js';
 import { DailyArenaService } from '../server/arena-service.js';
 import {
   RONIN_ARENA_DEPLOYMENT,
@@ -89,7 +89,7 @@ const arenaService = arenaEnabled
       liveEnabled: arenaLiveRequested
     }).init()
   : null;
-const service = new MattMineService(database, {
+const service = new AdminMattMineService(database, {
   publicOrigin: process.env.MATT_MINE_PUBLIC_ORIGIN || null,
   adminKey: process.env.MATT_MINE_ADMIN_KEY || '',
   mainnetTransactionsEnabled,
