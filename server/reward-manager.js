@@ -108,7 +108,7 @@ export class RewardManager {
     return {
       publicationEnabled: this.publicationEnabled,
       maxBoardMatt: this.maxBoardMatt,
-      drafts
+      drafts: drafts.map(adminRewardDraft)
     };
   }
 
@@ -181,6 +181,26 @@ export class RewardManager {
     );
     assertSecret(this.approverKey, candidate, 'reward_approver_rejected', 'The independent reward approver key is invalid.');
   }
+}
+
+function adminRewardDraft(draft) {
+  const entries = Array.isArray(draft.entries)
+    ? draft.entries
+    : Array.isArray(draft.allocations)
+      ? draft.allocations
+      : [];
+  const allocatedMatt = Number(
+    draft.allocatedMatt ??
+    draft.totalMatt ??
+    entries.reduce((sum, entry) => sum + Number(entry.amountMatt || 0), 0)
+  );
+  return {
+    ...draft,
+    allocatedMatt: Number.isFinite(allocatedMatt) ? allocatedMatt : 0,
+    entries: structuredClone(entries),
+    totalMatt: Number.isFinite(allocatedMatt) ? allocatedMatt : 0,
+    allocations: structuredClone(entries)
+  };
 }
 
 function publicReward(reward) {
