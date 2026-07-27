@@ -121,21 +121,23 @@ export class RewardManager {
         return { ...publicReward(reward), chain: { published: false, claimed: false, paused: false } };
       }
       try {
-        const chain = await this.chain.epochStatus(reward, player);
+        const chainReward = await this.bindRewardToDraft(reward);
+        const chain = await this.chain.epochStatus(chainReward, player);
         if (chain.published && reward.status !== 'published') {
           await this.store.markPublished(reward.id, '', this.now());
           reward.status = 'published';
           reward.publishedAt = this.now();
         }
         return { ...publicReward(reward), chain };
-      } catch {
+      } catch (error) {
         return {
           ...publicReward(reward),
           chain: {
             published: reward.status === 'published',
             claimed: false,
             paused: false,
-            unavailable: true
+            unavailable: true,
+            errorCode: error?.code || 'reward_chain_status_failed'
           }
         };
       }
@@ -148,11 +150,30 @@ export class RewardManager {
     const rewards = await this.store.playerRewards(player);
     const reward = rewards.find((entry) => entry.id === normalizeDraftId(id));
     assertApi(reward, 404, 'player_reward_missing', 'This wallet has no reward in the requested epoch.');
-    const chain = await this.chain.assertClaimable(reward, player);
+    const chainReward = await this.bindRewardToDraft(reward);
+    const chain = await this.chain.assertClaimable(chainReward, player);
     return {
       reward: publicReward(reward),
       chain,
-      transaction: this.chain.claimTransaction(reward)
+      transaction: this.chain.claimTransaction(chainReward)
+    };
+  }
+
+  async bindRewardToDraft(reward) {
+    const draft = await this.requireDraft(reward.id);
+    assertApi(
+      String(draft.epoch) === String(reward.epoch) && Number(draft.board) === Number(reward.board),
+      409,
+      'reward_epoch_metadata_mismatch',
+      'The stored player reward does not match its immutable published epoch.'
+    );
+    return {
+      ...reward,
+      epoch: draft.epoch,
+      board: draft.board,
+      merkleRoot: draft.merkleRoot,
+      allocatedRaw: draft.allocatedRaw,
+      claimDeadline: draft.claimDeadline
     };
   }
 
