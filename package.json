@@ -11,7 +11,7 @@
     "dev": "node scripts/dev-server.mjs",
     "start": "node scripts/dev-server.mjs",
     "test": "npm run test:game && npm run test:contracts",
-    "test:game": "node --test \"tests/*.test.mjs\"",
+    "test:game": "node --test --test-reporter=dot \"tests/*.test.mjs\"",
     "test:contracts": "npm --workspace contracts test",
     "contracts:compile": "npm --workspace contracts run compile",
     "contracts:validate:ronin": "npm --workspace contracts run validate:ronin",
