@@ -80,8 +80,12 @@ test('equipped Gold Trail creates connected ground glow and stationary sparkles'
   assert.ok(Number.isFinite(glow.x2) && Number.isFinite(glow.y2));
   assert.ok(glow.y2 > game.player.y, 'the trail should sit at the miner foot/ground plane');
   assert.ok(groundParticles.every((particle) => particle.vx === 0 && particle.vy === 0));
-  assert.equal(game.particles.some((particle) => particle.color === '#ffd95a'), false,
-    'the old round upward-moving puff should not be emitted');
+  assert.equal(glow.color, '#ffd95a', 'legacy cosmetic metadata should remain compatible');
+  assert.equal(
+    game.particles.some((particle) => particle.color === '#ffd95a' && particle.layer !== 'ground'),
+    false,
+    'the old round upward-moving puff should not be emitted'
+  );
 
   const arcsBeforeGenericParticles = calls.arc;
   game.drawParticles(context);
