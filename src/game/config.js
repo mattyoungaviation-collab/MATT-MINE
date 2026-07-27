@@ -30,7 +30,7 @@ export const CONFIG = Object.freeze({
   blasterEnergyMax: 115,
   blasterEnergyRegen: 17,
   blasterEnergyCost: 12,
-  blasterDamageScale: 0.56,
+  blasterDamageScale: 0.60,
   blasterVolleySpread: 0.2,
   blasterRange: 480,
   dynamiteRange: 285,
@@ -100,8 +100,8 @@ export const ORE_TYPES = Object.freeze({
 export const BLASTER_RUN_UPGRADES = Object.freeze([
   { id: 'blastercap', name: 'Crystal Battery', description: '+30 maximum Blaster energy and refill it', icon: '▰', max: 4 },
   { id: 'blasterregen', name: 'Flux Charger', description: '+35% Blaster recharge speed', icon: '↻', max: 4 },
-  { id: 'blasterpower', name: 'Focused Core', description: '+25% Blaster damage', icon: '✦', max: 4 },
-  { id: 'blastervolley', name: 'Split Prism', description: 'Split each shot into two crystal beams', icon: '⋔', max: 1 }
+  { id: 'blasterpower', name: 'Focused Core', description: '+10% Blaster damage', icon: '✦', max: 4 },
+  { id: 'blastervolley', name: 'Split Prism', description: 'Add one beam and split damage across the volley', icon: '⋔', max: 2 }
 ]);
 
 export const RUN_UPGRADES = Object.freeze([
@@ -112,7 +112,7 @@ export const RUN_UPGRADES = Object.freeze([
   { id: 'range', name: 'Long Handle', description: '+20% attack range', icon: '↔', max: 4 },
   { id: 'crit', name: 'Lucky Strike', description: '+8% critical chance', icon: '★', max: 5 },
   { id: 'magnet', name: 'Ore Magnet', description: '+45 pickup range', icon: '◉', max: 5 },
-  { id: 'armor', name: 'Rock Armor', description: 'Take 12% less damage', icon: '⬢', max: 5 },
+  { id: 'armor', name: 'Rock Armor', description: 'Take 8% less damage', icon: '⬢', max: 5 },
   { id: 'dash', name: 'Blast Boots', description: 'Dash recharges 25% faster', icon: '➤', max: 5 },
   { id: 'dynamite', name: 'Pocket Dynamite', description: 'Every fifth hit explodes nearby targets', icon: '🧨', max: 3 },
   { id: 'drone', name: 'Mining Drone', description: 'A drone automatically attacks nearby threats', icon: '◆', max: 4 },
@@ -125,7 +125,7 @@ export const META_UPGRADES = Object.freeze([
   { id: 'speed', name: 'Boot Speed', description: '+2% starting movement speed per rank', baseCost: 105, max: 25 },
   { id: 'luck', name: 'Crystal Luck', description: '+1% rich ore chance per rank', baseCost: 175, max: 20 },
   { id: 'magnet', name: 'Magnet Coil', description: '+6 starting pickup range per rank', baseCost: 145, max: 20 },
-  { id: 'armor', name: 'Reinforced Plates', description: '+1% starting damage reduction per rank', baseCost: 220, max: 15 },
+  { id: 'armor', name: 'Reinforced Plates', description: '+0.8% starting damage reduction per rank', baseCost: 220, max: 15 },
   { id: 'dash', name: 'Dash Capacitor', description: '+2% faster starting dash recharge per rank', baseCost: 240, max: 15 },
   { id: 'blaster', name: 'Blaster Tuning', description: '+3% starting Blaster damage per rank', baseCost: 260, max: 20 }
 ]);

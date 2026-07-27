@@ -52,7 +52,7 @@ export function normalizeServerState(input = {}) {
     runs: normalizeRecords(source.runs, 25_000),
     passPurchases: normalizePassPurchases(source.passPurchases),
     paidEntitlements: normalizePaidEntitlements(source.paidEntitlements),
-    gameTuning: normalizeGameTuning(source.gameTuning),
+    gameTuning: normalizeGameTuning(migrateLegacyGameTuning(source.gameTuning, source.version)),
     arenaTuningSchedule: normalizeArenaTuningSchedule(source.arenaTuningSchedule),
     operations: normalizeOperations(source.operations),
     audit: Array.isArray(source.audit)
@@ -260,6 +260,22 @@ function normalizeRecords(input, limit) {
     .filter(([, value]) => isRecord(value))
     .slice(-limit)
     .map(([key, value]) => [String(key).slice(0, 200), { ...value }]));
+}
+
+function migrateLegacyGameTuning(input, version) {
+  const source = isRecord(input) ? structuredClone(input) : {};
+  if (Number(version) >= 9) return source;
+  for (const lobby of ['practice', 'free', 'paid']) {
+    const preset = isRecord(source[lobby]) ? source[lobby] : {};
+    const current = Number(preset.blasterDamageMultiplier);
+    source[lobby] = {
+      ...preset,
+      ...(!Number.isFinite(current) || Math.abs(current - .56) < .000001
+        ? { blasterDamageMultiplier: .60 }
+        : {})
+    };
+  }
+  return source;
 }
 
 function safeTimestamp(value) {

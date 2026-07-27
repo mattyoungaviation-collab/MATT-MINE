@@ -6,6 +6,11 @@ import { pickupMethods } from './v3/pickups.js';
 import { weaponsMethods } from './v3/weapons.js';
 import { roomsMethods } from './v3/rooms.js';
 import { enemiesMethods } from './v3/enemies.js';
+import { balanceControlMethods } from './v3/balanceControls.js';
+import { blasterBalanceMethods } from './v3/blasterBalance.js';
+import { spawnTuningMethods } from './v3/spawnTuning.js';
+import { enemyCapMethods } from './v3/enemyCap.js';
+import { arenaCompatibilityMethods } from './v3/arenaCompatibility.js';
 import { renderMethods } from './v3/render.js';
 import { loadVisualAssets } from './v3/visualAssets.js';
 
@@ -25,5 +30,10 @@ Object.assign(
   weaponsMethods,
   roomsMethods,
   enemiesMethods,
+  balanceControlMethods,
+  blasterBalanceMethods,
+  spawnTuningMethods,
+  enemyCapMethods,
+  arenaCompatibilityMethods,
   renderMethods
 );

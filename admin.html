@@ -78,10 +78,10 @@
           <div><p class="eyebrow">LIVE GAME RULES</p><h2>Game tuning</h2></div>
           <div class="action-row">
             <label>Lobby<select id="tuning-lobby"><option value="practice">Practice</option><option value="free">Free ranked</option><option value="paid">Pass ranked</option><option value="arena">Daily Arena</option></select></label>
-            <label>Find setting<input id="tuning-search" placeholder="Health, boss, ore..."></label>
+            <label>Find setting<input id="tuning-search" placeholder="Blaster, armor, depth 5, bosses..."></label>
           </div>
         </div>
-        <div class="notice">Saved changes apply to new runs only. Contract prices, prize custody, pool caps, and finished scores stay protected.</div>
+        <div class="notice">Saved changes apply to new runs only. Daily Arena changes stage for the next UTC day. Contract prices, prize custody, pool caps, and finished scores stay protected.</div>
         <form id="tuning-form">
           <div id="tuning-fields" class="tuning-groups"></div>
           <article class="panel">
@@ -199,5 +199,6 @@
     </form>
   </dialog>
   <script type="module" src="/src/admin.js"></script>
+  <script type="module" src="/src/adminPlayerEditor.js"></script>
 </body>
 </html>
