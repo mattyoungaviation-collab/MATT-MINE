@@ -67,6 +67,7 @@ export const goldTrailMethods = {
     this.particles.push({
       kind: 'gold_trail_glow',
       layer: 'ground',
+      color: '#ffd95a',
       x: groundX,
       y: groundY,
       x1: segmentStartX,
@@ -89,6 +90,7 @@ export const goldTrailMethods = {
       this.particles.push({
         kind: 'gold_trail_spark',
         layer: 'ground',
+        color: '#fff2b8',
         x: groundX + directionX * along + perpendicularX * side,
         y: groundY + directionY * along + perpendicularY * side,
         vx: 0,
