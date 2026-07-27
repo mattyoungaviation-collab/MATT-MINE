@@ -18,7 +18,10 @@ export const blasterBalanceMethods = {
     this.player.swingTimer = Math.max(this.player.swingTimer, .14);
     this.player.blasterEnergy -= energyCost;
 
-    const maximumBeams = Math.max(1, Math.floor(tuning.blasterBeams ?? 3));
+    // Raw engine tests and unsnapshotted legacy runs retain the former two-beam
+    // ceiling. Production run snapshots explicitly carry the editable setting,
+    // whose normal Free, Pass, and Practice default is now three beams.
+    const maximumBeams = Math.max(1, Math.floor(tuning.blasterBeams ?? 2));
     const count = clamp(Math.floor(this.player.blasterVolley || 1), 1, maximumBeams);
     const perProjectileMultiplier = count >= 3
       ? tuning.blasterVolleyThreeDamageMultiplier ?? .60
