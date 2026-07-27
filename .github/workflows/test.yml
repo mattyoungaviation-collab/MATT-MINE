@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - agent/v0.3-combat-depth
+      - agent/admin-total-balance-controls
 
 permissions:
   contents: read
