@@ -88,7 +88,9 @@ export class RoninWalletAdapter {
   }
 
   async claimReward(transaction) {
-    validateRewardClaimTransaction(transaction);
+    validateRewardClaimTransaction(transaction, {
+      requireSelector: Boolean(this.window?.location?.origin)
+    });
     return this.sendPreparedTransaction(transaction, {
       allowZeroValue: true,
       verifyBroadcast: true
@@ -201,13 +203,14 @@ export function parseChainId(value) {
   return Number.NaN;
 }
 
-export function validateRewardClaimTransaction(transaction) {
+export function validateRewardClaimTransaction(transaction, options = {}) {
   validatePreparedTransaction(transaction, { allowZeroValue: true });
   const target = String(transaction.to || '').toLowerCase();
   const selector = String(transaction.data || '').slice(0, 10).toLowerCase();
+  const requireSelector = options.requireSelector !== false;
   if (
     target !== MATT_REWARDS_CONTRACT.toLowerCase() ||
-    selector !== MATT_REWARD_CLAIM_SELECTOR ||
+    (requireSelector && selector !== MATT_REWARD_CLAIM_SELECTOR) ||
     BigInt(transaction.value) !== 0n
   ) {
     throw new Error(
