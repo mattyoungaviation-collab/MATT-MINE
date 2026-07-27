@@ -1,5 +1,8 @@
 import { apiClient } from './apiClient.js';
 
+export const MATT_REWARDS_CONTRACT = '0x6ba468EE15cb3634F4Ea340407E9FD7A75267619';
+export const MATT_REWARD_CLAIM_SELECTOR = '0x8a23213f';
+
 export class RoninWalletAdapter {
   constructor(options = {}) {
     this.api = options.api || apiClient;
@@ -85,7 +88,13 @@ export class RoninWalletAdapter {
   }
 
   async claimReward(transaction) {
-    return this.sendPreparedTransaction(transaction, { allowZeroValue: true });
+    validateRewardClaimTransaction(transaction, {
+      requireSelector: Boolean(this.window?.location?.origin)
+    });
+    return this.sendPreparedTransaction(transaction, {
+      allowZeroValue: true,
+      verifyBroadcast: true
+    });
   }
 
   async sendPreparedTransactions(transactions, options = {}) {
@@ -133,6 +142,9 @@ export class RoninWalletAdapter {
       throw new Error('Ronin Wallet did not return a valid transaction hash.');
     }
     await waitForWalletReceipt(this.provider, transactionHash);
+    if (options.verifyBroadcast) {
+      await verifyBroadcastTransaction(this.provider, transactionHash, transaction);
+    }
     return transactionHash;
   }
 
@@ -191,6 +203,23 @@ export function parseChainId(value) {
   return Number.NaN;
 }
 
+export function validateRewardClaimTransaction(transaction, options = {}) {
+  validatePreparedTransaction(transaction, { allowZeroValue: true });
+  const target = String(transaction.to || '').toLowerCase();
+  const selector = String(transaction.data || '').slice(0, 10).toLowerCase();
+  const requireSelector = options.requireSelector !== false;
+  if (
+    target !== MATT_REWARDS_CONTRACT.toLowerCase() ||
+    (requireSelector && selector !== MATT_REWARD_CLAIM_SELECTOR) ||
+    BigInt(transaction.value) !== 0n
+  ) {
+    throw new Error(
+      `Blocked an unsafe MATT claim. Expected ${MATT_REWARDS_CONTRACT} / ${MATT_REWARD_CLAIM_SELECTOR}, ` +
+      `received ${transaction.to || 'no target'} / ${selector || 'no selector'}. Refresh the game before trying again.`
+    );
+  }
+}
+
 function validatePreparedTransaction(transaction, options = {}) {
   if (
     !transaction ||
@@ -202,6 +231,32 @@ function validatePreparedTransaction(transaction, options = {}) {
   }
   if (!options.allowZeroValue && BigInt(transaction.value) <= 0n) {
     throw new Error('The transaction value must be greater than zero.');
+  }
+}
+
+async function verifyBroadcastTransaction(provider, transactionHash, expected) {
+  let submitted;
+  try {
+    submitted = await provider.request({
+      method: 'eth_getTransactionByHash',
+      params: [transactionHash]
+    });
+  } catch {
+    return;
+  }
+  if (!submitted) return;
+  const actualTo = String(submitted.to || '').toLowerCase();
+  const actualData = String(submitted.input || submitted.data || '').toLowerCase();
+  if (
+    actualTo !== String(expected.to || '').toLowerCase() ||
+    actualData !== String(expected.data || '').toLowerCase()
+  ) {
+    const actualSelector = actualData.slice(0, 10) || 'no selector';
+    throw new Error(
+      `Ronin Wallet broadcast a different transaction: ${submitted.to || 'no target'} / ${actualSelector}. ` +
+      `Do not retry. Lock the wallet, disable other wallet extensions, refresh MATT Mine, and sign in again. ` +
+      `Transaction ${transactionHash}`
+    );
   }
 }
 
