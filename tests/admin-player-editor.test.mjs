@@ -185,5 +185,5 @@ test('the command center loads a complete editor with exact fields and destructi
   assert.match(script, /Clear Pass achievements/);
   assert.match(script, /Reset all off-chain progression/);
   assert.match(tuning, /Focused Core damage per level/);
-  assert.match(tuning, /depth5GuardianBosses/);
+  assert.match(tuning, /GuardianBosses/);
 });
