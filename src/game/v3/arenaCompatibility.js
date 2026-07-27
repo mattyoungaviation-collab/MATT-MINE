@@ -1,3 +1,4 @@
+import { defaultTuningPreset } from '../tuning.js';
 import { balanceControlMethods } from './balanceControls.js';
 
 export const arenaCompatibilityMethods = {
@@ -6,7 +7,12 @@ export const arenaCompatibilityMethods = {
       return balanceControlMethods.startRun.call(this);
     }
     const originalTuning = this.runContext.tuning || {};
-    this.runContext.tuning = { ...originalTuning, ignorePermanentUpgrades: true };
+    this.runContext.tuning = {
+      ...defaultTuningPreset('arena'),
+      ...originalTuning,
+      ignorePermanentUpgrades: true,
+      usePerDepthRoomSpawns: originalTuning.usePerDepthRoomSpawns === true
+    };
     try {
       return balanceControlMethods.startRun.call(this);
     } finally {
