@@ -1,6 +1,6 @@
-# MATT Mine Competition Studio v3.1
+# MATT Mine Competition Studio v3.2
 
-Competition Studio is the server-authoritative map and loadout system for MATT Mine's five playable mine slots.
+Competition Studio is the server-authoritative map and loadout system for MATT Mine's five playable mine slots. Version 3.2 gives each slot five independent depth layouts.
 
 ## Player flow
 
@@ -22,13 +22,15 @@ PvP is intentionally display-only. The server rejects PvP configuration, publica
 The Admin Command Center includes a Competition Studio tab.
 
 1. Choose one of the five playable mine slots.
-2. Draw, move, resize, rename, and connect rooms.
-3. Place the player spawn, Guardian, extraction lift, enemies, ore, loot, and hazards at exact coordinates.
-4. Inspect and edit the selected room or object.
-5. Set the character, available weapons, starting weapon, health, ammunition, drones, safe-start duration, upgrades, and attempt limit.
-6. Validate the complete configuration.
-7. Save the editable draft.
-8. Choose a future start and end time and publish.
+2. Select Depth 1–5. Each depth is an independent map.
+3. Draw, move, resize, rename, and connect rooms.
+4. Place the player spawn, Guardian, extraction lift, enemies, ore, loot, and hazards at exact coordinates.
+5. Inspect and edit the selected room or object.
+6. Copy the previous depth when useful, or reset only the selected depth.
+7. Set the character, available weapons, starting weapon, health, ammunition, drones, safe-start duration, upgrades, and attempt limit.
+8. Validate all five depths.
+9. Save the editable draft.
+10. Choose a future start and end time and publish all five maps as one version.
 
 Published versions are immutable. Updating the draft cannot change a scheduled or active competition.
 
@@ -37,8 +39,8 @@ Published versions are immutable. Updating the draft cannot change a scheduled o
 - Drafts and published snapshots live in the existing versioned server state.
 - Production stores that state in Postgres through the current durable store.
 - Every published snapshot receives a stable SHA-256 hash.
-- Runs copy the resolved snapshot ID, hash, map, loadout, rules, and tuning at start.
-- The game materializes only the server-returned map for ranked modes.
+- Runs copy the resolved snapshot ID, hash, five depth maps, loadout, rules, and tuning at start.
+- The game materializes only the matching server-returned depth map for ranked modes.
 - Deterministic Arena replay receives the same resolved Arena snapshot.
 - Scores remain subject to the existing replay, wallet, entitlement, payment, suspension, and submission checks.
 - Existing contracts, MATT routing, verified payment rules, and the no-burn policy are unchanged.
@@ -59,7 +61,7 @@ Objects are validated against room boundaries, required objectives, supported qu
 
 ## Migration
 
-Server state version 13 adds `competitionStudio`. Older states normalize into safe starter drafts and remain compatible with existing profiles, balances, sessions, payments, runs, leaderboards, claims, and contract records.
+Server state version 14 upgrades `competitionStudio` to five independent depth maps. Legacy single-map drafts and snapshots are cloned safely into Depths 1–5 and remain compatible with existing profiles, balances, sessions, payments, runs, leaderboards, claims, and contract records.
 
 ## Operations
 

@@ -4,6 +4,7 @@ import { clamp, random, randomRange, weightedChoice } from '../utils.js';
 import { bossPhaseForHealth, roomRequiresLock } from '../combat.js';
 import {
   MAP_OBJECT_KINDS,
+  competitionMapForDepth,
   materializeCompetitionMap
 } from '../competitionStudio.js';
 
@@ -118,8 +119,11 @@ export const stateMethods = {
   generateDepth() {
     const arenaMode = this.runContext?.mode === 'arena';
     const tuning = this.runContext?.tuning || {};
-    const authoredMap = this.runContext?.competitionSnapshot?.map ||
-      tuning._competitionSnapshot?.map;
+    const competitionSnapshot = this.runContext?.competitionSnapshot ||
+      tuning._competitionSnapshot;
+    const authoredMap = competitionSnapshot
+      ? competitionMapForDepth(competitionSnapshot, this.run.depth)
+      : null;
     this.layout = authoredMap
       ? materializeCompetitionMap(authoredMap)
       : createMineLayout(tuning.roomsPerDepth || CONFIG.roomsPerDepth, tuning);

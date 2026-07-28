@@ -51,7 +51,7 @@ import {
   competitionSlotForMode,
   normalizeCompetitionDraft,
   resolveCompetitionSnapshot,
-  validateCompetitionMap
+  validateCompetitionDraft
 } from '../src/game/competitionStudio.js';
 
 const FREE_PASS_XP = 25;
@@ -1084,7 +1084,7 @@ export class MattMineService {
     } catch (error) {
       throw new ApiError(422, 'competition_draft_invalid', error.message);
     }
-    const validation = validateCompetitionMap(draft.map);
+    const validation = validateCompetitionDraft(draft);
     const timestamp = this.now();
     return this.database.transact((state) => {
       state.competitionStudio.slots[slotId].draft = draft;
@@ -1094,7 +1094,7 @@ export class MattMineService {
         state,
         'SERVER_ADMIN',
         'COMPETITION_DRAFT_SAVED',
-        `${slotId}: ${validation.counts.rooms} rooms, ${validation.counts.objects} objects; ${normalizedReason}`,
+        `${slotId}: ${validation.counts.rooms} rooms, ${validation.counts.objects} objects across ${validation.depths.length} depths; ${normalizedReason}`,
         timestamp
       );
       return { draft: structuredClone(draft), validation, reason: normalizedReason };
@@ -1112,7 +1112,7 @@ export class MattMineService {
     const timestamp = this.now();
     return this.database.transact((state) => {
       const draft = normalizeCompetitionDraft(state.competitionStudio.slots[slotId].draft, slotId);
-      const validation = validateCompetitionMap(draft.map);
+      const validation = validateCompetitionDraft(draft);
       assertApi(validation.valid, 422, 'competition_map_invalid', validation.errors[0] || 'The map is not playable.');
       const id = `snapshot_${slotId}_${this.randomHex(10)}`;
       const canonical = JSON.stringify({ ...draft, effectiveAt, expiresAt });
@@ -2027,6 +2027,7 @@ function publicCompetitionSlot(definition, snapshot) {
       expiresAt: snapshot.expiresAt,
       fingerprint: snapshot.fingerprint,
       map: structuredClone(snapshot.map),
+      depths: structuredClone(snapshot.depths),
       loadout: structuredClone(snapshot.loadout),
       rules: structuredClone(snapshot.rules)
     } : null

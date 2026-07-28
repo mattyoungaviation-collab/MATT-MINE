@@ -1,4 +1,5 @@
 import { drawCompetitionMap } from './mineMapRenderer.js';
+import { COMPETITION_DEPTH_COUNT, competitionMapForDepth } from './competitionStudio.js';
 
 export async function mountMineHub(apiClient) {
   const layout = document.querySelector('.matchmaking-layout');
@@ -31,7 +32,11 @@ export async function mountMineHub(apiClient) {
       <button type="button" data-mine-close aria-label="Close">×</button>
       <header><div><span data-mine-kicker>OFFICIAL MINE</span><h2 data-mine-name></h2><p data-mine-subtitle></p></div><b data-mine-state>LIVE</b></header>
       <div class="mine-detail-layout">
-        <div class="mine-detail-map"><canvas width="1000" height="560"></canvas><div data-mine-loadout></div></div>
+        <div class="mine-detail-map">
+          <div class="mine-depth-tabs" data-mine-depth-tabs aria-label="Mine depths"></div>
+          <canvas width="1000" height="560"></canvas>
+          <div data-mine-loadout></div>
+        </div>
         <div class="mine-detail-board">
           <div class="mine-board-top"><span data-board-title>LEADERBOARD</span><small data-board-period></small></div>
           <div data-mine-rules class="mine-rule-strip"></div>
@@ -49,6 +54,11 @@ export async function mountMineHub(apiClient) {
     if (!state.selected || state.selected.comingSoon) return;
     closeModal(modal);
     window.dispatchEvent(new CustomEvent('mattmine:slot-enter', { detail: { slot: state.selected } }));
+  });
+  modal.querySelector('[data-mine-depth-tabs]').addEventListener('click', (event) => {
+    const button = event.target.closest('[data-mine-depth]');
+    if (!button || !state.selected) return;
+    renderDetailDepth(modal, state.selected, Number(button.dataset.mineDepth));
   });
 
   try {
@@ -111,7 +121,21 @@ function renderDetail(modal, slot, leaderboard) {
       : '<tr><td colspan="4">Be the first miner on this board.</td></tr>'
     : '<tr><td colspan="4">Practice is unlimited and never affects a ranked leaderboard.</td></tr>';
   modal.querySelector('[data-mine-enter]').textContent = slot.id === 'practice' ? 'START PRACTICE' : slot.id === 'arena' ? 'ENTER ARENA' : 'ENTER THIS MINE';
-  drawCompetitionMap(modal.querySelector('canvas'), snapshot.map);
+  modal.dataset.depth = '1';
+  modal.querySelector('[data-mine-depth-tabs]').innerHTML = Array.from(
+    { length: COMPETITION_DEPTH_COUNT },
+    (_, index) => `<button type="button" data-mine-depth="${index + 1}" class="${index === 0 ? 'active' : ''}">DEPTH ${index + 1}</button>`
+  ).join('');
+  renderDetailDepth(modal, slot, 1);
+}
+
+function renderDetailDepth(modal, slot, depth) {
+  const normalizedDepth = Math.max(1, Math.min(COMPETITION_DEPTH_COUNT, Math.floor(depth || 1)));
+  modal.dataset.depth = String(normalizedDepth);
+  modal.querySelectorAll('[data-mine-depth]').forEach((button) => {
+    button.classList.toggle('active', Number(button.dataset.mineDepth) === normalizedDepth);
+  });
+  drawCompetitionMap(modal.querySelector('canvas'), competitionMapForDepth(slot.snapshot, normalizedDepth));
 }
 
 function closeModal(modal) {

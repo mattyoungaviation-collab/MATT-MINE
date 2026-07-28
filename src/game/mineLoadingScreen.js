@@ -1,4 +1,5 @@
 import { drawCompetitionMap } from './mineMapRenderer.js';
+import { competitionMapForDepth } from './competitionStudio.js';
 
 const MINIMUM_LOADING_MS = 10_000;
 
@@ -13,7 +14,7 @@ export async function showMineLoadingScreen(slot, options = {}) {
     ? `MAP ${snapshot.fingerprint.slice(0, 10).toUpperCase()}`
     : 'OFFICIAL MATT MINE';
   const canvas = overlay.querySelector('canvas');
-  drawCompetitionMap(canvas, snapshot?.map);
+  drawCompetitionMap(canvas, competitionMapForDepth(snapshot, options.depth || 1));
   overlay.hidden = false;
   overlay.classList.add('active');
   const startedAt = performance.now();

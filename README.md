@@ -4,6 +4,16 @@
 
 MATT Mine is a standalone browser action roguelite and daily Web3 competition on Ronin. It has its own launch website, wallet identity, separate Free and Pass leaderboards, live Pass and paid-run payments, verified contracts, and a production persistence path independent from MATT Hub.
 
+## v3.2 independent depth layouts
+
+- Give every playable mine five independently authored depth maps.
+- Switch Depth 1–5 directly inside Competition Studio without changing another depth.
+- Copy the previous depth as a starting point or reset only the selected depth.
+- Validate all five layouts before one immutable competition version can be published.
+- Let players preview every depth from a mine card while the ten-second briefing shows Depth 1.
+- Select the exact authored layout whenever gameplay descends and bind the complete depth sequence to deterministic Arena replay.
+- Migrate legacy single-map drafts and snapshots safely into five independent layouts.
+
 ## v3.1 Competition Studio
 
 - Present Practice, MATT Arena, Daily, Pass, and Seven-Day mines together in one clear 3-by-2 mine hub, with PvP visibly reserved as coming soon.
