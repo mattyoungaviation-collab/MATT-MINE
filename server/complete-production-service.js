@@ -40,6 +40,7 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
   }
 
   async updateAdminNuggetEconomy(adminKey, patch, reason) {
+    this.assertAdminKey(adminKey);
     if (patch?.advertisementRewardsEnabled === true) {
       throw new ApiError(
         503,
