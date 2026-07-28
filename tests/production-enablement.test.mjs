@@ -8,6 +8,7 @@ import {
 } from '../server/external-verifiers.js';
 import { MemoryCompetitiveReplayStore } from '../server/competitive-replay-store.js';
 import { CompetitiveReplayService } from '../server/competitive-replay-service.js';
+import { buildArenaChallenge, replayArenaTranscript } from '../server/arena-engine.js';
 import { MattMineGame } from '../src/game/GameV4.js';
 import { defaultProfile } from '../src/game/storage.js';
 
@@ -152,4 +153,46 @@ test('paid revive preserves the same run and resumes once at a safe full-health 
   game.endRun(false);
   assert.equal(game.state, 'ended');
   assert.equal(events.at(-1).type, 'finish');
+});
+
+test('competitive replay uses the server-owned permanent-upgrade snapshot', () => {
+  const profile = defaultProfile();
+  profile.meta.health = 2;
+  const replayed = replayArenaTranscript(
+    buildArenaChallenge('a'.repeat(64)),
+    [],
+    { mode: 'free', profile }
+  );
+
+  assert.equal(replayed.maximumHealth, 116);
+});
+
+test('queued Blaster offers remain deterministic after choosing a run upgrade', () => {
+  const createGame = () => {
+    const game = new MattMineGame(null, defaultProfile(), {
+      headless: true,
+      audio: {
+        startMusic() {}, stopMusic() {}, resume() {}, play() {}, startBoss() {}, stopBoss() {}
+      }
+    });
+    game.startRun({ mode: 'free', seed: 'MATT-UPGRADE-REPLAY-TEST' });
+    game.state = 'levelup';
+    game.pendingUpgradeIds = ['power'];
+    game.pendingBlasterUpgrade = true;
+    return game;
+  };
+  const first = createGame();
+  const second = createGame();
+  const originalRandom = Math.random;
+  try {
+    Math.random = () => 0;
+    first.chooseRunUpgrade('power');
+    Math.random = () => 0.999999;
+    second.chooseRunUpgrade('power');
+  } finally {
+    Math.random = originalRandom;
+  }
+
+  assert.equal(first.state, 'levelup');
+  assert.deepEqual(first.pendingUpgradeIds, second.pendingUpgradeIds);
 });

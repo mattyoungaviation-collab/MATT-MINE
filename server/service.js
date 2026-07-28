@@ -677,6 +677,7 @@ export class MattMineService {
         passActiveAtStart,
         passXpAwarded: 0,
         result: null,
+        playerProfile: structuredClone(wallet.profile),
         characterId: selectedCharacterId,
         character: structuredClone(selectedCharacter),
         weeklyStage,

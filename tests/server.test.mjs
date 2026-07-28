@@ -861,6 +861,20 @@ test('permanent upgrades spend only server-owned banked nuggets', async () => {
   assert.equal(upgraded.profile.meta.health, 1);
 });
 
+test('competitive runs preserve the authoritative player profile for replay', async () => {
+  const harness = createHarness();
+  const { session } = await signIn(harness);
+  await harness.database.transact((state) => {
+    state.wallets[account.address.toLowerCase()].profile.meta.health = 3;
+  });
+
+  const run = await harness.service.startRun(session.token, SERVER_RUN_MODES.FREE);
+  const state = await harness.database.read();
+
+  assert.equal(state.runs[run.runId].playerProfile.meta.health, 3);
+  assert.notEqual(state.runs[run.runId].playerProfile, state.wallets[account.address.toLowerCase()].profile);
+});
+
 test('JSON server storage persists profiles and recovers corrupt state safely', async (context) => {
   const directory = await mkdtemp(join(tmpdir(), 'matt-mine-v6-'));
   context.after(() => rm(directory, { recursive: true, force: true }));
