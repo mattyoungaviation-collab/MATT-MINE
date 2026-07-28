@@ -264,6 +264,12 @@ async function handleApiRequest({
     sendJson(response, 200, { ok: true, ...result });
     return;
   }
+  if (method === 'POST' && path === '/api/runs/practice/claim') {
+    const body = await readJson(request, maxRequestBytes);
+    const result = await service.practiceRunClaim(bearerToken(request), body);
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
   if (method === 'POST' && path === '/api/runs/abandon') {
     const body = await readJson(request, maxRequestBytes);
     const result = await service.abandonRun(bearerToken(request), body);

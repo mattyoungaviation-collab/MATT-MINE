@@ -14,6 +14,10 @@ import {
   defaultPassInventory
 } from '../src/game/passRewards.js';
 import { defaultProfile } from '../src/game/storage.js';
+import {
+  NUGGET_LEDGER_TYPES,
+  setNuggetLedgerBalance
+} from './nugget-ledger.js';
 
 const MAX_PLAYER_VALUE = 1_000_000_000;
 
@@ -84,7 +88,7 @@ export class AdminMattMineService extends MattMineService {
 function applyResets(wallet, input, changes) {
   if (!isRecord(input)) return;
   if (input.allProgress === true) {
-    wallet.profile = defaultProfile();
+    resetWalletProfile(wallet, { profileOnly: false });
     wallet.passProgress = { xp: 0, updatedAt: 0 };
     wallet.passInventory = defaultPassInventory();
     wallet.keybindings = defaultKeybindings();
@@ -93,7 +97,7 @@ function applyResets(wallet, input, changes) {
     return;
   }
   if (input.profile === true) {
-    wallet.profile = defaultProfile();
+    resetWalletProfile(wallet, { profileOnly: true });
     changes.push('reset gameplay profile and nuggets');
   }
   if (input.upgrades === true) {
@@ -155,7 +159,14 @@ function applyIdentity(state, wallet, input, address, timestamp, changes) {
 function applyProfile(wallet, input, changes) {
   if (!isRecord(input)) return;
   setInteger(input, 'bankedNuggets', 0, MAX_PLAYER_VALUE, (value) => {
-    wallet.profile.bankedNuggets = value;
+    const target = Math.min(value, MAX_PLAYER_VALUE);
+    const ledger = setNuggetLedgerBalance(wallet, target, {
+      type: NUGGET_LEDGER_TYPES.ADMIN_ADJUSTMENT,
+      details: `Admin profile banked nuggets set to ${target}`,
+      adminActor: 'SERVER_ADMIN',
+      idempotencyKey: `admin-profile-balance:${wallet.address}:${target}`
+    });
+    wallet.profile.bankedNuggets = target;
     changes.push(`banked nuggets=${value}`);
   });
   setInteger(input, 'bestDepth', 0, 100, (value) => {
@@ -178,6 +189,27 @@ function applyProfile(wallet, input, changes) {
       wallet.profile.meta[upgrade.id] = rank;
       changes.push(`${upgrade.id} rank=${rank}`);
     }
+  }
+}
+
+function resetWalletProfile(wallet, options = {}) {
+  const previousBalance = wallet.profile?.bankedNuggets || 0;
+  const profile = defaultProfile();
+  wallet.profile = {
+    ...profile,
+    meta: { ...profile.meta }
+  };
+
+  if (previousBalance > 0) {
+    const cleared = setNuggetLedgerBalance(wallet, 0, {
+      type: NUGGET_LEDGER_TYPES.ADMIN_ADJUSTMENT,
+      details: `Profile reset${options.profileOnly ? '' : ' with progression'}`,
+      adminActor: 'SERVER_ADMIN',
+      idempotencyKey: `admin-profile-reset:${wallet.address}:${previousBalance}:${options.profileOnly ? 'partial' : 'full'}`
+    });
+    if (cleared.entry) wallet.profile.bankedNuggets = cleared.newBalance;
+  } else {
+    wallet.profile.bankedNuggets = 0;
   }
 }
 

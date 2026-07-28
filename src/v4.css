@@ -1270,6 +1270,46 @@
 .economy-result span { color: #d2d7de; }
 .economy-result small { color: #858f9e; line-height: 1.45; }
 
+.practice-claim-card {
+  border: 1px solid rgba(244,215,94,0.2);
+  border-radius: 11px;
+  background: rgba(244,215,94,0.05);
+  margin: 10px 0 16px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.run-claim-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.run-claim-info strong { color: #f4d75e; }
+.run-claim-info span,
+.run-claim-info small { color: #d2d7de; }
+
+.practice-claim-card .input-wrap {
+  display: grid;
+  gap: 6px;
+  color: #d2d7de;
+}
+
+.practice-claim-card .input-wrap span {
+  color: #8f98a7;
+  font-size: 11px;
+}
+
+.practice-claim-card input[type="text"] {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #4a5568;
+  background: #0f1520;
+  color: #f5f8ff;
+}
+
 @media (max-width: 900px) {
   .menu-v4 {
     display: block;

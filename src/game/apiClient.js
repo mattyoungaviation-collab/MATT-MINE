@@ -219,6 +219,18 @@ export class MattMineApiClient {
     });
   }
 
+  async practiceRunClaim(runId, action, transactionHash = '') {
+    return this.request('/api/runs/practice/claim', {
+      method: 'POST',
+      authenticated: true,
+      body: {
+        runId,
+        action,
+        transactionHash
+      }
+    });
+  }
+
   async updateKeybindings(keybindings) {
     const response = await this.request('/api/profile/keybindings', {
       method: 'PUT',

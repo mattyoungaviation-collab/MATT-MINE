@@ -9,6 +9,7 @@ import { SERVER_STATE_VERSION } from './constants.js';
 import { normalizeIdentity } from './identity.js';
 import { defaultGameTuning, normalizeGameTuning } from '../src/game/tuning.js';
 import { defaultKeybindings, normalizeKeybindings } from '../src/game/keybindings.js';
+import { normalizeMigrationWalletState, normalizeNuggetLedger } from './nugget-ledger.js';
 
 export function defaultServerState() {
   return {
@@ -31,6 +32,8 @@ export function defaultWalletState(address, timestamp = Date.now()) {
     address,
     identity: normalizeIdentity(),
     profile: defaultProfile(),
+    nuggetLedger: [],
+    practiceClaims: {},
     passProgress: defaultPassProgress(),
     passInventory: defaultPassInventory(),
     keybindings: defaultKeybindings(),
@@ -149,10 +152,22 @@ function normalizeWallets(input) {
     .slice(-20_000)
     .map(([address, wallet]) => {
       const normalizedAddress = address.toLowerCase();
+      const profile = normalizeProfile(wallet.profile);
+      const migration = normalizeMigrationWalletState(
+        normalizedAddress,
+        profile.bankedNuggets,
+        wallet.nuggetLedger,
+        safeTimestamp(wallet.updatedAt)
+      );
       return [normalizedAddress, {
         address: normalizedAddress,
         identity: normalizeIdentity(wallet.identity),
-        profile: normalizeProfile(wallet.profile),
+        profile: {
+          ...profile,
+          bankedNuggets: migration.balance
+        },
+        nuggetLedger: normalizeNuggetLedger(migration.ledger, normalizedAddress),
+        practiceClaims: normalizePracticeClaims(wallet.practiceClaims, safeTimestamp(wallet.updatedAt)),
         passProgress: normalizePassProgress(wallet.passProgress),
         passInventory: normalizePassInventory(wallet.passInventory),
         keybindings: safeKeybindings(wallet.keybindings),
@@ -254,6 +269,35 @@ function normalizeDaily(input) {
     }]));
 }
 
+function normalizePracticeClaims(input = {}, now = Date.now()) {
+  if (!isRecord(input)) return {};
+  const normalized = {};
+  for (const [runId, claim] of Object.entries(input)) {
+    if (!isRecord(claim)) continue;
+    const safeRunId = String(runId).slice(0, 120);
+    if (!safeRunId) continue;
+    const status = typeof claim.status === 'string' && ['pending', 'claimed', 'discarded'].includes(claim.status)
+      ? claim.status
+      : '';
+    if (!status) continue;
+    const projectedNuggets = safeInteger(claim.projectedNuggets, 0, true);
+    const createdAt = safeInteger(claim.createdAt, now);
+    const expiresAt = safeInteger(claim.expiresAt, createdAt);
+    const settledAt = safeInteger(claim.settledAt, 0);
+    const transactionHash = normalizeTransactionHash(claim.transactionHash);
+    normalized[safeRunId] = {
+      runId: safeRunId,
+      status,
+      createdAt,
+      expiresAt,
+      projectedNuggets,
+      settledAt,
+      transactionHash
+    };
+  }
+  return normalized;
+}
+
 function normalizeRecords(input, limit) {
   if (!isRecord(input)) return {};
   return Object.fromEntries(Object.entries(input)
@@ -286,8 +330,19 @@ function safeBoundedInteger(value, max) {
   return Number.isSafeInteger(value) && value >= 0 ? Math.min(value, max) : 0;
 }
 
+function safeInteger(value, fallback = 0, allowNegative = false) {
+  if (!Number.isSafeInteger(value)) return fallback;
+  if (!allowNegative && value < 0) return fallback;
+  return value;
+}
+
 function safeUnsignedString(value) {
   return typeof value === 'string' && /^\d+$/.test(value) ? value : '0';
+}
+
+function normalizeTransactionHash(value) {
+  const normalized = String(value || '').toLowerCase();
+  return /^0x[a-f0-9]{64}$/.test(normalized) ? normalized : '';
 }
 
 function isHexAddress(value) {

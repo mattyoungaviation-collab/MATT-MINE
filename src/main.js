@@ -55,6 +55,7 @@ const hud = $('#hud');
 const mobileControls = $('#mobile-controls');
 const isLocalPreview = ['localhost', '127.0.0.1', '[::1]'].includes(globalThis.location?.hostname);
 const economy = new LocalEconomyStore();
+const PRACTICE_CLAIM_PLACEHOLDER_PRICE = 5000;
 let profile = loadProfile();
 let gameplayPreferences = loadGameplayPreferences();
 let toastTimer;
@@ -76,6 +77,7 @@ let arenaBusy = false;
 let arenaCountdownTimer = null;
 let activeArenaRun = null;
 let activeArenaTranscript = null;
+let activePracticeClaim = null;
 let pendingAvatarDataUrl = '';
 let abandonConfirmUntil = 0;
 let abandonResetTimer = null;
@@ -462,6 +464,8 @@ async function refreshPaymentStatus(silent = false) {
 
 async function submitServerRun(serverRun, result) {
   activeServerRun = null;
+  activePracticeClaim = null;
+  clearPracticeClaimPanel();
   $('#economy-result').innerHTML = '<strong>SERVER VERIFYING</strong><span>Checking entitlement, run token, score rules, and replay protection…</span>';
   try {
     const accepted = await apiClient.finishRun(serverRun.runId, serverRun.runToken, {
@@ -501,6 +505,12 @@ async function submitServerRun(serverRun, result) {
       <span>Weekly ${boardName} score: ${formatNumber(leaderboard.playerScore)}${passXpCopy}${unlockedCopy}</span>
       <small>Entitlement, Pass status, one-time run token, telemetry limits, secured-loot rule, and duplicate submission checks passed.</small>
     `;
+    if (serverRun.mode === RUN_MODES.PRACTICE) {
+      activePracticeClaim = accepted.practiceClaim || null;
+      renderPracticeClaimPanel(activePracticeClaim, result);
+    } else {
+      clearPracticeClaimPanel();
+    }
     toast('Run accepted by the MATT Mine server');
     await refreshServerPlayer();
   } catch (error) {
@@ -509,6 +519,7 @@ async function submitServerRun(serverRun, result) {
       <span>${escapeHtml(error.message)}</span>
       <small>No leaderboard score was recorded. The server profile remains authoritative.</small>
     `;
+    if (serverRun.mode === RUN_MODES.PRACTICE) clearPracticeClaimPanel();
     toast(error.message);
     await refreshServerPlayer();
   }
@@ -550,11 +561,157 @@ async function submitArenaRun(run) {
   }
 }
 
+function clearPracticeClaimPanel() {
+  const panel = $('#practice-claim-panel');
+  if (!panel) return;
+  panel.hidden = true;
+  const info = $('#practice-claim-info');
+  const hashInput = $('#practice-claim-hash');
+  if (info) info.innerHTML = '';
+  if (hashInput) {
+    hashInput.value = '';
+    hashInput.disabled = false;
+  }
+}
+
+function renderPracticeClaimPanel(claim, result) {
+  const panel = $('#practice-claim-panel');
+  if (!panel) return;
+  const info = $('#practice-claim-info');
+  const hashInput = $('#practice-claim-hash');
+  const claimButton = $('#practice-claim-button');
+  const declineButton = $('#practice-decline-button');
+  if (!claim || !claim.runId) {
+    clearPracticeClaimPanel();
+    return;
+  }
+  panel.hidden = false;
+  const projected = Math.max(0, Math.floor(claim.projectedNuggets || result?.projected || 0));
+  const isExpired = claim.status === 'pending' && claim.expiresAt <= Date.now();
+  const paymentsEnabled = serverConfig?.realPaymentsEnabled === true;
+
+  if (claim.status === 'claimed') {
+    info.innerHTML = `<strong>Practice rewards claimed.</strong><span>Earned ${formatNumber(projected)} nuggets.</span>`;
+    if (claimButton) claimButton.disabled = true;
+    if (declineButton) declineButton.disabled = true;
+    if (hashInput) hashInput.disabled = true;
+    return;
+  }
+  if (claim.status === 'discarded') {
+    info.innerHTML = '<strong>Practice rewards declined.</strong><span>You chose not to claim this run reward. Decline is final.</span>';
+    if (claimButton) claimButton.disabled = true;
+    if (declineButton) declineButton.disabled = true;
+    if (hashInput) hashInput.disabled = true;
+    return;
+  }
+  if (isExpired) {
+    info.innerHTML = '<strong>Practice claim expired.</strong><span>The 24-hour practice claim window has ended.</span>';
+    if (claimButton) claimButton.disabled = true;
+    if (declineButton) declineButton.disabled = true;
+    if (hashInput) hashInput.disabled = true;
+    return;
+  }
+  if (!paymentsEnabled) {
+    if (claimButton) {
+      claimButton.disabled = true;
+      claimButton.textContent = 'PRACTICE CLAIM BLOCKED';
+    }
+  } else if (claimButton) {
+    claimButton.disabled = false;
+    claimButton.textContent = 'CLAIM PRACTICE REWARDS';
+  }
+  if (declineButton) declineButton.disabled = false;
+  if (hashInput) hashInput.disabled = !paymentsEnabled;
+  info.innerHTML = `
+    <strong>Practice rewards are available.</strong>
+    <span>Projected nuggets: ${formatNumber(projected)}</span>
+    <span>Approximate claim price: ${formatNumber(PRACTICE_CLAIM_PLACEHOLDER_PRICE)} MATT</span>
+    <small>If you decline, the projected reward is discarded. Exact reward rates are configured and server-verified once payment integration is live.</small>
+  `;
+}
+
+async function claimPracticeRewards() {
+  if (!activePracticeClaim || activePracticeClaim.status !== 'pending') {
+    return;
+  }
+  if (serverConfig?.realPaymentsEnabled !== true) {
+    toast('Practice reward claims are disabled until verified payment integration is enabled.');
+    return;
+  }
+  const hashInput = $('#practice-claim-hash');
+  const hash = hashInput?.value ? hashInput.value.trim() : '';
+  const valid = /^0x[a-fA-F0-9]{64}$/.test(hash);
+  if (!valid) {
+    toast('Paste a valid 32-byte reward payment transaction hash.');
+    return;
+  }
+  const claimButton = $('#practice-claim-button');
+  const declineButton = $('#practice-decline-button');
+  claimButton.disabled = true;
+  claimButton.textContent = 'VERIFYING CLAIM…';
+  declineButton.disabled = true;
+  try {
+    const accepted = await apiClient.practiceRunClaim(activePracticeClaim.runId, 'claim', hash);
+    activePracticeClaim = accepted.practiceClaim || accepted;
+    profile = accepted.profile;
+    saveProfile(profile);
+    game.setProfile(profile);
+    if (serverPlayer) {
+      serverPlayer.profile = accepted.profile;
+    }
+    renderPracticeClaimPanel(activePracticeClaim);
+    toast('Practice reward claim applied.');
+    await refreshServerPlayer();
+  } catch (error) {
+    toast(error.message);
+    await refreshServerPlayer();
+    renderPracticeClaimPanel(activePracticeClaim);
+  } finally {
+    claimButton.disabled = false;
+    claimButton.textContent = serverConfig?.realPaymentsEnabled === true
+      ? 'CLAIM PRACTICE REWARDS'
+      : 'PRACTICE CLAIM BLOCKED';
+    declineButton.disabled = !activePracticeClaim || activePracticeClaim.status !== 'pending' || !serverConfig;
+  }
+}
+
+async function declinePracticeRewards() {
+  if (!activePracticeClaim || activePracticeClaim.status !== 'pending') return;
+  const claimButton = $('#practice-claim-button');
+  const declineButton = $('#practice-decline-button');
+  claimButton.disabled = true;
+  declineButton.disabled = true;
+  declineButton.textContent = 'SKIPPING…';
+  try {
+    const accepted = await apiClient.practiceRunClaim(activePracticeClaim.runId, 'decline');
+    activePracticeClaim = accepted.practiceClaim || accepted;
+    profile = accepted.profile;
+    saveProfile(profile);
+    game.setProfile(profile);
+    if (serverPlayer) {
+      serverPlayer.profile = accepted.profile;
+    }
+    renderPracticeClaimPanel(activePracticeClaim);
+    toast('Practice reward discarded.');
+    await refreshServerPlayer();
+  } catch (error) {
+    toast(error.message);
+    await refreshServerPlayer();
+    renderPracticeClaimPanel(activePracticeClaim);
+  } finally {
+    claimButton.disabled = true;
+    declineButton.disabled = !activePracticeClaim || activePracticeClaim.status !== 'pending';
+    declineButton.textContent = 'DECLINE REWARDS';
+  }
+}
+
 async function startRunMode(mode) {
   const useServer =
     mode === RUN_MODES.FREE ||
     (mode === RUN_MODES.PAID && serverConfig?.paidRunsEnabled === true) ||
     (mode === RUN_MODES.PRACTICE && serverPlayer);
+  activePracticeClaim = null;
+  clearPracticeClaimPanel();
   if (useServer) {
     if (!serverPlayer) {
       const connected = await connectWallet();
@@ -694,6 +851,7 @@ const game = new MattMineGame(canvas, profile, {
       <div><span>Run Time</span><strong>${formatTime(result.elapsed)}</strong></div>
     `;
     $('#economy-result').innerHTML = economyResultMarkup(mode, result, recorded);
+    if (mode !== RUN_MODES.PRACTICE) clearPracticeClaimPanel();
     showScreen('run-end');
     setGameplayUi(false);
     updateMenu();
@@ -792,6 +950,8 @@ $('#wallet-button').addEventListener('click', () => {
 });
 $('#play-again-button').addEventListener('click', () => game.backToMenu());
 $('#menu-button').addEventListener('click', () => game.backToMenu());
+$('#practice-claim-button').addEventListener('click', () => void claimPracticeRewards());
+$('#practice-decline-button').addEventListener('click', () => void declinePracticeRewards());
 $('#abandon-run-button').addEventListener('click', () => {
   const now = Date.now();
   if (now > abandonConfirmUntil) {

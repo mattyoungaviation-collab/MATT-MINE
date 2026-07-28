@@ -851,7 +851,7 @@ test('server suspension blocks ranked issuance and submission but keeps Practice
 test('permanent upgrades spend only server-owned banked nuggets', async () => {
   const harness = createHarness();
   const { session } = await signIn(harness);
-  const run = await harness.service.startRun(session.token, SERVER_RUN_MODES.PRACTICE);
+  const run = await harness.service.startRun(session.token, SERVER_RUN_MODES.FREE);
   harness.advance(60_000);
   await finish(harness.service, session, run, extractedResult());
   const upgraded = await harness.service.purchaseUpgrade(session.token, 'health');
@@ -868,7 +868,7 @@ test('JSON server storage persists profiles and recovers corrupt state safely', 
   const database = await new JsonFileDatabase(filePath, { now: () => START }).init();
   const harness = createHarness({ database });
   const { session } = await signIn(harness);
-  const run = await harness.service.startRun(session.token, SERVER_RUN_MODES.PRACTICE);
+  const run = await harness.service.startRun(session.token, SERVER_RUN_MODES.FREE);
   harness.advance(60_000);
   await finish(harness.service, session, run, extractedResult());
 
