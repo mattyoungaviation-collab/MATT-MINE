@@ -7,11 +7,11 @@ Version 0.8 prepares production contracts and a guarded Ronin Mainnet deployment
 ## Required approvals
 
 - Independent smart-contract review completed with no unresolved critical or high-severity findings.
-- 2-of-3 contract-admin Safe deployed, tested with two independent signers, and backed up.
+- Three-owner contract-admin Safe deployed, tested, and backed up; current operator-approved threshold is 1-of-3.
 - Treasury destinations confirmed by at least two owners.
 - Price and configuration roles assigned to the bounded operational wallet.
 - Pauser assigned to a separate emergency wallet.
-- Reward publisher and treasury manager assigned to the 2-of-3 Safe unless a separately reviewed multisig is used.
+- Reward publisher and treasury manager assigned to the Treasury Safe unless a separately reviewed Safe is used.
 - Launch pass price confirmed at 95 RON with immutable 55-155 RON bounds.
 - Paid-run price confirmed at 10 RON with immutable 5-20 RON bounds.
 - Both price managers are contract-limited to one update every seven days.
@@ -28,7 +28,7 @@ Version 0.8 prepares production contracts and a guarded Ronin Mainnet deployment
 - Dependency audit reviewed and production-relevant findings resolved or documented.
 - Compiler fixed to Solidity 0.8.28, optimizer enabled, IR pipeline enabled, London EVM target.
 - MATT, WRON, Katana router, Katana factory, and MATT/WRON pair validated on Ronin Mainnet.
-- Admin Safe code, exact three-owner set, and 2-of-3 threshold validated on Ronin Mainnet.
+- Admin Safe code, exact three-owner set, and configured 1-of-3 threshold validated on Ronin Mainnet.
 - Encrypted deployment key resolves to the approved public address, is not a configured role or treasury, and holds at least a 3x gas buffer.
 
 ## Recommended minimum role map
@@ -45,7 +45,7 @@ Version 0.8 prepares production contracts and a guarded Ronin Mainnet deployment
 3. Deploy `MattMineRewards` with final role and reserve addresses.
 4. Deploy `MattMineRuns` with `MattMineRewards` as the current reward vault.
 5. Grant the executor's `RUNS_ROLE` only to `MattMineRuns`.
-6. Grant executor administration to the 2-of-3 multisig.
+6. Grant executor administration to the Treasury Safe.
 7. Renounce the temporary deployer's executor admin role.
 8. Re-read every role, fixed address, price bound, and destination from chain.
 9. Publish all four exact-match sources through Ronin Explorer/Blockscout.

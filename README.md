@@ -159,7 +159,7 @@ See [`docs/DAILY_ARENA_V18.md`](docs/DAILY_ARENA_V18.md).
 
 - Finalize immutable weekly leaderboard snapshots as soon as the UTC countdown reaches zero.
 - Close new ranked entries during the final five minutes so an unfinished run cannot cross the immutable snapshot boundary; Practice stays available.
-- Enable production reward publication while preserving independent approval and 2-of-3 Safe execution.
+- Enable production reward publication while preserving independent approval and Treasury Safe execution.
 - Run live Ronin preflight checks for vault pause state, duplicate epochs, available vault funding, and Treasury Safe MATT balance before creating a publication file.
 - Generate reward-vault funding as one ordered MATT approval and vault-funding Safe batch, preventing the missing-approval failure that produces Safe `GS013`.
 - Keep the non-adjustable 5,000,000 MATT per-board ceiling and 1,500,000 MATT first-place ceiling.
@@ -169,7 +169,7 @@ See [`docs/DAILY_ARENA_V18.md`](docs/DAILY_ARENA_V18.md).
 - Convert immutable weekly snapshots into deterministic OpenZeppelin Merkle reward proofs.
 - Allocate the complete approved board pool across eligible top-ten players using a 30% / 18% / 12% / 8% / 7% / 6% / 5.5% / 5% / 4.5% / 4% schedule, normalized when fewer than ten wallets qualify.
 - Require separate primary and independent approval secrets.
-- Prepare exact approve, fund, and publish transactions for the existing 2-of-3 Safe without storing a publisher key on the server.
+- Prepare exact approve, fund, and publish transactions for the existing Treasury Safe without storing a publisher key on the server.
 - Verify the exact root, allocation, and deadline on Ronin before exposing claims.
 - Give included players a server-prepared, player-signed Ronin Wallet claim transaction.
 - Use a non-adjustable 5,000,000 MATT per-board ceiling; first place can receive at most 30%, or 1,500,000 MATT.
@@ -276,7 +276,7 @@ See [`docs/REWARD_PIPELINE_V12.md`](docs/REWARD_PIPELINE_V12.md).
 - Earn pass XP and preview the premium reward track.
 - Publish immutable local test reward epochs and record one test claim per epoch.
 - Use role-separated local admin controls with immediate pausing, price management, pool management, moderation, and audit logging.
-- Preserve the approved 2-of-3 multisig production model with no timelock.
+- Preserve the approved three-owner Treasury Safe production model with its operator-selected threshold and no timelock.
 
 ## v0.3 action loop retained
 
@@ -334,7 +334,7 @@ Before real value is enabled, the production build still requires:
 7. Anti-cheat review and payout moderation.
 8. Formal security review before materially increasing contract balances or public reward pools.
 9. A full dry run and deliberately small pilot reward epoch before increasing the configured cap.
-10. Continued 2-of-3 multisig control for treasury and major contract administration, with no timelock.
+10. Continued Treasury Safe control for treasury and major contract administration, with no timelock.
 
 See [`docs/LEADERBOARD_STORAGE_V11.md`](docs/LEADERBOARD_STORAGE_V11.md), [`docs/STANDALONE_LAUNCH_V10.md`](docs/STANDALONE_LAUNCH_V10.md), [`docs/LIVE_PAYMENTS_V09.md`](docs/LIVE_PAYMENTS_V09.md), [`docs/CONTRACT_DEPLOYMENT_V08.md`](docs/CONTRACT_DEPLOYMENT_V08.md), [`docs/SECURITY_V07.md`](docs/SECURITY_V07.md), [`docs/ECONOMY_V1.md`](docs/ECONOMY_V1.md), and [`contracts/README.md`](contracts/README.md).
 Production operators use the separate, unlinked `/admin.html` command center. See [Admin Command Center](docs/ADMIN_COMMAND_CENTER.md) for permissions, protected fields, and emergency procedures.

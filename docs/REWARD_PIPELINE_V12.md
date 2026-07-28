@@ -11,7 +11,7 @@ MATT Mine v1.2 completes the path from an immutable weekly leaderboard snapshot 
 - One primary admin creates the immutable allocation draft.
 - A different secret is required for independent approval.
 - The web server holds no treasury or reward-publisher private key.
-- Publication is performed through the existing 2-of-3 MATT Mine Safe.
+- Publication is performed through the existing MATT Mine Treasury Safe.
 - Players submit their own claim transactions through Ronin Wallet.
 - The on-chain `MattMineRewards` contract remains authoritative for publication, deadlines, pauses, duplicate-claim protection, and transfers.
 
@@ -42,7 +42,7 @@ The complete approved board pool is funded and published. If fewer than ten wall
 6. The independent approver reviews and approves the exact root and totals.
 7. Live Ronin preflight rejects a paused vault, duplicate epoch, or insufficient Treasury balance.
 8. The API returns a checksummed, broadcast-ready Safe transaction file.
-9. The 2-of-3 Safe executes any required MATT approval and funding, then publishes the immutable epoch.
+9. The Treasury Safe executes any required MATT approval and funding, then publishes the immutable epoch.
 10. The admin sync endpoint verifies the exact root, allocation, and deadline on Ronin.
 11. Included players see their MATT reward in the leaderboard screen.
 12. Each player signs their own `claim` transaction in Ronin Wallet.
@@ -57,7 +57,7 @@ MATT_MINE_REWARD_PUBLISHING_ENABLED=true
 MATT_MINE_REWARD_MAX_BOARD_MATT=5000000
 ```
 
-Publication-enabled means the reviewed JSON is executable; the server still cannot sign or broadcast it. Independent approval and the 2-of-3 Treasury Safe remain mandatory. The code cap remains active even if the Render maximum is accidentally configured above 5,000,000 MATT.
+Publication-enabled means the reviewed JSON is executable; the server still cannot sign or broadcast it. Independent approval and Treasury Safe execution remain mandatory. The code cap remains active even if the Render maximum is accidentally configured above 5,000,000 MATT.
 
 ## Operator API
 

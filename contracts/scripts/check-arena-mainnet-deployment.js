@@ -28,10 +28,11 @@ if (!["deployed_unverified", "verified_exact"].includes(manifest.status)) {
 
 await validateArenaOnchainConfig(ethers, config);
 const checked = await verifyArenaDeploymentState(ethers, config, manifest, {
-  requireEmptyBalances: true
+  requireEmptyBalances: false,
+  requireEntriesPaused: false
 });
 
-console.log("Ronin Mainnet Daily Arena deployment is ready for activation.");
+console.log("Ronin Mainnet Daily Arena matches the approved production configuration.");
 console.log(`MattMineDailyArena: ${checked.address}`);
 console.log(`Treasury Safe: ${checked.treasurySafe}`);
 console.log(`Emergency pauser: ${checked.emergencyPauser}`);
@@ -39,7 +40,11 @@ console.log("Entry price bounds: 25,000 to 1,000,000 MATT.");
 console.log("Treasury seed cap: 10,000,000 MATT per day.");
 console.log("Player-funded pool: uncapped by the contract.");
 console.log("Maximum settlement winners: 10.");
-console.log("Entries are paused; the contract has no entries and holds 0 RON / 0 MATT.");
+console.log(`Entries paused: ${checked.entriesPaused}.`);
+console.log(`Arena MATT balance: ${checked.mattBalance}.`);
+console.log(`Arena reserved MATT: ${checked.reservedMatt}.`);
+console.log(`Arena next entry number: ${checked.nextEntryNumber}.`);
+console.log("The Arena is solvent.");
 console.log("All expected roles are present and the temporary deployer has none.");
 console.log(`Deployment record: ${ARENA_DEPLOYMENT_PATH}`);
 console.log("No transaction was broadcast.");
