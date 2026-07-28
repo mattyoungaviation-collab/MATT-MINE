@@ -19,6 +19,15 @@ import {
 } from '../server/arena-chain.js';
 import { MemoryArenaStore, PostgresArenaStore } from '../server/arena-store.js';
 import { MATT_MINE_ADMIN_CONTRACTS } from '../server/admin-controls.js';
+import {
+  MemoryCompetitiveReplayStore,
+  PostgresCompetitiveReplayStore
+} from '../server/competitive-replay-store.js';
+import { CompetitiveReplayService } from '../server/competitive-replay-service.js';
+import {
+  DirectRoninRevivePaymentVerifier,
+  HmacAdvertisementVerifier
+} from '../server/external-verifiers.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const port = Number(process.env.PORT || 4173);
@@ -109,6 +118,40 @@ const arenaService = arenaEnabled
       liveEnabled: arenaLiveRequested
     }).init()
   : null;
+const competitiveReplaySecret =
+  process.env.MATT_MINE_COMPETITIVE_REPLAY_SECRET ||
+  (process.env.NODE_ENV === 'production' ? '' : 'local-matt-mine-competitive-replay-secret');
+const competitiveReplayStore = database.kind === 'postgresql'
+  ? await new PostgresCompetitiveReplayStore(database).init()
+  : await new MemoryCompetitiveReplayStore().init();
+const competitiveReplayValidator = competitiveReplaySecret.length >= 32
+  ? await new CompetitiveReplayService({
+      store: competitiveReplayStore,
+      secret: competitiveReplaySecret
+    }).init()
+  : null;
+const revivePaymentsRequested =
+  process.env.MATT_MINE_REVIVE_PAYMENTS_ENABLED === 'true';
+const revivePaymentVerifier = mainnetTransactionsEnabled && revivePaymentsRequested
+  ? new DirectRoninRevivePaymentVerifier({
+      rpcUrl: process.env.RONIN_RPC_URL,
+      confirmations: Number(process.env.MATT_MINE_PAYMENT_CONFIRMATIONS || 3),
+      recipient:
+        process.env.MATT_MINE_REVIVE_RECIPIENT_ADDRESS ||
+        MATT_MINE_ADMIN_CONTRACTS.safe
+    })
+  : null;
+const advertisementSecret = process.env.MATT_MINE_ADVERTISEMENT_HMAC_SECRET || '';
+const advertisementProvider = process.env.MATT_MINE_ADVERTISEMENT_PROVIDER || '';
+const advertisementVerifier =
+  process.env.MATT_MINE_ADVERTISEMENT_REWARDS_ENABLED === 'true' &&
+  advertisementSecret.length >= 32 &&
+  advertisementProvider
+    ? new HmacAdvertisementVerifier({
+        secret: advertisementSecret,
+        provider: advertisementProvider
+      })
+    : null;
 const service = new CompleteProductionMattMineService(database, {
   publicOrigin: process.env.MATT_MINE_PUBLIC_ORIGIN || null,
   adminKey: process.env.MATT_MINE_ADMIN_KEY || '',
@@ -118,7 +161,15 @@ const service = new CompleteProductionMattMineService(database, {
   arenaService,
   nuggetEconomyStore,
   nuggetPaymentVerifier,
-  nuggetPaymentsEnabled: mainnetTransactionsEnabled && nuggetPaymentsRequested
+  nuggetPaymentsEnabled: mainnetTransactionsEnabled && nuggetPaymentsRequested,
+  competitiveReplayValidator,
+  ...(revivePaymentVerifier && competitiveReplayValidator ? {
+    revivePaymentVerifier,
+    reviveEligibilityValidator: {
+      validate: (input) => competitiveReplayValidator.validateDeath(input)
+    }
+  } : {}),
+  ...(advertisementVerifier ? { advertisementVerifier } : {})
 });
 const server = createProductionMattMineHttpServer({ root, service });
 
@@ -131,6 +182,11 @@ server.listen(port, '0.0.0.0', () => {
   console.log(`Daily Arena: ${arenaEnabled
     ? `exact deployment pinned (${arenaContractAddress}); deterministic replay ${arenaLiveRequested ? 'LIVE' : 'ready, live mode disabled'}`
     : 'disabled until contract + receipt secret are configured'}`);
+  console.log(`Competitive replay: ${competitiveReplayValidator
+    ? `ENABLED (${competitiveReplayStore.kind})`
+    : 'disabled until MATT_MINE_COMPETITIVE_REPLAY_SECRET is configured'}`);
+  console.log(`Paid revive verifier: ${revivePaymentVerifier ? 'EXACT RON TRANSFER ENABLED' : 'disabled'}`);
+  console.log(`Advertisement verifier: ${advertisementVerifier ? `SIGNED ${advertisementProvider}` : 'disabled'}`);
   console.log(`Server data: ${database.kind}${databaseUrl ? '' : ` (${dataFile})`}`);
   console.log(`Nugget economy data: ${nuggetEconomyStore.kind}${databaseUrl ? '' : ` (${nuggetEconomyFile})`}`);
 });
@@ -141,6 +197,7 @@ function closeServer() {
   closing = true;
   server.close(async () => {
     await nuggetEconomyStore.close();
+    await competitiveReplayStore.close();
     await database.close();
     process.exit(0);
   });

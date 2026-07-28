@@ -2,7 +2,7 @@ import { formatEther, getAddress } from "ethers";
 import { network } from "hardhat";
 import {
   RONIN_CHAIN_ID,
-  configHash,
+  acceptedDeploymentConfigHashes,
   loadDeploymentManifest,
   loadMainnetConfig,
   validateOnchainConfig
@@ -20,7 +20,7 @@ if (deployment.chainId !== Number(RONIN_CHAIN_ID)) {
     `Deployment manifest targets chain ${deployment.chainId}; expected ${RONIN_CHAIN_ID}.`
   );
 }
-if (deployment.configHash !== configHash(config)) {
+if (!acceptedDeploymentConfigHashes(config).has(deployment.configHash)) {
   throw new Error("Deployment manifest does not match the approved configuration.");
 }
 if (!["deployed_unverified", "verified"].includes(deployment.status)) {
@@ -193,7 +193,6 @@ expectAddress(
   "Rewards reserve treasury"
 );
 expectEqual(await rewards.paused(), false, "Rewards pause state");
-expectEqual(await rewards.totalReservedMatt(), 0n, "Reserved MATT before funding");
 await expectRole(
   rewards,
   await rewards.DEFAULT_ADMIN_ROLE(),
@@ -340,20 +339,29 @@ for (const [label, value] of Object.entries({
   "Rewards RON balance": rewardsRon,
   "Runs RON balance": runsRon,
   "Swap executor MATT balance": executorMatt,
-  "Rewards MATT balance": rewardsMatt,
   "Runs MATT balance": runsMatt
 })) {
-  expectEqual(value, 0n, `${label} before funding`);
+  expectEqual(value, 0n, label);
 }
 
-console.log("Ronin Mainnet deployment is ready for a controlled smoke test.");
+const reservedMatt = await rewards.totalReservedMatt();
+if (reservedMatt > rewardsMatt) {
+  throw new Error(
+    `Rewards vault is insolvent: ${reservedMatt} MATT reserved but only ${rewardsMatt} MATT held.`
+  );
+}
+
+console.log("Ronin Mainnet deployment matches the approved production configuration.");
 console.log(`Pass: ${addresses.pass}`);
 console.log(`Swap executor: ${addresses.executor}`);
 console.log(`Rewards: ${addresses.rewards}`);
 console.log(`Paid runs: ${addresses.runs}`);
 console.log(`Pass price: ${formatEther(await pass.passPriceRon())} RON`);
 console.log(`Paid-run price: ${formatEther(await runs.paidRunPriceRon())} RON`);
-console.log("All contracts are unpaused and unfunded.");
+console.log(`Rewards MATT balance: ${rewardsMatt}`);
+console.log(`Rewards reserved MATT: ${reservedMatt}`);
+console.log("The rewards vault is solvent.");
+console.log("All contracts are unpaused.");
 console.log("All approved roles, treasuries, protocol addresses, and limits match.");
 console.log("The temporary deployer has no administrator role.");
 console.log("No transaction was broadcast.");

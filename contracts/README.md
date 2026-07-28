@@ -25,11 +25,11 @@ The preflight script checks all five addresses and the pair composition directly
 
 ## Security model
 
-- Contract administration must be a deployed and tested 2-of-3 Safe.
+- Contract administration uses the deployed three-owner Safe with the operator-approved 1-of-3 threshold.
 - The same Safe may protect contract administration, reward publishing, treasury management, and the initial treasury destinations.
 - A bounded operational wallet may share price and configuration management.
 - Emergency pause authority must remain separate from the operational wallet and the admin Safe.
-- Mainnet preflight verifies the configured Safe's exact owner set and 2-of-3 threshold directly on Ronin.
+- Mainnet preflight verifies the configured Safe's exact owner set and the operator-approved 1-of-3 threshold directly on Ronin. This favors fast operations over multisignature approval and should be reviewed regularly.
 - Pass pricing launches at 95 RON within immutable 55-155 RON bounds; paid runs launch at 10 RON within immutable 5-20 RON bounds.
 - Each price can change at most once every seven days.
 - There is no timelock, per the approved MATT Mine control model.

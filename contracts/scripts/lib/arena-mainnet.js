@@ -85,8 +85,8 @@ export function loadArenaMainnetConfig() {
   );
   const owners = sortedAddresses(mainnet.adminSafe.owners);
 
-  if (mainnet.adminSafe.threshold !== 2 || owners.length !== 3) {
-    throw new Error("The Treasury Safe must remain a 2-of-3 Safe.");
+  if (mainnet.adminSafe.threshold !== 1 || owners.length !== 3) {
+    throw new Error("The Treasury Safe must remain the explicitly approved 1-of-3 Safe.");
   }
   if (new Set(owners.map((owner) => owner.toLowerCase())).size !== 3) {
     throw new Error("The Treasury Safe owners must be unique.");
@@ -122,7 +122,7 @@ export function loadArenaMainnetConfig() {
       emergencyPauser
     },
     adminSafe: {
-      threshold: 2,
+      threshold: 1,
       owners
     }
   };
@@ -130,6 +130,17 @@ export function loadArenaMainnetConfig() {
 
 export function arenaConfigHash(config) {
   return configHash(config);
+}
+
+export function acceptedArenaDeploymentConfigHashes(config) {
+  const hashes = new Set([arenaConfigHash(config)]);
+  if (config?.adminSafe?.threshold === 1) {
+    hashes.add(arenaConfigHash({
+      ...config,
+      adminSafe: { ...config.adminSafe, threshold: 2 }
+    }));
+  }
+  return hashes;
 }
 
 export function arenaConstructorArgs(config) {
@@ -173,7 +184,7 @@ export function assertArenaManifest(manifest, config, deployerAddress) {
       `Arena deployment manifest targets chain ${manifest.chainId}; expected ${RONIN_CHAIN_ID}.`
     );
   }
-  if (manifest.configHash !== arenaConfigHash(config)) {
+  if (!acceptedArenaDeploymentConfigHashes(config).has(manifest.configHash)) {
     throw new Error(
       "Arena deployment manifest does not match the approved configuration."
     );
@@ -287,7 +298,10 @@ export async function verifyArenaDeploymentState(
   ethers,
   config,
   manifest,
-  { requireEmptyBalances = true } = {}
+  {
+    requireEmptyBalances = true,
+    requireEntriesPaused = true
+  } = {}
 ) {
   assertArenaManifest(manifest, config);
   const record = manifest.contracts?.MattMineDailyArena;
@@ -396,42 +410,56 @@ export async function verifyArenaDeploymentState(
     EXPECTED_CONSTANTS.maximumWinners,
     "Arena maximum winners"
   );
-  expectEqual(
-    await arena.entriesPaused(),
-    true,
-    "Arena must deploy with entries paused"
-  );
+  const entriesPaused = await arena.entriesPaused();
+  if (requireEntriesPaused) {
+    expectEqual(
+      entriesPaused,
+      true,
+      "Arena must deploy with entries paused"
+    );
+  }
   expectEqual(
     await arena.settlementPaused(),
     false,
     "Arena settlement pause state"
   );
 
+  const matt = new Contract(
+    config.protocol.mattToken,
+    ["function balanceOf(address) view returns (uint256)"],
+    ethers.provider
+  );
+  const [ronBalance, mattBalance, reservedMatt, excessMatt, nextEntry] =
+    await Promise.all([
+      ethers.provider.getBalance(address),
+      matt.balanceOf(address),
+      arena.totalReservedMatt(),
+      arena.availableExcessMatt(),
+      arena.nextEntryNumber()
+    ]);
+
   if (requireEmptyBalances) {
-    const matt = new Contract(
-      config.protocol.mattToken,
-      ["function balanceOf(address) view returns (uint256)"],
-      ethers.provider
-    );
-    const [ronBalance, mattBalance, reservedMatt, excessMatt, nextEntry] =
-      await Promise.all([
-        ethers.provider.getBalance(address),
-        matt.balanceOf(address),
-        arena.totalReservedMatt(),
-        arena.availableExcessMatt(),
-        arena.nextEntryNumber()
-      ]);
     expectEqual(ronBalance, 0n, "Arena RON balance before activation");
     expectEqual(mattBalance, 0n, "Arena MATT balance before activation");
     expectEqual(reservedMatt, 0n, "Arena reserved MATT before activation");
     expectEqual(excessMatt, 0n, "Arena excess MATT before activation");
     expectEqual(nextEntry, 1n, "Arena next entry number before activation");
+  } else if (reservedMatt > mattBalance) {
+    throw new Error(
+      `Arena is insolvent: ${reservedMatt} MATT reserved but only ${mattBalance} MATT held.`
+    );
   }
 
   return {
     address,
     treasurySafe: config.treasurySafe,
     emergencyPauser: config.roles.emergencyPauser,
+    entriesPaused,
+    ronBalance: ronBalance.toString(),
+    mattBalance: mattBalance.toString(),
+    reservedMatt: reservedMatt.toString(),
+    excessMatt: excessMatt.toString(),
+    nextEntryNumber: nextEntry.toString(),
     constants: {
       dayDuration: EXPECTED_CONSTANTS.dayDuration.toString(),
       entryCutoffDuration:

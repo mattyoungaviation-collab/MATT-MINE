@@ -178,6 +178,15 @@ export class MattMineApiClient {
     return response.checkpoint;
   }
 
+  async appendCompetitiveEvents(runId, runToken, previousCheckpoint, events) {
+    const response = await this.request('/api/runs/competitive/events', {
+      method: 'POST',
+      authenticated: true,
+      body: { runId, runToken, previousCheckpoint, events }
+    });
+    return response.checkpoint;
+  }
+
   async finishArenaRun(runId, runToken, checkpoint) {
     return this.request('/api/arena/runs/finish', {
       method: 'POST',
@@ -211,11 +220,16 @@ export class MattMineApiClient {
     return response.run;
   }
 
-  async finishRun(runId, runToken, result) {
+  async finishRun(runId, runToken, result, competitiveCheckpoint = null) {
     return this.request('/api/runs/finish', {
       method: 'POST',
       authenticated: true,
-      body: { runId, runToken, result }
+      body: {
+        runId,
+        runToken,
+        result,
+        ...(competitiveCheckpoint ? { competitiveCheckpoint } : {})
+      }
     });
   }
 
@@ -294,6 +308,15 @@ export class MattMineApiClient {
       method: 'POST',
       authenticated: true,
       body: { runId, transactionHash }
+    });
+    return response.revive;
+  }
+
+  async cancelPaidRevive(runId) {
+    const response = await this.request('/api/revives/cancel', {
+      method: 'POST',
+      authenticated: true,
+      body: { runId }
     });
     return response.revive;
   }

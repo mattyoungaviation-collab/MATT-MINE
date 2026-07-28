@@ -60,10 +60,10 @@ The intended production role model is:
 
 | Role | Intended controller |
 |---|---|
-| Default admin | MATT Mine 2-of-3 Treasury Safe |
-| Treasury | MATT Mine 2-of-3 Treasury Safe |
-| Settler | MATT Mine 2-of-3 Treasury Safe |
-| Pricer | MATT Mine 2-of-3 Treasury Safe |
+| Default admin | MATT Mine Treasury Safe |
+| Treasury | MATT Mine Treasury Safe |
+| Settler | MATT Mine Treasury Safe |
+| Pricer | MATT Mine Treasury Safe |
 | Emergency pauser | Separate low-balance emergency wallet |
 
 The settlement contract intentionally does not calculate game scores. The Safe transaction is the final reviewed authorization boundary and displays the complete winner list and exact raw amounts before signing.
@@ -146,7 +146,7 @@ npm.cmd run contracts:check-arena-deployment:ronin
 Remove-Item Env:MATT_MINE_ARENA_EXPECTED_DEPLOYER_ADDRESS -ErrorAction SilentlyContinue
 ```
 
-The deployment preflight binds the encrypted signer to its expected public address, requires a three-times gas estimate buffer, validates the existing live MATT token and 2-of-3 Treasury Safe, and broadcasts nothing. Deployment is resumable from the predicted CREATE address, nonce, and transaction hash. Verification accepts only an exact Sourcify creation and runtime match. None of these commands schedules a day, transfers MATT, or enables paid play.
+The deployment preflight binds the encrypted signer to its expected public address, requires a three-times gas estimate buffer, validates the existing live MATT token and configured Treasury Safe owner/threshold policy, and broadcasts nothing. Deployment is resumable from the predicted CREATE address, nonce, and transaction hash. Verification accepts only an exact Sourcify creation and runtime match. None of these commands schedules a day, transfers MATT, or enables paid play.
 
 ## Activation checklist for a later release
 

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   EXPECTED_PROTOCOL,
+  acceptedDeploymentConfigHashes,
   configHash,
   normalizeMainnetConfig
 } from "../scripts/lib/mainnet-config.js";
@@ -20,7 +21,7 @@ function validConfig() {
       treasuryManager: "0x0000000000000000000000000000000000000016"
     },
     adminSafe: {
-      threshold: 2,
+      threshold: 1,
       owners: [
         "0x0000000000000000000000000000000000000031",
         "0x0000000000000000000000000000000000000032",
@@ -125,12 +126,12 @@ describe("Ronin Mainnet configuration guards", function () {
     );
   });
 
-  it("requires exactly three unique Safe owners and a 2-of-3 threshold", function () {
+  it("requires exactly three unique Safe owners and the approved 1-of-3 threshold", function () {
     const badThreshold = validConfig();
-    badThreshold.adminSafe.threshold = 1;
+    badThreshold.adminSafe.threshold = 2;
     assert.throws(
       () => normalizeMainnetConfig(badThreshold),
-      /threshold must be 2/
+      /threshold must be 1/
     );
 
     const duplicateOwner = validConfig();
@@ -139,5 +140,14 @@ describe("Ronin Mainnet configuration guards", function () {
       () => normalizeMainnetConfig(duplicateOwner),
       /owners must be unique/
     );
+  });
+
+  it("recognizes the immutable deployment manifest created before the Safe threshold changed", function () {
+    const current = normalizeMainnetConfig(validConfig());
+    const originalDeploymentHash = configHash({
+      ...current,
+      adminSafe: { ...current.adminSafe, threshold: 2 }
+    });
+    assert.equal(acceptedDeploymentConfigHashes(current).has(originalDeploymentHash), true);
   });
 });

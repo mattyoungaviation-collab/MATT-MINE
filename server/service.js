@@ -646,7 +646,18 @@ export class MattMineService {
         baseTuning.enemyHealthMultiplier = (baseTuning.enemyHealthMultiplier || 1) * weeklyStage.difficulty;
         baseTuning.enemyDamageMultiplier = (baseTuning.enemyDamageMultiplier || 1) * weeklyStage.difficulty;
         baseTuning.roomsPerDepth = weeklyStage.roomCount;
-        baseTuning.bossesPerDepth = weeklyStage.bossCount;
+        for (let depth = 1; depth <= 5; depth += 1) {
+          baseTuning[`depth${depth}GuardianBosses`] = depth === 1 ? weeklyStage.bossCount : 0;
+        }
+      }
+      let immutableEndlessSnapshot = null;
+      if (normalizedMode === SERVER_RUN_MODES.ENDLESS) {
+        state.endlessCompetition.seasons ||= {};
+        state.endlessCompetition.seasons[week] ||= {
+          snapshot: endlessSnapshot(week, state.expansionConfig, timestamp),
+          results: []
+        };
+        immutableEndlessSnapshot = structuredClone(state.endlessCompetition.seasons[week].snapshot);
       }
       const serverRun = {
         id: runId,
@@ -668,9 +679,7 @@ export class MattMineService {
         characterId: selectedCharacterId,
         character: structuredClone(selectedCharacter),
         weeklyStage,
-        endlessSnapshot: normalizedMode === SERVER_RUN_MODES.ENDLESS
-          ? endlessSnapshot(week, state.expansionConfig, timestamp)
-          : null,
+        endlessSnapshot: immutableEndlessSnapshot,
         tuning: baseTuning
       };
       state.runs[runId] = serverRun;

@@ -9,6 +9,7 @@ export class ArenaTranscript {
     this.nextSequence = Math.max(1, Number(this.checkpoint?.throughSeq || 0) + 1);
     this.pending = [];
     this.flushSize = Math.max(1, Number(options.flushSize || 64));
+    this.appendEvents = options.appendEvents || ((...args) => this.api.appendArenaEvents(...args));
     this.queue = Promise.resolve();
     this.closed = false;
     this.lastInput = '';
@@ -37,7 +38,7 @@ export class ArenaTranscript {
     if (!this.pending.length) return this.queue.then(() => this.checkpoint);
     const events = this.pending.splice(0, this.pending.length);
     this.queue = this.queue.then(async () => {
-      this.checkpoint = await this.api.appendArenaEvents(
+      this.checkpoint = await this.appendEvents(
         this.runId,
         this.runToken,
         this.checkpoint,

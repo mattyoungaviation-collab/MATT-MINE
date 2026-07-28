@@ -50,7 +50,7 @@ This document records the approved v0.4 rules implemented by the standalone test
 - Competition Moderator: wallet suspension and restoration.
 - Price Manager: pass, paid-run, and MATT quote controls.
 - Emergency Pauser: immediate pause of ranked runs, pass sales, paid runs, and claims.
-- Production treasury and major contract actions require the approved 2-of-3 multisig.
+- Production treasury and major contract actions require the approved three-owner Treasury Safe (currently 1-of-3 by operator decision).
 - There is no timelock.
 - All local economy and admin actions are recorded in the audit log.
 

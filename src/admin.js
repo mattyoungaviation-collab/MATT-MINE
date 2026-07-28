@@ -239,6 +239,27 @@ async function loadExpansion() {
 
 function renderExpansion() {
   if (!state.expansion) return;
+  const readiness = state.expansion.productionReadiness || {};
+  const readinessNode = $('#production-readiness');
+  if (readinessNode) {
+    const cards = [
+      ['Competitive replay', readiness.competitiveReplay],
+      ['Paid revive', readiness.paidRevivePayments],
+      ['Ad rewards', readiness.advertisementRewards],
+      ['Treasury Safe', {
+        configured: Boolean(readiness.treasurySafe?.address),
+        enabled: true,
+        detail: readiness.treasurySafe
+          ? `${readiness.treasurySafe.threshold}-of-${readiness.treasurySafe.owners}`
+          : ''
+      }]
+    ];
+    readinessNode.innerHTML = cards.map(([label, status]) => `<article class="panel metric">
+      <span>${escapeHtml(label)}</span>
+      <strong>${status?.configured ? 'READY' : 'BLOCKED'}</strong>
+      <small>${escapeHtml(status?.verification || status?.provider || status?.store || status?.detail || status?.blocker || '')}</small>
+    </article>`).join('');
+  }
   const needle = $('#expansion-search').value.trim().toLowerCase();
   const visible = state.expansion.schema.filter((entry) =>
     !needle || `${entry.category} ${entry.label} ${entry.description}`.toLowerCase().includes(needle)
@@ -618,7 +639,7 @@ function renderArenaSafePackage(title, safe, transactions = [], fallbackFileName
   panel.hidden = false;
   panel.innerHTML = `<h2>${escapeHtml(title)} — not broadcast</h2>
     ${row('Ordered Safe transactions', transactions?.length || safe?.transactions?.length || 0)}
-    <p>Download this JSON file, inspect the exact day, MATT amounts, winner addresses, and total, then drag it into the Ronin Safe Transaction Builder for 2-of-3 approval.</p>
+    <p>Download this JSON file, inspect the exact day, MATT amounts, winner addresses, and total, then drag it into the Ronin Safe Transaction Builder for Safe-owner approval.</p>
     <div class="action-row"><button id="download-arena-safe-json">Download Safe JSON</button><button id="copy-arena-safe-json" class="ghost">Copy JSON</button></div>
     <div class="code">${escapeHtml(JSON.stringify(transactions?.length ? transactions : safe?.transactions || [], null, 2))}</div>`;
   $('#download-arena-safe-json').addEventListener('click', () => downloadJson(fallbackFileName, safe));
