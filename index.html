@@ -414,6 +414,25 @@
             <button id="update-avatar-button" class="secondary-button" hidden>UPDATE PROFILE PICTURE</button>
           </div>
           <p id="profile-status" class="preview-note">Sign in with Ronin Wallet to manage your miner profile.</p>
+          <div class="character-selector">
+            <p class="eyebrow">PLAYABLE CHARACTER</p>
+            <h3>Choose Your Miner</h3>
+            <div id="character-grid" class="character-grid"></div>
+          </div>
+          <div class="run-mode-grid expansion-lobbies" aria-label="Additional competitive modes">
+            <button id="weekly-run-button" class="run-mode-card" hidden>
+              <span class="mode-kicker">SEVEN-DAY MINE</span><strong>One stage each UTC day</strong>
+              <small>Same seed, character, and immutable rules for every player.</small><b>PLAY TODAY'S STAGE</b>
+            </button>
+            <button id="endless-run-button" class="run-mode-card" hidden>
+              <span class="mode-kicker">ENDLESS MINE</span><strong>Go as deep as you can</strong>
+              <small>Depth, score, bosses, then survival time decide rank.</small><b>START ENDLESS</b>
+            </button>
+            <button id="beta-run-button" class="run-mode-card" hidden>
+              <span class="mode-kicker">BETA TESTING</span><strong>Developer test mine</strong>
+              <small>No nuggets, MATT, Pass XP, achievements, or permanent progress.</small><b>ENTER BETA</b>
+            </button>
+          </div>
           <div id="keybind-editor" class="keybind-editor">
             <p class="eyebrow">GAMEPLAY CONTROLS</p>
             <h3>Choose Your Keys</h3>
@@ -422,6 +441,16 @@
             <div class="keybind-actions">
               <button id="reset-keybinds-button" class="secondary-button" type="button">RESET DEFAULTS</button>
               <button id="save-keybinds-button" class="primary-button" type="button">SAVE CONTROLS</button>
+            </div>
+            <div class="controller-settings">
+              <p class="eyebrow">CONTROLLER</p>
+              <p id="controller-status" class="preview-note">Connect an Xbox-style or PlayStation-style controller.</p>
+              <label>STICK DEAD ZONE <input id="controller-dead-zone" type="range" min="0" max="0.5" step="0.01" value="0.18"><output id="controller-dead-zone-value">18%</output></label>
+              <label>AIM SENSITIVITY <input id="controller-aim-sensitivity" type="range" min="0.25" max="3" step="0.05" value="1"><output id="controller-aim-sensitivity-value">1.00×</output></label>
+              <label class="preference-toggle"><input id="controller-vibration" type="checkbox" checked> VIBRATION</label>
+              <div id="controller-mapping-grid" class="controller-mapping-grid"></div>
+              <button id="reset-controller-button" class="secondary-button" type="button">RESET CONTROLLER</button>
+              <button id="save-controller-button" class="primary-button" type="button">SAVE CONTROLLER</button>
             </div>
           </div>
         </div>
@@ -736,6 +765,29 @@
           <div class="weapon-slot locked" data-weapon="blaster"><kbd>3</kbd><span>✦</span><strong>BLASTER</strong><small data-weapon-value="blaster">LOCKED</small></div>
         </div>
       </section>
+
+      <section id="controller-pause-overlay" class="controller-pause-overlay" hidden aria-labelledby="controller-pause-title">
+        <div class="panel choice-panel">
+          <p class="eyebrow">GAME PAUSED</p>
+          <h2 id="controller-pause-title">Ready to keep mining?</h2>
+          <button id="resume-run-button" class="primary-button" type="button">RESUME RUN</button>
+          <p class="preview-note">Reconnect your controller or continue with keyboard and mouse.</p>
+        </div>
+      </section>
+
+      <aside id="beta-tools" class="beta-tools" hidden>
+        <p class="eyebrow">BETA TESTING · NO REWARDS</p>
+        <div class="beta-tool-actions">
+          <button type="button" data-beta-action="restore">FULL HEALTH</button>
+          <button type="button" data-beta-action="refill">REFILL BLASTER</button>
+          <button type="button" data-beta-action="clear">CLEAR MONSTERS</button>
+          <button type="button" data-beta-action="reset">RESET DEPTH</button>
+          <button type="button" data-beta-action="spawn">SPAWN ENEMIES</button>
+          <button type="button" data-beta-action="boss">SPAWN BOSS</button>
+        </div>
+        <label>Validated test configuration<textarea id="beta-config-json" rows="12"></textarea></label>
+        <div class="action-row"><button id="beta-apply-config" type="button">APPLY</button><button id="beta-copy-config" type="button">COPY JSON</button></div>
+      </aside>
 
       <div id="toast" class="toast" role="status"></div>
 

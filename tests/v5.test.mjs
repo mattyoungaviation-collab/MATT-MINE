@@ -514,7 +514,7 @@ test('ranged enemies fire at the player and run endings clear all camera shake',
   assert.equal(game.camera.shake, 0);
 });
 
-test('the stronger Guardian fires evasive spreads and summons fast relentless reinforcements', async () => {
+test('the stronger Guardian scheduler prevents same-frame attack combinations', async () => {
   const { MattMineGame } = await import('../src/game/GameV4.js');
   const stubs = installBrowserStubs();
   const game = new MattMineGame(stubs.canvas, stubs.profile);
@@ -529,13 +529,11 @@ test('the stronger Guardian fires evasive spreads and summons fast relentless re
 
   game.updateGuardian(guardian, 0.02);
 
-  const reinforcements = game.enemies.filter((enemy) => enemy.guardianReinforcement);
   assert.equal(guardian.maxHp, 820);
-  assert.equal(game.projectiles.length, 5);
-  assert.equal(reinforcements.length, 3);
-  assert.equal(reinforcements.every((enemy) => enemy.awake && enemy.speed > 74), true);
-  const projectileAngles = game.projectiles.map((projectile) => Math.atan2(projectile.vy, projectile.vx));
-  assert.ok(Math.max(...projectileAngles) - Math.min(...projectileAngles) > 1);
+  const firstSequence = guardian.bossScheduler.sequence;
+  assert.equal(firstSequence, 1);
+  game.updateGuardian(guardian, 0.02);
+  assert.equal(guardian.bossScheduler.sequence, firstSequence);
 });
 
 test('Guardian slam aura cannot damage the player through mine walls', async () => {

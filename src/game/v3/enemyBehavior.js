@@ -50,7 +50,9 @@ export const enemyBehaviorMethods = {
 
       if (enemy.type !== 'exploder' && distance(enemy, this.player) < enemy.radius + this.player.radius && enemy.contactTimer <= 0) {
         enemy.contactTimer = enemy.isBoss ? 0.8 : 1.05;
-        this.damagePlayer(enemy.damage, angleTo(enemy, this.player));
+        this.damagePlayer(enemy.damage, angleTo(enemy, this.player), enemy.isBoss
+          ? { bossId: enemy.id, bossAttack: 'contact' }
+          : {});
       }
     }
   },

@@ -35,6 +35,7 @@
         <button data-tab="operations">Operations</button>
         <button data-tab="players">Players</button>
         <button data-tab="tuning">Game Tuning</button>
+        <button data-tab="expansion">Expansion</button>
         <button data-tab="rewards">Rewards</button>
         <button data-tab="arena">Daily Arena</button>
         <button data-tab="contracts">Contracts</button>
@@ -48,6 +49,31 @@
         <div class="grid two">
           <article class="panel"><h2>Live systems</h2><div id="systems"></div></article>
           <article class="panel"><h2>Protected foundations</h2><div id="immutable"></div></article>
+        </div>
+      </section>
+
+      <section id="tab-expansion" class="tab">
+        <div class="section-heading">
+          <div><p class="eyebrow">PRODUCTION EXPANSION</p><h2>Modes, rewards, characters, and controls</h2></div>
+          <label>Find setting<input id="expansion-search" placeholder="Chest, revive, controller, character..."></label>
+        </div>
+        <div class="notice">Payment and advertisement switches remain blocked until their exact production verifiers are configured. Competitive settings apply only before a stage opens.</div>
+        <form id="expansion-form">
+          <div id="expansion-fields" class="tuning-groups"></div>
+          <article class="panel">
+            <label>Required reason<input id="expansion-reason" maxlength="240" placeholder="Why are these production settings changing?" required></label>
+            <div class="action-row"><button type="submit">Save expansion settings</button><button id="reset-expansion" type="button" class="ghost">Load safe defaults</button><button id="export-expansion" type="button" class="ghost">Export validated preset</button><label class="file-button">Import preset<input id="import-expansion" type="file" accept="application/json" hidden></label></div>
+          </article>
+        </form>
+        <div class="grid two">
+          <form id="beta-access-form" class="panel">
+            <h2>Beta tester access</h2>
+            <label>Wallet<input id="beta-wallet" placeholder="0x..."></label>
+            <label>Access<select id="beta-enabled"><option value="true">Grant</option><option value="false">Revoke</option></select></label>
+            <label>Required reason<input id="beta-reason" maxlength="240" required></label>
+            <button>Apply audited access</button>
+          </form>
+          <article class="panel"><h2>Boss telemetry</h2><div id="boss-telemetry"></div></article>
         </div>
       </section>
 

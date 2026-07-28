@@ -37,6 +37,14 @@ import {
   NUGGET_LEDGER_TYPES,
   applyNuggetLedgerDelta
 } from './nugget-ledger.js';
+import {
+  consumeWeeklyAttempt,
+  endlessLeaderboard,
+  endlessSnapshot,
+  finishWeeklyAttempt,
+  openWeeklyStage,
+  weeklyLeaderboard
+} from './competition-engine.js';
 
 const FREE_PASS_XP = 25;
 const PAID_PASS_XP = 100;
@@ -521,6 +529,16 @@ export class MattMineService {
     if (normalizedMode === SERVER_RUN_MODES.PAID) {
       assertApi(!operationState.operations.passRankedPaused, 503, 'pass_ranked_paused', 'Pass ranked runs are temporarily paused.');
     }
+    if (normalizedMode === SERVER_RUN_MODES.BETA) {
+      assertApi(operationState.expansionConfig.settings.betaModeEnabled, 503, 'beta_mode_disabled', 'Beta Testing is currently disabled.');
+      assertApi(operationState.wallets[session.address]?.expansion?.betaTester === true, 403, 'beta_access_required', 'This wallet is not approved for Beta Testing.');
+    }
+    if (normalizedMode === SERVER_RUN_MODES.WEEKLY) {
+      assertApi(operationState.expansionConfig.settings.weeklyCompetitionEnabled, 503, 'weekly_competition_disabled', 'Weekly competition is not open.');
+    }
+    if (normalizedMode === SERVER_RUN_MODES.ENDLESS) {
+      assertApi(operationState.expansionConfig.settings.endlessEnabled, 503, 'endless_mode_disabled', 'Endless mode is not open.');
+    }
     let passActiveAtStart = false;
     if (normalizedMode === SERVER_RUN_MODES.PAID) {
       assertApi(
@@ -545,12 +563,13 @@ export class MattMineService {
     return this.database.transact(async (state, transaction) => {
       const wallet = requireWallet(state, session.address);
       await expireOldRuns(state, timestamp, transaction);
-      if (normalizedMode !== SERVER_RUN_MODES.PRACTICE) {
+      const betaMode = normalizedMode === SERVER_RUN_MODES.BETA;
+      if (normalizedMode !== SERVER_RUN_MODES.PRACTICE && !betaMode) {
         assertIdentityReady(wallet);
         assertApi(!wallet.suspended, 403, 'wallet_suspended', 'This wallet is suspended from ranked play.');
         const activeRanked = Object.values(state.runs).find((run) =>
           run.address === session.address &&
-          run.mode !== SERVER_RUN_MODES.PRACTICE &&
+          ![SERVER_RUN_MODES.PRACTICE, SERVER_RUN_MODES.BETA].includes(run.mode) &&
           run.status === 'active'
         );
         assertApi(!activeRanked, 409, 'ranked_run_active', 'Finish or expire the current ranked run before starting another.');
@@ -559,7 +578,7 @@ export class MattMineService {
       const day = utcDayKey(timestamp);
       const week = utcWeekKey(timestamp);
       const weekEndsAt = Date.parse(`${week}T00:00:00.000Z`) + 7 * 24 * 60 * 60 * 1000;
-      if (normalizedMode !== SERVER_RUN_MODES.PRACTICE) {
+      if (normalizedMode !== SERVER_RUN_MODES.PRACTICE && !betaMode) {
         assertApi(
           weekEndsAt - timestamp >= MIN_RANKED_RUN_WINDOW_MS,
           409,
@@ -579,11 +598,56 @@ export class MattMineService {
         entitlement.usedRunId = runId;
       }
 
+      let weeklyStage = null;
+      if (normalizedMode === SERVER_RUN_MODES.WEEKLY) {
+        const weekStartedAt = Date.parse(`${week}T00:00:00.000Z`);
+        const dayNumber = Math.floor((timestamp - weekStartedAt) / 86_400_000) + 1;
+        assertApi(dayNumber <= state.expansionConfig.settings.weeklyActiveDayCount, 409, 'weekly_stage_locked', 'This weekly stage is not open yet.');
+        weeklyStage = openWeeklyStage(state.weeklyCompetition, week, dayNumber, state.expansionConfig, timestamp);
+        try {
+          consumeWeeklyAttempt(state.weeklyCompetition, week, dayNumber, session.address, runId, timestamp);
+        } catch (error) {
+          throw new ApiError(409, error.message, error.message === 'weekly_attempt_used'
+            ? 'Today’s weekly competition attempt has already been used.'
+            : 'The weekly stage is unavailable.');
+        }
+      }
+
       const seed = normalizedMode === SERVER_RUN_MODES.FREE
         ? `MATT-MINE-${day}-FREE`
         : normalizedMode === SERVER_RUN_MODES.PAID
           ? `MATT-MINE-${day}-PAID`
-          : `MATT-PRACTICE-${day}-${this.randomHex(10)}`;
+          : normalizedMode === SERVER_RUN_MODES.WEEKLY
+            ? weeklyStage.seed
+            : normalizedMode === SERVER_RUN_MODES.ENDLESS
+              ? `MATT-ENDLESS-${week}-${session.address}`
+              : normalizedMode === SERVER_RUN_MODES.BETA
+                ? `MATT-BETA-${day}-${this.randomHex(10)}`
+                : `MATT-PRACTICE-${day}-${this.randomHex(10)}`;
+      const selectedCharacterId = normalizedMode === SERVER_RUN_MODES.WEEKLY
+        ? state.expansionConfig.settings.weeklyLockedCharacter
+        : wallet.expansion?.selectedCharacter || 'matt';
+      const selectedCharacter = state.expansionConfig?.characters?.[selectedCharacterId];
+      assertApi(
+        selectedCharacter?.enabled === true &&
+        (normalizedMode === SERVER_RUN_MODES.WEEKLY || wallet.expansion?.ownedCharacters?.includes(selectedCharacterId)),
+        409,
+        'selected_character_unavailable',
+        'Select an enabled character owned by this wallet.'
+      );
+      const baseTuning = structuredClone(state.gameTuning[normalizedMode] || state.gameTuning.practice);
+      const retentionPercent = normalizedMode === SERVER_RUN_MODES.FREE
+        ? state.expansionConfig.settings.deathRetentionFree
+        : normalizedMode === SERVER_RUN_MODES.PAID
+          ? state.expansionConfig.settings.deathRetentionPaid
+          : state.expansionConfig.settings.deathRetentionPractice;
+      baseTuning.deathKeepFraction = retentionPercent / 100;
+      if (weeklyStage) {
+        baseTuning.enemyHealthMultiplier = (baseTuning.enemyHealthMultiplier || 1) * weeklyStage.difficulty;
+        baseTuning.enemyDamageMultiplier = (baseTuning.enemyDamageMultiplier || 1) * weeklyStage.difficulty;
+        baseTuning.roomsPerDepth = weeklyStage.roomCount;
+        baseTuning.bossesPerDepth = weeklyStage.bossCount;
+      }
       const serverRun = {
         id: runId,
         tokenHash: runTokenHash,
@@ -594,14 +658,20 @@ export class MattMineService {
         week,
         status: 'active',
         startedAt: timestamp,
-        expiresAt: normalizedMode === SERVER_RUN_MODES.PRACTICE
+        expiresAt: [SERVER_RUN_MODES.PRACTICE, SERVER_RUN_MODES.BETA].includes(normalizedMode)
           ? timestamp + RUN_TTL_MS
           : Math.min(timestamp + RUN_TTL_MS, weekEndsAt),
         finishedAt: 0,
         passActiveAtStart,
         passXpAwarded: 0,
         result: null,
-        tuning: structuredClone(state.gameTuning[normalizedMode] || state.gameTuning.practice)
+        characterId: selectedCharacterId,
+        character: structuredClone(selectedCharacter),
+        weeklyStage,
+        endlessSnapshot: normalizedMode === SERVER_RUN_MODES.ENDLESS
+          ? endlessSnapshot(week, state.expansionConfig, timestamp)
+          : null,
+        tuning: baseTuning
       };
       state.runs[runId] = serverRun;
       await transaction?.upsertRun(serverRun);
@@ -621,7 +691,11 @@ export class MattMineService {
             ? 2
             : 0,
         expiresAt: serverRun.expiresAt,
-        tuning: structuredClone(serverRun.tuning)
+        tuning: structuredClone(serverRun.tuning),
+        characterId: selectedCharacterId,
+        character: structuredClone(selectedCharacter),
+        weeklyStage: weeklyStage ? structuredClone(weeklyStage) : null,
+        endlessSnapshot: serverRun.endlessSnapshot ? structuredClone(serverRun.endlessSnapshot) : null
       };
     });
   }
@@ -652,7 +726,7 @@ export class MattMineService {
       assertApi(run.status === 'active', 409, 'run_already_finished', 'This run was already submitted.');
       assertApi(run.expiresAt > timestamp, 410, 'run_expired', 'The run expired before it was submitted.');
       assertApi(safeTokenEqual(run.tokenHash, hashToken(runToken)), 401, 'run_token_rejected', 'The run token is invalid.');
-      if (run.mode !== SERVER_RUN_MODES.PRACTICE) {
+      if (![SERVER_RUN_MODES.PRACTICE, SERVER_RUN_MODES.BETA].includes(run.mode)) {
         assertApi(!wallet.suspended, 403, 'wallet_suspended', 'This wallet is suspended from ranked score submission.');
       }
 
@@ -663,7 +737,7 @@ export class MattMineService {
       let practiceClaim = null;
       if (run.mode === SERVER_RUN_MODES.PRACTICE) {
         practiceClaim = upsertPracticeClaim(wallet, run, result, timestamp);
-      } else {
+      } else if ([SERVER_RUN_MODES.FREE, SERVER_RUN_MODES.PAID].includes(run.mode)) {
         const _ledgerUpdate = applyNuggetLedgerDelta(wallet, result.banked, {
           type: NUGGET_LEDGER_TYPES.RUN_EXTRACTION,
           runId,
@@ -673,10 +747,36 @@ export class MattMineService {
           // If the same submission is retried after a restart, keep the same outcome without mutation.
         }
       }
-      wallet.profile.bestDepth = Math.max(wallet.profile.bestDepth, result.depth);
-      wallet.profile.bestScore = Math.max(wallet.profile.bestScore, result.score);
-      wallet.profile.totalRuns += 1;
-      const passXpAwarded = Math.round((run.passActiveAtStart
+      if (run.mode === SERVER_RUN_MODES.WEEKLY) {
+        finishWeeklyAttempt(
+          state.weeklyCompetition,
+          run.week,
+          run.weeklyStage.day,
+          session.address,
+          { score: result.score, completed: result.extracted, elapsed: result.elapsed },
+          timestamp
+        );
+      }
+      if (run.mode === SERVER_RUN_MODES.ENDLESS) {
+        state.endlessCompetition.seasons ||= {};
+        state.endlessCompetition.seasons[run.week] ||= { snapshot: run.endlessSnapshot, results: [] };
+        state.endlessCompetition.seasons[run.week].results.push({
+          address: session.address,
+          runId,
+          depth: result.depth,
+          score: result.score,
+          bosses: result.bossTelemetry?.completedBosses || (result.bossTelemetry?.encounterDuration > 0 ? 1 : 0),
+          survivalTime: result.elapsed,
+          verified: true,
+          finishedAt: timestamp
+        });
+      }
+      if (run.mode !== SERVER_RUN_MODES.BETA) {
+        wallet.profile.bestDepth = Math.max(wallet.profile.bestDepth, result.depth);
+        wallet.profile.bestScore = Math.max(wallet.profile.bestScore, result.score);
+        wallet.profile.totalRuns += 1;
+      }
+      const passXpAwarded = run.mode === SERVER_RUN_MODES.BETA ? 0 : Math.round((run.passActiveAtStart
         ? run.mode === SERVER_RUN_MODES.PAID
           ? PAID_PASS_XP
           : run.mode === SERVER_RUN_MODES.FREE
@@ -707,11 +807,14 @@ export class MattMineService {
         week: run.week
       };
     });
-    const leaderboard = await this.leaderboardFor(
-      completed.mode,
-      completed.week,
-      session.address
-    );
+    const state = await this.database.read();
+    const leaderboard = completed.mode === SERVER_RUN_MODES.WEEKLY
+      ? { mode: 'weekly', week: completed.week, rows: weeklyLeaderboard(state.weeklyCompetition, completed.week) }
+      : completed.mode === SERVER_RUN_MODES.ENDLESS
+        ? { mode: 'endless', season: completed.week, rows: endlessLeaderboard(state.endlessCompetition.seasons?.[completed.week]?.results || []) }
+        : completed.mode === SERVER_RUN_MODES.BETA
+          ? { mode: 'beta', rows: [], excludedFromRewards: true }
+          : await this.leaderboardFor(completed.mode, completed.week, session.address);
     return {
       accepted: completed.accepted,
       run: completed.run,
@@ -967,6 +1070,8 @@ export class MattMineService {
       },
       payments: paymentStatus,
       rewards: this.rewardManager?.publicConfig?.() || { available: false },
+      bossTelemetry: aggregateBossTelemetry(runs),
+      characterTelemetry: aggregateCharacterTelemetry(runs),
       contractActions: listAdminContractActions()
     };
   }
@@ -1041,9 +1146,10 @@ export class MattMineService {
     this.assertAdminKey(adminKey);
     assertApi(GAMEPLAY_LOBBIES.includes(lobby), 404, 'tuning_lobby_unknown', 'Unknown gameplay lobby.');
     const normalizedReason = normalizeAdminReason(reason);
+    const snapshot = await this.database.read();
     let patch;
     try {
-      patch = normalizeTuningPatch(input);
+      patch = normalizeTuningPatch(input, snapshot.gameTuning?.[lobby] || {});
     } catch (error) {
       throw new ApiError(422, 'tuning_invalid', error.message);
     }
@@ -1396,11 +1502,12 @@ export function validateRunResult(input, run, timestamp) {
   const extracted = input.extracted === true;
   const projected = strictInteger(input.projected, 'projected', 0, MAX_RUN_SCORE);
   const banked = strictInteger(input.banked, 'banked', 0, projected);
-  const depth = strictInteger(input.depth, 'depth', 1, 5);
+  const depth = strictInteger(input.depth, 'depth', 1, run.mode === SERVER_RUN_MODES.ENDLESS ? 1_000 : 5);
   const kills = strictInteger(input.kills, 'kills', 0, 10_000);
   const oreBroken = strictInteger(input.oreBroken, 'oreBroken', 0, 10_000);
   const elapsed = strictNumber(input.elapsed, 'elapsed', 0, RUN_TTL_MS / 1000);
   const wallElapsed = Math.max(0, (timestamp - run.startedAt) / 1000);
+  const bossTelemetry = normalizeBossTelemetry(input.bossTelemetry, elapsed);
 
   assertApi(elapsed <= wallElapsed + 15, 422, 'elapsed_time_impossible', 'Reported gameplay time exceeds the server run window.');
   assertApi(kills <= 25 + Math.ceil(elapsed * 8), 422, 'kill_rate_impossible', 'Enemy count exceeds the accepted run rate.');
@@ -1423,8 +1530,121 @@ export function validateRunResult(input, run, timestamp) {
     depth,
     kills,
     oreBroken,
-    elapsed: Math.round(elapsed * 1000) / 1000
+    elapsed: Math.round(elapsed * 1000) / 1000,
+    bossTelemetry
   };
+}
+
+function normalizeBossTelemetry(input, elapsed) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    return {
+      encounterDuration: 0,
+      phaseDurations: { 1: 0, 2: 0, 3: 0 },
+      damageDealt: 0,
+      damageReceived: 0,
+      playerDeaths: 0,
+      attacksUsed: {},
+      bosses: []
+    };
+  }
+  const startedAt = strictNumber(input.encounterStartedAt || 0, 'bossTelemetry.encounterStartedAt', 0, elapsed);
+  const endedAt = strictNumber(input.encounterEndedAt || 0, 'bossTelemetry.encounterEndedAt', 0, elapsed);
+  const bosses = Object.values(input.bosses || {}).slice(0, 50).map((boss, index) => {
+    assertApi(boss && typeof boss === 'object' && !Array.isArray(boss), 422, 'boss_telemetry_invalid', 'Boss telemetry entries must be objects.');
+    const phaseDurations = Object.fromEntries([1, 2, 3].map((phase) => [
+      phase,
+      strictNumber(boss.phaseDurations?.[phase] || 0, `bossTelemetry.bosses.${index}.phase${phase}`, 0, elapsed)
+    ]));
+    assertApi(
+      Object.values(phaseDurations).reduce((sum, value) => sum + value, 0) <= elapsed + 1,
+      422,
+      'boss_phase_time_impossible',
+      'Boss phase time exceeds the run duration.'
+    );
+    return {
+      bossId: strictInteger(Number(boss.bossId), `bossTelemetry.bosses.${index}.bossId`, 1, 1_000_000),
+      phaseDurations,
+      attacksUsed: normalizeAttackCounts(boss.attacksUsed, elapsed)
+    };
+  });
+  const attacksUsed = normalizeAttackCounts(input.attacksUsed, elapsed);
+  return {
+    encounterDuration: startedAt > 0 ? Math.max(0, (endedAt || elapsed) - startedAt) : 0,
+    phaseDurations: bosses.reduce((totals, boss) => {
+      for (const phase of [1, 2, 3]) totals[phase] += boss.phaseDurations[phase];
+      return totals;
+    }, { 1: 0, 2: 0, 3: 0 }),
+    damageDealt: strictNumber(input.damageDealt || 0, 'bossTelemetry.damageDealt', 0, 25_000_000),
+    damageReceived: strictNumber(input.damageReceived || 0, 'bossTelemetry.damageReceived', 0, 1_000_000),
+    playerDeaths: strictInteger(input.playerDeaths || 0, 'bossTelemetry.playerDeaths', 0, 1),
+    attacksUsed,
+    bosses
+  };
+}
+
+function normalizeAttackCounts(input, elapsed) {
+  const allowed = new Set(['slam', 'volley', 'radial', 'summon', 'contact']);
+  const source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+  const result = {};
+  for (const [attack, raw] of Object.entries(source)) {
+    assertApi(allowed.has(attack), 422, 'boss_attack_unknown', `Unknown boss attack telemetry: ${attack}.`);
+    result[attack] = strictInteger(raw, `bossTelemetry.attacksUsed.${attack}`, 0, Math.ceil(elapsed * 10) + 10);
+  }
+  return result;
+}
+
+function aggregateBossTelemetry(runs) {
+  const completed = runs
+    .filter((run) => run.status === 'finished' && run.result?.bossTelemetry?.encounterDuration > 0)
+    .slice(-5_000);
+  const totals = {
+    encounters: completed.length,
+    encounterDuration: 0,
+    damageDealt: 0,
+    damageReceived: 0,
+    playerDeaths: 0,
+    phaseDurations: { 1: 0, 2: 0, 3: 0 },
+    attacksUsed: {}
+  };
+  for (const run of completed) {
+    const telemetry = run.result.bossTelemetry;
+    totals.encounterDuration += telemetry.encounterDuration;
+    totals.damageDealt += telemetry.damageDealt;
+    totals.damageReceived += telemetry.damageReceived;
+    totals.playerDeaths += telemetry.playerDeaths;
+    for (const phase of [1, 2, 3]) totals.phaseDurations[phase] += telemetry.phaseDurations?.[phase] || 0;
+    for (const [attack, count] of Object.entries(telemetry.attacksUsed || {})) {
+      totals.attacksUsed[attack] = (totals.attacksUsed[attack] || 0) + count;
+    }
+  }
+  return {
+    ...totals,
+    averageEncounterSeconds: completed.length
+      ? Math.round((totals.encounterDuration / completed.length) * 100) / 100
+      : 0,
+    averageDamageDealt: completed.length ? Math.round(totals.damageDealt / completed.length) : 0,
+    averageDamageReceived: completed.length ? Math.round(totals.damageReceived / completed.length) : 0
+  };
+}
+
+function aggregateCharacterTelemetry(runs) {
+  const rows = {};
+  for (const run of runs) {
+    if (run.status !== 'finished' || !run.result) continue;
+    const id = run.characterId || 'matt';
+    rows[id] ||= { characterId: id, runs: 0, extractions: 0, knockouts: 0, totalScore: 0, totalDepth: 0 };
+    rows[id].runs += 1;
+    rows[id].extractions += run.result.extracted ? 1 : 0;
+    rows[id].knockouts += run.result.extracted ? 0 : 1;
+    rows[id].totalScore += Number(run.result.score || 0);
+    rows[id].totalDepth += Number(run.result.depth || 0);
+  }
+  return Object.values(rows).map((row) => ({
+    ...row,
+    averageScore: row.runs ? Math.round(row.totalScore / row.runs) : 0,
+    averageDepth: row.runs ? Math.round(row.totalDepth / row.runs * 100) / 100 : 0,
+    extractionRate: row.runs ? Math.round(row.extractions / row.runs * 10_000) / 100 : 0
+  }));
 }
 
 function publicWalletSnapshot(state, address, timestamp) {
@@ -1434,7 +1654,7 @@ function publicWalletSnapshot(state, address, timestamp) {
   const freeDaily = wallet.daily[day] || { freeRunUsed: false, freeRunId: '' };
   const activeRanked = Object.values(state.runs).find((run) =>
     run.address === address &&
-    run.mode !== SERVER_RUN_MODES.PRACTICE &&
+    ![SERVER_RUN_MODES.PRACTICE, SERVER_RUN_MODES.BETA].includes(run.mode) &&
     run.status === 'active' &&
     run.expiresAt > timestamp
   );
@@ -1530,6 +1750,7 @@ function publicRun(run) {
     startedAt: run.startedAt,
     finishedAt: run.finishedAt,
     passXpAwarded: Number(run.passXpAwarded || 0),
+    characterId: run.characterId || 'matt',
     result: structuredClone(run.result)
   };
 }

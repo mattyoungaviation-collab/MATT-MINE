@@ -4,6 +4,21 @@
 
 MATT Mine is a standalone browser action roguelite and daily Web3 competition on Ronin. It has its own launch website, wallet identity, separate Free and Pass leaderboards, live Pass and paid-run payments, verified contracts, and a production persistence path independent from MATT Hub.
 
+## v3.0 production expansion
+
+- Tune every real Guardian attack independently across all three phases with deterministic, per-boss cooldown scheduling and completed-run telemetry.
+- Increase the configurable Pass Chest default to 250,000 server-ledger nuggets with atomic opening and duplicate-cosmetic rules.
+- Add server-owned playable characters, unlocks, purchases, Admin grants, balance controls, and character usage telemetry.
+- Add wallet-saved controller remapping, dead zones, aiming, vibration, menu navigation, controller-safe pause, and resume.
+- Add a rewardless, entitled Beta Testing mine with developer controls and audited tester access.
+- Add server-owned Weekly and Endless competition engines, immutable snapshots, scaling, and separate rankings.
+- Add one-run revive and verified advertisement reward interfaces that remain fail-closed until production verifiers are configured.
+- Migrate existing state to version 11 without losing profiles, cosmetics, controls, run history, payments, or claims.
+
+Weekly, Endless, paid revive, and advertisement rewards remain unavailable in production until their explicit replay/payment/provider validation blockers are satisfied. No MATT is burned.
+
+See [`docs/PRODUCTION_EXPANSION_V30.md`](docs/PRODUCTION_EXPANSION_V30.md).
+
 ## v2.6 production game control
 
 - Add a Nitrado-style Game Tuning panel for Practice, Free, Pass, and Daily Arena lobbies.
@@ -112,7 +127,7 @@ See [`docs/DAILY_ARENA_V18.md`](docs/DAILY_ARENA_V18.md).
 
 - Deliver all eight Pass levels from server-owned XP into a permanent wallet inventory.
 - Unlock the Starter Badge, Gold Trail, Crystal Skin, Founder Frame, Guardian Aura, Ore Reactor title, and Season One Trophy.
-- Open the level-three Pass Chest for the exclusive Molten Pickaxe and 2,500 permanent nuggets.
+- Open the level-three Pass Chest for the exclusive Molten Pickaxe and a configurable 250,000-nugget default award.
 - Equip or remove every owned cosmetic through the MATT Mine Loadout screen.
 - Show equipped skins, auras, trails, and pickaxes directly during gameplay.
 - Show equipped frames, badges, titles, and trophies on server-verified leaderboard rows.

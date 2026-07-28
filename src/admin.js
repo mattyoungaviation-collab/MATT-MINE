@@ -1,4 +1,4 @@
-const state = { key: '', overview: null, actions: [], tuning: null };
+const state = { key: '', overview: null, actions: [], tuning: null, expansion: null };
 const $ = (selector) => document.querySelector(selector);
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char]));
 
@@ -30,6 +30,7 @@ $('#tabs').addEventListener('click', async (event) => {
   document.querySelectorAll('.tab').forEach((tab) => tab.classList.toggle('active', tab.id === `tab-${name}`));
   if (name === 'players') await loadWallets();
   if (name === 'tuning') await loadTuning();
+  if (name === 'expansion') await loadExpansion();
   if (name === 'rewards') await loadRewards();
   if (name === 'arena') await loadArenaAdmin();
   if (name === 'audit') await loadAudit();
@@ -67,6 +68,15 @@ function renderOverview(data) {
     row('Confirmed payments editable', 'No'),
     row('Finished scores editable', 'No'),
     row('Treasury Safe', short(data.immutable.contracts.safe))
+  ].join('');
+  const boss = data.bossTelemetry || {};
+  if ($('#boss-telemetry')) $('#boss-telemetry').innerHTML = [
+    row('Completed encounters', Number(boss.completedEncounters || 0).toLocaleString()),
+    row('Average duration', `${Number(boss.averageEncounterSeconds || 0).toFixed(2)} seconds`),
+    row('Average boss damage', Number(boss.averageDamageDealt || 0).toLocaleString()),
+    row('Average damage received', Number(boss.averageDamageReceived || 0).toLocaleString()),
+    row('Player deaths', Number(boss.playerDeaths || 0).toLocaleString()),
+    row('Attacks', Object.entries(boss.attacksUsed || {}).map(([key, value]) => `${key}: ${value}`).join(' · ') || 'No data')
   ].join('');
 }
 
@@ -219,6 +229,125 @@ $('#tuning-form').addEventListener('submit', async (event) => {
   showAlert(result.effectiveDay
     ? `${words(lobby)} tuning saved for ${result.effectiveDay} UTC.`
     : `${words(lobby)} tuning saved.`);
+});
+
+async function loadExpansion() {
+  const data = await api('/api/admin/expansion');
+  state.expansion = data.expansion;
+  renderExpansion();
+}
+
+function renderExpansion() {
+  if (!state.expansion) return;
+  const needle = $('#expansion-search').value.trim().toLowerCase();
+  const visible = state.expansion.schema.filter((entry) =>
+    !needle || `${entry.category} ${entry.label} ${entry.description}`.toLowerCase().includes(needle)
+  );
+  const groups = visible.reduce((map, entry) => {
+    if (!map.has(entry.category)) map.set(entry.category, []);
+    map.get(entry.category).push(entry);
+    return map;
+  }, new Map());
+  const settings = state.expansion.config.settings;
+  const settingCards = [...groups].map(([category, entries]) => `<details class="panel structured-card" open>
+    <summary><strong>${escapeHtml(category)}</strong><span>${entries.length} controls</span></summary>
+    <div class="tuning-grid">${entries.map((entry) => expansionField(entry, settings[entry.id])).join('')}</div>
+  </details>`).join('');
+  const characters = Object.entries(state.expansion.config.characters).map(([id, character]) => `<details class="panel structured-card">
+    <summary><strong>${escapeHtml(character.name)}</strong><span>${character.enabled ? 'Enabled' : 'Disabled'}</span></summary>
+    <div class="tuning-grid">${Object.entries(character).map(([key, value]) => characterField(id, key, value)).join('')}</div>
+  </details>`).join('');
+  $('#expansion-fields').innerHTML = `${settingCards}<div class="section-heading"><div><p class="eyebrow">PLAYABLE ROSTER</p><h2>Characters</h2></div></div>${characters}`;
+}
+
+function expansionField(entry, value) {
+  let input;
+  if (entry.type === 'boolean') input = `<input data-expansion-setting="${entry.id}" type="checkbox" ${value ? 'checked' : ''}>`;
+  else if (entry.type === 'enum') input = `<select data-expansion-setting="${entry.id}">${entry.options.map((option) => `<option value="${escapeHtml(option)}" ${option === value ? 'selected' : ''}>${escapeHtml(words(option))}</option>`).join('')}</select>`;
+  else input = `<input data-expansion-setting="${entry.id}" type="${entry.type === 'atomic' ? 'text' : 'number'}" ${entry.type === 'atomic' ? '' : `min="${entry.min}" max="${entry.max}" step="${entry.type === 'integer' ? 1 : 'any'}"`} value="${escapeHtml(value)}">`;
+  return `<label class="tuning-field">${escapeHtml(entry.label)}${input}<small>${escapeHtml(entry.description)}${entry.type !== 'boolean' && entry.type !== 'enum' && entry.type !== 'atomic' ? ` Safe range: ${entry.min}–${entry.max}.` : ''}</small></label>`;
+}
+
+function characterField(id, key, value) {
+  if (key === 'enabled') return `<label class="tuning-field">${escapeHtml(words(key))}<input data-character="${id}" data-character-field="${key}" type="checkbox" ${value ? 'checked' : ''}></label>`;
+  if (typeof value === 'number') return `<label class="tuning-field">${escapeHtml(words(key))}<input data-character="${id}" data-character-field="${key}" type="number" step="any" value="${value}"></label>`;
+  return `<label class="tuning-field">${escapeHtml(words(key))}<input data-character="${id}" data-character-field="${key}" maxlength="200" value="${escapeHtml(value)}"></label>`;
+}
+
+$('#expansion-search').addEventListener('input', renderExpansion);
+$('#expansion-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const settings = {};
+  document.querySelectorAll('[data-expansion-setting]').forEach((input) => {
+    settings[input.dataset.expansionSetting] = input.type === 'checkbox'
+      ? input.checked
+      : input.type === 'number'
+        ? Number(input.value)
+        : input.value;
+  });
+  const characters = {};
+  document.querySelectorAll('[data-character]').forEach((input) => {
+    characters[input.dataset.character] ||= {};
+    characters[input.dataset.character][input.dataset.characterField] = input.type === 'checkbox'
+      ? input.checked
+      : input.type === 'number'
+        ? Number(input.value)
+        : input.value;
+  });
+  if (!await confirmAction('Save production expansion settings?', 'Every field is schema validated and the reason is audit logged. External-verifier blockers remain enforced.')) return;
+  const result = await api('/api/admin/expansion', {
+    method: 'PUT',
+    body: { patch: { settings, characters }, reason: $('#expansion-reason').value }
+  });
+  state.expansion.config = result.config;
+  $('#expansion-reason').value = '';
+  renderExpansion();
+  showAlert('Expansion settings validated, saved, and audited.');
+});
+
+$('#export-expansion').addEventListener('click', () => {
+  if (!state.expansion) return;
+  downloadJson(`matt-mine-expansion-r${state.expansion.config.revision}.json`, state.expansion.config);
+});
+
+$('#reset-expansion').addEventListener('click', async () => {
+  if (!state.expansion?.defaults) return;
+  if (!await confirmAction('Load safe expansion defaults?', 'This only stages the defaults in the form. Enter a reason and press Save to apply them.')) return;
+  state.expansion.config = structuredClone(state.expansion.defaults);
+  renderExpansion();
+  showAlert('Safe defaults loaded for review. No server setting changed yet.');
+});
+
+$('#import-expansion').addEventListener('change', async (event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  try {
+    const imported = JSON.parse(await file.text());
+    if (!imported.settings || !imported.characters) throw new Error('Preset must contain settings and characters.');
+    state.expansion.config = imported;
+    renderExpansion();
+    showAlert('Preset loaded for review. Press Save to validate and apply it.');
+  } catch (error) {
+    showAlert(`Preset rejected: ${error.message}`, true);
+  } finally {
+    event.target.value = '';
+  }
+});
+
+$('#beta-access-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (!await confirmAction('Change Beta Testing access?', 'The entitlement is server owned and the change is audit logged.')) return;
+  await api('/api/admin/beta-testers', {
+    method: 'PUT',
+    body: {
+      address: $('#beta-wallet').value,
+      enabled: $('#beta-enabled').value === 'true',
+      reason: $('#beta-reason').value
+    }
+  });
+  $('#beta-reason').value = '';
+  await loadExpansion();
+  showAlert('Beta Testing access updated.');
 });
 
 $('#refresh-rewards').addEventListener('click', loadRewards);

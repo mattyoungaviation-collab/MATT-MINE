@@ -4,6 +4,8 @@ import { META_UPGRADES, metaUpgradeCost } from './game/config.js';
 import { prepareProfileImage } from './game/profileImage.js';
 import { mountDailyMinePreviews } from './game/dailyMapPreview.js';
 import { KEYBIND_ACTIONS, defaultKeybindings, normalizeKeybindings } from './game/keybindings.js';
+import { CONTROLLER_ACTIONS, defaultControllerProfile, normalizeControllerProfile } from './game/expansionConfig.js';
+import { BetaDeveloperTools, defaultBetaConfiguration } from './game/betaTools.js';
 import {
   ADMIN_ROLES,
   LocalEconomyStore,
@@ -56,6 +58,18 @@ const mobileControls = $('#mobile-controls');
 const isLocalPreview = ['localhost', '127.0.0.1', '[::1]'].includes(globalThis.location?.hostname);
 const economy = new LocalEconomyStore();
 const PRACTICE_CLAIM_PLACEHOLDER_PRICE = 5000;
+const CONTROLLER_ACTION_LABELS = Object.freeze({
+  attack: 'Attack', dash: 'Dash', pickaxe: 'Pickaxe', dynamite: 'Dynamite',
+  blaster: 'Blaster', interact: 'Interact', pause: 'Pause', confirm: 'Confirm',
+  cancel: 'Back', menuUp: 'Menu Up', menuDown: 'Menu Down',
+  menuLeft: 'Menu Left', menuRight: 'Menu Right'
+});
+const CONTROLLER_BUTTON_LABELS = Object.freeze([
+  'A / Cross', 'B / Circle', 'X / Square', 'Y / Triangle',
+  'LB / L1', 'RB / R1', 'LT / L2', 'RT / R2', 'View / Share',
+  'Menu / Options', 'Left Stick', 'Right Stick', 'D-pad Up',
+  'D-pad Down', 'D-pad Left', 'D-pad Right', 'Home', 'Touchpad'
+]);
 let profile = loadProfile();
 let gameplayPreferences = loadGameplayPreferences();
 let toastTimer;
@@ -78,6 +92,7 @@ let arenaCountdownTimer = null;
 let activeArenaRun = null;
 let activeArenaTranscript = null;
 let activePracticeClaim = null;
+let activeBetaTools = null;
 let pendingAvatarDataUrl = '';
 let abandonConfirmUntil = 0;
 let abandonResetTimer = null;
@@ -124,6 +139,10 @@ function showScreen(id = null) {
 function setGameplayUi(active) {
   hud.classList.toggle('active', active);
   mobileControls.classList.toggle('active', active);
+  if (!active) {
+    if ($('#beta-tools')) $('#beta-tools').hidden = true;
+    if ($('#controller-pause-overlay')) $('#controller-pause-overlay').hidden = true;
+  }
 }
 
 function applyPassInventory(passInventory) {
@@ -224,6 +243,9 @@ function updateMenu() {
     passActive
   });
   renderArenaMenuStatus();
+  $('#weekly-run-button').hidden = serverPlayer?.expansion?.settings?.weeklyCompetitionEnabled !== true;
+  $('#endless-run-button').hidden = serverPlayer?.expansion?.settings?.endlessEnabled !== true;
+  $('#beta-run-button').hidden = serverPlayer?.expansion?.betaAvailable !== true;
   renderPassProgress();
   renderGameplayPreferences();
 }
@@ -328,6 +350,8 @@ function openMinerProfile(forceSetup = false) {
   renderProfileAvatar(identity.avatarUrl || '');
   pendingKeybindings = { ...(serverPlayer.keybindings || defaultKeybindings()) };
   renderKeybindings();
+  loadControllerSettings();
+  renderCharacters();
   showScreen('miner-profile');
   if (requiresSetup) $('#profile-name').focus();
 }
@@ -401,6 +425,7 @@ async function connectWallet() {
     saveProfile(profile);
     game.setProfile(profile);
     game.input.setKeybindings(serverPlayer.keybindings || defaultKeybindings());
+    if (serverPlayer.expansion?.controller) game.input.setControllerProfile(serverPlayer.expansion.controller);
     await refreshPaymentStatus(true);
     if (serverPlayer.identity?.requiresSetup) {
       openMinerProfile(true);
@@ -430,6 +455,7 @@ async function refreshServerPlayer() {
     saveProfile(profile);
     game.setProfile(profile);
     game.input.setKeybindings(serverPlayer.keybindings || defaultKeybindings());
+    if (serverPlayer.expansion?.controller) game.input.setControllerProfile(serverPlayer.expansion.controller);
     await refreshPaymentStatus(true);
     await refreshArena(true);
     updateMenu();
@@ -475,7 +501,8 @@ async function submitServerRun(serverRun, result) {
       depth: Math.max(1, Math.floor(result.depth || 1)),
       kills: Math.max(0, Math.floor(result.kills || 0)),
       oreBroken: Math.max(0, Math.floor(result.oreBroken || 0)),
-      elapsed: Math.max(0, Number(result.elapsed || 0))
+      elapsed: Math.max(0, Number(result.elapsed || 0)),
+      bossTelemetry: result.bossTelemetry || null
     });
     profile = accepted.profile;
     saveProfile(profile);
@@ -709,7 +736,8 @@ async function startRunMode(mode) {
   const useServer =
     mode === RUN_MODES.FREE ||
     (mode === RUN_MODES.PAID && serverConfig?.paidRunsEnabled === true) ||
-    (mode === RUN_MODES.PRACTICE && serverPlayer);
+    (mode === RUN_MODES.PRACTICE && serverPlayer) ||
+    [RUN_MODES.BETA, RUN_MODES.WEEKLY, RUN_MODES.ENDLESS].includes(mode);
   activePracticeClaim = null;
   clearPracticeClaimPanel();
   if (useServer) {
@@ -734,8 +762,21 @@ async function startRunMode(mode) {
         day: run.day,
         week: run.week,
         rewardWeight: run.rewardWeight,
-        tuning: run.tuning
+        tuning: run.tuning,
+        characterId: run.characterId,
+        character: run.character,
+        weeklyStage: run.weeklyStage,
+        endlessSnapshot: run.endlessSnapshot
       });
+      if (mode === RUN_MODES.BETA) {
+        const entitlement = await apiClient.betaAccess();
+        activeBetaTools = new BetaDeveloperTools(game, entitlement);
+        $('#beta-config-json').value = JSON.stringify(defaultBetaConfiguration(), null, 2);
+        $('#beta-tools').hidden = false;
+      } else {
+        activeBetaTools = null;
+        $('#beta-tools').hidden = true;
+      }
       updateMenu();
     } catch (error) {
       toast(error.message);
@@ -822,7 +863,9 @@ const game = new MattMineGame(canvas, profile, {
   },
   onDepthChoice(data) {
     $('#depth-summary').textContent = `You can bank ${formatNumber(data.projectedPayout)} nuggets now, or descend for a x${data.nextMultiplier.toFixed(1)} total loot multiplier.`;
-    $('#descend-button').textContent = data.depth >= 5 ? 'MAX DEPTH — EXTRACT' : 'DESCEND DEEPER';
+    $('#descend-button').textContent = activeServerRun?.mode === RUN_MODES.ENDLESS
+      ? 'DESCEND ENDLESS'
+      : data.depth >= 5 ? 'MAX DEPTH — EXTRACT' : 'DESCEND DEEPER';
     showScreen('depth-choice');
     setGameplayUi(false);
   },
@@ -928,6 +971,35 @@ $('#launch-wallet-button').addEventListener('click', () => {
 $('#home-button').addEventListener('click', () => openLaunch(true));
 $('#free-run-button').addEventListener('click', () => void startRunMode(RUN_MODES.FREE));
 $('#practice-run-button').addEventListener('click', () => void startRunMode(RUN_MODES.PRACTICE));
+$('#weekly-run-button').addEventListener('click', () => void startRunMode(RUN_MODES.WEEKLY));
+$('#endless-run-button').addEventListener('click', () => void startRunMode(RUN_MODES.ENDLESS));
+$('#beta-run-button').addEventListener('click', () => void startRunMode(RUN_MODES.BETA));
+document.querySelectorAll('[data-beta-action]').forEach((button) => button.addEventListener('click', () => {
+  if (!activeBetaTools) return;
+  const actions = {
+    restore: () => activeBetaTools.restoreHealth(),
+    refill: () => activeBetaTools.refillBlaster(),
+    clear: () => activeBetaTools.clearMonsters(),
+    reset: () => activeBetaTools.restartDepth(),
+    spawn: () => activeBetaTools.spawnEnemies(),
+    boss: () => activeBetaTools.spawnBosses()
+  };
+  actions[button.dataset.betaAction]?.();
+}));
+$('#beta-apply-config').addEventListener('click', () => {
+  try {
+    const applied = activeBetaTools?.importJson($('#beta-config-json').value);
+    if (applied) $('#beta-config-json').value = JSON.stringify(applied, null, 2);
+    toast('Beta configuration applied');
+  } catch (error) {
+    toast(error.message);
+  }
+});
+$('#beta-copy-config').addEventListener('click', () => {
+  if (!activeBetaTools) return;
+  navigator.clipboard.writeText(activeBetaTools.exportJson());
+  toast('Beta configuration copied');
+});
 $('#paid-run-button').addEventListener('click', () => {
   if (serverConfig?.paidRunsEnabled === true) {
     if ((paymentStatus?.confirmedCredits || 0) > 0 && paymentStatus?.pass?.active) {
@@ -994,6 +1066,27 @@ $('#reset-keybinds-button').addEventListener('click', () => {
   pendingKeybindings = defaultKeybindings();
   renderKeybindings();
   toast('Default controls restored — press Save Controls to keep them');
+});
+$('#controller-dead-zone').addEventListener('input', renderControllerSettings);
+$('#controller-aim-sensitivity').addEventListener('input', renderControllerSettings);
+$('#reset-controller-button').addEventListener('click', () => {
+  const defaults = defaultControllerProfile();
+  $('#controller-dead-zone').value = defaults.deadZone;
+  $('#controller-aim-sensitivity').value = defaults.aimSensitivity;
+  $('#controller-vibration').checked = defaults.vibration;
+  renderControllerMappings(defaults.mapping);
+  renderControllerSettings();
+  toast('Controller defaults loaded — press Save Controller to keep them');
+});
+$('#save-controller-button').addEventListener('click', () => void saveControllerSettings());
+$('#resume-run-button').addEventListener('click', resumeControllerPausedRun);
+window.addEventListener('mattmine:controller', (event) => {
+  const status = $('#controller-status');
+  if (!status) return;
+  status.textContent = event.detail?.connected
+    ? `Controller ${Number(event.detail.index) + 1} connected.`
+    : 'Controller disconnected. The current run is paused for safety.';
+  if (event.detail?.pauseRequested && game.state === 'playing') pauseControllerRun();
 });
 $('#profile-name').addEventListener('input', () => renderProfileAvatar(pendingAvatarDataUrl || serverPlayer?.identity?.avatarUrl || ''));
 $('#profile-avatar-input').addEventListener('change', async (event) => {
@@ -2048,12 +2141,162 @@ function renderKeybindings() {
   }));
 }
 
+function renderControllerSettings() {
+  const deadZone = Number($('#controller-dead-zone')?.value || .18);
+  const sensitivity = Number($('#controller-aim-sensitivity')?.value || 1);
+  if ($('#controller-dead-zone-value')) $('#controller-dead-zone-value').textContent = `${Math.round(deadZone * 100)}%`;
+  if ($('#controller-aim-sensitivity-value')) $('#controller-aim-sensitivity-value').textContent = `${sensitivity.toFixed(2)}×`;
+}
+
+function renderControllerMappings(mapping = defaultControllerProfile().mapping) {
+  const grid = $('#controller-mapping-grid');
+  if (!grid) return;
+  grid.innerHTML = CONTROLLER_ACTIONS.map((action) => `<label>
+    <span>${escapeHtml(CONTROLLER_ACTION_LABELS[action] || action)}</span>
+    <select data-controller-action="${action}">
+      ${Array.from({ length: 18 }, (_, button) => `<option value="${button}" ${Number(mapping[action]) === button ? 'selected' : ''}>${escapeHtml(CONTROLLER_BUTTON_LABELS[button] || `Button ${button}`)}</option>`).join('')}
+    </select>
+  </label>`).join('');
+}
+
+function renderCharacters() {
+  const characters = serverPlayer?.expansion?.characters || {};
+  const selected = serverPlayer?.expansion?.selectedCharacter || 'matt';
+  $('#character-grid').innerHTML = Object.entries(characters).map(([id, character]) => `<article class="character-card ${selected === id ? 'selected' : ''}">
+    <div><strong>${escapeHtml(character.name)}</strong><small>${escapeHtml(character.description)}</small></div>
+    <p>HP ${Math.round(character.baseHealth)} · SPEED ${Number(character.movementSpeed).toFixed(2)}× · PICKAXE ${Number(character.pickaxeDamage).toFixed(2)}× · BLASTER ${Number(character.blasterDamage).toFixed(2)}×</p>
+    <button type="button" data-character-select="${id}" ${!character.enabled ? 'disabled' : ''}>${character.owned ? (selected === id ? 'SELECTED' : 'SELECT') : character.nuggetPrice > 0 ? `UNLOCK · ${Number(character.nuggetPrice).toLocaleString()} NUGGETS` : 'LOCKED'}</button>
+  </article>`).join('') || '<p class="preview-note">Sign in to load your server-owned characters.</p>';
+  document.querySelectorAll('[data-character-select]').forEach((button) => button.addEventListener('click', async () => {
+    const id = button.dataset.characterSelect;
+    const character = serverPlayer.expansion.characters[id];
+    try {
+      if (!character.owned && character.nuggetPrice > 0) {
+        serverPlayer.expansion = await apiClient.purchaseCharacter(id);
+        serverPlayer.profile.bankedNuggets -= character.nuggetPrice;
+      }
+      const result = await apiClient.selectCharacter(id);
+      serverPlayer.expansion.selectedCharacter = result.selectedCharacter;
+      renderCharacters();
+      updateMenu();
+      toast(`${result.character.name} selected`);
+    } catch (error) {
+      toast(error.message);
+    }
+  }));
+}
+
+function loadControllerSettings() {
+  const controller = serverPlayer?.expansion?.controller || defaultControllerProfile();
+  $('#controller-dead-zone').value = controller.deadZone;
+  $('#controller-aim-sensitivity').value = controller.aimSensitivity;
+  $('#controller-vibration').checked = controller.vibration !== false;
+  renderControllerMappings(controller.mapping);
+  renderControllerSettings();
+}
+
+async function saveControllerSettings() {
+  if (!serverPlayer) return toast('Connect Ronin Wallet first');
+  try {
+    const base = serverPlayer.expansion?.controller || defaultControllerProfile();
+    const controller = normalizeControllerProfile({
+      ...base,
+      deadZone: Number($('#controller-dead-zone').value),
+      aimSensitivity: Number($('#controller-aim-sensitivity').value),
+      vibration: $('#controller-vibration').checked,
+      mapping: Object.fromEntries([...document.querySelectorAll('[data-controller-action]')]
+        .map((input) => [input.dataset.controllerAction, Number(input.value)]))
+    });
+    const saved = await apiClient.updateController(controller);
+    serverPlayer.expansion ||= {};
+    serverPlayer.expansion.controller = saved;
+    game.input.setControllerProfile(saved);
+    toast('Controller settings saved to your profile');
+  } catch (error) {
+    $('#profile-status').textContent = error.message;
+  }
+}
+
+function pauseControllerRun() {
+  if (game.state !== 'playing') return;
+  game.state = 'paused';
+  game.audio?.pause?.();
+  $('#controller-pause-overlay').hidden = false;
+  requestAnimationFrame(() => $('#resume-run-button')?.focus());
+}
+
+function resumeControllerPausedRun() {
+  if (game.state !== 'paused') return;
+  $('#controller-pause-overlay').hidden = true;
+  game.state = 'playing';
+  game.audio?.resume?.();
+}
+
+let controllerMenuPrevious = [];
+function pollControllerMenus() {
+  const profile = serverPlayer?.expansion?.controller || defaultControllerProfile();
+  const pads = typeof navigator.getGamepads === 'function' ? navigator.getGamepads() : [];
+  const preferred = pads?.[profile.activeIndex];
+  const pad = preferred?.connected ? preferred : [...(pads || [])].find((entry) => entry?.connected);
+  const current = pad ? pad.buttons.map((button) => button.pressed || button.value >= .55) : [];
+  const pressed = (action) => {
+    const button = profile.mapping?.[action];
+    return current[button] === true && controllerMenuPrevious[button] !== true;
+  };
+  if (pad) {
+    if (game.state === 'playing' && pressed('pause')) pauseControllerRun();
+    else if (game.state === 'paused' && pressed('pause')) resumeControllerPausedRun();
+    else if (game.state !== 'playing') {
+      if (pressed('menuUp') || pressed('menuLeft')) moveControllerFocus(-1, pad, profile);
+      if (pressed('menuDown') || pressed('menuRight')) moveControllerFocus(1, pad, profile);
+      if (pressed('confirm')) {
+        const target = document.activeElement;
+        if (target instanceof HTMLElement && target.matches('button,a,[role="button"]')) target.click();
+      }
+      if (pressed('cancel')) {
+        const scope = activeControllerScope();
+        const target = scope?.querySelector('.close-button,[data-close],#menu-button');
+        if (target instanceof HTMLElement) target.click();
+      }
+    }
+  }
+  controllerMenuPrevious = current;
+  requestAnimationFrame(pollControllerMenus);
+}
+
+function activeControllerScope() {
+  if (!$('#controller-pause-overlay').hidden) return $('#controller-pause-overlay');
+  return document.querySelector('.screen.active') || document.body;
+}
+
+function moveControllerFocus(direction, pad, profile) {
+  const scope = activeControllerScope();
+  const focusable = [...scope.querySelectorAll('button:not([disabled]):not([hidden]),a[href],select:not([disabled]),input:not([disabled]):not([type="hidden"])')]
+    .filter((element) => element.getClientRects().length > 0);
+  if (!focusable.length) return;
+  const currentIndex = focusable.indexOf(document.activeElement);
+  const next = focusable[(currentIndex + direction + focusable.length) % focusable.length];
+  next.focus();
+  next.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  if (profile.vibration && pad.vibrationActuator?.playEffect) {
+    void pad.vibrationActuator.playEffect('dual-rumble', {
+      duration: 35,
+      weakMagnitude: .12,
+      strongMagnitude: 0
+    }).catch(() => {});
+  }
+}
+
+requestAnimationFrame(pollControllerMenus);
+
 async function openPlayerControls() {
   if (!serverPlayer) {
     const connected = await connectWallet();
     if (!connected) return;
   }
   openMinerProfile(false);
+  loadControllerSettings();
+  renderCharacters();
   requestAnimationFrame(() => {
     const editor = $('#keybind-editor');
     editor.classList.add('keybind-highlight');

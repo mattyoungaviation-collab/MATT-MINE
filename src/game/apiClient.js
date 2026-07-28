@@ -240,6 +240,82 @@ export class MattMineApiClient {
     return response.keybindings;
   }
 
+  async expansionStatus() {
+    const response = await this.request('/api/expansion/status', { authenticated: true });
+    return response.expansion;
+  }
+
+  async updateController(controller) {
+    const response = await this.request('/api/profile/controller', {
+      method: 'PUT',
+      authenticated: true,
+      body: { controller }
+    });
+    return response.controller;
+  }
+
+  async selectCharacter(characterId) {
+    return this.request('/api/characters/select', {
+      method: 'POST',
+      authenticated: true,
+      body: { characterId }
+    });
+  }
+
+  async purchaseCharacter(characterId) {
+    const response = await this.request('/api/characters/purchase', {
+      method: 'POST',
+      authenticated: true,
+      body: { characterId }
+    });
+    return response.expansion;
+  }
+
+  async betaAccess() {
+    const response = await this.request('/api/beta/access', {
+      method: 'POST',
+      authenticated: true,
+      body: {}
+    });
+    return response.beta;
+  }
+
+  async requestPaidRevive(runId, deathState) {
+    const response = await this.request('/api/revives/request', {
+      method: 'POST',
+      authenticated: true,
+      body: { runId, deathState }
+    });
+    return response.revive;
+  }
+
+  async confirmPaidRevive(runId, transactionHash) {
+    const response = await this.request('/api/revives/confirm', {
+      method: 'POST',
+      authenticated: true,
+      body: { runId, transactionHash }
+    });
+    return response.revive;
+  }
+
+  async confirmAdvertisement(runId, completion) {
+    const response = await this.request('/api/advertisements/confirm', {
+      method: 'POST',
+      authenticated: true,
+      body: { runId, completion }
+    });
+    return response.advertisement;
+  }
+
+  async skipAdvertisement(runId) {
+    const response = await this.request('/api/advertisements/skip', {
+      method: 'POST',
+      authenticated: true,
+      body: { runId }
+    });
+    return response.advertisement;
+  }
+
   async gameTuning(lobby) {
     const response = await this.request(`/api/game-tuning/${encodeURIComponent(lobby)}`);
     return response.preset;

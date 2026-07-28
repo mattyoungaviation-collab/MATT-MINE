@@ -485,7 +485,7 @@ async function createPostgresSchema(pool) {
       run_id TEXT PRIMARY KEY,
       token_hash TEXT NOT NULL,
       address TEXT NOT NULL,
-      mode TEXT NOT NULL CHECK (mode IN ('free', 'paid', 'practice')),
+      mode TEXT NOT NULL CHECK (mode IN ('free', 'paid', 'practice', 'beta', 'weekly', 'endless')),
       seed TEXT NOT NULL,
       day_key TEXT NOT NULL,
       week_key TEXT NOT NULL,
@@ -503,6 +503,30 @@ async function createPostgresSchema(pool) {
       elapsed_ms BIGINT,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
+  `);
+  await pool.query(`
+    DO $$
+    DECLARE constraint_name TEXT;
+    BEGIN
+      SELECT conname INTO constraint_name
+      FROM pg_constraint
+      WHERE conrelid = 'matt_mine_runs'::regclass
+        AND contype = 'c'
+        AND pg_get_constraintdef(oid) LIKE '%mode%'
+        AND pg_get_constraintdef(oid) NOT LIKE '%beta%';
+      IF constraint_name IS NOT NULL THEN
+        EXECUTE format('ALTER TABLE matt_mine_runs DROP CONSTRAINT %I', constraint_name);
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'matt_mine_runs'::regclass
+          AND conname = 'matt_mine_runs_mode_check'
+      ) THEN
+        ALTER TABLE matt_mine_runs
+          ADD CONSTRAINT matt_mine_runs_mode_check
+          CHECK (mode IN ('free', 'paid', 'practice', 'beta', 'weekly', 'endless'));
+      END IF;
+    END $$;
   `);
   await pool.query(`
     CREATE INDEX IF NOT EXISTS matt_mine_runs_wallet_week_idx
@@ -692,7 +716,7 @@ function normalizeRunRecord(run = {}) {
     !/^run_[a-f0-9]{24}$/.test(id) ||
     !/^[a-f0-9]{64}$/.test(tokenHash) ||
     !/^0x[a-f0-9]{40}$/.test(address) ||
-    !['free', 'paid', 'practice'].includes(mode) ||
+    !['free', 'paid', 'practice', 'beta', 'weekly', 'endless'].includes(mode) ||
     !seed ||
     !/^\d{4}-\d{2}-\d{2}$/.test(day) ||
     !/^\d{4}-\d{2}-\d{2}$/.test(week) ||

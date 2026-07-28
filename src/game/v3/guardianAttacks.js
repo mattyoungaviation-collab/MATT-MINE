@@ -5,7 +5,7 @@ import { angleTo, distance } from '../utils.js';
 const TAU = Math.PI * 2;
 
 export const guardianAttackMethods = {
-  guardianSlam(enemy, radius, damage) {
+  guardianSlam(enemy, radius, damage, attackType = 'slam') {
     this.camera.shake = 15;
     this.audio.play('boom');
     this.tracers.push({ x1: enemy.x, y1: enemy.y, x2: enemy.x, y2: enemy.y, radius, color: '#d86cff', life: 0.42, maxLife: 0.42, ring: true });
@@ -18,10 +18,13 @@ export const guardianAttackMethods = {
       Math.min(6, this.player.radius * 0.2)
     );
     if (playerIsExposed && distance(enemy, this.player) < radius + this.player.radius) {
-      this.damagePlayer(damage, angleTo(enemy, this.player));
+      this.damagePlayer(damage, angleTo(enemy, this.player), {
+        bossId: enemy.id,
+        bossAttack: attackType
+      });
     }
   },
-  fireEnemyVolley(enemy, count, spread, speed, radial = false) {
+  fireEnemyVolley(enemy, count, spread, speed, radial = false, options = {}) {
     if (enemy.isBoss) {
       speed = this.runContext?.tuning?.bossProjectileSpeed || speed;
       if (!radial) spread = this.runContext?.tuning?.bossVolleySpread || spread;
@@ -47,8 +50,10 @@ export const guardianAttackMethods = {
         radius: this.runContext?.mode === 'arena' ? 9 : enemy.isBoss ? 7 : 8,
         life: 2.2,
         travelled: 0,
-        maxRange: CONFIG.guardianProjectileRange,
-        damage: enemy.damage * 0.62,
+        maxRange: options.maxRange || CONFIG.guardianProjectileRange,
+        damage: options.damage ?? enemy.damage * 0.62,
+        bossId: enemy.isBoss ? enemy.id : 0,
+        bossAttack: options.attackType || (radial ? 'radial' : 'volley'),
         color: '#d86cff'
       });
     }
