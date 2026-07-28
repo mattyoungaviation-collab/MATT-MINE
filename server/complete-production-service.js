@@ -1,4 +1,5 @@
 import { ProductionMattMineService } from './production-service.js';
+import { ApiError } from './errors.js';
 import {
   NUGGET_LEDGER_TYPES,
   applyNuggetLedgerDelta,
@@ -36,6 +37,17 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
         pendingPracticeClaims: structuredClone(wallet?.practiceClaims || {})
       }
     };
+  }
+
+  async updateAdminNuggetEconomy(adminKey, patch, reason) {
+    if (patch?.advertisementRewardsEnabled === true) {
+      throw new ApiError(
+        503,
+        'advertisement_provider_disabled',
+        'Advertisement rewards cannot be enabled until a signed provider or server-to-server completion verifier is configured.'
+      );
+    }
+    return super.updateAdminNuggetEconomy(adminKey, patch, reason);
   }
 
   async quoteNuggetPurchase(token, input = {}) {
