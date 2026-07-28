@@ -1,86 +1,6 @@
-const tabs = document.querySelector('#tabs');
-const dashboard = document.querySelector('#dashboard');
+const section = document.querySelector('#tab-nugget-economy');
 
-if (tabs && dashboard && !document.querySelector('[data-tab="nugget-economy"]')) {
-  const button = document.createElement('button');
-  button.dataset.tab = 'nugget-economy';
-  button.textContent = 'Nugget Economy';
-  tabs.insertBefore(button, document.querySelector('#lock-button'));
-
-  const section = document.createElement('section');
-  section.id = 'tab-nugget-economy';
-  section.className = 'tab';
-  section.innerHTML = `
-    <div class="section-heading">
-      <div><p class="eyebrow">SERVER-AUTHORITATIVE ECONOMY</p><h2>Nugget economy</h2></div>
-      <button id="refresh-nugget-economy" class="ghost" type="button">Refresh</button>
-    </div>
-    <div id="nugget-economy-blocker" class="notice warning" hidden></div>
-    <div id="nugget-economy-metrics" class="metrics"></div>
-    <form id="nugget-economy-form">
-      <article class="panel">
-        <h2>Release controls</h2>
-        <div class="toggle-grid">
-          <label class="toggle">Enable nugget purchases<input id="economy-purchases-enabled" type="checkbox"></label>
-          <label class="toggle">Enable paid Practice claims<input id="economy-practice-enabled" type="checkbox"></label>
-          <label class="toggle">Enable advertisement rewards<input id="economy-ads-enabled" type="checkbox"></label>
-          <label class="toggle">Allow MATT payments<input id="economy-asset-matt" type="checkbox"></label>
-          <label class="toggle">Allow RON payments<input id="economy-asset-ron" type="checkbox"></label>
-        </div>
-        <p class="muted">Paid features cannot be enabled unless the server was launched with the exact Ronin receipt verifier. Advertisement rewards remain a separate provider integration.</p>
-      </article>
-
-      <article class="panel">
-        <h2>Canonical value and limits</h2>
-        <div class="grid two">
-          <label>Nuggets per MATT<input id="economy-nuggets-per-matt" type="number" min="0.000001" max="1000000000" step="0.000001"></label>
-          <label>MATT per nugget<input id="economy-matt-per-nugget" type="number" step="0.000000001" readonly></label>
-          <label>Displayed USD reference per 1,000,000 nuggets<input id="economy-usd-reference" type="number" min="0" max="1000000" step="0.01"></label>
-          <label>UTC daily purchase cap<input id="economy-daily-cap" type="number" min="0" max="1000000000" step="1"></label>
-          <label>Quote lifetime in seconds<input id="economy-quote-seconds" type="number" min="30" max="1800" step="1"></label>
-          <label>Approved payment recipient<input id="economy-recipient" maxlength="42" spellcheck="false"></label>
-        </div>
-      </article>
-
-      <article class="panel">
-        <h2>Practice claim price</h2>
-        <div class="grid two">
-          <label>Payment asset<select id="economy-practice-asset"><option value="MATT">MATT</option><option value="RON">RON</option></select></label>
-          <label>Token amount<input id="economy-practice-amount" type="number" min="0" step="0.000000000000000001"></label>
-        </div>
-        <p class="muted">Default target is 5,000 MATT. The server converts this display value into exact 18-decimal atomic units.</p>
-      </article>
-
-      <article class="panel">
-        <div class="section-heading"><div><h2>Purchase packages</h2><p>Every package is exact, expires with its quote, and counts toward the UTC cap.</p></div><button id="economy-add-package" class="ghost" type="button">Add package</button></div>
-        <div id="economy-package-list" class="cards"></div>
-      </article>
-
-      <article class="panel">
-        <h2>Character unlock prices</h2>
-        <div class="grid two">
-          <label>Ronke nuggets<input id="economy-character-ronke" type="number" min="0" max="1000000000" step="1"></label>
-          <label>ADL Dyno nuggets<input id="economy-character-adl" type="number" min="0" max="1000000000" step="1"></label>
-          <label>Axie nuggets<input id="economy-character-axie" type="number" min="0" max="1000000000" step="1"></label>
-          <label>Orc nuggets<input id="economy-character-orc" type="number" min="0" max="1000000000" step="1"></label>
-        </div>
-      </article>
-
-      <article class="panel">
-        <label>Required reason<input id="economy-reason" maxlength="240" placeholder="Why are these economy rules changing?" required></label>
-        <button type="submit">Save nugget economy</button>
-      </article>
-    </form>
-
-    <div class="panel table-wrap">
-      <h2>Recent verified purchases</h2>
-      <table><thead><tr><th>UTC time</th><th>Wallet</th><th>Package</th><th>Nuggets</th><th>Paid</th><th>Transaction</th></tr></thead><tbody id="economy-purchase-rows"></tbody></table>
-    </div>
-    <div class="panel"><h2>Economy audit</h2><div id="economy-audit-list" class="timeline"></div></div>
-  `;
-  dashboard.append(section);
-
-  button.addEventListener('click', loadEconomy);
+if (section) {
   section.querySelector('#refresh-nugget-economy').addEventListener('click', loadEconomy);
   section.querySelector('#economy-nuggets-per-matt').addEventListener('input', updateDerivedConversion);
   section.querySelector('#economy-add-package').addEventListener('click', () => {
@@ -96,11 +16,22 @@ if (tabs && dashboard && !document.querySelector('[data-tab="nugget-economy"]'))
     bindPackageButtons();
   });
   section.querySelector('#nugget-economy-form').addEventListener('submit', saveEconomy);
+  section.querySelectorAll('[data-linked-control]').forEach((input) => {
+    input.addEventListener('input', () => {
+      document.dispatchEvent(new CustomEvent('admin-linked-control-change', {
+        detail: {
+          id: input.dataset.linkedControl,
+          value: input.type === 'checkbox' ? input.checked : Number(input.value),
+          source: 'nugget-economy'
+        }
+      }));
+    });
+  });
 }
 
 let loadedEconomy = null;
 
-async function loadEconomy() {
+export async function loadEconomy() {
   try {
     const data = await adminApi('/api/admin/nugget-economy');
     loadedEconomy = data.economy;
@@ -109,6 +40,12 @@ async function loadEconomy() {
     showEconomyMessage(error.message, true);
   }
 }
+
+export function currentEconomyConfig() {
+  return loadedEconomy?.editableConfig ? structuredClone(loadedEconomy.editableConfig) : null;
+}
+
+window.mattMineAdminEconomy = { load: loadEconomy, current: currentEconomyConfig };
 
 function renderEconomy(economy) {
   const config = economy.editableConfig;
@@ -201,6 +138,9 @@ async function saveEconomy(event) {
     document.querySelector('#economy-reason').value = '';
     loadedEconomy = { ...loadedEconomy, ...result.economy, editableConfig: result.economy.editableConfig };
     await loadEconomy();
+    document.dispatchEvent(new CustomEvent('admin-linked-controls-saved', {
+      detail: { source: 'nugget-economy', linkedChanges: result.economy.linkedChanges || [] }
+    }));
     showEconomyMessage('Nugget economy settings saved and audit logged.');
   } catch (error) {
     showEconomyMessage(error.message, true);

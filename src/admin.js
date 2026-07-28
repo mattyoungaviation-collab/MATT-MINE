@@ -1,4 +1,25 @@
-const state = { key: '', overview: null, actions: [], tuning: null, expansion: null };
+import {
+  CHARACTER_PRICE_CONTROL_LINKS,
+  RETENTION_CONTROL_LINKS,
+  buildAdminControlIndex,
+  linkedControlForCharacter,
+  linkedControlForExpansion,
+  linkedControlForTuning,
+  searchAdminControls
+} from './adminControlRegistry.js';
+
+const state = {
+  key: '',
+  overview: null,
+  actions: [],
+  tuning: null,
+  tuningDrafts: {},
+  expansion: null,
+  expansionDraft: null,
+  controlIndex: [],
+  activeTab: 'overview',
+  overviewTimer: null
+};
 const $ = (selector) => document.querySelector(selector);
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char]));
 
@@ -12,29 +33,48 @@ $('#unlock-form').addEventListener('submit', async (event) => {
     $('#dashboard').hidden = false;
     $('.connection').classList.add('live');
     $('#connection-label').textContent = 'Production connected';
+    await hydrateControlIndex();
+    startOverviewMonitor();
   } catch (error) {
     showAlert(error.message, true);
   }
 });
 
 $('#lock-button').addEventListener('click', () => {
+  if (state.overviewTimer) clearInterval(state.overviewTimer);
   sessionStorage.removeItem('mattMineAdminKey');
   state.key = '';
   location.reload();
 });
 
 $('#tabs').addEventListener('click', async (event) => {
-  const name = event.target.dataset.tab;
+  const name = event.target.closest('[data-tab]')?.dataset.tab;
   if (!name) return;
+  resetTabFilters(name);
+  await activateTab(name);
+});
+
+function resetTabFilters(name) {
+  if (name === 'tuning') {
+    $('#tuning-category').value = '';
+    $('#tuning-search').value = '';
+  }
+  if (name === 'expansion') $('#expansion-search').value = '';
+}
+
+async function activateTab(name) {
+  state.activeTab = name;
   document.querySelectorAll('#tabs [data-tab]').forEach((button) => button.classList.toggle('active', button.dataset.tab === name));
   document.querySelectorAll('.tab').forEach((tab) => tab.classList.toggle('active', tab.id === `tab-${name}`));
   if (name === 'players') await loadWallets();
   if (name === 'tuning') await loadTuning();
   if (name === 'expansion') await loadExpansion();
+  if (name === 'nugget-economy') await window.mattMineAdminEconomy?.load?.();
   if (name === 'rewards') await loadRewards();
   if (name === 'arena') await loadArenaAdmin();
   if (name === 'audit') await loadAudit();
-});
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
 
 async function refreshOverview() {
   const data = await api('/api/admin/overview');
@@ -46,6 +86,7 @@ async function refreshOverview() {
 }
 
 function renderOverview(data) {
+  renderReadiness(data.readiness);
   $('#metrics').innerHTML = Object.entries(data.counts).map(([key, value]) =>
     `<div class="metric"><span class="muted">${words(key)}</span><strong>${Number(value).toLocaleString()}</strong></div>`
   ).join('');
@@ -179,42 +220,72 @@ async function loadWallet(address) {
   panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-async function loadTuning() {
-  if (!state.tuning) state.tuning = await api('/api/admin/game-tuning');
+async function loadTuning(force = false) {
+  if (!state.tuning || force) {
+    state.tuning = await api('/api/admin/game-tuning');
+    state.tuningDrafts = Object.fromEntries(
+      Object.entries(state.tuning.presets).map(([lobby, preset]) => [lobby, structuredClone(preset)])
+    );
+    const categories = [...new Set(state.tuning.schema.map((entry) => entry.category))];
+    $('#tuning-category').innerHTML = '<option value="">All categories</option>' +
+      categories.map((category) => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`).join('');
+    rebuildControlIndex();
+  }
   renderTuning();
 }
 
 function renderTuning() {
   if (!state.tuning) return;
   const lobby = $('#tuning-lobby').value;
-  const preset = state.tuning.presets[lobby];
+  const preset = state.tuningDrafts[lobby] || state.tuning.presets[lobby];
   const needle = $('#tuning-search').value.trim().toLowerCase();
+  const categoryFilter = $('#tuning-category').value;
   const visible = state.tuning.schema.filter((entry) =>
-    !needle || `${entry.category} ${entry.label} ${entry.description || ''}`.toLowerCase().includes(needle)
+    (!categoryFilter || entry.category === categoryFilter) &&
+    (!needle || `${entry.id} ${entry.category} ${entry.label} ${entry.description || ''}`.toLowerCase().includes(needle))
   );
   const groups = visible.reduce((map, entry) => {
     if (!map.has(entry.category)) map.set(entry.category, []);
     map.get(entry.category).push(entry);
     return map;
   }, new Map());
-  $('#tuning-fields').innerHTML = [...groups].map(([category, entries]) => `<article class="panel">
-    <h2>${escapeHtml(category)}</h2><div class="tuning-grid">${entries.map((entry) => `<label class="tuning-field">${escapeHtml(entry.label)}
+  $('#tuning-result-count').textContent = `${visible.length.toLocaleString()} of ${state.tuning.schema.length.toLocaleString()} settings · ${words(lobby)} lobby`;
+  $('#tuning-fields').innerHTML = [...groups].map(([category, entries], index) => `<details class="panel structured-card" ${needle || categoryFilter || index < 2 ? 'open' : ''}>
+    <summary><strong>${escapeHtml(category)}</strong><span>${entries.length} controls</span></summary>
+    <div class="tuning-grid">${entries.map((entry) => {
+      const linked = linkedControlForTuning(lobby, entry.id);
+      return `<label class="tuning-field ${linked ? 'linked-field' : ''}">${escapeHtml(entry.label)}
+      ${linked ? `<span class="link-chip">Linked · ${escapeHtml(linked.linkedTo)}</span>` : ''}
       ${entry.type === 'boolean'
-        ? `<input data-tuning="${entry.id}" type="checkbox" ${preset[entry.id] ? 'checked' : ''}>`
-        : `<input data-tuning="${entry.id}" type="number" min="${entry.min}" max="${entry.max}" step="any" value="${preset[entry.id]}">`}
-      ${entry.description ? `<small>${escapeHtml(entry.description)}</small>` : ''}</label>`).join('')}</div>
-  </article>`).join('');
+        ? `<input data-tuning="${entry.id}" ${linked ? `data-linked-control="${linked.id}"` : ''} type="checkbox" ${preset[entry.id] ? 'checked' : ''}>`
+        : `<input data-tuning="${entry.id}" ${linked ? `data-linked-control="${linked.id}"` : ''} type="number" min="${entry.min}" max="${entry.max}" step="${entry.step || 'any'}" value="${preset[entry.id]}">`}
+      ${entry.description ? `<small>${escapeHtml(entry.description)}</small>` : ''}</label>`;
+    }).join('')}</div>
+  </details>`).join('');
 }
 
 $('#tuning-lobby').addEventListener('change', renderTuning);
+$('#tuning-category').addEventListener('change', renderTuning);
 $('#tuning-search').addEventListener('input', renderTuning);
+$('#tuning-fields').addEventListener('input', (event) => {
+  const input = event.target.closest('[data-tuning]');
+  if (!input) return;
+  const lobby = $('#tuning-lobby').value;
+  state.tuningDrafts[lobby][input.dataset.tuning] = input.type === 'checkbox' ? input.checked : Number(input.value);
+  if (input.dataset.linkedControl) {
+    syncLinkedDraft(input.dataset.linkedControl, state.tuningDrafts[lobby][input.dataset.tuning], 'tuning');
+  }
+});
 $('#tuning-form').addEventListener('submit', async (event) => {
   event.preventDefault();
   const lobby = $('#tuning-lobby').value;
-  const patch = {};
-  document.querySelectorAll('[data-tuning]').forEach((input) => {
-    patch[input.dataset.tuning] = input.type === 'checkbox' ? input.checked : Number(input.value);
-  });
+  const original = state.tuning.presets[lobby];
+  const draft = state.tuningDrafts[lobby];
+  const patch = Object.fromEntries(Object.entries(draft).filter(([key, value]) => original[key] !== value));
+  if (!Object.keys(patch).length) {
+    showAlert('No Game Balance values changed.');
+    return;
+  }
   const timing = lobby === 'arena'
     ? 'Daily Arena changes begin with the next UTC day. Today keeps the same rules for every player.'
     : 'New runs in this lobby will use these values immediately.';
@@ -224,16 +295,24 @@ $('#tuning-form').addEventListener('submit', async (event) => {
     body: { patch, reason: $('#tuning-reason').value }
   });
   state.tuning.presets[lobby] = result.preset;
+  state.tuningDrafts[lobby] = structuredClone(result.preset);
   $('#tuning-reason').value = '';
+  if (result.linkedChanges?.length) await loadExpansion(true);
   renderTuning();
   showAlert(result.effectiveDay
     ? `${words(lobby)} tuning saved for ${result.effectiveDay} UTC.`
     : `${words(lobby)} tuning saved.`);
 });
 
-async function loadExpansion() {
+async function loadExpansion(force = false) {
+  if (state.expansion && !force) {
+    renderExpansion();
+    return;
+  }
   const data = await api('/api/admin/expansion');
   state.expansion = data.expansion;
+  state.expansionDraft = structuredClone(data.expansion.config);
+  rebuildControlIndex();
   renderExpansion();
 }
 
@@ -269,12 +348,16 @@ function renderExpansion() {
     map.get(entry.category).push(entry);
     return map;
   }, new Map());
-  const settings = state.expansion.config.settings;
-  const settingCards = [...groups].map(([category, entries]) => `<details class="panel structured-card" open>
+  const draft = state.expansionDraft || state.expansion.config;
+  const settings = draft.settings;
+  $('#expansion-result-count').textContent = `${visible.length.toLocaleString()} of ${state.expansion.schema.length.toLocaleString()} feature settings`;
+  const settingCards = [...groups].map(([category, entries], index) => `<details class="panel structured-card" ${needle || index < 2 ? 'open' : ''}>
     <summary><strong>${escapeHtml(category)}</strong><span>${entries.length} controls</span></summary>
     <div class="tuning-grid">${entries.map((entry) => expansionField(entry, settings[entry.id])).join('')}</div>
   </details>`).join('');
-  const characters = Object.entries(state.expansion.config.characters).map(([id, character]) => `<details class="panel structured-card">
+  const characters = Object.entries(draft.characters)
+    .filter(([id, character]) => !needle || `${id} ${Object.entries(character).flat().join(' ')}`.toLowerCase().includes(needle))
+    .map(([id, character]) => `<details class="panel structured-card" ${needle ? 'open' : ''}>
     <summary><strong>${escapeHtml(character.name)}</strong><span>${character.enabled ? 'Enabled' : 'Disabled'}</span></summary>
     <div class="tuning-grid">${Object.entries(character).map(([key, value]) => characterField(id, key, value)).join('')}</div>
   </details>`).join('');
@@ -282,59 +365,75 @@ function renderExpansion() {
 }
 
 function expansionField(entry, value) {
+  const linked = linkedControlForExpansion(entry.id);
+  const linkedData = linked ? `data-linked-control="${linked.id}"` : '';
   let input;
-  if (entry.type === 'boolean') input = `<input data-expansion-setting="${entry.id}" type="checkbox" ${value ? 'checked' : ''}>`;
-  else if (entry.type === 'enum') input = `<select data-expansion-setting="${entry.id}">${entry.options.map((option) => `<option value="${escapeHtml(option)}" ${option === value ? 'selected' : ''}>${escapeHtml(words(option))}</option>`).join('')}</select>`;
-  else input = `<input data-expansion-setting="${entry.id}" type="${entry.type === 'atomic' ? 'text' : 'number'}" ${entry.type === 'atomic' ? '' : `min="${entry.min}" max="${entry.max}" step="${entry.type === 'integer' ? 1 : 'any'}"`} value="${escapeHtml(value)}">`;
-  return `<label class="tuning-field">${escapeHtml(entry.label)}${input}<small>${escapeHtml(entry.description)}${entry.type !== 'boolean' && entry.type !== 'enum' && entry.type !== 'atomic' ? ` Safe range: ${entry.min}–${entry.max}.` : ''}</small></label>`;
+  if (entry.type === 'boolean') input = `<input data-expansion-setting="${entry.id}" ${linkedData} type="checkbox" ${value ? 'checked' : ''}>`;
+  else if (entry.type === 'enum') input = `<select data-expansion-setting="${entry.id}" ${linkedData}>${entry.options.map((option) => `<option value="${escapeHtml(option)}" ${option === value ? 'selected' : ''}>${escapeHtml(words(option))}</option>`).join('')}</select>`;
+  else input = `<input data-expansion-setting="${entry.id}" ${linkedData} type="${entry.type === 'atomic' ? 'text' : 'number'}" ${entry.type === 'atomic' ? '' : `min="${entry.min}" max="${entry.max}" step="${entry.type === 'integer' ? 1 : 'any'}"`} value="${escapeHtml(value)}">`;
+  return `<label class="tuning-field ${linked ? 'linked-field' : ''}">${escapeHtml(entry.label)}${linked ? `<span class="link-chip">Linked · ${escapeHtml(linked.linkedTo)}</span>` : ''}${input}<small>${escapeHtml(entry.description)}${entry.type !== 'boolean' && entry.type !== 'enum' && entry.type !== 'atomic' ? ` Safe range: ${entry.min}–${entry.max}.` : ''}</small></label>`;
 }
 
 function characterField(id, key, value) {
-  if (key === 'enabled') return `<label class="tuning-field">${escapeHtml(words(key))}<input data-character="${id}" data-character-field="${key}" type="checkbox" ${value ? 'checked' : ''}></label>`;
-  if (typeof value === 'number') return `<label class="tuning-field">${escapeHtml(words(key))}<input data-character="${id}" data-character-field="${key}" type="number" step="any" value="${value}"></label>`;
-  return `<label class="tuning-field">${escapeHtml(words(key))}<input data-character="${id}" data-character-field="${key}" maxlength="200" value="${escapeHtml(value)}"></label>`;
+  const linked = linkedControlForCharacter(id, key);
+  const linkedData = linked ? `data-linked-control="${linked.id}"` : '';
+  const opening = `<label class="tuning-field ${linked ? 'linked-field' : ''}">${escapeHtml(words(key))}${linked ? `<span class="link-chip">Linked · ${escapeHtml(linked.linkedTo)}</span>` : ''}`;
+  if (key === 'enabled') return `${opening}<input data-character="${id}" data-character-field="${key}" ${linkedData} type="checkbox" ${value ? 'checked' : ''}></label>`;
+  if (typeof value === 'number') return `${opening}<input data-character="${id}" data-character-field="${key}" ${linkedData} type="number" step="any" value="${value}"></label>`;
+  return `${opening}<input data-character="${id}" data-character-field="${key}" ${linkedData} maxlength="200" value="${escapeHtml(value)}"></label>`;
 }
 
 $('#expansion-search').addEventListener('input', renderExpansion);
+$('#expansion-fields').addEventListener('input', (event) => {
+  const setting = event.target.closest('[data-expansion-setting]');
+  const character = event.target.closest('[data-character]');
+  if (setting) {
+    const value = setting.type === 'checkbox' ? setting.checked : setting.type === 'number' ? Number(setting.value) : setting.value;
+    state.expansionDraft.settings[setting.dataset.expansionSetting] = value;
+    if (setting.dataset.linkedControl) syncLinkedDraft(setting.dataset.linkedControl, value, 'expansion');
+  }
+  if (character) {
+    const value = character.type === 'checkbox' ? character.checked : character.type === 'number' ? Number(character.value) : character.value;
+    state.expansionDraft.characters[character.dataset.character][character.dataset.characterField] = value;
+    if (character.dataset.linkedControl) syncLinkedDraft(character.dataset.linkedControl, value, 'expansion');
+  }
+});
 $('#expansion-form').addEventListener('submit', async (event) => {
   event.preventDefault();
-  const settings = {};
-  document.querySelectorAll('[data-expansion-setting]').forEach((input) => {
-    settings[input.dataset.expansionSetting] = input.type === 'checkbox'
-      ? input.checked
-      : input.type === 'number'
-        ? Number(input.value)
-        : input.value;
-  });
-  const characters = {};
-  document.querySelectorAll('[data-character]').forEach((input) => {
-    characters[input.dataset.character] ||= {};
-    characters[input.dataset.character][input.dataset.characterField] = input.type === 'checkbox'
-      ? input.checked
-      : input.type === 'number'
-        ? Number(input.value)
-        : input.value;
-  });
-  if (!await confirmAction('Save production expansion settings?', 'Every field is schema validated and the reason is audit logged. External-verifier blockers remain enforced.')) return;
+  const settings = objectDiff(state.expansion.config.settings, state.expansionDraft.settings);
+  const characters = Object.fromEntries(Object.entries(state.expansionDraft.characters).flatMap(([id, character]) => {
+    const changes = objectDiff(state.expansion.config.characters[id] || {}, character);
+    return Object.keys(changes).length ? [[id, changes]] : [];
+  }));
+  if (!Object.keys(settings).length && !Object.keys(characters).length) {
+    showAlert('No Modes & Characters values changed.');
+    return;
+  }
+  if (!await confirmAction('Save Modes & Characters settings?', 'Every field is schema validated, linked controls move together, and the reason is audit logged.')) return;
   const result = await api('/api/admin/expansion', {
     method: 'PUT',
     body: { patch: { settings, characters }, reason: $('#expansion-reason').value }
   });
   state.expansion.config = result.config;
+  state.expansionDraft = structuredClone(result.config);
   $('#expansion-reason').value = '';
+  await Promise.all([
+    loadTuning(true),
+    window.mattMineAdminEconomy?.load?.()
+  ]);
   renderExpansion();
-  showAlert('Expansion settings validated, saved, and audited.');
+  showAlert('Modes & Characters settings validated, synchronized, saved, and audited.');
 });
 
 $('#export-expansion').addEventListener('click', () => {
-  if (!state.expansion) return;
-  downloadJson(`matt-mine-expansion-r${state.expansion.config.revision}.json`, state.expansion.config);
+  if (!state.expansionDraft) return;
+  downloadJson(`matt-mine-expansion-r${state.expansion.config.revision}.json`, state.expansionDraft);
 });
 
 $('#reset-expansion').addEventListener('click', async () => {
   if (!state.expansion?.defaults) return;
   if (!await confirmAction('Load safe expansion defaults?', 'This only stages the defaults in the form. Enter a reason and press Save to apply them.')) return;
-  state.expansion.config = structuredClone(state.expansion.defaults);
+  state.expansionDraft = structuredClone(state.expansion.defaults);
   renderExpansion();
   showAlert('Safe defaults loaded for review. No server setting changed yet.');
 });
@@ -345,7 +444,7 @@ $('#import-expansion').addEventListener('change', async (event) => {
   try {
     const imported = JSON.parse(await file.text());
     if (!imported.settings || !imported.characters) throw new Error('Preset must contain settings and characters.');
-    state.expansion.config = imported;
+    state.expansionDraft = imported;
     renderExpansion();
     showAlert('Preset loaded for review. Press Save to validate and apply it.');
   } catch (error) {
@@ -367,7 +466,7 @@ $('#beta-access-form').addEventListener('submit', async (event) => {
     }
   });
   $('#beta-reason').value = '';
-  await loadExpansion();
+  await loadExpansion(true);
   showAlert('Beta Testing access updated.');
 });
 
@@ -404,6 +503,48 @@ async function loadRewards() {
   } catch (error) {
     $('#reward-drafts').innerHTML = `<div class="panel">${escapeHtml(error.message)}</div>`;
   }
+}
+
+function renderReadiness(readiness = {}) {
+  const hero = $('#readiness-hero');
+  if (!hero) return;
+  hero.dataset.status = readiness.status || 'blocked';
+  $('#readiness-score').textContent = Number.isFinite(readiness.score) ? readiness.score : '—';
+  $('#readiness-label').textContent = readiness.label || 'Readiness unavailable';
+  $('#readiness-copy').textContent = readiness.requiredCount
+    ? `${readiness.readyRequired} of ${readiness.requiredCount} core systems ready. Optional features are shown separately.`
+    : 'The live server did not return readiness details.';
+  $('#readiness-checked').textContent = readiness.checkedAt
+    ? `Checked ${new Date(readiness.checkedAt).toLocaleTimeString()}`
+    : 'Not checked';
+  $('#readiness-monitors').innerHTML = (readiness.monitors || []).map((monitor) => `
+    <article class="readiness-monitor" data-status="${escapeHtml(monitor.status)}">
+      <span class="monitor-group">${escapeHtml(monitor.group)}${monitor.required ? ' · CORE' : ''}</span>
+      <strong>${escapeHtml(monitor.label)}</strong>
+      <p>${escapeHtml(monitor.detail)}</p>
+    </article>
+  `).join('') || '<article class="readiness-monitor" data-status="blocked"><strong>No readiness data</strong><p>Run the checks again.</p></article>';
+}
+
+$('#refresh-overview').addEventListener('click', async () => {
+  $('#refresh-overview').disabled = true;
+  try {
+    await refreshOverview();
+    showAlert('Live readiness checks completed.');
+  } catch (error) {
+    showAlert(error.message, true);
+  } finally {
+    $('#refresh-overview').disabled = false;
+  }
+});
+
+function startOverviewMonitor() {
+  if (state.overviewTimer) clearInterval(state.overviewTimer);
+  state.overviewTimer = setInterval(() => {
+    if (state.key && state.activeTab === 'overview' && document.visibilityState === 'visible') {
+      refreshOverview().catch(() => undefined);
+    }
+  }, 30_000);
 }
 
 async function approveReward(id) {
@@ -657,7 +798,7 @@ function renderArenaDirectTransaction(title, control = {}, fallbackFileName) {
     transaction
   };
   panel.hidden = false;
-  panel.innerHTML = `<h2>${escapeHtml(title)} â€” not broadcast</h2>
+  panel.innerHTML = `<h2>${escapeHtml(title)} — not broadcast</h2>
     ${row('Required signer', downloadable.requiredSigner || 'Emergency pauser')}
     ${row('To', transaction.to || 'Unavailable')}
     ${row('Value', transaction.value ?? '0')}
@@ -713,6 +854,147 @@ async function loadAudit() {
   const data = await api(`/api/admin/audit?limit=200&action=${encodeURIComponent($('#audit-action').value)}`);
   $('#audit-list').innerHTML = data.entries.map((entry) => `<article><strong>${escapeHtml(entry.action)}</strong>
     <p>${escapeHtml(entry.details)}</p><time>${new Date(entry.timestamp).toLocaleString()} · ${escapeHtml(entry.actor)}</time></article>`).join('') || '<div class="panel">No matching audit entries.</div>';
+}
+
+async function hydrateControlIndex() {
+  await Promise.allSettled([loadTuning(), loadExpansion()]);
+  rebuildControlIndex();
+}
+
+function rebuildControlIndex() {
+  state.controlIndex = buildAdminControlIndex({
+    tuningSchema: state.tuning?.schema || [],
+    expansionSchema: state.expansion?.schema || [],
+    characters: state.expansionDraft?.characters || state.expansion?.config?.characters || {}
+  });
+}
+
+$('#control-search').addEventListener('input', renderControlSearch);
+$('#control-search').addEventListener('focus', renderControlSearch);
+$('#control-search-results').addEventListener('click', async (event) => {
+  const button = event.target.closest('[data-control-result]');
+  if (!button) return;
+  const result = state.controlIndex.find((entry) => entry.id === button.dataset.controlResult);
+  if (!result) return;
+  await openControlSearchResult(result);
+});
+
+document.addEventListener('keydown', (event) => {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+    event.preventDefault();
+    $('#control-search').focus();
+    $('#control-search').select();
+  }
+  if (event.key === 'Escape') {
+    $('#control-search-results').hidden = true;
+    $('#control-search').blur();
+  }
+});
+
+document.addEventListener('click', (event) => {
+  if (!event.target.closest('#command-toolbar')) $('#control-search-results').hidden = true;
+});
+
+document.addEventListener('admin-linked-control-change', (event) => {
+  syncLinkedDraft(event.detail?.id, event.detail?.value, event.detail?.source || 'nugget-economy');
+});
+
+document.addEventListener('admin-linked-controls-saved', () => {
+  Promise.all([loadExpansion(true), loadTuning(true), refreshOverview()]).catch((error) => showAlert(error.message, true));
+});
+
+function renderControlSearch() {
+  const query = $('#control-search').value;
+  const results = searchAdminControls(state.controlIndex, query, 14);
+  const panel = $('#control-search-results');
+  panel.hidden = !query.trim();
+  if (!query.trim()) {
+    panel.innerHTML = '';
+    return;
+  }
+  panel.innerHTML = results.map((result) => `
+    <button class="search-result" type="button" data-control-result="${escapeHtml(result.id)}">
+      <strong>${escapeHtml(result.label)}</strong>
+      <small>${escapeHtml(result.group)} · ${escapeHtml(result.description)}</small>
+      <span>Open</span>
+    </button>
+  `).join('') || '<div class="search-result"><strong>No controls found</strong><small>Try a shorter phrase or a category name.</small></div>';
+}
+
+async function openControlSearchResult(result) {
+  $('#control-search-results').hidden = true;
+  if (result.id.startsWith('tuning:')) {
+    if (!state.tuning) await loadTuning();
+    const definition = state.tuning.schema.find((entry) => `tuning:${entry.id}` === result.id);
+    $('#tuning-category').value = definition?.category || '';
+    $('#tuning-search').value = definition?.label || result.label;
+    await activateTab(result.tab);
+    $('#tuning-fields').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else if (result.id.startsWith('expansion:')) {
+    if (!state.expansion) await loadExpansion();
+    const definition = state.expansion.schema.find((entry) => `expansion:${entry.id}` === result.id);
+    $('#expansion-search').value = definition
+      ? `${definition.category} ${definition.label}`
+      : result.label;
+    await activateTab(result.tab);
+    $('#expansion-fields').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else if (result.id.startsWith('character:')) {
+    if (!state.expansion) await loadExpansion();
+    const [, characterId] = result.id.split(':');
+    $('#expansion-search').value = characterId;
+    await activateTab(result.tab);
+    $('#expansion-fields').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else {
+    await activateTab(result.tab);
+  }
+  $('#control-search').value = '';
+}
+
+function syncLinkedDraft(id, value, source) {
+  if (!id) return;
+  const retention = RETENTION_CONTROL_LINKS.find((entry) => entry.id === id);
+  if (retention) {
+    if (source === 'tuning') {
+      if (state.expansionDraft) state.expansionDraft.settings[retention.expansionKey] = Number((Number(value) * 100).toFixed(4));
+      setLinkedInput(`[data-expansion-setting="${retention.expansionKey}"]`, Number(value) * 100);
+    } else {
+      if (state.tuningDrafts[retention.lobby]) state.tuningDrafts[retention.lobby].deathKeepFraction = Number((Number(value) / 100).toFixed(4));
+      if ($('#tuning-lobby').value === retention.lobby) setLinkedInput('[data-tuning="deathKeepFraction"]', Number(value) / 100);
+    }
+    return;
+  }
+  if (id === 'advertisement-rewards-enabled') {
+    const enabled = value === true;
+    if (state.expansionDraft) state.expansionDraft.settings.advertisementRewardsEnabled = enabled;
+    setLinkedInput('[data-expansion-setting="advertisementRewardsEnabled"]', enabled);
+    setLinkedInput('#economy-ads-enabled', enabled);
+    return;
+  }
+  const characterPrice = CHARACTER_PRICE_CONTROL_LINKS.find((entry) => entry.id === id);
+  if (!characterPrice) return;
+  const price = Math.max(0, Math.round(Number(value) || 0));
+  if (state.expansionDraft?.characters?.[characterPrice.characterId]) {
+    state.expansionDraft.characters[characterPrice.characterId].nuggetPrice = price;
+  }
+  setLinkedInput(`[data-character="${characterPrice.characterId}"][data-character-field="nuggetPrice"]`, price);
+  const selector = {
+    ronke: '#economy-character-ronke',
+    adlDyno: '#economy-character-adl',
+    axie: '#economy-character-axie',
+    orc: '#economy-character-orc'
+  }[characterPrice.economyKey];
+  setLinkedInput(selector, price);
+}
+
+function setLinkedInput(selector, value) {
+  const input = selector ? $(selector) : null;
+  if (!input) return;
+  if (input.type === 'checkbox') input.checked = value === true;
+  else input.value = Number.isFinite(Number(value)) ? Number(value) : value;
+}
+
+function objectDiff(original = {}, next = {}) {
+  return Object.fromEntries(Object.entries(next).filter(([key, value]) => original[key] !== value));
 }
 
 async function api(path, options = {}) {

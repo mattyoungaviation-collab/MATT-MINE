@@ -68,7 +68,7 @@ export function bossTuningSchema(number, toggle) {
       number(`bossPhase${phase}RepeatCooldown`, category, 'Same-attack repeat cooldown', phaseDefaults.repeatCooldown, 0, 20, .1, 'Extra fairness interval before the same attack may be selected again.'),
       number(`bossPhase${phase}MovementSpeed`, category, 'Movement speed multiplier', phaseDefaults.movementSpeed, .1, 4, .05, 'Guardian chase speed during this phase.'),
       number(`bossPhase${phase}ChasePressure`, category, 'Chase pressure', phaseDefaults.chasePressure, .5, 15, .1, 'How quickly the Guardian corrects its movement toward the miner.'),
-      number(`bossPhase${phase}SummonCooldown`, category, 'Summon cooldown', phaseDefaults.summonCooldown, .5, 60, .25, 'Minimum interval between successful reinforcement calls.'),
+      number(`bossPhase${phase}ReinforcementCooldown`, category, 'Reinforcement gate cooldown', phaseDefaults.summonCooldown, .5, 60, .25, 'Phase-wide minimum interval between successful reinforcement calls. This is separate from the Summon attack cooldown.'),
       number(`bossPhase${phase}MaxSummons`, category, 'Maximum active summons', phaseDefaults.maxSummons, 0, 30, 1, 'Hard cap for reinforcements owned by one Guardian.')
     ];
     const attackFields = BOSS_ATTACKS.flatMap((attack) => {
@@ -112,7 +112,7 @@ export function bossPhaseConfig(tuning = {}, phase = 1) {
     repeatCooldown: Number(tuning[`${prefix}RepeatCooldown`] ?? defaults.repeatCooldown),
     movementSpeed: Number(tuning[`${prefix}MovementSpeed`] ?? defaults.movementSpeed),
     chasePressure: Number(tuning[`${prefix}ChasePressure`] ?? defaults.chasePressure),
-    summonCooldown: Number(tuning[`${prefix}SummonCooldown`] ?? defaults.summonCooldown),
+    summonCooldown: Number(tuning[`${prefix}ReinforcementCooldown`] ?? defaults.summonCooldown),
     maxSummons: Math.max(0, Math.round(Number(tuning[`${prefix}MaxSummons`] ?? defaults.maxSummons)))
   };
 }

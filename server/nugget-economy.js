@@ -43,10 +43,10 @@ export function defaultNuggetEconomyConfig() {
       }
     ],
     characterUnlockPrices: {
-      ronke: 0,
+      ronke: 400_000,
       adlDyno: 0,
-      axie: 0,
-      orc: 0
+      axie: 550_000,
+      orc: 700_000
     },
     updatedAt: 0,
     updatedBy: ''

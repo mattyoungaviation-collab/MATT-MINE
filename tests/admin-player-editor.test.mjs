@@ -178,7 +178,8 @@ test('the command center loads a complete editor with exact fields and destructi
   ]);
 
   assert.match(html, /adminPlayerEditor\.js/);
-  assert.match(html, /Find setting/);
+  assert.match(html, /Search all controls/);
+  assert.match(html, /Filter this page/);
   assert.match(script, /Save exact player state/);
   assert.match(script, /Reset permanent upgrades/);
   assert.match(script, /Zero nuggets/);

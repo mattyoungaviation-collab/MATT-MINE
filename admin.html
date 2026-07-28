@@ -9,11 +9,11 @@
 </head>
 <body>
   <div class="shell">
-    <header>
+    <header class="command-header">
       <div>
-        <p class="eyebrow">PRIVATE OPERATIONS</p>
+        <p class="eyebrow">PRIVATE · PRODUCTION</p>
         <h1>MATT Mine Command Center</h1>
-        <p class="muted">Production controls, player moderation, rewards, contracts, and audit history.</p>
+        <p class="muted">One organized source of truth for live operations, balance, economy, rewards, and Ronin.</p>
       </div>
       <div class="connection"><span id="status-dot"></span><span id="connection-label">Locked</span></div>
     </header>
@@ -31,34 +31,67 @@
 
     <main id="dashboard" hidden>
       <nav id="tabs" aria-label="Admin sections">
-        <button class="active" data-tab="overview">Overview</button>
-        <button data-tab="operations">Operations</button>
-        <button data-tab="players">Players</button>
-        <button data-tab="tuning">Game Tuning</button>
-        <button data-tab="expansion">Expansion</button>
-        <button data-tab="rewards">Rewards</button>
-        <button data-tab="arena">Daily Arena</button>
-        <button data-tab="contracts">Contracts</button>
-        <button data-tab="audit">Audit</button>
+        <span class="nav-label">Status</span>
+        <button class="active" data-tab="overview"><span>Overview</span><small>Health &amp; readiness</small></button>
+        <button data-tab="operations"><span>Live Operations</span><small>Immediate gates</small></button>
+        <span class="nav-label">People</span>
+        <button data-tab="players"><span>Players</span><small>Search &amp; moderation</small></button>
+        <span class="nav-label">Game</span>
+        <button data-tab="tuning"><span>Game Balance</span><small>Per-lobby tuning</small></button>
+        <button data-tab="expansion"><span>Modes &amp; Characters</span><small>Features &amp; roster</small></button>
+        <span class="nav-label">Economy</span>
+        <button data-tab="nugget-economy"><span>Nugget Economy</span><small>Prices &amp; packages</small></button>
+        <button data-tab="rewards"><span>MATT Rewards</span><small>Weekly claims</small></button>
+        <button data-tab="arena"><span>Daily Arena</span><small>Pool &amp; settlement</small></button>
+        <span class="nav-label">System</span>
+        <button data-tab="contracts"><span>Onchain Actions</span><small>Safe transaction files</small></button>
+        <button data-tab="audit"><span>Audit Log</span><small>Every admin change</small></button>
         <button id="lock-button" class="ghost">Lock</button>
       </nav>
 
+      <section id="command-toolbar" aria-label="Command Center search">
+        <div class="command-search">
+          <span aria-hidden="true">⌕</span>
+          <label for="control-search">Search all controls</label>
+          <input id="control-search" type="search" placeholder="Try “Depth 3 Orc health”, “revive”, or “pause claims”" autocomplete="off">
+          <kbd>Ctrl K</kbd>
+        </div>
+        <div id="control-search-results" class="search-results" hidden></div>
+      </section>
+
       <section id="tab-overview" class="tab active">
         <div id="alert" class="alert" hidden></div>
+        <article id="readiness-hero" class="panel readiness-hero">
+          <div class="readiness-score" aria-label="Readiness score"><strong id="readiness-score">—</strong><span>/ 100</span></div>
+          <div>
+            <p class="eyebrow">LIVE READINESS</p>
+            <h2 id="readiness-label">Checking production systems…</h2>
+            <p id="readiness-copy" class="muted">Verifying persistence, Ronin contracts, rewards, replay, and linked controls.</p>
+          </div>
+          <div class="readiness-actions">
+            <button id="refresh-overview" class="ghost" type="button">Run checks</button>
+            <small id="readiness-checked">Not checked</small>
+          </div>
+        </article>
+        <div id="readiness-monitors" class="readiness-grid"></div>
+        <div class="section-heading compact">
+          <div><p class="eyebrow">LIVE COUNTS</p><h2>Production activity</h2></div>
+        </div>
         <div id="metrics" class="metrics"></div>
         <div class="grid two">
-          <article class="panel"><h2>Live systems</h2><div id="systems"></div></article>
+          <article class="panel"><h2>Runtime gates</h2><div id="systems"></div></article>
           <article class="panel"><h2>Protected foundations</h2><div id="immutable"></div></article>
         </div>
       </section>
 
       <section id="tab-expansion" class="tab">
         <div class="section-heading">
-          <div><p class="eyebrow">PRODUCTION EXPANSION</p><h2>Modes, rewards, characters, and controls</h2></div>
-          <label>Find setting<input id="expansion-search" placeholder="Chest, revive, controller, character..."></label>
+          <div><p class="eyebrow">MODES &amp; CHARACTERS</p><h2>Features and playable roster</h2><p>Release gates, special modes, rewards, controllers, and character stats.</p></div>
+          <label class="search-field">Filter this page<input id="expansion-search" type="search" placeholder="Chest, revive, weekly, character…"></label>
         </div>
         <div class="notice">Production switches unlock only when their server verifier is ready. Competitive settings apply only before a stage opens.</div>
         <div id="production-readiness" class="grid four"></div>
+        <p id="expansion-result-count" class="result-count"></p>
         <form id="expansion-form">
           <div id="expansion-fields" class="tuning-groups"></div>
           <article class="panel">
@@ -102,13 +135,15 @@
 
       <section id="tab-tuning" class="tab">
         <div class="section-heading">
-          <div><p class="eyebrow">LIVE GAME RULES</p><h2>Game tuning</h2></div>
-          <div class="action-row">
+          <div><p class="eyebrow">GAME BALANCE</p><h2>Per-lobby tuning</h2><p>Every combat, enemy, boss, room, weapon, and scoring value.</p></div>
+          <div class="filter-bar">
             <label>Lobby<select id="tuning-lobby"><option value="practice">Practice</option><option value="free">Free ranked</option><option value="paid">Pass ranked</option><option value="arena">Daily Arena</option></select></label>
-            <label>Find setting<input id="tuning-search" placeholder="Blaster, armor, depth 5, bosses..."></label>
+            <label>Category<select id="tuning-category"><option value="">All categories</option></select></label>
+            <label>Filter this page<input id="tuning-search" type="search" placeholder="Blaster, armor, Depth 5…"></label>
           </div>
         </div>
         <div class="notice">Saved changes apply to new runs only. Daily Arena changes stage for the next UTC day. Contract prices, prize custody, pool caps, and finished scores stay protected.</div>
+        <p id="tuning-result-count" class="result-count"></p>
         <form id="tuning-form">
           <div id="tuning-fields" class="tuning-groups"></div>
           <article class="panel">
@@ -116,6 +151,78 @@
             <button type="submit">Save this lobby</button>
           </article>
         </form>
+      </section>
+
+      <section id="tab-nugget-economy" class="tab">
+        <div class="section-heading">
+          <div><p class="eyebrow">NUGGET ECONOMY</p><h2>Prices, packages, and verified payments</h2><p>Server-authoritative purchase rules and permanent character unlock prices.</p></div>
+          <button id="refresh-nugget-economy" class="ghost" type="button">Refresh</button>
+        </div>
+        <div id="nugget-economy-blocker" class="notice warning" hidden></div>
+        <div id="nugget-economy-metrics" class="metrics"></div>
+        <form id="nugget-economy-form">
+          <details class="panel structured-card" open>
+            <summary><strong>Release gates</strong><span>5 controls</span></summary>
+            <div class="toggle-grid">
+              <label class="toggle">Nugget purchases<input id="economy-purchases-enabled" type="checkbox"></label>
+              <label class="toggle">Paid Practice claims<input id="economy-practice-enabled" type="checkbox"></label>
+              <label class="toggle linked-field"><span class="toggle-copy">Advertisement rewards<span class="link-chip">Linked · Modes &amp; Characters</span></span><input id="economy-ads-enabled" type="checkbox" data-linked-control="advertisement-rewards-enabled"></label>
+              <label class="toggle">Accept MATT<input id="economy-asset-matt" type="checkbox"></label>
+              <label class="toggle">Accept RON<input id="economy-asset-ron" type="checkbox"></label>
+            </div>
+            <p class="muted">Paid features stay blocked unless the exact Ronin receipt verifier is live. Linked controls update together.</p>
+          </details>
+
+          <details class="panel structured-card" open>
+            <summary><strong>Canonical value and limits</strong><span>6 controls</span></summary>
+            <div class="tuning-grid">
+              <label class="tuning-field">Nuggets per MATT<input id="economy-nuggets-per-matt" type="number" min="0.000001" max="1000000000" step="0.000001"></label>
+              <label class="tuning-field">MATT per nugget<input id="economy-matt-per-nugget" type="number" step="0.000000001" readonly></label>
+              <label class="tuning-field">USD reference per 1,000,000 nuggets<input id="economy-usd-reference" type="number" min="0" max="1000000" step="0.01"></label>
+              <label class="tuning-field">UTC daily purchase cap<input id="economy-daily-cap" type="number" min="0" max="1000000000" step="1"></label>
+              <label class="tuning-field">Quote lifetime (seconds)<input id="economy-quote-seconds" type="number" min="30" max="1800" step="1"></label>
+              <label class="tuning-field">Approved recipient<input id="economy-recipient" maxlength="42" spellcheck="false"></label>
+            </div>
+          </details>
+
+          <details class="panel structured-card">
+            <summary><strong>Practice claim price</strong><span>2 controls</span></summary>
+            <div class="tuning-grid">
+              <label class="tuning-field">Payment asset<select id="economy-practice-asset"><option value="MATT">MATT</option><option value="RON">RON</option></select></label>
+              <label class="tuning-field">Token amount<input id="economy-practice-amount" type="number" min="0" step="0.000000000000000001"></label>
+            </div>
+          </details>
+
+          <details class="panel structured-card" open>
+            <summary><strong>Purchase packages</strong><span>Exact verified quotes</span></summary>
+            <div class="action-row section-actions"><p>Each enabled package needs a positive price in an accepted asset.</p><button id="economy-add-package" class="ghost" type="button">Add package</button></div>
+            <div id="economy-package-list" class="cards"></div>
+          </details>
+
+          <details class="panel structured-card">
+            <summary><strong>Character unlock prices</strong><span class="link-chip">Linked · Playable roster</span></summary>
+            <div class="tuning-grid">
+              <label class="tuning-field linked-field">Ronke nuggets<span class="link-chip">Linked</span><input id="economy-character-ronke" data-linked-control="character-price-ronke" type="number" min="0" max="1000000000" step="1"></label>
+              <label class="tuning-field linked-field">ADL Dyno nuggets<span class="link-chip">Linked</span><input id="economy-character-adl" data-linked-control="character-price-adl-dyno" type="number" min="0" max="1000000000" step="1"></label>
+              <label class="tuning-field linked-field">Axie nuggets<span class="link-chip">Linked</span><input id="economy-character-axie" data-linked-control="character-price-axie" type="number" min="0" max="1000000000" step="1"></label>
+              <label class="tuning-field linked-field">Orc nuggets<span class="link-chip">Linked</span><input id="economy-character-orc" data-linked-control="character-price-orc" type="number" min="0" max="1000000000" step="1"></label>
+            </div>
+          </details>
+
+          <article class="panel save-bar">
+            <label>Required reason<input id="economy-reason" maxlength="240" placeholder="Why are these economy rules changing?" required></label>
+            <button type="submit">Save nugget economy</button>
+          </article>
+        </form>
+
+        <details class="panel structured-card" open>
+          <summary><strong>Recent verified purchases</strong><span>Latest 250</span></summary>
+          <div class="table-wrap"><table><thead><tr><th>UTC time</th><th>Wallet</th><th>Package</th><th>Nuggets</th><th>Paid</th><th>Transaction</th></tr></thead><tbody id="economy-purchase-rows"></tbody></table></div>
+        </details>
+        <details class="panel structured-card">
+          <summary><strong>Economy audit</strong><span>Latest changes</span></summary>
+          <div id="economy-audit-list" class="timeline"></div>
+        </details>
       </section>
 
       <section id="tab-rewards" class="tab">
