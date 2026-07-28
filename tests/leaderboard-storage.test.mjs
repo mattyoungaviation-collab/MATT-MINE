@@ -293,7 +293,11 @@ function createRecordingPool(options = {}) {
     queries.push({ normalized, params: structuredClone(params) });
     const handled = options.handler?.(normalized, params);
     if (handled !== undefined) return handled;
-    if (normalized.startsWith('CREATE TABLE') || normalized.startsWith('CREATE INDEX')) {
+    if (
+      normalized.startsWith('CREATE TABLE')
+      || normalized.startsWith('CREATE INDEX')
+      || normalized.startsWith('DO $$')
+    ) {
       return { rows: [] };
     }
     if (normalized.startsWith('INSERT INTO MATT_MINE_STATE')) {

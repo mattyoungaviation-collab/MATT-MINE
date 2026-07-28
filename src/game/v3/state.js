@@ -49,7 +49,7 @@ export const stateMethods = {
       health: maxHealth,
       speed: (tuning.playerSpeed || CONFIG.basePlayerSpeed) * (1 + (meta.speed || 0) * 0.02) * Number(character.movementSpeed || 1),
       damage: (tuning.playerBaseDamage || CONFIG.baseDamage) * (1 + (meta.damage || 0) * 0.05) * Number(character.pickaxeDamage || 1),
-      attackCooldown: tuning.pickaxeCooldown || CONFIG.baseAttackCooldown,
+      attackCooldown: (tuning.pickaxeCooldown || CONFIG.baseAttackCooldown) / Number(character.miningSpeed || 1),
       attackTimer: 0,
       attackRange: tuning.pickaxeRange || CONFIG.baseAttackRange,
       critChance: tuning.playerCritChance ?? CONFIG.baseCritChance,
@@ -183,7 +183,7 @@ export const stateMethods = {
     const tuning = this.runContext?.tuning || {};
     const position = randomPointInRoom(room, 52);
     const scale = type.id === 'cache' ? 1.25 : randomRange(0.86, 1.2);
-    const richChance = 0.07 + luck * 0.01;
+    const richChance = (0.07 + luck * 0.01) * Number(this.runContext?.character?.luck || 1);
     const rich = forceRich || type.id === 'cache' || (type.id !== 'stone' && random() < richChance);
     const depthHealth = 1 + (this.run.depth - 1) * 0.11;
     const treasureMultiplier = type.id === 'cache' ? (tuning.treasureAmountMultiplier ?? 1) : 1;

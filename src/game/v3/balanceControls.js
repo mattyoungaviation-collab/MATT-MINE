@@ -37,7 +37,7 @@ export const balanceControlMethods = {
       : Number(originalMeta.armor || 0) * (tuning.permanentArmorPerRank ?? .008);
     this.player.armor = Math.min(
       tuning.armorMaximum ?? .45,
-      Math.max(0, permanentArmor)
+      Math.max(0, permanentArmor + Number(this.runContext?.character?.armor || 0))
     );
 
     const permanentBlaster = ignorePermanent
@@ -45,7 +45,8 @@ export const balanceControlMethods = {
       : Number(originalMeta.blaster || 0) * (tuning.permanentBlasterDamagePerRank ?? .03);
     this.player.blasterDamageScale =
       (tuning.blasterDamageMultiplier ?? CONFIG.blasterDamageScale) *
-      (1 + Math.max(0, permanentBlaster));
+      (1 + Math.max(0, permanentBlaster)) *
+      Number(this.runContext?.character?.blasterDamage || 1);
   },
 
   gainXp(amount) {

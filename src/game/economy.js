@@ -6,7 +6,10 @@ const MAX_SAFE_VALUE = Number.MAX_SAFE_INTEGER;
 export const RUN_MODES = Object.freeze({
   FREE: 'free',
   PAID: 'paid',
-  PRACTICE: 'practice'
+  PRACTICE: 'practice',
+  BETA: 'beta',
+  WEEKLY: 'weekly',
+  ENDLESS: 'endless'
 });
 
 export const ADMIN_ROLES = Object.freeze({

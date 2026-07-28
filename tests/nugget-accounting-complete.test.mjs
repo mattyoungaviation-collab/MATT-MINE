@@ -61,7 +61,7 @@ test('knockout rewards keep the same balance while append-only entries classify 
   const result = {
     extracted: false,
     projected: 1_000,
-    banked: 350,
+    banked: 500,
     depth: 1,
     kills: 5,
     oreBroken: 5,
@@ -72,17 +72,17 @@ test('knockout rewards keep the same balance while append-only entries classify 
     runToken: run.runToken,
     result
   });
-  assert.equal(finished.profile.bankedNuggets, 350);
+  assert.equal(finished.profile.bankedNuggets, 500);
 
   const persisted = await harness.database.read();
   const wallet = persisted.wallets[account.address.toLowerCase()];
-  assert.equal(wallet.profile.bankedNuggets, 350);
+  assert.equal(wallet.profile.bankedNuggets, 500);
   assert.deepEqual(
     wallet.nuggetLedger.map((entry) => [entry.type, entry.direction, entry.amount]),
     [
-      ['RUN_EXTRACTION', 'credit', 350],
-      ['ADMIN_ADJUSTMENT', 'debit', 350],
-      ['RUN_DEATH_RETENTION', 'credit', 350]
+      ['RUN_EXTRACTION', 'credit', 500],
+      ['ADMIN_ADJUSTMENT', 'debit', 500],
+      ['RUN_DEATH_RETENTION', 'credit', 500]
     ]
   );
   assert.equal(wallet.nuggetLedger.at(-1).runId, run.runId);

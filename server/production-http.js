@@ -9,7 +9,22 @@ const ECONOMY_PATHS = new Set([
   '/api/nuggets/purchases/quote',
   '/api/nuggets/purchases/confirm',
   '/api/nuggets/practice/quote',
-  '/api/admin/nugget-economy'
+  '/api/admin/nugget-economy',
+  '/api/expansion/status',
+  '/api/profile/controller',
+  '/api/characters/select',
+  '/api/characters/purchase',
+  '/api/revives/request',
+  '/api/revives/confirm',
+  '/api/advertisements/confirm',
+  '/api/advertisements/skip',
+  '/api/beta/access',
+  '/api/admin/expansion',
+  '/api/admin/beta-testers',
+  '/api/admin/characters',
+  '/api/admin/weekly-competition/preview',
+  '/api/competitions/weekly/leaderboard',
+  '/api/competitions/endless/leaderboard'
 ]);
 
 export function createProductionMattMineHttpServer({ root, service, maxRequestBytes = MAX_REQUEST_BYTES }) {
@@ -31,6 +46,85 @@ export function createProductionMattMineHttpServer({ root, service, maxRequestBy
       limiter.consume(`${clientKey}:${requestUrl.pathname}`, 30, 60_000);
       const method = request.method || 'GET';
       const path = requestUrl.pathname;
+
+      if (method === 'GET' && path === '/api/expansion/status') {
+        sendJson(response, 200, { ok: true, expansion: await service.expansionStatus(bearerToken(request)) });
+        return;
+      }
+      if (method === 'PUT' && path === '/api/profile/controller') {
+        const body = await readJson(request, maxRequestBytes);
+        sendJson(response, 200, { ok: true, ...(await service.updateControllerProfile(bearerToken(request), body.controller)) });
+        return;
+      }
+      if (method === 'POST' && path === '/api/characters/select') {
+        const body = await readJson(request, maxRequestBytes);
+        sendJson(response, 200, { ok: true, ...(await service.selectCharacter(bearerToken(request), body.characterId)) });
+        return;
+      }
+      if (method === 'POST' && path === '/api/characters/purchase') {
+        const body = await readJson(request, maxRequestBytes);
+        sendJson(response, 200, { ok: true, expansion: await service.purchaseCharacter(bearerToken(request), body.characterId) });
+        return;
+      }
+      if (method === 'POST' && path === '/api/revives/request') {
+        const body = await readJson(request, maxRequestBytes);
+        sendJson(response, 201, { ok: true, revive: await service.requestPaidRevive(bearerToken(request), body) });
+        return;
+      }
+      if (method === 'POST' && path === '/api/revives/confirm') {
+        const body = await readJson(request, maxRequestBytes);
+        sendJson(response, 200, { ok: true, revive: await service.confirmPaidRevive(bearerToken(request), body) });
+        return;
+      }
+      if (method === 'POST' && path === '/api/advertisements/confirm') {
+        const body = await readJson(request, maxRequestBytes);
+        sendJson(response, 200, { ok: true, advertisement: await service.confirmAdvertisementBonus(bearerToken(request), body) });
+        return;
+      }
+      if (method === 'POST' && path === '/api/advertisements/skip') {
+        const body = await readJson(request, maxRequestBytes);
+        sendJson(response, 200, { ok: true, advertisement: await service.skipAdvertisementBonus(bearerToken(request), body.runId) });
+        return;
+      }
+      if (method === 'POST' && path === '/api/beta/access') {
+        sendJson(response, 200, { ok: true, beta: await service.betaAccess(bearerToken(request)) });
+        return;
+      }
+      if (method === 'GET' && path === '/api/admin/expansion') {
+        sendJson(response, 200, { ok: true, expansion: await service.adminExpansion(request.headers['x-matt-admin-key']) });
+        return;
+      }
+      if (method === 'PUT' && path === '/api/admin/expansion') {
+        const body = await readJson(request, maxRequestBytes);
+        sendJson(response, 200, { ok: true, ...(await service.updateAdminExpansion(request.headers['x-matt-admin-key'], body.patch, body.reason)) });
+        return;
+      }
+      if (method === 'PUT' && path === '/api/admin/beta-testers') {
+        const body = await readJson(request, maxRequestBytes);
+        sendJson(response, 200, { ok: true, betaTester: await service.setBetaTester(request.headers['x-matt-admin-key'], body.address, body.enabled, body.reason) });
+        return;
+      }
+      if (method === 'PUT' && path === '/api/admin/characters') {
+        const body = await readJson(request, maxRequestBytes);
+        sendJson(response, 200, { ok: true, expansion: await service.grantCharacter(request.headers['x-matt-admin-key'], body.address, body.characterId, body.enabled, body.reason) });
+        return;
+      }
+      if (method === 'GET' && path === '/api/admin/weekly-competition/preview') {
+        sendJson(response, 200, { ok: true, preview: await service.weeklyCompetitionPreview(request.headers['x-matt-admin-key'], requestUrl.searchParams.get('week')) });
+        return;
+      }
+      const competitionMatch = path.match(/^\/api\/competitions\/(weekly|endless)\/leaderboard$/);
+      if (method === 'GET' && competitionMatch) {
+        sendJson(response, 200, {
+          ok: true,
+          leaderboard: await service.competitionLeaderboard(
+            bearerToken(request),
+            competitionMatch[1],
+            requestUrl.searchParams.get('period')
+          )
+        });
+        return;
+      }
 
       if (method === 'GET' && path === '/api/nuggets/status') {
         const result = await service.nuggetEconomyStatus(bearerToken(request));

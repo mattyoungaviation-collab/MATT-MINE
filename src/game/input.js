@@ -1,5 +1,6 @@
 import { clamp } from './utils.js';
 import { defaultKeybindings, normalizeKeybindings } from './keybindings.js';
+import { defaultControllerProfile, normalizeControllerProfile } from './expansionConfig.js';
 
 export class InputController {
   constructor(canvas) {
@@ -13,9 +14,75 @@ export class InputController {
     this.mobileWeaponQueued = null;
     this.joystickPointerId = null;
     this.keybindings = defaultKeybindings();
+    this.controllerProfile = defaultControllerProfile();
+    this.gamepad = {
+      connected: false,
+      index: 0,
+      previous: [],
+      current: [],
+      movement: { x: 0, y: 0 },
+      aim: { x: 0, y: 0 }
+    };
+    this.gamepadPolledThisTask = false;
     this.bindKeyboard();
     this.bindPointer();
     this.bindMobile();
+    this.bindGamepad();
+  }
+
+  bindGamepad() {
+    window.addEventListener('gamepadconnected', (event) => {
+      if (this.gamepad.connected && event.gamepad.index !== this.controllerProfile.activeIndex) return;
+      this.gamepad.connected = true;
+      this.gamepad.index = event.gamepad.index;
+      window.dispatchEvent(new CustomEvent('mattmine:controller', {
+        detail: { connected: true, index: event.gamepad.index }
+      }));
+    });
+    window.addEventListener('gamepaddisconnected', (event) => {
+      if (event.gamepad.index !== this.gamepad.index) return;
+      this.gamepad.connected = false;
+      this.gamepad.current = [];
+      this.gamepad.previous = [];
+      window.dispatchEvent(new CustomEvent('mattmine:controller', {
+        detail: { connected: false, index: event.gamepad.index, pauseRequested: true }
+      }));
+    });
+  }
+
+  pollGamepad() {
+    if (this.gamepadPolledThisTask) return;
+    this.gamepadPolledThisTask = true;
+    queueMicrotask(() => {
+      this.gamepadPolledThisTask = false;
+    });
+    if (typeof navigator === 'undefined' || typeof navigator.getGamepads !== 'function') return;
+    const pads = navigator.getGamepads();
+    const preferred = pads?.[this.controllerProfile.activeIndex];
+    const pad = preferred?.connected ? preferred : [...(pads || [])].find((entry) => entry?.connected);
+    if (!pad) {
+      this.gamepad.connected = false;
+      return;
+    }
+    this.gamepad.connected = true;
+    this.gamepad.index = pad.index;
+    this.gamepad.previous = this.gamepad.current;
+    this.gamepad.current = pad.buttons.map((button) => button.pressed || button.value >= .55);
+    this.gamepad.movement = deadZoneVector(pad.axes[0] || 0, pad.axes[1] || 0, this.controllerProfile.deadZone);
+    const aim = deadZoneVector(pad.axes[2] || 0, pad.axes[3] || 0, this.controllerProfile.deadZone);
+    this.gamepad.aim = {
+      x: aim.x * this.controllerProfile.aimSensitivity,
+      y: aim.y * this.controllerProfile.aimSensitivity
+    };
+  }
+
+  controllerHeld(action) {
+    return this.gamepad.current[this.controllerProfile.mapping[action]] === true;
+  }
+
+  consumeController(action) {
+    const button = this.controllerProfile.mapping[action];
+    return this.gamepad.current[button] === true && this.gamepad.previous[button] !== true;
   }
 
   bindKeyboard() {
@@ -123,6 +190,7 @@ export class InputController {
   }
 
   movement() {
+    this.pollGamepad();
     let x = 0;
     let y = 0;
     if (this.keys.has(this.keybindings.moveLeft)) x -= 1;
@@ -131,12 +199,14 @@ export class InputController {
     if (this.keys.has(this.keybindings.moveDown)) y += 1;
     x += this.mobileMove.x;
     y += this.mobileMove.y;
+    x += this.gamepad.movement.x;
+    y += this.gamepad.movement.y;
     const length = Math.hypot(x, y);
     return length > 1 ? { x: x / length, y: y / length } : { x, y };
   }
 
   attacking() {
-    return this.pointer.down || this.mobileAttack || this.keys.has(this.keybindings.attack);
+    return this.pointer.down || this.mobileAttack || this.keys.has(this.keybindings.attack) || this.controllerHeld('attack');
   }
 
   reset() {
@@ -149,9 +219,12 @@ export class InputController {
     this.mobileDashQueued = false;
     this.mobileWeaponQueued = null;
     this.joystickPointerId = null;
+    this.gamepad.previous = [];
+    this.gamepad.current = [];
   }
 
   consumeWeaponSelection() {
+    this.pollGamepad();
     let selected = this.mobileWeaponQueued;
     this.mobileWeaponQueued = null;
     const bindings = [
@@ -164,13 +237,17 @@ export class InputController {
       selected = weapon;
       this.pressed.delete(code);
     }
+    if (this.consumeController('pickaxe')) selected = 'pickaxe';
+    else if (this.consumeController('dynamite')) selected = 'dynamite';
+    else if (this.consumeController('blaster')) selected = 'blaster';
     return selected;
   }
 
   consumeDash() {
+    this.pollGamepad();
     const keyboardDash = this.pressed.has(this.keybindings.dash);
     this.pressed.delete(this.keybindings.dash);
-    const result = keyboardDash || this.mobileDashQueued;
+    const result = keyboardDash || this.mobileDashQueued || this.consumeController('dash');
     this.mobileDashQueued = false;
     return result;
   }
@@ -179,4 +256,21 @@ export class InputController {
     this.keybindings = normalizeKeybindings(bindings);
     return { ...this.keybindings };
   }
+
+  setControllerProfile(profile) {
+    this.controllerProfile = normalizeControllerProfile(profile);
+    return structuredClone(this.controllerProfile);
+  }
+
+  aimVector() {
+    this.pollGamepad();
+    return { ...this.gamepad.aim };
+  }
+}
+
+export function deadZoneVector(x, y, deadZone = .18) {
+  const length = Math.hypot(x, y);
+  if (length <= deadZone) return { x: 0, y: 0 };
+  const scaled = Math.min(1, (length - deadZone) / Math.max(.001, 1 - deadZone));
+  return { x: (x / length) * scaled, y: (y / length) * scaled };
 }

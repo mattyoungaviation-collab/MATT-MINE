@@ -10,6 +10,12 @@ import { normalizeIdentity } from './identity.js';
 import { defaultGameTuning, normalizeGameTuning } from '../src/game/tuning.js';
 import { defaultKeybindings, normalizeKeybindings } from '../src/game/keybindings.js';
 import { normalizeMigrationWalletState, normalizeNuggetLedger } from './nugget-ledger.js';
+import {
+  defaultExpansionConfig,
+  defaultPlayerExpansion,
+  normalizeExpansionConfig,
+  normalizePlayerExpansion
+} from '../src/game/expansionConfig.js';
 
 export function defaultServerState() {
   return {
@@ -18,9 +24,13 @@ export function defaultServerState() {
     challenges: {},
     sessions: {},
     runs: {},
+    revivePayments: {},
     passPurchases: {},
     paidEntitlements: {},
     gameTuning: defaultGameTuning(),
+    expansionConfig: defaultExpansionConfig(),
+    weeklyCompetition: { weeks: {} },
+    endlessCompetition: { seasons: {} },
     arenaTuningSchedule: {},
     operations: defaultOperations(),
     audit: []
@@ -37,6 +47,7 @@ export function defaultWalletState(address, timestamp = Date.now()) {
     passProgress: defaultPassProgress(),
     passInventory: defaultPassInventory(),
     keybindings: defaultKeybindings(),
+    expansion: defaultPlayerExpansion(),
     activity: [],
     suspended: false,
     daily: {},
@@ -53,9 +64,13 @@ export function normalizeServerState(input = {}) {
     challenges: normalizeRecords(source.challenges, 2_000),
     sessions: normalizeRecords(source.sessions, 10_000),
     runs: normalizeRecords(source.runs, 25_000),
+    revivePayments: normalizeRecords(source.revivePayments, 25_000),
     passPurchases: normalizePassPurchases(source.passPurchases),
     paidEntitlements: normalizePaidEntitlements(source.paidEntitlements),
     gameTuning: normalizeGameTuning(migrateLegacyGameTuning(source.gameTuning, source.version)),
+    expansionConfig: safeExpansionConfig(source.expansionConfig),
+    weeklyCompetition: normalizeCompetitionStore(source.weeklyCompetition, 'weeks'),
+    endlessCompetition: normalizeCompetitionStore(source.endlessCompetition, 'seasons'),
     arenaTuningSchedule: normalizeArenaTuningSchedule(source.arenaTuningSchedule),
     operations: normalizeOperations(source.operations),
     audit: Array.isArray(source.audit)
@@ -171,6 +186,7 @@ function normalizeWallets(input) {
         passProgress: normalizePassProgress(wallet.passProgress),
         passInventory: normalizePassInventory(wallet.passInventory),
         keybindings: safeKeybindings(wallet.keybindings),
+        expansion: safePlayerExpansion(wallet.expansion),
         activity: normalizeActivity(wallet.activity),
         suspended: wallet.suspended === true,
         daily: normalizeDaily(wallet.daily),
@@ -196,6 +212,33 @@ function safeKeybindings(input) {
   } catch {
     return defaultKeybindings();
   }
+}
+
+function safeExpansionConfig(input) {
+  try {
+    return normalizeExpansionConfig(input);
+  } catch {
+    return defaultExpansionConfig();
+  }
+}
+
+function safePlayerExpansion(input) {
+  try {
+    return normalizePlayerExpansion(input);
+  } catch {
+    return defaultPlayerExpansion();
+  }
+}
+
+function normalizeCompetitionStore(input, bucket) {
+  const source = isRecord(input) ? input : {};
+  const records = isRecord(source[bucket]) ? source[bucket] : {};
+  return {
+    [bucket]: Object.fromEntries(Object.entries(records)
+      .filter(([key, value]) => key.length <= 40 && isRecord(value))
+      .slice(-250)
+      .map(([key, value]) => [key, structuredClone(value)]))
+  };
 }
 
 function normalizeActivity(input) {
@@ -308,14 +351,17 @@ function normalizeRecords(input, limit) {
 
 function migrateLegacyGameTuning(input, version) {
   const source = isRecord(input) ? structuredClone(input) : {};
-  if (Number(version) >= 9) return source;
   for (const lobby of ['practice', 'free', 'paid']) {
     const preset = isRecord(source[lobby]) ? source[lobby] : {};
-    const current = Number(preset.blasterDamageMultiplier);
+    const blasterDamage = Number(preset.blasterDamageMultiplier);
+    const bossHealth = Number(preset.bossHealthMultiplier);
     source[lobby] = {
       ...preset,
-      ...(!Number.isFinite(current) || Math.abs(current - .56) < .000001
+      ...(Number(version) < 9 && (!Number.isFinite(blasterDamage) || Math.abs(blasterDamage - .56) < .000001)
         ? { blasterDamageMultiplier: .60 }
+        : {}),
+      ...(Number(version) < 11 && (!Number.isFinite(bossHealth) || Math.abs(bossHealth - 1) < .000001)
+        ? { bossHealthMultiplier: 2.25 }
         : {})
     };
   }

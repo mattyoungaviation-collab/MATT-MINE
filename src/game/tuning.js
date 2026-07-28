@@ -119,7 +119,7 @@ export const GAME_TUNING_SCHEMA = Object.freeze([
 
   ...depthSpawnSchema,
 
-  number('bossHealthMultiplier', 'Boss', 'Health multiplier', 1, .1, 20, .05),
+  number('bossHealthMultiplier', 'Boss', 'Health multiplier', 2.25, .1, 20, .05, 'Default targets a readable roughly 30-second final encounter for a normally upgraded miner.'),
   number('bossDamageMultiplier', 'Boss', 'Damage multiplier', 1, 0, 10, .05),
   number('bossSpeedMultiplier', 'Boss', 'Speed multiplier', 1, .1, 5, .05),
   number('bossAwarenessRange', 'Boss', 'Awareness range', CONFIG.guardianAwarenessRange, 100, 1800, 10),
@@ -193,6 +193,7 @@ export function defaultTuningPreset(lobby = 'practice') {
   if (lobby === 'arena') {
     Object.assign(preset, {
       usePerDepthRoomSpawns: false,
+      bossHealthMultiplier: 1,
       blasterDamageMultiplier: .56,
       blasterFocusedCoreBonus: .25,
       blasterBeams: 2,

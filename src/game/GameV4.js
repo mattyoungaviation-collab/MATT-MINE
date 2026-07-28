@@ -7,6 +7,7 @@ import {
   normalizeArenaControlState
 } from './arenaControls.js';
 import { seededRandom, withRandomSource } from './utils.js';
+import { endlessScale } from './expansionConfig.js';
 
 /**
  * v0.4 adds deterministic ranked-run seeds and economy metadata while
@@ -21,8 +22,13 @@ export class MattMineGame extends V3MattMineGame {
       day: context.day || '',
       week: context.week || '',
       rewardWeight: Number(context.rewardWeight || 0),
+      characterId: context.characterId || 'matt',
+      character: context.character && typeof context.character === 'object' ? { ...context.character } : {},
+      weeklyStage: context.weeklyStage && typeof context.weeklyStage === 'object' ? { ...context.weeklyStage } : null,
+      endlessSnapshot: context.endlessSnapshot && typeof context.endlessSnapshot === 'object' ? { ...context.endlessSnapshot } : null,
       tuning: context.tuning && typeof context.tuning === 'object' ? { ...context.tuning } : {}
     };
+    this.baseRunTuning = structuredClone(this.runContext.tuning);
     this.arenaAccumulator = 0;
     this.arenaFinishRecorded = false;
     this.arenaRandom = this.runContext.mode === 'arena'
@@ -32,6 +38,34 @@ export class MattMineGame extends V3MattMineGame {
   }
 
   generateDepth() {
+    if (this.runContext?.mode === 'endless' && this.runContext.endlessSnapshot) {
+      const depth = this.run?.depth || 1;
+      const snapshot = this.runContext.endlessSnapshot;
+      const scale = endlessScale(depth, {
+        endlessHealthGrowth: snapshot.healthGrowth,
+        endlessDamageGrowth: snapshot.damageGrowth,
+        endlessSpeedGrowth: snapshot.speedGrowth,
+        endlessMultiplierGrowth: snapshot.multiplierGrowth,
+        endlessMaximumScale: snapshot.maximumScale
+      });
+      const rules = {
+        ...scale,
+        bossCount: depth % snapshot.bossFrequency === 0
+          ? Math.min(10, snapshot.bossCount + Math.floor(depth / 10))
+          : 0,
+        roomCount: Math.min(30, snapshot.roomCount + Math.floor((depth - 1) / 3))
+      };
+      const tuning = structuredClone(this.baseRunTuning || this.runContext.tuning || {});
+      tuning.roomsPerDepth = rules.roomCount;
+      tuning.enemyHealthMultiplier = (tuning.enemyHealthMultiplier || 1) * rules.health;
+      tuning.enemyDamageMultiplier = (tuning.enemyDamageMultiplier || 1) * rules.damage;
+      tuning.enemySpeedMultiplier = (tuning.enemySpeedMultiplier || 1) * rules.speed;
+      for (let depth = 1; depth <= 5; depth += 1) {
+        tuning[`depth${depth}GuardianBosses`] = rules.bossCount;
+      }
+      this.runContext.tuning = tuning;
+      this.run.endlessRules = rules;
+    }
     const seed = `${this.runContext?.seed || 'MATT-RANDOM'}:DEPTH:${this.run?.depth || 1}`;
     const source = this.runContext?.mode === 'arena'
       ? this.arenaRandom
@@ -92,6 +126,11 @@ export class MattMineGame extends V3MattMineGame {
         return;
       }
     }
+    const controllerAim = this.input?.aimVector?.();
+    if (controllerAim && Math.hypot(controllerAim.x, controllerAim.y) > .05) {
+      this.player.angle = Math.atan2(controllerAim.y, controllerAim.x);
+      return;
+    }
     return super.updateAim();
   }
 
@@ -125,7 +164,23 @@ export class MattMineGame extends V3MattMineGame {
       if ((this.run?.depth || 0) >= 5) return this.extract();
       this.recordArenaCommand('descend');
     }
+    if (this.runContext?.mode === 'endless' && this.state === 'depthchoice') {
+      this.run.depth += 1;
+      this.state = 'playing';
+      this.generateDepth();
+      this.hooks.onDepthStarted?.(this.run.depth);
+      this.hooks.onToast?.(`Endless Depth ${this.run.depth}: x${this.depthMultiplier().toFixed(2)}`);
+      return;
+    }
     return super.descend();
+  }
+
+  depthMultiplier(depth = this.run?.depth || 1) {
+    if (this.runContext?.mode === 'endless') {
+      const growth = Number(this.runContext.endlessSnapshot?.multiplierGrowth || .25);
+      return 1 + Math.max(0, depth - 1) * growth;
+    }
+    return super.depthMultiplier(depth);
   }
 
   extract() {

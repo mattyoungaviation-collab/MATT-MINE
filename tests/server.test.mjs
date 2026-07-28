@@ -481,8 +481,8 @@ test('Pass levels permanently deliver cosmetics, chest contents, and server-owne
 
   const chest = await harness.service.openPassChest(session.token, PASS_CHEST_ID);
   assert.equal(chest.rewards.cosmetic.id, 'molten_pickaxe');
-  assert.equal(chest.rewards.nuggets, 2_500);
-  assert.equal(chest.profile.bankedNuggets, 2_500);
+  assert.equal(chest.rewards.nuggets, 250_000);
+  assert.equal(chest.profile.bankedNuggets, 250_000);
   assert.equal(chest.passInventory.chests[PASS_CHEST_ID].available, 0);
   assert.equal(chest.passInventory.chests[PASS_CHEST_ID].opened, 1);
   assert.equal(chest.passInventory.cosmetics.length, 8);
@@ -802,7 +802,7 @@ test('impossible telemetry is rejected without consuming the active run submissi
   assert.equal(accepted.accepted, true);
 });
 
-test('ranked knockouts score only the exact secured 35 percent loot amount', async () => {
+test('ranked knockouts score only the exact secured 50 percent loot amount', async () => {
   const harness = createHarness();
   const { session } = await signIn(harness);
   const run = await harness.service.startRun(session.token, SERVER_RUN_MODES.FREE);
@@ -811,7 +811,7 @@ test('ranked knockouts score only the exact secured 35 percent loot amount', asy
     () => finish(harness.service, session, run, extractedResult({
       extracted: false,
       projected: 1_001,
-      banked: 351,
+      banked: 501,
       elapsed: 30
     })),
     (error) => error.code === 'knockout_mismatch'
@@ -819,11 +819,11 @@ test('ranked knockouts score only the exact secured 35 percent loot amount', asy
   const accepted = await finish(harness.service, session, run, extractedResult({
     extracted: false,
     projected: 1_001,
-    banked: 350,
+    banked: 500,
     elapsed: 30
   }));
-  assert.equal(accepted.run.result.score, 350);
-  assert.equal(accepted.profile.bankedNuggets, 350);
+  assert.equal(accepted.run.result.score, 500);
+  assert.equal(accepted.profile.bankedNuggets, 500);
 });
 
 test('server suspension blocks ranked issuance and submission but keeps Practice available', async () => {
@@ -980,7 +980,11 @@ function createFakePostgresPool() {
 
   async function query(sql, params = []) {
     const normalized = sql.replace(/\s+/g, ' ').trim().toUpperCase();
-    if (normalized.startsWith('CREATE TABLE') || normalized.startsWith('CREATE INDEX')) {
+    if (
+      normalized.startsWith('CREATE TABLE')
+      || normalized.startsWith('CREATE INDEX')
+      || normalized.startsWith('DO $$')
+    ) {
       return { rows: [] };
     }
     if (normalized.startsWith('INSERT INTO MATT_MINE_STATE')) {
