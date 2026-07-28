@@ -46,6 +46,7 @@ export function confirmRevive(run, verifiedPayment, config, timestamp) {
     runId: run.id,
     reviveCount: run.revives.length,
     playerState: structuredClone(run.playerState),
+    invulnerabilitySeconds: config.reviveInvulnerabilitySeconds,
     warning: 'Verified payment is final and non-refundable.'
   };
 }
@@ -61,7 +62,10 @@ export async function awardVerifiedAdvertisement({
   if (config.advertisementRewardsEnabled !== true) throw new Error('advertisement_rewards_disabled');
   if (!run?.result || run.status !== 'finished') throw new Error('advertisement_run_ineligible');
   if (run.advertisement?.status) throw new Error('advertisement_already_resolved');
-  const verified = await verifier.verifyCompletion(completion);
+  const verified = await verifier.verifyCompletion(completion, {
+    address: wallet.address,
+    runId: run.id
+  });
   if (!verified?.completionId || verified.expiresAt <= timestamp) throw new Error('advertisement_completion_invalid');
   if (
     !Number.isSafeInteger(verified.expiresAt) ||

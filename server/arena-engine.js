@@ -14,7 +14,8 @@ export const ARENA_MAX_TICKS = 20 * 60_000;
 export const ARENA_MAX_EVENTS = 20_000;
 export const ARENA_MAX_BATCH_EVENTS = 256;
 export const ARENA_EVENT_TYPES = Object.freeze(['input', 'command', 'finish']);
-export const ARENA_COMMANDS = Object.freeze(['upgrade', 'descend', 'extract']);
+export const ARENA_COMMANDS = Object.freeze(['upgrade', 'descend', 'extract', 'death', 'revive', 'decline']);
+export const COMPETITIVE_REPLAY_MODES = Object.freeze(['free', 'paid', 'weekly', 'endless']);
 
 const NOOP_AUDIO = Object.freeze({
   startMusic() {},
@@ -40,6 +41,24 @@ export function buildArenaChallenge(dailySeed, tuning = {}) {
     maxDepth: 5,
     verificationMode: 'deterministic-input-replay',
     tuning: tuning && typeof tuning === 'object' ? structuredClone(tuning) : {}
+  };
+}
+
+export function buildCompetitiveChallenge(run) {
+  assertApi(
+    run && COMPETITIVE_REPLAY_MODES.includes(run.mode) && typeof run.seed === 'string',
+    500,
+    'competitive_challenge_invalid',
+    'The competitive run snapshot is invalid.'
+  );
+  return {
+    version: ARENA_TRANSCRIPT_VERSION,
+    dailySeed: run.seed,
+    tickMs: ARENA_TICK_MS,
+    maxTicks: ARENA_MAX_TICKS,
+    maxDepth: run.mode === 'weekly' ? 1 : run.mode === 'endless' ? 1_000 : 5,
+    verificationMode: 'deterministic-input-replay',
+    tuning: structuredClone(run.tuning || {})
   };
 }
 
@@ -78,11 +97,25 @@ export function replayArenaTranscript(challenge, inputEvents, options = {}) {
       finalResult = { ...result };
     }
   });
+  const replayMode = options.mode || 'arena';
+  assertApi(
+    replayMode === 'arena' || COMPETITIVE_REPLAY_MODES.includes(replayMode),
+    500,
+    'replay_mode_invalid',
+    'The deterministic replay mode is invalid.'
+  );
   game.startRun({
-    mode: 'arena',
+    mode: replayMode,
     seed: challenge.dailySeed,
     day: options.day || '',
-    tuning: challenge.tuning || {}
+    week: options.week || '',
+    tuning: challenge.tuning || {},
+    characterId: options.characterId || 'matt',
+    character: options.character || {},
+    weeklyStage: options.weeklyStage || null,
+    endlessSnapshot: options.endlessSnapshot || null,
+    allowPaidRevive: options.allowPaidRevive === true,
+    reviveInvulnerabilitySeconds: options.reviveInvulnerabilitySeconds
   });
 
   let control = decodeArenaControlState({
@@ -110,7 +143,13 @@ export function replayArenaTranscript(challenge, inputEvents, options = {}) {
     if (event.type === 'input') {
       control = decodeArenaControlState(event);
     } else if (event.type === 'command') {
-      applyCommand(game, event);
+      applyCommand(game, event, {
+        mode: replayMode,
+        allowPaidRevive: options.allowPaidRevive === true,
+        maxDepth: Number.isSafeInteger(options.maxDepth)
+          ? options.maxDepth
+          : challenge.maxDepth
+      });
     } else {
       finishSeen = true;
       assertApi(
@@ -135,13 +174,19 @@ export function replayArenaTranscript(challenge, inputEvents, options = {}) {
     extracted,
     score,
     projected,
+    banked: Math.max(0, Math.floor(finalResult?.banked || 0)),
+    lost: Math.max(0, Math.floor(finalResult?.lost || 0)),
     depth: Math.max(1, Math.floor(finalResult?.depth || game.run?.depth || 1)),
     guardianTimeMs,
     damageTaken: Math.max(0, Math.round(damageTaken)),
     elapsedMs: Math.max(0, Math.round((game.run?.elapsed || 0) * 1_000)),
+    elapsed: Math.max(0, Number(finalResult?.elapsed || game.run?.elapsed || 0)),
     kills: Math.max(0, Math.floor(finalResult?.kills || game.run?.kills || 0)),
     oreBroken: Math.max(0, Math.floor(finalResult?.oreBroken || game.run?.oreBroken || 0)),
-    eventCount: inputEvents.length
+    bossTelemetry: finalResult?.bossTelemetry || null,
+    maximumHealth: Math.max(1, Number(game.player?.maxHealth || 100)),
+    eventCount: inputEvents.length,
+    awaitingRevive: game.state === 'awaitingrevive'
   };
 }
 
@@ -212,7 +257,7 @@ export function canonicalJson(value) {
   return JSON.stringify(value);
 }
 
-function applyCommand(game, event) {
+function applyCommand(game, event, options = {}) {
   if (event.command === 'upgrade') {
     assertApi(
       game.state === 'levelup' && game.pendingUpgradeIds?.includes(event.value),
@@ -224,6 +269,33 @@ function applyCommand(game, event) {
     assertApi(game.state === 'playing', 422, 'arena_upgrade_rejected', 'The replayed upgrade was rejected.');
     return;
   }
+  if (event.command === 'death') {
+    assertApi(
+      game.state === 'awaitingrevive',
+      422,
+      'revive_death_not_verified',
+      'The replay did not reach a paid-revive knockout.'
+    );
+    return;
+  }
+  if (event.command === 'revive') {
+    assertApi(
+      options.allowPaidRevive === true && game.applyPaidRevive({ record: false }),
+      422,
+      'revive_command_rejected',
+      'The replayed paid revive was rejected.'
+    );
+    return;
+  }
+  if (event.command === 'decline') {
+    assertApi(
+      options.allowPaidRevive === true && game.declinePaidRevive({ record: false }) !== false,
+      422,
+      'revive_decline_rejected',
+      'The replayed revive decline was rejected.'
+    );
+    return;
+  }
   assertApi(
     game.state === 'depthchoice' && game.run?.bossKilled === true,
     422,
@@ -232,7 +304,14 @@ function applyCommand(game, event) {
   );
   if (event.command === 'descend') {
     const depth = game.run.depth;
-    assertApi(depth < 5, 422, 'arena_max_depth', 'The final Arena depth cannot descend further.');
+    assertApi(options.mode !== 'weekly', 422, 'weekly_single_depth', 'Weekly competition ends after one mine.');
+    const maxDepth = Number.isSafeInteger(options.maxDepth) ? options.maxDepth : 5;
+    assertApi(
+      options.mode === 'endless' || depth < maxDepth,
+      422,
+      'arena_max_depth',
+      'The final competition depth cannot descend further.'
+    );
     game.descend();
     assertApi(game.state === 'playing' && game.run.depth === depth + 1, 422, 'arena_depth_mismatch', 'The replayed descent failed.');
     return;

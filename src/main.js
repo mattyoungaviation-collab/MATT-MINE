@@ -93,6 +93,7 @@ let activeArenaRun = null;
 let activeArenaTranscript = null;
 let activePracticeClaim = null;
 let activeBetaTools = null;
+let paidRevivePending = false;
 let pendingAvatarDataUrl = '';
 let abandonConfirmUntil = 0;
 let abandonResetTimer = null;
@@ -489,11 +490,17 @@ async function refreshPaymentStatus(silent = false) {
 }
 
 async function submitServerRun(serverRun, result) {
+  const transcript = activeArenaTranscript;
   activeServerRun = null;
+  activeArenaTranscript = null;
   activePracticeClaim = null;
   clearPracticeClaimPanel();
   $('#economy-result').innerHTML = '<strong>SERVER VERIFYING</strong><span>Checking entitlement, run token, score rules, and replay protection…</span>';
   try {
+    const competitiveCheckpoint = transcript ? await transcript.close() : null;
+    if (serverRun.verification === 'fixed-step-input-replay' && !competitiveCheckpoint) {
+      throw new Error('The competitive transcript was not checkpointed.');
+    }
     const accepted = await apiClient.finishRun(serverRun.runId, serverRun.runToken, {
       extracted: Boolean(result.extracted),
       projected: Math.max(0, Math.floor(result.projected || 0)),
@@ -503,16 +510,28 @@ async function submitServerRun(serverRun, result) {
       oreBroken: Math.max(0, Math.floor(result.oreBroken || 0)),
       elapsed: Math.max(0, Number(result.elapsed || 0)),
       bossTelemetry: result.bossTelemetry || null
-    });
+    }, competitiveCheckpoint);
     profile = accepted.profile;
     saveProfile(profile);
     game.setProfile(profile);
-    const leaderboard = accepted.leaderboard;
+    const leaderboard = accepted.leaderboard || {};
+    const playerRow = Array.isArray(leaderboard.rows)
+      ? leaderboard.rows.find((row) =>
+          row.isPlayer ||
+          String(row.address || '').toLowerCase() === String(serverPlayer?.address || '').toLowerCase()
+        )
+      : null;
+    const playerScore = leaderboard.playerScore ?? playerRow?.score ?? accepted.run?.score ?? 0;
+    const playerRank = leaderboard.playerRank ?? playerRow?.rank ?? 0;
+    leaderboard.playerScore = playerScore;
+    leaderboard.playerRank = playerRank;
     if (serverPlayer) {
       serverPlayer.profile = accepted.profile;
       serverPlayer.passProgress = accepted.passProgress;
       serverPlayer.passInventory = accepted.passInventory;
-      serverPlayer.scores[serverRun.mode] = leaderboard.playerScore;
+      if (serverRun.mode === RUN_MODES.FREE || serverRun.mode === RUN_MODES.PAID) {
+        serverPlayer.scores[serverRun.mode] = playerScore;
+      }
     }
     if (paymentStatus && accepted.passProgress) paymentStatus.passProgress = accepted.passProgress;
     applyPassInventory(accepted.passInventory);
@@ -520,7 +539,11 @@ async function submitServerRun(serverRun, result) {
       ? 'Free'
       : serverRun.mode === RUN_MODES.PAID
         ? 'Pass'
-        : 'Practice';
+        : serverRun.mode === RUN_MODES.WEEKLY
+          ? 'Challenge'
+          : serverRun.mode === RUN_MODES.ENDLESS
+            ? 'Endless'
+            : 'Practice';
     const passXpCopy = accepted.run?.passXpAwarded
       ? ` · +${accepted.run.passXpAwarded} Pass XP`
       : '';
@@ -752,6 +775,11 @@ async function startRunMode(mode) {
     try {
       const run = await apiClient.startRun(mode);
       activeServerRun = run;
+      activeArenaTranscript = run.verification === 'fixed-step-input-replay'
+        ? new ArenaTranscript(apiClient, run, {
+            appendEvents: (...args) => apiClient.appendCompetitiveEvents(...args)
+          })
+        : null;
       if (mode === RUN_MODES.FREE) serverPlayer.entitlements.freeRunAvailable = false;
       if (mode === RUN_MODES.PAID && paymentStatus) {
         paymentStatus.confirmedCredits = Math.max(0, paymentStatus.confirmedCredits - 1);
@@ -766,7 +794,9 @@ async function startRunMode(mode) {
         characterId: run.characterId,
         character: run.character,
         weeklyStage: run.weeklyStage,
-        endlessSnapshot: run.endlessSnapshot
+        endlessSnapshot: run.endlessSnapshot,
+        allowPaidRevive: run.paidReviveEligible === true,
+        reviveInvulnerabilitySeconds: run.reviveInvulnerabilitySeconds
       });
       if (mode === RUN_MODES.BETA) {
         const entitlement = await apiClient.betaAccess();
@@ -802,6 +832,54 @@ async function startRunMode(mode) {
     tuning
   });
   updateMenu();
+}
+
+async function purchasePaidRevive() {
+  if (!paidRevivePending || !activeServerRun || !activeArenaTranscript) return;
+  const button = $('#paid-revive-button');
+  button.disabled = true;
+  button.textContent = 'VERIFYING KNOCKOUT...';
+  let serverPending = false;
+  try {
+    const checkpoint = await activeArenaTranscript.flush();
+    const pending = await apiClient.requestPaidRevive(activeServerRun.runId, {
+      checkpoint
+    });
+    serverPending = true;
+    button.textContent = `CONFIRM ${formatRonWei(pending.priceRonWei)} RON`;
+    const transactionHash = await wallet.sendPreparedTransaction(pending.transaction);
+    button.textContent = 'CONFIRMING ON RONIN...';
+    await apiClient.confirmPaidRevive(activeServerRun.runId, transactionHash);
+    if (!game.applyPaidRevive()) throw new Error('The saved run could not resume safely.');
+  } catch (error) {
+    if (serverPending) {
+      await apiClient.cancelPaidRevive(activeServerRun.runId).catch(() => undefined);
+    }
+    button.disabled = false;
+    button.textContent = 'REVIVE WITH RON';
+    toast(error.message);
+  }
+}
+
+function declinePaidRevive() {
+  if (!paidRevivePending) return;
+  paidRevivePending = false;
+  game.declinePaidRevive();
+}
+
+function formatRonWei(value) {
+  try {
+    const raw = BigInt(value);
+    const whole = raw / 1_000_000_000_000_000_000n;
+    const fraction = (raw % 1_000_000_000_000_000_000n)
+      .toString()
+      .padStart(18, '0')
+      .replace(/0+$/, '')
+      .slice(0, 4);
+    return fraction ? `${whole}.${fraction}` : String(whole);
+  } catch {
+    return '10';
+  }
 }
 
 const game = new MattMineGame(canvas, profile, {
@@ -874,6 +952,10 @@ const game = new MattMineGame(canvas, profile, {
     setGameplayUi(true);
   },
   onRunEnd(result) {
+    paidRevivePending = false;
+    $('#paid-revive-panel').hidden = true;
+    $('#play-again-button').hidden = false;
+    $('#menu-button').hidden = false;
     const mode = result.mode || RUN_MODES.PRACTICE;
     const serverRun = activeServerRun && activeServerRun.mode === mode ? activeServerRun : null;
     const arenaRun = activeArenaRun && mode === 'arena' ? activeArenaRun : null;
@@ -900,6 +982,34 @@ const game = new MattMineGame(canvas, profile, {
     updateMenu();
     if (arenaRun) void submitArenaRun(arenaRun);
     else if (serverRun) void submitServerRun(serverRun, result);
+  },
+  onPaidReviveOffered(data) {
+    paidRevivePending = true;
+    $('#end-kicker').textContent = 'MINER DOWN';
+    $('#end-title').textContent = 'Revive This Run?';
+    $('#run-mode-result').textContent = modeLabel(
+      activeServerRun?.mode || RUN_MODES.PRACTICE,
+      activeServerRun?.rewardWeight || 0
+    );
+    $('#end-stats').innerHTML = `
+      <div><span>Current Loot</span><strong>${formatNumber(data.projected)}</strong></div>
+      <div><span>Depth</span><strong>${data.depth}</strong></div>
+      <div><span>Enemies</span><strong>${data.kills}</strong></div>
+      <div><span>Ore Broken</span><strong>${data.oreBroken}</strong></div>
+    `;
+    $('#economy-result').innerHTML = '<strong>RUN PAUSED</strong><span>Your rooms, weapons, upgrades, boss progress, and score are preserved.</span>';
+    $('#paid-revive-panel').hidden = false;
+    $('#play-again-button').hidden = true;
+    $('#menu-button').hidden = true;
+    showScreen('run-end');
+    setGameplayUi(false);
+  },
+  onPaidReviveApplied() {
+    paidRevivePending = false;
+    $('#paid-revive-panel').hidden = true;
+    showScreen();
+    setGameplayUi(true);
+    toast('Revived at full health');
   },
   onProfileChanged(nextProfile) {
     profile = nextProfile;
@@ -1024,6 +1134,8 @@ $('#play-again-button').addEventListener('click', () => game.backToMenu());
 $('#menu-button').addEventListener('click', () => game.backToMenu());
 $('#practice-claim-button').addEventListener('click', () => void claimPracticeRewards());
 $('#practice-decline-button').addEventListener('click', () => void declinePracticeRewards());
+$('#paid-revive-button').addEventListener('click', () => void purchasePaidRevive());
+$('#paid-revive-decline').addEventListener('click', declinePaidRevive);
 $('#abandon-run-button').addEventListener('click', () => {
   const now = Date.now();
   if (now > abandonConfirmUntil) {

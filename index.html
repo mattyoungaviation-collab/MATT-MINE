@@ -243,7 +243,7 @@
             <div class="launch-section-heading">
               <p>VERIFIED ON RONIN</p>
               <h2>Contracts you can<br /><span>inspect yourself.</span></h2>
-              <p class="launch-section-copy">MATT Mine uses conventional, non-upgradeable contracts controlled by the approved 2-of-3 MATT Mine Treasury Safe. No replacement MATT token. No burn.</p>
+              <p class="launch-section-copy">MATT Mine uses conventional, non-upgradeable contracts controlled by the approved MATT Mine Treasury Safe. No replacement MATT token. No burn.</p>
             </div>
             <div class="launch-contract-grid">
               <a href="https://explorer.roninchain.com/address/0x56a6d4Cf4Fbd1C7aA1572028556657CbC0fB5855?tab=contract" target="_blank" rel="noopener noreferrer">
@@ -621,7 +621,7 @@
           <button class="close-button" data-close="admin-panel" aria-label="Close">×</button>
           <p class="eyebrow">LOCAL CONTROL CENTER</p>
           <h2 id="admin-title">MATT Mine Admin</h2>
-          <div class="admin-warning">TEST CONTROLS ONLY · Production treasury actions require the approved 2-of-3 multisig. No timelock.</div>
+          <div class="admin-warning">TEST CONTROLS ONLY · Production treasury actions require the approved Treasury Safe. No timelock.</div>
           <div class="admin-dashboard-grid">
             <article class="admin-card">
               <h3>Emergency Controls</h3>
@@ -721,6 +721,16 @@
           <div id="run-cosmetic-result" class="run-cosmetic-result"></div>
           <div id="end-stats" class="end-stats"></div>
           <div id="economy-result" class="economy-result"></div>
+          <section id="paid-revive-panel" class="practice-claim-card" hidden>
+            <p class="eyebrow">ONE LAST CHANCE</p>
+            <div class="run-claim-info">
+              <strong>Revive at full health</strong>
+              <span>Pay the exact RON amount shown by the server and continue this same run.</span>
+              <small>One revive only. Verified payments are final and non-refundable.</small>
+            </div>
+            <button id="paid-revive-button" class="primary-button" type="button">REVIVE WITH RON</button>
+            <button id="paid-revive-decline" class="secondary-button" type="button">KEEP 50% AND END RUN</button>
+          </section>
           <section id="practice-claim-panel" class="practice-claim-card" hidden>
             <p class="eyebrow">PRACTICE CLAIM</p>
             <div id="practice-claim-info" class="run-claim-info"></div>

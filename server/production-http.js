@@ -16,6 +16,7 @@ const ECONOMY_PATHS = new Set([
   '/api/characters/purchase',
   '/api/revives/request',
   '/api/revives/confirm',
+  '/api/revives/cancel',
   '/api/advertisements/confirm',
   '/api/advertisements/skip',
   '/api/beta/access',
@@ -24,7 +25,8 @@ const ECONOMY_PATHS = new Set([
   '/api/admin/characters',
   '/api/admin/weekly-competition/preview',
   '/api/competitions/weekly/leaderboard',
-  '/api/competitions/endless/leaderboard'
+  '/api/competitions/endless/leaderboard',
+  '/api/runs/competitive/events'
 ]);
 
 export function createProductionMattMineHttpServer({ root, service, maxRequestBytes = MAX_REQUEST_BYTES }) {
@@ -51,6 +53,14 @@ export function createProductionMattMineHttpServer({ root, service, maxRequestBy
         sendJson(response, 200, { ok: true, expansion: await service.expansionStatus(bearerToken(request)) });
         return;
       }
+      if (method === 'POST' && path === '/api/runs/competitive/events') {
+        const body = await readJson(request, maxRequestBytes);
+        sendJson(response, 200, {
+          ok: true,
+          ...(await service.appendCompetitiveEvents(bearerToken(request), body))
+        });
+        return;
+      }
       if (method === 'PUT' && path === '/api/profile/controller') {
         const body = await readJson(request, maxRequestBytes);
         sendJson(response, 200, { ok: true, ...(await service.updateControllerProfile(bearerToken(request), body.controller)) });
@@ -74,6 +84,14 @@ export function createProductionMattMineHttpServer({ root, service, maxRequestBy
       if (method === 'POST' && path === '/api/revives/confirm') {
         const body = await readJson(request, maxRequestBytes);
         sendJson(response, 200, { ok: true, revive: await service.confirmPaidRevive(bearerToken(request), body) });
+        return;
+      }
+      if (method === 'POST' && path === '/api/revives/cancel') {
+        const body = await readJson(request, maxRequestBytes);
+        sendJson(response, 200, {
+          ok: true,
+          revive: await service.cancelPaidRevive(bearerToken(request), body.runId)
+        });
         return;
       }
       if (method === 'POST' && path === '/api/advertisements/confirm') {

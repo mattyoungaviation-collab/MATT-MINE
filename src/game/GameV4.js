@@ -9,6 +9,8 @@ import {
 import { seededRandom, withRandomSource } from './utils.js';
 import { endlessScale } from './expansionConfig.js';
 
+const DETERMINISTIC_SERVER_MODES = new Set(['arena', 'free', 'paid', 'weekly', 'endless']);
+
 /**
  * v0.4 adds deterministic ranked-run seeds and economy metadata while
  * preserving the v0.3 combat engine. Entitlements are consumed outside the
@@ -26,13 +28,20 @@ export class MattMineGame extends V3MattMineGame {
       character: context.character && typeof context.character === 'object' ? { ...context.character } : {},
       weeklyStage: context.weeklyStage && typeof context.weeklyStage === 'object' ? { ...context.weeklyStage } : null,
       endlessSnapshot: context.endlessSnapshot && typeof context.endlessSnapshot === 'object' ? { ...context.endlessSnapshot } : null,
+      allowPaidRevive: context.allowPaidRevive === true,
+      reviveInvulnerabilitySeconds: Math.max(0, Number(context.reviveInvulnerabilitySeconds || 3)),
       tuning: context.tuning && typeof context.tuning === 'object' ? { ...context.tuning } : {}
     };
     this.baseRunTuning = structuredClone(this.runContext.tuning);
     this.arenaAccumulator = 0;
     this.arenaFinishRecorded = false;
-    this.arenaRandom = this.runContext.mode === 'arena'
-      ? seededRandom(`${this.runContext.seed}:MATT-ARENA-RUNTIME-V2`)
+    this.paidReviveUsed = false;
+    this.arenaRandom = DETERMINISTIC_SERVER_MODES.has(this.runContext.mode)
+      ? seededRandom(
+          this.runContext.mode === 'arena'
+            ? `${this.runContext.seed}:MATT-ARENA-RUNTIME-V2`
+            : `${this.runContext.seed}:MATT-SERVER-RUNTIME-V3`
+        )
       : null;
     super.startRun();
   }
@@ -67,14 +76,14 @@ export class MattMineGame extends V3MattMineGame {
       this.run.endlessRules = rules;
     }
     const seed = `${this.runContext?.seed || 'MATT-RANDOM'}:DEPTH:${this.run?.depth || 1}`;
-    const source = this.runContext?.mode === 'arena'
+    const source = DETERMINISTIC_SERVER_MODES.has(this.runContext?.mode)
       ? this.arenaRandom
       : seededRandom(seed);
     return withRandomSource(source, () => super.generateDepth());
   }
 
   update(dt) {
-    if (this.runContext?.mode !== 'arena') return super.update(dt);
+    if (!DETERMINISTIC_SERVER_MODES.has(this.runContext?.mode)) return super.update(dt);
     this.arenaAccumulator += Math.max(0, Math.min(Number(dt) || 0, 0.25));
     const stepSeconds = ARENA_FIXED_STEP_MS / 1_000;
     while (this.arenaAccumulator + Number.EPSILON >= stepSeconds && this.state === 'playing') {
@@ -85,7 +94,7 @@ export class MattMineGame extends V3MattMineGame {
   }
 
   applyArenaControlStep(control, record = false) {
-    if (this.runContext?.mode !== 'arena' || this.state !== 'playing') return false;
+    if (!DETERMINISTIC_SERVER_MODES.has(this.runContext?.mode) || this.state !== 'playing') return false;
     const normalized = normalizeArenaControlState(control);
     const tick = Math.round((this.run?.elapsed || 0) * 1_000);
     if (record) {
@@ -119,7 +128,7 @@ export class MattMineGame extends V3MattMineGame {
   }
 
   updateAim() {
-    if (this.runContext?.mode === 'arena') {
+    if (DETERMINISTIC_SERVER_MODES.has(this.runContext?.mode)) {
       const angle = this.input?.arenaAimAngle?.(this);
       if (Number.isFinite(angle)) {
         this.player.angle = angle;
@@ -150,7 +159,7 @@ export class MattMineGame extends V3MattMineGame {
 
   chooseRunUpgrade(id) {
     if (
-      this.runContext?.mode === 'arena' &&
+      DETERMINISTIC_SERVER_MODES.has(this.runContext?.mode) &&
       this.state === 'levelup' &&
       this.pendingUpgradeIds?.includes(id)
     ) {
@@ -160,11 +169,16 @@ export class MattMineGame extends V3MattMineGame {
   }
 
   descend() {
+    if (this.runContext?.mode === 'weekly' && this.state === 'depthchoice') {
+      this.recordArenaCommand('extract');
+      return super.extract();
+    }
     if (this.runContext?.mode === 'arena' && this.state === 'depthchoice') {
       if ((this.run?.depth || 0) >= 5) return this.extract();
       this.recordArenaCommand('descend');
     }
     if (this.runContext?.mode === 'endless' && this.state === 'depthchoice') {
+      this.recordArenaCommand('descend');
       this.run.depth += 1;
       this.state = 'playing';
       this.generateDepth();
@@ -184,7 +198,7 @@ export class MattMineGame extends V3MattMineGame {
   }
 
   extract() {
-    if (this.runContext?.mode === 'arena' && this.state === 'depthchoice') {
+    if (DETERMINISTIC_SERVER_MODES.has(this.runContext?.mode) && this.state === 'depthchoice') {
       this.recordArenaCommand('extract');
     }
     return super.extract();
@@ -199,8 +213,60 @@ export class MattMineGame extends V3MattMineGame {
     });
   }
 
+  applyPaidRevive(options = {}) {
+    if (this.state !== 'awaitingrevive' || !this.player || this.paidReviveUsed) return false;
+    if (options.record !== false) this.recordArenaCommand('revive');
+    this.paidReviveUsed = true;
+    this.player.health = this.player.maxHealth;
+    this.player.invulnerable = this.runContext.reviveInvulnerabilitySeconds;
+    this.player.vx = 0;
+    this.player.vy = 0;
+    const safeRoom = this.layout?.startRoom;
+    if (safeRoom) {
+      this.player.x = safeRoom.x;
+      this.player.y = safeRoom.y;
+    }
+    this.state = 'playing';
+    this.audio.startMusic?.();
+    this.hooks.onPaidReviveApplied?.({
+      health: this.player.health,
+      maximumHealth: this.player.maxHealth,
+      invulnerabilitySeconds: this.runContext.reviveInvulnerabilitySeconds
+    });
+    return true;
+  }
+
+  declinePaidRevive(options = {}) {
+    if (this.state !== 'awaitingrevive') return false;
+    if (options.record !== false) this.recordArenaCommand('decline');
+    this.runContext.allowPaidRevive = false;
+    return this.endRun(false);
+  }
+
   endRun(extracted) {
-    if (this.runContext?.mode === 'arena' && !this.arenaFinishRecorded) {
+    if (
+      extracted === false &&
+      this.runContext?.allowPaidRevive &&
+      !this.paidReviveUsed &&
+      this.state !== 'awaitingrevive'
+    ) {
+      this.player.health = 0;
+      this.state = 'awaitingrevive';
+      this.camera.shake = 0;
+      this.audio.stopBoss?.();
+      this.audio.stopMusic?.();
+      this.recordArenaCommand('death');
+      this.hooks.onPaidReviveOffered?.({
+        projected: this.projectedPayout(),
+        depth: this.run.depth,
+        kills: this.run.kills,
+        oreBroken: this.run.oreBroken,
+        elapsed: this.run.elapsed,
+        maximumHealth: this.player.maxHealth
+      });
+      return;
+    }
+    if (DETERMINISTIC_SERVER_MODES.has(this.runContext?.mode) && !this.arenaFinishRecorded) {
       this.arenaFinishRecorded = true;
       this.hooks.onArenaInput?.({
         type: 'finish',

@@ -53,7 +53,45 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
         'This competition remains disabled until deterministic server replay validation is configured.'
       );
     }
-    return super.startRun(token, mode);
+    const started = await super.startRun(token, mode);
+    const reviveInfrastructureReady =
+      this.revivePaymentVerifier?.publicStatus?.().configured === true &&
+      Boolean(this.reviveEligibilityValidator);
+    if (['free', 'paid'].includes(started.mode) && reviveInfrastructureReady) {
+      const reviveSnapshot = await this.database.transact((state) => {
+        const run = state.runs?.[started.runId];
+        const eligible = state.expansionConfig.settings.paidRevivesEnabled === true;
+        if (run) {
+          run.paidReviveEligible = eligible;
+          run.reviveInvulnerabilitySeconds =
+            state.expansionConfig.settings.reviveInvulnerabilitySeconds;
+        }
+        return {
+          eligible,
+          invulnerabilitySeconds:
+            state.expansionConfig.settings.reviveInvulnerabilitySeconds
+        };
+      });
+      started.paidReviveEligible = reviveSnapshot.eligible;
+      started.reviveInvulnerabilitySeconds = reviveSnapshot.invulnerabilitySeconds;
+    }
+    if (this.competitiveReplayValidator?.publicStatus?.().modes?.includes(started.mode)) {
+      const state = await this.database.read();
+      const run = state.runs?.[started.runId];
+      started.checkpoint = await this.competitiveReplayValidator.register(run, started.runToken);
+      started.verification = 'fixed-step-input-replay';
+    }
+    return started;
+  }
+
+  async appendCompetitiveEvents(token, payload) {
+    if (!this.competitiveReplayValidator) {
+      throw new ApiError(503, 'competitive_replay_validator_missing', 'Deterministic server replay is not configured.');
+    }
+    const session = await this.authenticate(token);
+    return {
+      checkpoint: await this.competitiveReplayValidator.append(session.address, payload)
+    };
   }
 
   async me(token) {
@@ -232,6 +270,27 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
           : 'Signed advertisement provider completion verifier is not configured.',
         weeklyCompetition: this.competitiveReplayValidator ? '' : 'Deterministic replay validation is not configured.',
         endless: this.competitiveReplayValidator ? '' : 'Deterministic replay validation is not configured.'
+      },
+      productionReadiness: {
+        competitiveReplay: this.competitiveReplayValidator?.publicStatus?.() || {
+          configured: false,
+          enabled: false
+        },
+        paidRevivePayments: this.revivePaymentVerifier?.publicStatus?.() || {
+          configured: false,
+          enabled: false
+        },
+        advertisementRewards: this.advertisementVerifier?.publicStatus?.() || {
+          configured: false,
+          enabled: false
+        },
+        treasurySafe: {
+          address: '0xbace355d23d378a6e1add986e53a18dd12e6eeac',
+          owners: 3,
+          threshold: 1,
+          noTimelock: true,
+          operatorApproved: true
+        }
       },
       betaTesters: Object.values(state.wallets)
         .filter((wallet) => wallet.expansion?.betaTester)
@@ -449,9 +508,15 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
       throw new ApiError(503, 'revive_payment_verifier_missing', 'Paid revives are disabled until exact payment and death replay verification are configured.');
     }
     const runId = String(input.runId || '');
+    const currentState = await this.database.read();
+    const currentRun = currentState.runs?.[runId];
+    if (!currentRun || currentRun.address !== session.address) {
+      throw new ApiError(404, 'run_not_found', 'The active run was not found.');
+    }
     const verifiedDeath = await this.reviveEligibilityValidator.validate({
       address: session.address,
       runId,
+      run: structuredClone(currentRun),
       submission: structuredClone(input.deathState || {})
     });
     const timestamp = this.now();
@@ -464,7 +529,11 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
       run.status = 'awaiting-revive';
       run.playerState = structuredClone(verifiedDeath.playerState);
       try {
-        return createPendingRevive(run, config, timestamp);
+        const pending = createPendingRevive(run, config, timestamp);
+        return {
+          ...pending,
+          transaction: this.revivePaymentVerifier.transactionForPayment(pending.priceRonWei)
+        };
       } catch (error) {
         throw bonusError(error);
       }
@@ -510,6 +579,24 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
       appendActivity(next.wallets[session.address], 'PAID_REVIVE_CONFIRMED', `${runId}; ${transactionHash}`, timestamp);
       appendAudit(next, 'PAID_REVIVE_CONFIRMED', `${session.address}; ${runId}; ${transactionHash}`, timestamp);
       return revived;
+    });
+  }
+
+  async cancelPaidRevive(token, runIdInput) {
+    const session = await this.authenticate(token);
+    const runId = String(runIdInput || '');
+    return this.database.transact((state) => {
+      const run = state.runs[runId];
+      if (!run || run.address !== session.address) {
+        throw new ApiError(404, 'run_not_found', 'The pending revive was not found.');
+      }
+      if (run.status !== 'awaiting-revive' || run.pendingRevive?.status !== 'pending') {
+        throw new ApiError(409, 'revive_not_pending', 'This revive is no longer pending.');
+      }
+      run.pendingRevive.status = 'cancelled';
+      run.pendingRevive.cancelledAt = this.now();
+      run.status = 'active';
+      return { runId, cancelled: true };
     });
   }
 
@@ -606,18 +693,27 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
   async finishRun(token, payload) {
     let verifiedPayload = payload;
     const pendingRun = (await this.database.read()).runs?.[String(payload?.runId || '')];
-    if (['weekly', 'endless'].includes(pendingRun?.mode)) {
+    if (
+      pendingRun &&
+      this.competitiveReplayValidator?.publicStatus?.().modes?.includes(pendingRun.mode)
+    ) {
       if (!this.competitiveReplayValidator) {
         throw new ApiError(503, 'competitive_replay_validator_missing', 'Competitive result submission requires deterministic server replay.');
       }
       const verified = await this.competitiveReplayValidator.validate({
         run: structuredClone(pendingRun),
-        submission: structuredClone(payload?.result || {})
+        submission: structuredClone(payload?.competitiveCheckpoint || {})
       });
       verifiedPayload = { ...payload, result: verified.result };
     }
     const result = await super.finishRun(token, verifiedPayload);
     const runId = String(payload?.runId || '');
+    if (
+      pendingRun &&
+      this.competitiveReplayValidator?.publicStatus?.().modes?.includes(pendingRun.mode)
+    ) {
+      await this.competitiveReplayValidator.finalize(runId, 'finished').catch(() => undefined);
+    }
     const finished = result?.run?.result;
     const isDeathRetention =
       result?.accepted === true &&

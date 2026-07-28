@@ -32,6 +32,14 @@ services:
         value: "true"
       - key: MATT_MINE_PAYMENT_CONFIRMATIONS
         value: "3"
+      - key: MATT_MINE_COMPETITIVE_REPLAY_SECRET
+        generateValue: true
+      - key: MATT_MINE_REVIVE_PAYMENTS_ENABLED
+        value: "true"
+      - key: MATT_MINE_REVIVE_RECIPIENT_ADDRESS
+        value: "0xBacE355D23d378a6E1adD986E53a18Dd12E6EeAc"
+      - key: MATT_MINE_ADVERTISEMENT_REWARDS_ENABLED
+        value: "false"
       - key: MATT_MINE_ARENA_CONTRACT_ADDRESS
         value: "0x506f969279F8264fd629BBB0Df861Ab91343b12C"
       - key: MATT_MINE_ARENA_EXPECTED_CONTRACT_ADDRESS
