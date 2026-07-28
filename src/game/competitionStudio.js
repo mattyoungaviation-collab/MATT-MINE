@@ -20,14 +20,15 @@ const ROOM_TYPES = new Set(['start', 'mining', 'combat', 'mixed', 'treasure', 'g
 const OBJECT_TYPES = new Set(Object.values(MAP_OBJECT_KINDS).flat());
 const MAX_ROOMS = 30;
 const MAX_OBJECTS = 300;
+export const COMPETITION_DEPTH_COUNT = 5;
 
 export function defaultCompetitionStudio(timestamp = Date.now()) {
   const slots = Object.fromEntries(COMPETITION_SLOTS.map((slot) => {
-    const map = createStarterMap(slot.id);
+    const depths = createStarterDepths(slot.id);
     const draft = normalizeCompetitionDraft({
       slotId: slot.id,
       name: slot.name,
-      map,
+      depths,
       loadout: defaultLoadout(),
       rules: defaultSlotRules(slot.id)
     }, slot.id);
@@ -86,13 +87,66 @@ export function normalizeCompetitionDraft(input, forcedSlotId = '') {
   const slotId = forcedSlotId || String(source.slotId || '');
   const slot = COMPETITION_SLOTS.find((entry) => entry.id === slotId);
   if (!slot) throw new TypeError('Unknown competition slot.');
+  const depths = normalizeCompetitionDepths(source, slotId);
   return {
     slotId,
     name: cleanText(source.name || slot.name, 48),
     subtitle: cleanText(source.subtitle || defaultSubtitle(slotId), 120),
-    map: normalizeCompetitionMap(source.map || createStarterMap(slotId)),
+    depths,
+    map: depths[0].map,
     loadout: normalizeLoadout(source.loadout),
     rules: normalizeRules(source.rules, slotId)
+  };
+}
+
+export function normalizeCompetitionDepths(input, slotId) {
+  const source = isRecord(input) ? input : {};
+  const supplied = Array.isArray(source.depths) ? source.depths : [];
+  const legacyMap = source.map ? normalizeCompetitionMap(source.map) : null;
+  return Array.from({ length: COMPETITION_DEPTH_COUNT }, (_, index) => {
+    const depth = index + 1;
+    const suppliedDepth = supplied.find((entry) => Number(entry?.depth) === depth) || supplied[index];
+    const fallback = legacyMap
+      ? {
+          ...structuredClone(legacyMap),
+          name: depth === 1 ? legacyMap.name : `${legacyMap.name} · Depth ${depth}`
+        }
+      : createStarterMap(slotId, depth);
+    return {
+      depth,
+      map: normalizeCompetitionMap(suppliedDepth?.map || fallback)
+    };
+  });
+}
+
+export function competitionMapForDepth(snapshot, depth = 1) {
+  const normalizedDepth = Math.max(1, Math.min(COMPETITION_DEPTH_COUNT, Math.floor(Number(depth) || 1)));
+  const match = Array.isArray(snapshot?.depths)
+    ? snapshot.depths.find((entry) => Number(entry?.depth) === normalizedDepth)
+    : null;
+  return normalizeCompetitionMap(match?.map || snapshot?.map || createStarterMap(snapshot?.slotId || 'practice', normalizedDepth));
+}
+
+export function validateCompetitionDraft(input) {
+  const draft = normalizeCompetitionDraft(input, input?.slotId);
+  const depths = draft.depths.map((entry) => ({
+    depth: entry.depth,
+    ...validateCompetitionMap(entry.map)
+  }));
+  const errors = depths.flatMap((entry) => entry.errors.map((message) => `Depth ${entry.depth}: ${message}`));
+  const warnings = depths.flatMap((entry) => entry.warnings.map((message) => `Depth ${entry.depth}: ${message}`));
+  return {
+    valid: errors.length === 0,
+    errors,
+    warnings,
+    depths,
+    counts: depths.reduce((totals, entry) => ({
+      rooms: totals.rooms + entry.counts.rooms,
+      corridors: totals.corridors + entry.counts.corridors,
+      objects: totals.objects + entry.counts.objects,
+      enemies: totals.enemies + entry.counts.enemies,
+      loot: totals.loot + entry.counts.loot
+    }), { rooms: 0, corridors: 0, objects: 0, enemies: 0, loot: 0 })
   };
 }
 
@@ -277,15 +331,17 @@ export function competitionSlotForMode(mode) {
   return COMPETITION_SLOTS.find((slot) => slot.mode === mode)?.id || '';
 }
 
-function createStarterMap(slotId) {
+export function createStarterMap(slotId, depth = 1) {
+  const depthIndex = Math.max(0, Math.min(COMPETITION_DEPTH_COUNT - 1, Math.floor(Number(depth) || 1) - 1));
+  const branchOffset = (depthIndex % 3 - 1) * 0.3;
   const rooms = [
     room('lift', 1, 3, 2, 2, 'start', 'Lift Station'),
     room('vein', 3, 3, 2, 2, 'mining', 'Crystal Vein'),
     room('crossing', 5, 3, 2, 2, 'combat', 'Broken Crossing'),
-    room('cache', 5, 1, 2, 1.7, 'treasure', 'Prospector Cache'),
+    room('cache', 5, 1 - Math.abs(branchOffset), 2, 1.7, 'treasure', 'Prospector Cache'),
     room('works', 7, 3, 2, 2, 'mixed', 'Old Workings'),
-    room('nest', 7, 5, 2, 1.7, 'combat', 'Crawler Nest'),
-    room('vault', 9.5, 3, 2.4, 2.4, 'guardian', 'Guardian Vault')
+    room('nest', 7, 5 + Math.abs(branchOffset), 2, 1.7, 'combat', 'Crawler Nest'),
+    room('vault', 9.5, 3 + branchOffset, 2.4, 2.4, 'guardian', 'Guardian Vault')
   ];
   const links = [['lift', 'vein'], ['vein', 'crossing'], ['crossing', 'cache'], ['crossing', 'works'], ['works', 'nest'], ['works', 'vault']];
   const objects = [
@@ -293,23 +349,30 @@ function createStarterMap(slotId) {
     object('extraction', 'lift', -0.3, 0),
     object('crystal', 'vein', -0.2, -0.2, 4),
     object('gold', 'vein', 0.25, 0.18, 3),
-    object('slime', 'crossing', -0.2, 0, 2),
+    object(depthIndex >= 3 ? 'exploder' : 'slime', 'crossing', -0.2, 0, 2 + Math.floor(depthIndex / 2)),
     object('beetle', 'crossing', 0.25, 0.12),
     object('treasure', 'cache', 0, 0),
     object('weapon_blaster', 'cache', 0.25, 0),
     object('copper', 'works', -0.2, 0.18, 4),
-    object('crawler', 'nest', -0.15, 0, 3),
+    object('crawler', 'nest', -0.15, 0, 3 + depthIndex),
     object('spitter', 'nest', 0.28, -0.1),
     object('guardian', 'vault', 0.15, 0),
     object('health', 'vault', -0.3, 0.25)
   ];
   return {
-    name: `${COMPETITION_SLOTS.find((slot) => slot.id === slotId)?.name || 'MATT'} Layout`,
-    background: slotId === 'pass' ? 'crystal' : slotId === 'weekly' ? 'ruins' : slotId === 'arena' ? 'magma' : 'deep',
+    name: `${COMPETITION_SLOTS.find((slot) => slot.id === slotId)?.name || 'MATT'} · Depth ${depthIndex + 1}`,
+    background: depthIndex >= 4 ? 'ruins' : depthIndex >= 2 ? 'crystal' : slotId === 'pass' ? 'crystal' : slotId === 'weekly' ? 'ruins' : slotId === 'arena' ? 'magma' : 'deep',
     rooms,
     corridors: links.map(([from, to], index) => ({ id: `path-${index + 1}`, from, to, width: 0.75 })),
     objects
   };
+}
+
+function createStarterDepths(slotId) {
+  return Array.from({ length: COMPETITION_DEPTH_COUNT }, (_, index) => ({
+    depth: index + 1,
+    map: createStarterMap(slotId, index + 1)
+  }));
 }
 
 function defaultLoadout() {

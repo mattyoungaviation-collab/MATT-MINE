@@ -1237,13 +1237,39 @@ button,
 }
 
 .mine-detail-map canvas { display: block; width: 100%; aspect-ratio: 16 / 9; }
-.mine-detail-map > div,
+.mine-detail-map > [data-mine-loadout],
 .mine-loading-shell footer {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
   padding: 12px;
   border-top: 1px solid #282d38;
+}
+
+.mine-depth-tabs {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  padding: 10px;
+  border-bottom: 1px solid #282d38;
+  background: #101218;
+}
+
+.mine-depth-tabs button {
+  min-height: 34px;
+  border: 1px solid #303642;
+  border-radius: 8px;
+  background: #181b23;
+  color: #7f8899;
+  font: 900 9px Inter, sans-serif;
+  letter-spacing: .08em;
+  cursor: pointer;
+}
+
+.mine-depth-tabs button.active {
+  border-color: var(--slot-color);
+  background: color-mix(in srgb, var(--slot-color) 14%, #151821);
+  color: var(--slot-color);
 }
 
 .mine-detail-map span,
@@ -1309,7 +1335,8 @@ button,
   .competition-slot-card { min-height: 135px; }
   .mine-detail, .mine-loading-screen { padding: 8px; }
   .mine-detail-shell { padding: 18px 12px; }
-  .mine-detail-map > div { grid-template-columns: 1fr; }
+  .mine-detail-map > [data-mine-loadout] { grid-template-columns: 1fr; }
+  .mine-depth-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .mine-loading-shell header { padding: 18px; }
   .mine-loading-shell header > strong { width: 62px; height: 62px; font-size: 28px; }
 }

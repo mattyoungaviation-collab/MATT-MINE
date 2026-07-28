@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 import {
+  COMPETITION_DEPTH_COUNT,
   COMPETITION_SLOTS,
+  competitionMapForDepth,
   defaultCompetitionStudio,
   materializeCompetitionMap,
   normalizeCompetitionDraft,
@@ -24,11 +26,14 @@ test('Competition Studio owns five playable slots and keeps PvP visibly locked',
   ]);
   for (const slot of COMPETITION_SLOTS.filter((entry) => !entry.comingSoon)) {
     const draft = studio.slots[slot.id].draft;
-    const validation = validateCompetitionMap(draft.map);
-    assert.equal(validation.valid, true, validation.errors.join('\n'));
-    assert.equal(draft.map.objects.filter((object) => object.type === 'player').length, 1);
-    assert.equal(draft.map.objects.filter((object) => object.type === 'extraction').length, 1);
-    assert.ok(draft.map.objects.some((object) => object.type === 'guardian'));
+    assert.equal(draft.depths.length, COMPETITION_DEPTH_COUNT);
+    for (const depth of draft.depths) {
+      const validation = validateCompetitionMap(depth.map);
+      assert.equal(validation.valid, true, validation.errors.join('\n'));
+      assert.equal(depth.map.objects.filter((object) => object.type === 'player').length, 1);
+      assert.equal(depth.map.objects.filter((object) => object.type === 'extraction').length, 1);
+      assert.ok(depth.map.objects.some((object) => object.type === 'guardian'));
+    }
   }
   assert.equal(COMPETITION_SLOTS.at(-1).comingSoon, true);
 });
@@ -44,10 +49,23 @@ test('state migration adds safe Competition Studio drafts without disturbing leg
       }
     }
   });
-  assert.equal(migrated.version, 13);
+  assert.equal(migrated.version, 14);
   assert.equal(Object.keys(migrated.competitionStudio.slots).length, 6);
   assert.equal(migrated.competitionStudio.slots.practice.draft.slotId, 'practice');
+  assert.equal(migrated.competitionStudio.slots.practice.draft.depths.length, 5);
   assert.ok(migrated.wallets[address]);
+});
+
+test('legacy single maps migrate to five independently editable depth maps', () => {
+  const source = structuredClone(defaultCompetitionStudio(NOW).slots.daily.draft);
+  delete source.depths;
+  source.map.name = 'Legacy Daily Layout';
+  const normalized = normalizeCompetitionDraft(source, 'daily');
+  assert.equal(normalized.depths.length, 5);
+  assert.equal(competitionMapForDepth(normalized, 1).name, 'Legacy Daily Layout');
+  assert.match(competitionMapForDepth(normalized, 5).name, /Depth 5/);
+  normalized.depths[1].map.rooms[0].x = 2.5;
+  assert.notEqual(normalized.depths[0].map.rooms[0].x, normalized.depths[1].map.rooms[0].x);
 });
 
 test('map validation blocks disconnected objectives, duplicate spawns, and overlapping rooms', () => {
@@ -114,7 +132,7 @@ test('authored maps materialize exact player, Guardian, extraction, loot, and ha
   installBrowserStubs();
   const { MattMineGame } = await import('../src/game/GameV4.js');
   const draft = structuredClone(defaultCompetitionStudio(NOW).slots.practice.draft);
-  draft.map.objects.push({
+  draft.depths[0].map.objects.push({
     id: 'rockfall-test',
     type: 'rockfall',
     roomId: 'crossing',
@@ -122,8 +140,11 @@ test('authored maps materialize exact player, Guardian, extraction, loot, and ha
     y: -0.15,
     quantity: 1
   });
+  draft.depths[1].map.name = 'Independent Depth Two';
+  draft.depths[1].map.rooms.find((room) => room.id === 'lift').x = 2.5;
   const snapshot = {
     ...draft,
+    map: draft.depths[0].map,
     id: 'snapshot-practice-test',
     status: 'live',
     fingerprint: 'a'.repeat(64)
@@ -150,6 +171,14 @@ test('authored maps materialize exact player, Guardian, extraction, loot, and ha
   game.createPortal();
   assert.equal(game.portal.x, extractionPlacement.x);
   assert.equal(game.portal.y, extractionPlacement.y);
+
+  game.run.depth = 2;
+  game.generateDepth();
+  assert.equal(game.layout.source.name, 'Independent Depth Two');
+  assert.notEqual(
+    game.layout.startRoom.cellX,
+    materializeCompetitionMap(draft.depths[0].map).startRoom.cellX
+  );
 });
 
 test('production surfaces include the six-card hub, exact-map loading screen, and visual Admin editor', async () => {
@@ -161,6 +190,7 @@ test('production surfaces include the six-card hub, exact-map loading screen, an
   ]);
   assert.match(admin, /id="tab-studio"/);
   assert.match(admin, /id="studio-map-canvas"/);
+  assert.match(admin, /id="studio-depth-tabs"/);
   assert.match(admin, /PUBLISH VERSION/);
   assert.match(hub, /competition-slot-grid/);
   assert.match(hub, /PvP Mine/);

@@ -1,6 +1,9 @@
 import {
+  COMPETITION_DEPTH_COUNT,
   COMPETITION_SLOTS,
+  createStarterMap,
   normalizeCompetitionDraft,
+  validateCompetitionDraft,
   validateCompetitionMap
 } from './game/competitionStudio.js';
 import {
@@ -11,6 +14,7 @@ import {
 const studio = {
   payload: null,
   slotId: 'practice',
+  depth: 1,
   draft: null,
   selected: null,
   tool: 'select',
@@ -46,6 +50,12 @@ function bindOnce() {
     const button = event.target.closest('[data-studio-slot]');
     if (button) selectSlot(button.dataset.studioSlot);
   });
+  $('#studio-depth-tabs').addEventListener('click', (event) => {
+    const button = event.target.closest('[data-studio-depth]');
+    if (button) selectDepth(Number(button.dataset.studioDepth));
+  });
+  $('#studio-copy-depth').addEventListener('click', copyPreviousDepth);
+  $('#studio-reset-depth').addEventListener('click', resetCurrentDepth);
   document.querySelector('.studio-tool-grid').addEventListener('click', (event) => {
     const button = event.target.closest('[data-studio-tool]');
     if (!button) return;
@@ -85,6 +95,8 @@ function selectSlot(slotId) {
   if (!definition || !studio.payload?.studio?.slots?.[slotId]) return;
   studio.slotId = slotId;
   studio.draft = structuredClone(studio.payload.studio.slots[slotId].draft);
+  studio.depth = 1;
+  syncActiveMap();
   studio.selected = null;
   studio.tool = 'select';
   studio.connectFrom = '';
@@ -93,12 +105,33 @@ function selectSlot(slotId) {
 
 function renderAll() {
   renderSlotTabs();
+  renderDepthTabs();
   renderTools();
   renderCanvas();
   renderInspector();
   renderCompetition();
   renderVersions();
   renderValidation();
+}
+
+function selectDepth(depth) {
+  studio.depth = Math.max(1, Math.min(COMPETITION_DEPTH_COUNT, Math.floor(depth || 1)));
+  studio.selected = null;
+  studio.tool = 'select';
+  studio.connectFrom = '';
+  syncActiveMap();
+  renderAll();
+}
+
+function renderDepthTabs() {
+  if (!studio.draft) return;
+  $('#studio-depth-tabs').innerHTML = studio.draft.depths.map((entry) => {
+    const validation = validateCompetitionMap(entry.map);
+    return `<button type="button" data-studio-depth="${entry.depth}" class="${entry.depth === studio.depth ? 'active' : ''}">
+      <span>DEPTH</span><b>${entry.depth}</b><small>${validation.valid ? `${validation.counts.rooms} ROOMS` : `${validation.errors.length} BLOCKERS`}</small>
+    </button>`;
+  }).join('');
+  $('#studio-copy-depth').disabled = studio.depth === 1;
 }
 
 function renderSlotTabs() {
@@ -117,12 +150,13 @@ function renderTools() {
 
 function renderCanvas() {
   if (!studio.draft) return;
+  const map = activeMap();
   const canvas = $('#studio-map-canvas');
-  drawCompetitionMap(canvas, studio.draft.map);
+  drawCompetitionMap(canvas, map);
   const context = canvas.getContext('2d');
-  const transform = canvasTransform(canvas, studio.draft.map);
+  const transform = canvasTransform(canvas, map);
   if (studio.selected?.kind === 'room') {
-    const room = studio.draft.map.rooms.find((entry) => entry.id === studio.selected.id);
+    const room = map.rooms.find((entry) => entry.id === studio.selected.id);
     if (room) {
       const center = transform.point(room.x, room.y);
       context.strokeStyle = '#fff';
@@ -137,8 +171,8 @@ function renderCanvas() {
       context.setLineDash([]);
     }
   }
-  $('#studio-map-name').textContent = studio.draft.map.name;
-  const validation = validateCompetitionMap(studio.draft.map);
+  $('#studio-map-name').textContent = map.name;
+  const validation = validateCompetitionMap(map);
   $('#studio-map-counts').textContent = `${validation.counts.rooms} rooms · ${validation.counts.objects} objects · ${validation.counts.enemies} threats`;
 }
 
@@ -194,7 +228,7 @@ function pointerUp(event) {
 
 function addRoom(point) {
   const id = uniqueId('room');
-  studio.draft.map.rooms.push({
+  activeMap().rooms.push({
     id,
     x: snap(point.x, .5, 0, 11),
     y: snap(point.y, .5, 0, 7),
@@ -213,9 +247,9 @@ function addObject(room, point) {
   const type = $('#studio-object-type').value;
   const id = uniqueId(type);
   if (['player', 'extraction'].includes(type)) {
-    studio.draft.map.objects = studio.draft.map.objects.filter((object) => object.type !== type);
+    activeMap().objects = activeMap().objects.filter((object) => object.type !== type);
   }
-  studio.draft.map.objects.push({
+  activeMap().objects.push({
     id,
     type,
     roomId: room.id,
@@ -238,12 +272,12 @@ function connectRoom(roomId) {
     return;
   }
   if (studio.connectFrom !== roomId) {
-    const exists = studio.draft.map.corridors.some((corridor) =>
+    const exists = activeMap().corridors.some((corridor) =>
       [corridor.from, corridor.to].includes(studio.connectFrom) &&
       [corridor.from, corridor.to].includes(roomId)
     );
     if (!exists) {
-      studio.draft.map.corridors.push({
+      activeMap().corridors.push({
         id: uniqueId('path'),
         from: studio.connectFrom,
         to: roomId,
@@ -261,11 +295,11 @@ function deleteSelection() {
   if (!studio.selected) return;
   if (studio.selected.kind === 'room') {
     const id = studio.selected.id;
-    studio.draft.map.rooms = studio.draft.map.rooms.filter((room) => room.id !== id);
-    studio.draft.map.corridors = studio.draft.map.corridors.filter((corridor) => corridor.from !== id && corridor.to !== id);
-    studio.draft.map.objects = studio.draft.map.objects.filter((object) => object.roomId !== id);
+    activeMap().rooms = activeMap().rooms.filter((room) => room.id !== id);
+    activeMap().corridors = activeMap().corridors.filter((corridor) => corridor.from !== id && corridor.to !== id);
+    activeMap().objects = activeMap().objects.filter((object) => object.roomId !== id);
   } else {
-    studio.draft.map.objects = studio.draft.map.objects.filter((object) => object.id !== studio.selected.id);
+    activeMap().objects = activeMap().objects.filter((object) => object.id !== studio.selected.id);
   }
   studio.selected = null;
   studio.tool = 'select';
@@ -293,7 +327,7 @@ function renderInspector() {
     title.textContent = titleCase(object.type);
     fields.innerHTML = `
       <label>Object type<select data-inspector="type">${allObjectTypes().map((type) => `<option value="${type}" ${object.type === type ? 'selected' : ''}>${titleCase(type)}</option>`).join('')}</select></label>
-      <label>Room<select data-inspector="roomId">${studio.draft.map.rooms.map((room) => `<option value="${room.id}" ${object.roomId === room.id ? 'selected' : ''}>${escapeHtml(room.name)}</option>`).join('')}</select></label>
+      <label>Room<select data-inspector="roomId">${activeMap().rooms.map((room) => `<option value="${room.id}" ${object.roomId === room.id ? 'selected' : ''}>${escapeHtml(room.name)}</option>`).join('')}</select></label>
       ${field('Quantity', 'quantity', object.quantity, 'number', '1', '50', '1')}
       ${field('Horizontal position', 'x', object.x, 'number', '-.46', '.46', '.01')}
       ${field('Vertical position', 'y', object.y, 'number', '-.46', '.46', '.01')}`;
@@ -301,9 +335,9 @@ function renderInspector() {
   }
   title.textContent = 'Mine settings';
   fields.innerHTML = `
-    ${field('Map name', 'map.name', studio.draft.map.name, 'text')}
-    <label>Cave theme<select data-inspector="map.background">${['deep','crystal','magma','ruins'].map((theme) => `<option value="${theme}" ${studio.draft.map.background === theme ? 'selected' : ''}>${titleCase(theme)}</option>`).join('')}</select></label>
-    <div class="studio-tip"><b>PRODUCTION MAP</b><span>Published maps are immutable. Players, server replay, loading screens, and leaderboards all receive the same snapshot fingerprint.</span></div>`;
+    ${field('Map name', 'map.name', activeMap().name, 'text')}
+    <label>Cave theme<select data-inspector="map.background">${['deep','crystal','magma','ruins'].map((theme) => `<option value="${theme}" ${activeMap().background === theme ? 'selected' : ''}>${titleCase(theme)}</option>`).join('')}</select></label>
+    <div class="studio-tip"><b>DEPTH ${studio.depth} MAP</b><span>This depth is independent. Publishing locks all five depth maps into one immutable competition version.</span></div>`;
 }
 
 function updateInspector(event) {
@@ -311,7 +345,7 @@ function updateInspector(event) {
   if (!input) return;
   const key = input.dataset.inspector;
   const value = input.type === 'number' ? Number(input.value) : input.value;
-  if (key.startsWith('map.')) studio.draft.map[key.slice(4)] = value;
+  if (key.startsWith('map.')) activeMap()[key.slice(4)] = value;
   else if (studio.selected?.kind === 'room') roomById(studio.selected.id)[key] = value;
   else if (studio.selected?.kind === 'object') objectById(studio.selected.id)[key] = value;
   markDirty();
@@ -363,9 +397,11 @@ function updateCompetition(event) {
 }
 
 function renderValidation() {
-  const validation = validateCompetitionMap(studio.draft.map);
+  const validation = validateCompetitionDraft(studio.draft);
+  const current = validation.depths.find((entry) => entry.depth === studio.depth);
   $('#studio-validation').innerHTML = `
-    <div class="${validation.valid ? 'valid' : 'invalid'}"><b>${validation.valid ? 'MAP READY' : `${validation.errors.length} BLOCKER${validation.errors.length === 1 ? '' : 'S'}`}</b><span>${validation.valid ? 'All required routes and objectives are playable.' : escapeHtml(validation.errors[0])}</span></div>
+    <div class="${current.valid ? 'valid' : 'invalid'}"><b>${current.valid ? `DEPTH ${studio.depth} READY` : `DEPTH ${studio.depth}: ${current.errors.length} BLOCKER${current.errors.length === 1 ? '' : 'S'}`}</b><span>${current.valid ? 'Required routes and objectives are playable.' : escapeHtml(current.errors[0])}</span></div>
+    <small>${validation.valid ? 'ALL 5 DEPTHS READY TO PUBLISH' : `${validation.errors.length} TOTAL BLOCKERS ACROSS ALL DEPTHS`}</small>
     ${validation.warnings.map((warning) => `<small>⚠ ${escapeHtml(warning)}</small>`).join('')}`;
   $('#studio-publish').disabled = !validation.valid;
 }
@@ -388,6 +424,7 @@ async function saveDraft() {
     body: { draft: normalizeCompetitionDraft(studio.draft, studio.slotId), reason }
   });
   studio.draft = structuredClone(result.draft);
+  syncActiveMap();
   studio.payload.studio.slots[studio.slotId].draft = structuredClone(result.draft);
   setSaveState('DRAFT SAVED', 'ready');
   renderAll();
@@ -395,13 +432,13 @@ async function saveDraft() {
 
 async function publishSnapshot() {
   const reason = requiredReason();
-  const validation = validateCompetitionMap(studio.draft.map);
+  const validation = validateCompetitionDraft(studio.draft);
   if (!validation.valid) throw new Error(validation.errors[0]);
   await saveDraft();
   const effectiveAt = dateValue($('#studio-effective-at').value, Date.now());
   const expiresAt = $('#studio-expires-at').value ? dateValue($('#studio-expires-at').value, 0) : 0;
   if (expiresAt && expiresAt <= effectiveAt) throw new Error('The competition end must be after its start.');
-  if (!confirm(`Publish this immutable ${studio.slotId} map?\n\nEvery player and server replay will use this exact version.`)) return;
+  if (!confirm(`Publish all five immutable ${studio.slotId} depth maps?\n\nEvery player and server replay will use this exact version.`)) return;
   setSaveState('PUBLISHING', 'working');
   const result = await adminApi(`/api/admin/competition-studio/${studio.slotId}/publish`, {
     method: 'POST',
@@ -416,7 +453,7 @@ async function publishSnapshot() {
 }
 
 function testDraft() {
-  const validation = validateCompetitionMap(studio.draft.map);
+  const validation = validateCompetitionDraft(studio.draft);
   if (!validation.valid) throw new Error(validation.errors[0]);
   localStorage.setItem('matt-mine-studio-test-v1', JSON.stringify({
     ...normalizeCompetitionDraft(studio.draft, studio.slotId),
@@ -436,7 +473,7 @@ async function runAction(action) {
 }
 
 function hitTest(point) {
-  for (const object of [...studio.draft.map.objects].reverse()) {
+  for (const object of [...activeMap().objects].reverse()) {
     const room = roomById(object.roomId);
     const x = room.x + object.x * room.width;
     const y = room.y + object.y * room.height;
@@ -447,7 +484,7 @@ function hitTest(point) {
 }
 
 function roomAtPoint(point) {
-  return [...studio.draft.map.rooms].reverse().find((room) =>
+  return [...activeMap().rooms].reverse().find((room) =>
     point.x >= room.x - room.width / 2 &&
     point.x <= room.x + room.width / 2 &&
     point.y >= room.y - room.height / 2 &&
@@ -458,7 +495,7 @@ function roomAtPoint(point) {
 function eventPoint(event) {
   const canvas = $('#studio-map-canvas');
   const rect = canvas.getBoundingClientRect();
-  const transform = canvasTransform(canvas, studio.draft.map);
+  const transform = canvasTransform(canvas, activeMap());
   return transform.inverse(
     (event.clientX - rect.left) * canvas.width / rect.width,
     (event.clientY - rect.top) * canvas.height / rect.height
@@ -481,18 +518,18 @@ function canvasTransform(canvas, map) {
 }
 
 function roomById(id) {
-  return studio.draft.map.rooms.find((room) => room.id === id);
+  return activeMap().rooms.find((room) => room.id === id);
 }
 
 function objectById(id) {
-  return studio.draft.map.objects.find((object) => object.id === id);
+  return activeMap().objects.find((object) => object.id === id);
 }
 
 function uniqueId(prefix) {
   const used = new Set([
-    ...studio.draft.map.rooms.map((room) => room.id),
-    ...studio.draft.map.corridors.map((corridor) => corridor.id),
-    ...studio.draft.map.objects.map((object) => object.id)
+    ...activeMap().rooms.map((room) => room.id),
+    ...activeMap().corridors.map((corridor) => corridor.id),
+    ...activeMap().objects.map((object) => object.id)
   ]);
   let index = 1;
   while (used.has(`${prefix}-${index}`)) index += 1;
@@ -500,7 +537,40 @@ function uniqueId(prefix) {
 }
 
 function allObjectTypes() {
-  return ['player','extraction','guardian','slime','bat','crawler','beetle','exploder','ranged','stone','copper','gold','crystal','treasure','weapon_blaster','weapon_dynamite','health','upgrade','rockfall','crystal_field'];
+  return ['player','extraction','guardian','slime','bat','crawler','beetle','exploder','spitter','stone','copper','gold','crystal','treasure','weapon_blaster','weapon_dynamite','health','upgrade','rockfall','crystal_field'];
+}
+
+function activeMap() {
+  return studio.draft.depths.find((entry) => entry.depth === studio.depth)?.map || studio.draft.map;
+}
+
+function syncActiveMap() {
+  const map = activeMap();
+  if (map) studio.draft.map = map;
+}
+
+function copyPreviousDepth() {
+  if (studio.depth <= 1) return;
+  const previous = studio.draft.depths.find((entry) => entry.depth === studio.depth - 1)?.map;
+  const current = studio.draft.depths.find((entry) => entry.depth === studio.depth);
+  if (!previous || !current) return;
+  current.map = structuredClone(previous);
+  current.map.name = `${previous.name.replace(/\s*·\s*Depth\s+\d+$/i, '')} · Depth ${studio.depth}`;
+  syncActiveMap();
+  studio.selected = null;
+  markDirty();
+  renderAll();
+}
+
+function resetCurrentDepth() {
+  if (!confirm(`Reset Depth ${studio.depth} to its starter layout?`)) return;
+  const current = studio.draft.depths.find((entry) => entry.depth === studio.depth);
+  if (!current) return;
+  current.map = createStarterMap(studio.slotId, studio.depth);
+  syncActiveMap();
+  studio.selected = null;
+  markDirty();
+  renderAll();
 }
 
 function field(label, key, value, type, min = '', max = '', step = '', competition = false) {
