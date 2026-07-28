@@ -4,7 +4,8 @@ const MAX_ID_LENGTH = 120;
 const MAX_DETAILS_LENGTH = 500;
 const MAX_IDEMPOTENCY_KEY_LENGTH = 200;
 
-export const NUGGET_LEDGER_LIMIT = 5_000;
+// Retained as a compatibility export. Production ledgers are no longer truncated.
+export const NUGGET_LEDGER_LIMIT = Number.MAX_SAFE_INTEGER;
 
 export const NUGGET_LEDGER_TYPES = Object.freeze({
   RUN_EXTRACTION: 'RUN_EXTRACTION',
@@ -40,8 +41,7 @@ export function normalizeNuggetLedger(rawLedger, walletAddress = '', defaultTime
     .map((entry) => normalizeLedgerEntry(entry, normalizedAddress, safeDefaultTs))
     .filter(Boolean);
 
-  const deduped = dedupeByIdOrCompositeKey(ledger);
-  return deduped.slice(-NUGGET_LEDGER_LIMIT);
+  return dedupeByIdOrCompositeKey(ledger);
 }
 
 export function nuggetBalanceFromLedger(ledger = []) {
@@ -135,7 +135,6 @@ export function applyNuggetLedgerDelta(wallet, amount, options = {}) {
   };
 
   wallet.nuggetLedger.push(entry);
-  wallet.nuggetLedger = wallet.nuggetLedger.slice(-NUGGET_LEDGER_LIMIT);
   wallet.profile ||= {};
   wallet.profile.bankedNuggets = newBalance;
 
