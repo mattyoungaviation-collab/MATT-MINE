@@ -75,6 +75,20 @@ async function handleApiRequest({
     sendJson(response, 200, { ok: true, status });
     return;
   }
+  if (method === 'GET' && path === '/api/mines') {
+    const mines = await service.publicMineSlots();
+    sendJson(response, 200, { ok: true, ...mines });
+    return;
+  }
+  const publicMineMatch = path.match(/^\/api\/mines\/(practice|arena|daily|pass|weekly|pvp)$/);
+  if (method === 'GET' && publicMineMatch) {
+    const result = await service.publicMineSlot(
+      publicMineMatch[1],
+      requestUrl.searchParams.get('period') || ''
+    );
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
   if (method === 'POST' && path === '/api/auth/challenge') {
     const body = await readJson(request, maxRequestBytes);
     const expectedOrigin = requestOrigin(request, service.publicOrigin);
@@ -431,6 +445,34 @@ async function handleApiRequest({
   if (method === 'GET' && path === '/api/admin/game-tuning') {
     const result = await service.adminGameTuning(request.headers['x-matt-admin-key']);
     sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
+  if (method === 'GET' && path === '/api/admin/competition-studio') {
+    const result = await service.adminCompetitionStudio(request.headers['x-matt-admin-key']);
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
+  const competitionDraftMatch = path.match(/^\/api\/admin\/competition-studio\/(practice|arena|daily|pass|weekly)\/draft$/);
+  if (method === 'PUT' && competitionDraftMatch) {
+    const body = await readJson(request, maxRequestBytes);
+    const result = await service.saveCompetitionDraft(
+      request.headers['x-matt-admin-key'],
+      competitionDraftMatch[1],
+      body.draft,
+      body.reason
+    );
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
+  const competitionPublishMatch = path.match(/^\/api\/admin\/competition-studio\/(practice|arena|daily|pass|weekly)\/publish$/);
+  if (method === 'POST' && competitionPublishMatch) {
+    const body = await readJson(request, maxRequestBytes);
+    const result = await service.publishCompetitionSnapshot(
+      request.headers['x-matt-admin-key'],
+      competitionPublishMatch[1],
+      body
+    );
+    sendJson(response, 201, { ok: true, ...result });
     return;
   }
   const gameTuningMatch = path.match(/^\/api\/admin\/game-tuning\/(practice|free|paid|arena)$/);

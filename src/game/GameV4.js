@@ -28,6 +28,11 @@ export class MattMineGame extends V3MattMineGame {
       character: context.character && typeof context.character === 'object' ? { ...context.character } : {},
       weeklyStage: context.weeklyStage && typeof context.weeklyStage === 'object' ? { ...context.weeklyStage } : null,
       endlessSnapshot: context.endlessSnapshot && typeof context.endlessSnapshot === 'object' ? { ...context.endlessSnapshot } : null,
+      competitionSnapshot: context.competitionSnapshot && typeof context.competitionSnapshot === 'object'
+        ? structuredClone(context.competitionSnapshot)
+        : context.tuning?._competitionSnapshot && typeof context.tuning._competitionSnapshot === 'object'
+          ? structuredClone(context.tuning._competitionSnapshot)
+          : null,
       allowPaidRevive: context.allowPaidRevive === true,
       reviveInvulnerabilitySeconds: Math.max(0, Number(context.reviveInvulnerabilitySeconds || 3)),
       tuning: context.tuning && typeof context.tuning === 'object' ? { ...context.tuning } : {}

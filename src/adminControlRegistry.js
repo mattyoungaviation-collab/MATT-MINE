@@ -49,6 +49,10 @@ export const LINKED_ADMIN_CONTROL_GROUPS = Object.freeze([
 
 const STATIC_CONTROLS = Object.freeze([
   entry('overview', 'overview', 'Live readiness monitors', 'System status, deployment health, verifier gates, and linked-control consistency.', 'Status'),
+  entry('studio', 'studio:maps', 'Competition Studio map builder', 'Build exact room layouts, connections, enemy spawns, loot, objectives, and hazards for every playable mine.', 'Competition Studio'),
+  entry('studio', 'studio:loadout', 'Competition loadouts', 'Choose the character, starting weapons, health, ammo, drones, upgrades, and attempt rules for a mine.', 'Competition Studio'),
+  entry('studio', 'studio:schedule', 'Competition schedule', 'Publish an immutable server-owned mine snapshot for a future start and end time.', 'Competition Studio'),
+  entry('studio', 'studio:versions', 'Competition versions', 'Inspect active and scheduled map snapshots without changing competitions already in progress.', 'Competition Studio'),
   entry('operations', 'operations:maintenance', 'Maintenance mode', 'Immediately stop new production play while preserving stored data.', 'Live operations'),
   entry('operations', 'operations:free-ranked', 'Free ranked pause', 'Pause or resume Free ranked entry.', 'Live operations'),
   entry('operations', 'operations:pass-ranked', 'Pass ranked pause', 'Pause or resume Pass ranked entry.', 'Live operations'),

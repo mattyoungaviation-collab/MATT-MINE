@@ -1,0 +1,199 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+
+import {
+  COMPETITION_SLOTS,
+  defaultCompetitionStudio,
+  materializeCompetitionMap,
+  normalizeCompetitionDraft,
+  resolveCompetitionSnapshot,
+  validateCompetitionMap
+} from '../src/game/competitionStudio.js';
+import { defaultProfile } from '../src/game/storage.js';
+import { MemoryDatabase } from '../server/database.js';
+import { MattMineService } from '../server/service.js';
+import { defaultWalletState, normalizeServerState } from '../server/state.js';
+
+const NOW = Date.UTC(2026, 6, 28, 18, 0, 0);
+
+test('Competition Studio owns five playable slots and keeps PvP visibly locked', () => {
+  const studio = defaultCompetitionStudio(NOW);
+  assert.deepEqual(COMPETITION_SLOTS.map((slot) => slot.id), [
+    'practice', 'arena', 'daily', 'pass', 'weekly', 'pvp'
+  ]);
+  for (const slot of COMPETITION_SLOTS.filter((entry) => !entry.comingSoon)) {
+    const draft = studio.slots[slot.id].draft;
+    const validation = validateCompetitionMap(draft.map);
+    assert.equal(validation.valid, true, validation.errors.join('\n'));
+    assert.equal(draft.map.objects.filter((object) => object.type === 'player').length, 1);
+    assert.equal(draft.map.objects.filter((object) => object.type === 'extraction').length, 1);
+    assert.ok(draft.map.objects.some((object) => object.type === 'guardian'));
+  }
+  assert.equal(COMPETITION_SLOTS.at(-1).comingSoon, true);
+});
+
+test('state migration adds safe Competition Studio drafts without disturbing legacy data', () => {
+  const address = '0x1111111111111111111111111111111111111111';
+  const migrated = normalizeServerState({
+    version: 12,
+    wallets: {
+      [address]: {
+        ...defaultWalletState(address, NOW),
+        profile: { ...defaultProfile(), bankedNuggets: 42 }
+      }
+    }
+  });
+  assert.equal(migrated.version, 13);
+  assert.equal(Object.keys(migrated.competitionStudio.slots).length, 6);
+  assert.equal(migrated.competitionStudio.slots.practice.draft.slotId, 'practice');
+  assert.ok(migrated.wallets[address]);
+});
+
+test('map validation blocks disconnected objectives, duplicate spawns, and overlapping rooms', () => {
+  const draft = structuredClone(defaultCompetitionStudio(NOW).slots.daily.draft);
+  draft.map.corridors = [];
+  draft.map.objects.push({ ...draft.map.objects[0], id: 'second-player' });
+  draft.map.rooms[1].x = draft.map.rooms[0].x;
+  draft.map.rooms[1].y = draft.map.rooms[0].y;
+  const validation = validateCompetitionMap(draft.map);
+  assert.equal(validation.valid, false);
+  assert.ok(validation.errors.some((error) => error.includes('exactly one player spawn')));
+  assert.ok(validation.errors.some((error) => error.includes('Unreachable rooms')));
+  assert.ok(validation.errors.some((error) => error.includes('overlaps')));
+});
+
+test('published competition snapshots are scheduled, immutable, and selected by server time', async () => {
+  let randomCounter = 0;
+  const database = new MemoryDatabase();
+  const service = new MattMineService(database, {
+    now: () => NOW,
+    chainId: 2020,
+    adminKey: 'competition-admin',
+    randomHex(bytes) {
+      randomCounter += 1;
+      return randomCounter.toString(16).padStart(bytes * 2, '0');
+    }
+  });
+  const overview = await service.adminCompetitionStudio('competition-admin');
+  const draft = structuredClone(overview.studio.slots.daily.draft);
+  draft.name = 'Tomorrow’s Crystal Gauntlet';
+  draft.map.name = 'Crystal Gauntlet Layout';
+  await service.saveCompetitionDraft(
+    'competition-admin',
+    'daily',
+    draft,
+    'Prepare tomorrow’s official competition.'
+  );
+  const effectiveAt = NOW + 60_000;
+  const published = await service.publishCompetitionSnapshot('competition-admin', 'daily', {
+    effectiveAt,
+    expiresAt: effectiveAt + 86_400_000,
+    reason: 'Publish the reviewed daily map.'
+  });
+  assert.match(published.snapshot.id, /^snapshot_daily_/);
+  assert.match(published.snapshot.fingerprint, /^[a-f0-9]{64}$/);
+  const state = await database.read();
+  assert.notEqual(resolveCompetitionSnapshot(state.competitionStudio, 'daily', NOW).id, published.snapshot.id);
+  assert.equal(resolveCompetitionSnapshot(state.competitionStudio, 'daily', effectiveAt).id, published.snapshot.id);
+  assert.equal(
+    resolveCompetitionSnapshot(state.competitionStudio, 'daily', effectiveAt + 86_400_000).id,
+    'default-daily'
+  );
+
+  const changed = normalizeCompetitionDraft({
+    ...draft,
+    name: 'Later Draft'
+  }, 'daily');
+  await service.saveCompetitionDraft('competition-admin', 'daily', changed, 'Start a later draft.');
+  const after = await database.read();
+  assert.equal(after.competitionStudio.snapshots[published.snapshot.id].name, 'Tomorrow’s Crystal Gauntlet');
+});
+
+test('authored maps materialize exact player, Guardian, extraction, loot, and hazard positions', async () => {
+  installBrowserStubs();
+  const { MattMineGame } = await import('../src/game/GameV4.js');
+  const draft = structuredClone(defaultCompetitionStudio(NOW).slots.practice.draft);
+  draft.map.objects.push({
+    id: 'rockfall-test',
+    type: 'rockfall',
+    roomId: 'crossing',
+    x: 0.1,
+    y: -0.15,
+    quantity: 1
+  });
+  const snapshot = {
+    ...draft,
+    id: 'snapshot-practice-test',
+    status: 'live',
+    fingerprint: 'a'.repeat(64)
+  };
+  const materialized = materializeCompetitionMap(snapshot.map);
+  const guardianPlacement = materialized.objects.find((object) => object.type === 'guardian');
+  const extractionPlacement = materialized.objects.find((object) => object.type === 'extraction');
+  const canvas = browserCanvas();
+  const game = new MattMineGame(canvas, defaultProfile(), { headless: true });
+  game.startRun({
+    mode: 'practice',
+    seed: 'AUTHORED-MAP',
+    tuning: { usePerDepthRoomSpawns: false, _competitionSnapshot: snapshot },
+    competitionSnapshot: snapshot
+  });
+  assert.equal(game.layout.rooms.length, draft.map.rooms.length);
+  assert.equal(game.hazards.length, 1);
+  assert.equal(game.run.customExtraction.x, extractionPlacement.x);
+  assert.equal(game.run.customExtraction.y, extractionPlacement.y);
+  game.run.bossReady = true;
+  const guardian = game.awakenGuardian(game.layout.guardianRoom);
+  assert.equal(guardian.x, guardianPlacement.x);
+  assert.equal(guardian.y, guardianPlacement.y);
+  game.createPortal();
+  assert.equal(game.portal.x, extractionPlacement.x);
+  assert.equal(game.portal.y, extractionPlacement.y);
+});
+
+test('production surfaces include the six-card hub, exact-map loading screen, and visual Admin editor', async () => {
+  const [admin, main, hub, loading] = await Promise.all([
+    readFile(new URL('../admin.html', import.meta.url), 'utf8'),
+    readFile(new URL('../src/main.js', import.meta.url), 'utf8'),
+    readFile(new URL('../src/game/mineHub.js', import.meta.url), 'utf8'),
+    readFile(new URL('../src/game/mineLoadingScreen.js', import.meta.url), 'utf8')
+  ]);
+  assert.match(admin, /id="tab-studio"/);
+  assert.match(admin, /id="studio-map-canvas"/);
+  assert.match(admin, /PUBLISH VERSION/);
+  assert.match(hub, /competition-slot-grid/);
+  assert.match(hub, /PvP Mine/);
+  assert.match(loading, /MINIMUM_LOADING_MS = 10_000/);
+  assert.match(main, /competitionSnapshot/);
+});
+
+function installBrowserStubs() {
+  globalThis.window = { addEventListener() {}, devicePixelRatio: 1 };
+  globalThis.document = { querySelector() { return null; } };
+  globalThis.requestAnimationFrame = () => 1;
+}
+
+function browserCanvas() {
+  const gradient = { addColorStop() {} };
+  const context = new Proxy({}, {
+    get(target, property) {
+      if (property === 'createRadialGradient' || property === 'createLinearGradient') return () => gradient;
+      if (property in target) return target[property];
+      return () => {};
+    },
+    set(target, property, value) {
+      target[property] = value;
+      return true;
+    }
+  });
+  return {
+    width: 1280,
+    height: 720,
+    style: {},
+    dataset: {},
+    getContext: () => context,
+    addEventListener() {},
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 1280, height: 720 })
+  };
+}

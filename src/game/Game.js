@@ -799,6 +799,7 @@ export class MattMineGame {
   }
 
   crystalGoal() {
+    if (Number.isSafeInteger(this.run?.customCrystalGoal)) return this.run.customCrystalGoal;
     return CONFIG.crystalGoalBase + Math.floor((this.run.depth - 1) / 2);
   }
 

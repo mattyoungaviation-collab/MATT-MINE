@@ -24,6 +24,7 @@ import {
   PostgresCompetitiveReplayStore
 } from '../server/competitive-replay-store.js';
 import { CompetitiveReplayService } from '../server/competitive-replay-service.js';
+import { resolveCompetitionSnapshot } from '../src/game/competitionStudio.js';
 import {
   DirectRoninRevivePaymentVerifier,
   HmacAdvertisementVerifier
@@ -113,7 +114,13 @@ const arenaService = arenaEnabled
       safeAddress: process.env.MATT_MINE_ARENA_SAFE_ADDRESS || MATT_MINE_ADMIN_CONTRACTS.safe,
       getTuning: async (day) => {
         const state = await database.read();
-        return state.arenaTuningSchedule?.[day] || state.gameTuning.arena;
+        const tuning = structuredClone(state.arenaTuningSchedule?.[day] || state.gameTuning.arena);
+        tuning._competitionSnapshot = resolveCompetitionSnapshot(
+          state.competitionStudio,
+          'arena',
+          Date.parse(`${day}T12:00:00.000Z`)
+        );
+        return tuning;
       },
       liveEnabled: arenaLiveRequested
     }).init()

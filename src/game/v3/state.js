@@ -2,6 +2,10 @@ import { CONFIG, ORE_TYPES } from '../config.js';
 import { createMineLayout, randomPointInRoom, roomAt } from '../layout.js';
 import { clamp, random, randomRange, weightedChoice } from '../utils.js';
 import { bossPhaseForHealth, roomRequiresLock } from '../combat.js';
+import {
+  MAP_OBJECT_KINDS,
+  materializeCompetitionMap
+} from '../competitionStudio.js';
 
 export const stateMethods = {
   startRun() {
@@ -83,6 +87,16 @@ export const stateMethods = {
       blasterVolley: 1,
       emptyWeaponToast: 0
     };
+    const loadout = this.runContext?.competitionSnapshot?.loadout ||
+      tuning._competitionSnapshot?.loadout;
+    if (loadout) {
+      this.player.unlockedWeapons = {
+        pickaxe: true,
+        dynamite: loadout.availableWeapons?.includes('dynamite') && loadout.startingDynamite > 0,
+        blaster: loadout.availableWeapons?.includes('blaster') && loadout.startingWeapon === 'blaster'
+      };
+      this.player.weapon = loadout.startingWeapon || 'pickaxe';
+    }
     this.enemies = [];
     this.ores = [];
     this.pickups = [];
@@ -104,8 +118,12 @@ export const stateMethods = {
   generateDepth() {
     const arenaMode = this.runContext?.mode === 'arena';
     const tuning = this.runContext?.tuning || {};
-    this.layout = createMineLayout(tuning.roomsPerDepth || CONFIG.roomsPerDepth, tuning);
-    if (!arenaMode && this.layout.guardianRoom) {
+    const authoredMap = this.runContext?.competitionSnapshot?.map ||
+      tuning._competitionSnapshot?.map;
+    this.layout = authoredMap
+      ? materializeCompetitionMap(authoredMap)
+      : createMineLayout(tuning.roomsPerDepth || CONFIG.roomsPerDepth, tuning);
+    if (!authoredMap && !arenaMode && this.layout.guardianRoom) {
       this.layout.guardianRoom.width = Math.max(this.layout.guardianRoom.width, tuning.bossRoomWidth || 520);
       this.layout.guardianRoom.height = Math.max(this.layout.guardianRoom.height, tuning.bossRoomHeight || 390);
     }
@@ -115,6 +133,7 @@ export const stateMethods = {
     this.pickups = [];
     this.portal = null;
     this.projectiles = [];
+    this.hazards = [];
     this.roomStates = Object.fromEntries(this.layout.rooms.map((room) => [room.id, {
       triggered: false,
       locked: false,
@@ -135,6 +154,12 @@ export const stateMethods = {
       (arenaMode ? CONFIG.arenaSafeStartSeconds : (tuning.safeStartSeconds ?? CONFIG.safeStartSeconds));
 
     const luck = this.runContext?.mode === 'arena' ? 0 : this.profile.meta.luck || 0;
+    if (authoredMap) {
+      this.populateCompetitionMap(this.layout.objects, luck);
+      this.updateObjective();
+      this.updateHud();
+      return;
+    }
     const oreEntries = Object.entries(ORE_TYPES)
       .filter(([id]) => id !== 'cache')
       .map(([id, ore]) => ({ id, ...ore }));
@@ -178,6 +203,85 @@ export const stateMethods = {
     if (this.layout.treasureRoom) this.addOre({ id: 'cache', ...ORE_TYPES.cache }, this.layout.treasureRoom, luck, true);
     this.updateObjective();
     this.updateHud();
+  },
+  populateCompetitionMap(objects = [], luck = 0) {
+    const rooms = new Map(this.layout.rooms.map((room) => [room.id, room]));
+    const oreTypes = { ...ORE_TYPES, treasure: ORE_TYPES.cache, weapon_blaster: ORE_TYPES.cache, weapon_dynamite: ORE_TYPES.cache };
+    let requiredCrystals = 0;
+    for (const placed of objects) {
+      const room = rooms.get(placed.roomId);
+      if (!room || placed.type === 'player' || placed.type === 'extraction' || placed.type === 'guardian') continue;
+      if (MAP_OBJECT_KINDS.enemy.includes(placed.type)) {
+        for (let index = 0; index < placed.quantity; index += 1) {
+          const enemy = this.spawnEnemy(false, room, placed.type);
+          if (enemy) {
+            enemy.x = placed.x + index * 12;
+            enemy.y = placed.y + index * 9;
+          }
+        }
+        continue;
+      }
+      if (oreTypes[placed.type]) {
+        for (let index = 0; index < placed.quantity; index += 1) {
+          const type = placed.type === 'treasure' || placed.type.startsWith('weapon_')
+            ? { id: 'cache', ...ORE_TYPES.cache }
+            : { id: placed.type, ...oreTypes[placed.type] };
+          this.addOre(type, room, luck, type.id === 'cache');
+          const ore = this.ores.at(-1);
+          ore.x = placed.x + index * 13;
+          ore.y = placed.y + index * 10;
+          if (placed.type === 'weapon_blaster') ore.grantsWeapon = 'blaster';
+          if (placed.type === 'weapon_dynamite') ore.grantsWeapon = 'dynamite';
+          if (placed.type === 'crystal') requiredCrystals += 1;
+        }
+        continue;
+      }
+      if (placed.type === 'health' || placed.type === 'upgrade') {
+        this.pickups.push({
+          id: this.entityId++,
+          type: placed.type,
+          x: placed.x,
+          y: placed.y,
+          radius: 14,
+          value: placed.type === 'health' ? 30 : 0,
+          color: placed.type === 'health' ? '#ff657d' : '#68e6ff',
+          vx: 0,
+          vy: 0
+        });
+        continue;
+      }
+      if (MAP_OBJECT_KINDS.hazard.includes(placed.type)) {
+        this.hazards.push({
+          id: this.entityId++,
+          type: placed.type,
+          x: placed.x,
+          y: placed.y,
+          radius: placed.type === 'rockfall' ? 66 : 54,
+          phase: 0,
+          damageTimer: 0
+        });
+      }
+    }
+    const playerSpawn = objects.find((object) => object.type === 'player');
+    if (playerSpawn) {
+      this.player.x = playerSpawn.x;
+      this.player.y = playerSpawn.y;
+    }
+    const extraction = objects.find((object) => object.type === 'extraction');
+    this.run.customExtraction = extraction ? { x: extraction.x, y: extraction.y } : null;
+    this.run.customGuardianSpawns = objects
+      .filter((object) => object.type === 'guardian')
+      .flatMap((object) => Array.from({ length: object.quantity }, (_, index) => ({
+        x: object.x + index * 14,
+        y: object.y + index * 10
+      })));
+    this.run.customGuardianCount = Math.max(
+      1,
+      objects.filter((object) => object.type === 'guardian')
+        .reduce((sum, object) => sum + object.quantity, 0)
+    );
+    this.run.customCrystalGoal = requiredCrystals > 0 ? Math.min(requiredCrystals, 3) : 0;
+    if (this.run.customCrystalGoal === 0) this.run.bossReady = true;
   },
   addOre(type, room, luck = 0, forceRich = false) {
     const tuning = this.runContext?.tuning || {};
@@ -224,7 +328,8 @@ export const stateMethods = {
   },
   update(dt) {
     this.run.elapsed += dt;
-    this.player.droneCount = clamp(Math.floor(Number(this.player.droneCount) || 0), 0, 4);
+    const maximumDrones = Math.max(0, Math.min(4, Math.floor(this.runContext?.tuning?.maximumDrones ?? 4)));
+    this.player.droneCount = clamp(Math.floor(Number(this.player.droneCount) || 0), 0, maximumDrones);
     this.player.attackTimer -= dt;
     this.player.invulnerable -= dt;
     this.player.hitFlash -= dt;
@@ -250,12 +355,29 @@ export const stateMethods = {
     this.updateProjectiles(dt);
     this.updateEnemies(dt);
     this.updatePickups(dt);
+    this.updateCompetitionHazards(dt);
     this.updateEffects(dt);
     this.updatePortal();
     this.updateCamera(dt);
     this.updateCurrentRoom();
     this.updateObjective();
     this.updateHud();
+  },
+  updateCompetitionHazards(dt) {
+    if (!Array.isArray(this.hazards) || !this.hazards.length) return;
+    for (const hazard of this.hazards) {
+      hazard.phase += dt;
+      hazard.damageTimer = Math.max(0, hazard.damageTimer - dt);
+      const range = Math.hypot(this.player.x - hazard.x, this.player.y - hazard.y);
+      if (range > hazard.radius + this.player.radius || hazard.damageTimer > 0) continue;
+      if (hazard.type === 'crystal_field') {
+        hazard.damageTimer = 0.72;
+        this.damagePlayer(9, Math.atan2(this.player.y - hazard.y, this.player.x - hazard.x));
+      } else if (hazard.type === 'rockfall' && hazard.phase % 2.8 > 2.05) {
+        hazard.damageTimer = 1.2;
+        this.damagePlayer(22, Math.atan2(this.player.y - hazard.y, this.player.x - hazard.x));
+      }
+    }
   },
   updatePlayerMovement(dt) {
     const move = this.input.movement();
@@ -410,7 +532,15 @@ export const stateMethods = {
         pickup.y += Math.sin(angle) * pull * dt;
       }
       if (dist < pickup.radius + this.player.radius + 5) {
-        this.run.rawNuggets += pickup.value;
+        if (pickup.type === 'health') {
+          this.player.health = Math.min(this.player.maxHealth, this.player.health + pickup.value);
+          this.addFloater(this.player.x, this.player.y - 52, `+${pickup.value} HEALTH`, '#ff8798');
+        } else if (pickup.type === 'upgrade') {
+          this.gainXp(this.player.nextXp);
+          this.addFloater(this.player.x, this.player.y - 52, 'UPGRADE READY', '#68e6ff');
+        } else {
+          this.run.rawNuggets += pickup.value;
+        }
         if (pickup.type === 'crystal') {
           this.run.crystals += 1;
           this.audio.play('crystal');

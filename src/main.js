@@ -46,6 +46,8 @@ import {
   normalizeArenaPlayer
 } from './game/arena.js';
 import { ArenaTranscript } from './game/arenaTranscript.js';
+import { mountMineHub } from './game/mineHub.js';
+import { showMineLoadingScreen } from './game/mineLoadingScreen.js';
 import { loadProfile, saveProfile } from './game/storage.js';
 import { loadGameplayPreferences, saveGameplayPreferences } from './game/preferences.js';
 import { RoninWalletAdapter } from './game/walletAdapter.js';
@@ -792,6 +794,11 @@ async function startRunMode(mode) {
       if (mode === RUN_MODES.PAID && paymentStatus) {
         paymentStatus.confirmedCredits = Math.max(0, paymentStatus.confirmedCredits - 1);
       }
+      await showMineLoadingScreen({
+        id: run.competitionSlotId || slotIdForMode(mode),
+        name: run.competitionSnapshot?.name || mode,
+        snapshot: run.competitionSnapshot || run.tuning?._competitionSnapshot
+      });
       game.startRun({
         mode: run.mode,
         seed: run.seed,
@@ -803,6 +810,7 @@ async function startRunMode(mode) {
         character: run.character,
         weeklyStage: run.weeklyStage,
         endlessSnapshot: run.endlessSnapshot,
+        competitionSnapshot: run.competitionSnapshot,
         allowPaidRevive: run.paidReviveEligible === true,
         reviveInvulnerabilitySeconds: run.reviveInvulnerabilitySeconds
       });
@@ -831,13 +839,20 @@ async function startRunMode(mode) {
     return;
   }
   const tuning = await apiClient.gameTuning(mode).catch(() => ({}));
+  const mine = await apiClient.mineSlot(slotIdForMode(mode)).catch(() => null);
+  await showMineLoadingScreen(mine?.slot || {
+    id: slotIdForMode(mode),
+    name: 'MATT Mine',
+    snapshot: tuning?._competitionSnapshot
+  });
   game.startRun({
     mode: result.mode,
     seed: result.seed,
     day: result.day,
     week: result.week,
     rewardWeight: result.rewardWeight,
-    tuning
+    tuning,
+    competitionSnapshot: mine?.slot?.snapshot || tuning?._competitionSnapshot
   });
   updateMenu();
 }
@@ -1796,12 +1811,18 @@ async function startArenaRun() {
       ...arenaPlayer,
       unusedAttempts: Math.max(0, arenaPlayer.unusedAttempts - 1)
     });
+    await showMineLoadingScreen({
+      id: 'arena',
+      name: run.challenge?.tuning?._competitionSnapshot?.name || 'MATT Arena',
+      snapshot: run.challenge?.tuning?._competitionSnapshot
+    });
     game.startRun({
       mode: 'arena',
       seed: run.dailySeed || run.seed,
       day: run.day,
       rewardWeight: 0,
-      tuning: run.challenge?.tuning || {}
+      tuning: run.challenge?.tuning || {},
+      competitionSnapshot: run.challenge?.tuning?._competitionSnapshot
     });
   } catch (error) {
     activeArenaRun = null;
@@ -2630,6 +2651,78 @@ function abbreviateAddress(address) {
     : String(address || '');
 }
 
+function slotIdForMode(mode) {
+  return {
+    [RUN_MODES.PRACTICE]: 'practice',
+    [RUN_MODES.FREE]: 'daily',
+    [RUN_MODES.PAID]: 'pass',
+    [RUN_MODES.WEEKLY]: 'weekly',
+    arena: 'arena'
+  }[mode] || 'practice';
+}
+
+async function startCompetitionStudioTest() {
+  if (new URLSearchParams(window.location.search).get('studioTest') !== '1') return false;
+  let snapshot;
+  try {
+    snapshot = JSON.parse(localStorage.getItem('matt-mine-studio-test-v1') || 'null');
+  } catch {}
+  if (!snapshot?.map || snapshot.status !== 'test') {
+    toast('Studio test map was not found. Return to Admin and press Test in Practice.');
+    return false;
+  }
+  await showMineLoadingScreen({
+    id: 'practice',
+    name: snapshot.name || 'Studio Test Mine',
+    snapshot
+  }, { minimumMs: 2_500 });
+  game.startRun({
+    mode: RUN_MODES.PRACTICE,
+    seed: `STUDIO-TEST-${snapshot.id || Date.now()}`,
+    day: new Date().toISOString().slice(0, 10),
+    rewardWeight: 0,
+    tuning: {
+      usePerDepthRoomSpawns: false,
+      _competitionSnapshot: snapshot,
+      safeStartSeconds: snapshot.rules?.safeStartSeconds ?? 4,
+      maximumDrones: snapshot.loadout?.maximumDrones ?? 4,
+      ignorePermanentUpgrades: snapshot.loadout?.permanentUpgrades === false,
+      disableRunUpgrades: snapshot.loadout?.runUpgrades === false
+    },
+    competitionSnapshot: snapshot,
+    allowPaidRevive: false
+  });
+  toast('ADMIN TEST · rewards and scores disabled');
+  return true;
+}
+
+window.addEventListener('mattmine:slot-enter', (event) => {
+  const slot = event.detail?.slot;
+  if (!slot || slot.comingSoon) return;
+  if (slot.id === 'arena') {
+    void openArena();
+    return;
+  }
+  if (slot.id === 'pass') {
+    if (
+      serverConfig?.paidRunsEnabled === true &&
+      (paymentStatus?.confirmedCredits || 0) > 0 &&
+      paymentStatus?.pass?.active
+    ) {
+      void startRunMode(RUN_MODES.PAID);
+    } else {
+      openPass();
+    }
+    return;
+  }
+  const mode = {
+    practice: RUN_MODES.PRACTICE,
+    daily: RUN_MODES.FREE,
+    weekly: RUN_MODES.WEEKLY
+  }[slot.id];
+  if (mode) void startRunMode(mode);
+});
+
 async function bootstrapServer() {
   const today = new Date().toISOString().slice(0, 10);
   dailyMinePreviewCleanup?.();
@@ -2649,14 +2742,17 @@ async function bootstrapServer() {
       await refreshPaymentStatus(true);
     }
     await refreshArena(true);
+    await mountMineHub(apiClient);
   } catch (error) {
     console.warn('[MATT Mine] Server bootstrap unavailable.', error);
+    await mountMineHub(apiClient);
   }
   const adminButton = $('#admin-button');
   adminButton.hidden = !isLocalPreview;
   adminButton.parentElement?.classList.toggle('public-menu', !isLocalPreview);
   updateMenu();
   if (serverPlayer?.identity?.requiresSetup) openMinerProfile(true);
+  await startCompetitionStudioTest();
 }
 
 updateMenu();

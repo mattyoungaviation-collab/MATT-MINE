@@ -52,6 +52,7 @@ test('global Admin search indexes every schema and finds deeply nested balance c
   const claims = searchAdminControls(index, 'pause claims');
   assert.equal(claims[0].tab, 'operations');
 
+  assert.equal(searchAdminControls(index, 'competition map builder')[0].id, 'studio:maps');
   assert.equal(searchAdminControls(index, 'daily purchase cap')[0].id, 'economy:daily-cap');
   assert.equal(searchAdminControls(index, 'arena treasury seed')[0].id, 'arena:seed');
   assert.equal(searchAdminControls(index, 'player award')[0].id, 'players:award');

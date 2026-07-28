@@ -67,6 +67,7 @@ async function activateTab(name) {
   document.querySelectorAll('#tabs [data-tab]').forEach((button) => button.classList.toggle('active', button.dataset.tab === name));
   document.querySelectorAll('.tab').forEach((tab) => tab.classList.toggle('active', tab.id === `tab-${name}`));
   if (name === 'players') await loadWallets();
+  if (name === 'studio') await window.mattMineCompetitionStudio?.load?.();
   if (name === 'tuning') await loadTuning();
   if (name === 'expansion') await loadExpansion();
   if (name === 'nugget-economy') await window.mattMineAdminEconomy?.load?.();

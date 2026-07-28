@@ -46,6 +46,13 @@ import {
   openWeeklyStage,
   weeklyLeaderboard
 } from './competition-engine.js';
+import {
+  COMPETITION_SLOTS,
+  competitionSlotForMode,
+  normalizeCompetitionDraft,
+  resolveCompetitionSnapshot,
+  validateCompetitionMap
+} from '../src/game/competitionStudio.js';
 
 const FREE_PASS_XP = 25;
 const PAID_PASS_XP = 100;
@@ -587,6 +594,26 @@ export class MattMineService {
           'Ranked entries are closed for the final five minutes so the leaderboard can finalize exactly at zero.'
         );
       }
+      const competitionSlotId = competitionSlotForMode(normalizedMode);
+      const competitionSnapshot = competitionSlotId
+        ? resolveCompetitionSnapshot(state.competitionStudio, competitionSlotId, timestamp)
+        : null;
+      const authoredAttemptLimit = Math.max(0, Math.floor(competitionSnapshot?.rules?.attemptLimit || 0));
+      if (authoredAttemptLimit > 0 && normalizedMode === SERVER_RUN_MODES.PAID) {
+        const attempts = Object.values(state.runs).filter((existingRun) =>
+          existingRun.address === session.address &&
+          existingRun.day === day &&
+          existingRun.competitionSlotId === competitionSlotId &&
+          existingRun.competitionSnapshot?.id === competitionSnapshot.id &&
+          ['active', 'finished'].includes(existingRun.status)
+        ).length;
+        assertApi(
+          attempts < authoredAttemptLimit,
+          409,
+          'competition_attempt_limit',
+          `This mine allows ${authoredAttemptLimit} attempt${authoredAttemptLimit === 1 ? '' : 's'} per UTC day.`
+        );
+      }
       if (normalizedMode === SERVER_RUN_MODES.FREE) {
         const daily = wallet.daily[day] || { freeRunUsed: false, freeRunId: '' };
         assertApi(!daily.freeRunUsed, 409, 'free_run_used', 'Today’s free ranked run has already been used.');
@@ -628,10 +655,15 @@ export class MattMineService {
       const selectedCharacterId = normalizedMode === SERVER_RUN_MODES.WEEKLY
         ? state.expansionConfig.settings.weeklyLockedCharacter
         : wallet.expansion?.selectedCharacter || 'matt';
-      const selectedCharacter = state.expansionConfig?.characters?.[selectedCharacterId];
+      const lockedCharacterId = competitionSnapshot?.loadout?.characterId || selectedCharacterId;
+      const selectedCharacter = state.expansionConfig?.characters?.[lockedCharacterId];
       assertApi(
         selectedCharacter?.enabled === true &&
-        (normalizedMode === SERVER_RUN_MODES.WEEKLY || wallet.expansion?.ownedCharacters?.includes(selectedCharacterId)),
+        (
+          normalizedMode === SERVER_RUN_MODES.WEEKLY ||
+          lockedCharacterId === competitionSnapshot?.loadout?.characterId ||
+          wallet.expansion?.ownedCharacters?.includes(lockedCharacterId)
+        ),
         409,
         'selected_character_unavailable',
         'Select an enabled character owned by this wallet.'
@@ -643,6 +675,17 @@ export class MattMineService {
           ? state.expansionConfig.settings.deathRetentionPaid
           : state.expansionConfig.settings.deathRetentionPractice;
       baseTuning.deathKeepFraction = retentionPercent / 100;
+      if (competitionSnapshot) {
+        baseTuning._competitionSnapshot = structuredClone(competitionSnapshot);
+        baseTuning.safeStartSeconds = competitionSnapshot.rules.safeStartSeconds;
+        baseTuning.playerMaxHealth = competitionSnapshot.loadout.startingHealth;
+        baseTuning.dynamiteStartAmmo = competitionSnapshot.loadout.startingDynamite;
+        baseTuning.blasterEnergy = competitionSnapshot.loadout.blasterEnergy;
+        baseTuning.ignorePermanentUpgrades = !competitionSnapshot.loadout.permanentUpgrades;
+        baseTuning.disableRunUpgrades = !competitionSnapshot.loadout.runUpgrades;
+        baseTuning.maximumDrones = competitionSnapshot.loadout.maximumDrones;
+        baseTuning.usePerDepthRoomSpawns = false;
+      }
       if (weeklyStage) {
         baseTuning.enemyHealthMultiplier = (baseTuning.enemyHealthMultiplier || 1) * weeklyStage.difficulty;
         baseTuning.enemyDamageMultiplier = (baseTuning.enemyDamageMultiplier || 1) * weeklyStage.difficulty;
@@ -678,8 +721,10 @@ export class MattMineService {
         passXpAwarded: 0,
         result: null,
         playerProfile: structuredClone(wallet.profile),
-        characterId: selectedCharacterId,
+        characterId: lockedCharacterId,
         character: structuredClone(selectedCharacter),
+        competitionSlotId,
+        competitionSnapshot: competitionSnapshot ? structuredClone(competitionSnapshot) : null,
         weeklyStage,
         endlessSnapshot: immutableEndlessSnapshot,
         tuning: baseTuning
@@ -703,8 +748,10 @@ export class MattMineService {
             : 0,
         expiresAt: serverRun.expiresAt,
         tuning: structuredClone(serverRun.tuning),
-        characterId: selectedCharacterId,
+        characterId: lockedCharacterId,
         character: structuredClone(selectedCharacter),
+        competitionSlotId,
+        competitionSnapshot: competitionSnapshot ? structuredClone(competitionSnapshot) : null,
         weeklyStage: weeklyStage ? structuredClone(weeklyStage) : null,
         endlessSnapshot: serverRun.endlessSnapshot ? structuredClone(serverRun.endlessSnapshot) : null
       };
@@ -962,6 +1009,140 @@ export class MattMineService {
       }
     }
     return leaderboardForState(state, mode, week, viewerAddress);
+  }
+
+  async publicMineSlots() {
+    const timestamp = this.now();
+    const state = await this.database.read();
+    return {
+      generatedAt: timestamp,
+      slots: COMPETITION_SLOTS.map((definition) => {
+        const snapshot = resolveCompetitionSnapshot(state.competitionStudio, definition.id, timestamp);
+        return publicCompetitionSlot(definition, snapshot);
+      })
+    };
+  }
+
+  async publicMineSlot(slotId, requestedPeriod = '') {
+    const definition = COMPETITION_SLOTS.find((slot) => slot.id === String(slotId || ''));
+    assertApi(definition, 404, 'mine_slot_unknown', 'That mine does not exist.');
+    const timestamp = this.now();
+    const state = await this.database.read();
+    const snapshot = resolveCompetitionSnapshot(state.competitionStudio, definition.id, timestamp);
+    let leaderboard = null;
+    if (definition.id === 'daily' || definition.id === 'pass') {
+      const week = normalizeWeekKey(requestedPeriod, utcWeekKey(timestamp));
+      leaderboard = await this.leaderboardFor(definition.mode, week, '0x0000000000000000000000000000000000000000');
+    } else if (definition.id === 'arena' && this.arenaService) {
+      leaderboard = enrichLeaderboardAppearances(
+        await this.arenaLeaderboard(requestedPeriod),
+        state
+      );
+    } else if (definition.id === 'weekly') {
+      const week = normalizeWeekKey(requestedPeriod, utcWeekKey(timestamp));
+      const rows = weeklyLeaderboard(state.weeklyCompetition, week);
+      leaderboard = {
+        mode: 'weekly',
+        week,
+        finalized: week !== utcWeekKey(timestamp),
+        participantCount: rows.length,
+        rows: rows.slice(0, 100).map((row) => ({
+          ...row,
+          walletId: state.wallets[row.address]?.identity?.name || abbreviateAddress(row.address),
+          identity: publicIdentity(state.wallets[row.address]),
+          appearance: publicLeaderboardAppearance(state.wallets[row.address])
+        }))
+      };
+    }
+    return {
+      slot: publicCompetitionSlot(definition, snapshot),
+      leaderboard
+    };
+  }
+
+  async adminCompetitionStudio(adminKey) {
+    this.assertAdminKey(adminKey);
+    const state = await this.database.read();
+    return {
+      definitions: COMPETITION_SLOTS,
+      studio: structuredClone(state.competitionStudio),
+      active: Object.fromEntries(COMPETITION_SLOTS.map((slot) => [
+        slot.id,
+        resolveCompetitionSnapshot(state.competitionStudio, slot.id, this.now())
+      ]))
+    };
+  }
+
+  async saveCompetitionDraft(adminKey, slotId, input, reason) {
+    this.assertAdminKey(adminKey);
+    const definition = COMPETITION_SLOTS.find((slot) => slot.id === slotId && !slot.comingSoon);
+    assertApi(definition, 404, 'mine_slot_locked', 'That mine slot cannot be edited.');
+    const normalizedReason = normalizeAdminReason(reason);
+    let draft;
+    try {
+      draft = normalizeCompetitionDraft(input, slotId);
+    } catch (error) {
+      throw new ApiError(422, 'competition_draft_invalid', error.message);
+    }
+    const validation = validateCompetitionMap(draft.map);
+    const timestamp = this.now();
+    return this.database.transact((state) => {
+      state.competitionStudio.slots[slotId].draft = draft;
+      state.competitionStudio.slots[slotId].updatedAt = timestamp;
+      state.competitionStudio.updatedAt = timestamp;
+      addAudit(
+        state,
+        'SERVER_ADMIN',
+        'COMPETITION_DRAFT_SAVED',
+        `${slotId}: ${validation.counts.rooms} rooms, ${validation.counts.objects} objects; ${normalizedReason}`,
+        timestamp
+      );
+      return { draft: structuredClone(draft), validation, reason: normalizedReason };
+    });
+  }
+
+  async publishCompetitionSnapshot(adminKey, slotId, input = {}) {
+    this.assertAdminKey(adminKey);
+    const definition = COMPETITION_SLOTS.find((slot) => slot.id === slotId && !slot.comingSoon);
+    assertApi(definition, 404, 'mine_slot_locked', 'That mine slot cannot be published.');
+    const normalizedReason = normalizeAdminReason(input.reason);
+    const effectiveAt = strictInteger(Number(input.effectiveAt), 'effective_at', 0, 9_007_199_254_740_991);
+    const expiresAt = strictInteger(Number(input.expiresAt || 0), 'expires_at', 0, 9_007_199_254_740_991);
+    assertApi(!expiresAt || expiresAt > effectiveAt, 422, 'competition_window_invalid', 'The end time must be after the start time.');
+    const timestamp = this.now();
+    return this.database.transact((state) => {
+      const draft = normalizeCompetitionDraft(state.competitionStudio.slots[slotId].draft, slotId);
+      const validation = validateCompetitionMap(draft.map);
+      assertApi(validation.valid, 422, 'competition_map_invalid', validation.errors[0] || 'The map is not playable.');
+      const id = `snapshot_${slotId}_${this.randomHex(10)}`;
+      const canonical = JSON.stringify({ ...draft, effectiveAt, expiresAt });
+      const fingerprint = createHash('sha256').update(canonical).digest('hex');
+      const snapshot = {
+        ...structuredClone(draft),
+        id,
+        status: effectiveAt <= timestamp ? 'live' : 'scheduled',
+        effectiveAt,
+        expiresAt,
+        publishedAt: timestamp,
+        publishedBy: 'SERVER_ADMIN',
+        fingerprint
+      };
+      state.competitionStudio.snapshots[id] = snapshot;
+      state.competitionStudio.slots[slotId].scheduledSnapshotIds.push(id);
+      if (effectiveAt <= timestamp && (!expiresAt || expiresAt > timestamp)) {
+        state.competitionStudio.slots[slotId].activeSnapshotId = id;
+      }
+      state.competitionStudio.slots[slotId].updatedAt = timestamp;
+      state.competitionStudio.updatedAt = timestamp;
+      addAudit(
+        state,
+        'SERVER_ADMIN',
+        'COMPETITION_SNAPSHOT_PUBLISHED',
+        `${slotId} ${id} ${fingerprint}; ${normalizedReason}`,
+        timestamp
+      );
+      return { snapshot: structuredClone(snapshot), validation, reason: normalizedReason };
+    });
   }
 
   async rewardClaims(token) {
@@ -1830,6 +2011,25 @@ function publicLeaderboardAppearance(wallet) {
     frame: equipped.frame || '',
     title: equipped.title || '',
     trophy: equipped.trophy || ''
+  };
+}
+
+function publicCompetitionSlot(definition, snapshot) {
+  return {
+    ...definition,
+    state: definition.comingSoon ? 'coming-soon' : snapshot?.status || 'draft',
+    snapshot: snapshot ? {
+      id: snapshot.id,
+      name: snapshot.name,
+      subtitle: snapshot.subtitle,
+      status: snapshot.status,
+      effectiveAt: snapshot.effectiveAt,
+      expiresAt: snapshot.expiresAt,
+      fingerprint: snapshot.fingerprint,
+      map: structuredClone(snapshot.map),
+      loadout: structuredClone(snapshot.loadout),
+      rules: structuredClone(snapshot.rules)
+    } : null
   };
 }
 
