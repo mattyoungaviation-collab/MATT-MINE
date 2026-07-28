@@ -5,7 +5,7 @@ import {
   decodeArenaControlState
 } from '../src/game/arenaControls.js';
 import { MattMineGame } from '../src/game/GameV4.js';
-import { defaultProfile } from '../src/game/storage.js';
+import { defaultProfile, normalizeProfile } from '../src/game/storage.js';
 import { assertApi } from './errors.js';
 
 export const ARENA_TRANSCRIPT_VERSION = 'matt-arena-input-v2';
@@ -86,17 +86,21 @@ export function replayArenaTranscript(challenge, inputEvents, options = {}) {
   let damageTaken = 0;
   let guardianTimeMs = Number.MAX_SAFE_INTEGER;
   let finishSeen = false;
-  const game = new MattMineGame(null, defaultProfile(), {
-    headless: true,
-    audio: NOOP_AUDIO,
-    onArenaEvent(event) {
-      if (event?.type === 'damage_taken') damageTaken += Math.max(0, Number(event.amount) || 0);
-      if (event?.type === 'guardian_defeated') guardianTimeMs = Math.min(guardianTimeMs, Number(event.tick) || 0);
-    },
-    onRunEnd(result) {
-      finalResult = { ...result };
+  const game = new MattMineGame(
+    null,
+    options.profile ? normalizeProfile(options.profile) : defaultProfile(),
+    {
+      headless: true,
+      audio: NOOP_AUDIO,
+      onArenaEvent(event) {
+        if (event?.type === 'damage_taken') damageTaken += Math.max(0, Number(event.amount) || 0);
+        if (event?.type === 'guardian_defeated') guardianTimeMs = Math.min(guardianTimeMs, Number(event.tick) || 0);
+      },
+      onRunEnd(result) {
+        finalResult = { ...result };
+      }
     }
-  });
+  );
   const replayMode = options.mode || 'arena';
   assertApi(
     replayMode === 'arena' || COMPETITIVE_REPLAY_MODES.includes(replayMode),

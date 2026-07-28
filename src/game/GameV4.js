@@ -158,14 +158,17 @@ export class MattMineGame extends V3MattMineGame {
   }
 
   chooseRunUpgrade(id) {
+    const deterministic = DETERMINISTIC_SERVER_MODES.has(this.runContext?.mode);
     if (
-      DETERMINISTIC_SERVER_MODES.has(this.runContext?.mode) &&
+      deterministic &&
       this.state === 'levelup' &&
       this.pendingUpgradeIds?.includes(id)
     ) {
       this.recordArenaCommand('upgrade', id);
     }
-    return super.chooseRunUpgrade(id);
+    return deterministic
+      ? withRandomSource(this.arenaRandom, () => super.chooseRunUpgrade(id))
+      : super.chooseRunUpgrade(id);
   }
 
   descend() {
