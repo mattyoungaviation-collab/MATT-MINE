@@ -18,6 +18,15 @@ test('advertisement rewards remain blocked until provider completion verificatio
 
   await assert.rejects(
     service.updateAdminNuggetEconomy(
+      'wrong-admin-key',
+      { advertisementRewardsEnabled: true },
+      'Attempt to enable advertisements without authorization.'
+    ),
+    (error) => error.code === 'admin_key_rejected'
+  );
+
+  await assert.rejects(
+    service.updateAdminNuggetEconomy(
       'test-admin-key',
       { advertisementRewardsEnabled: true },
       'Attempt to enable advertisements without provider verification.'
