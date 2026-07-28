@@ -4,6 +4,20 @@
 
 MATT Mine is a standalone browser action roguelite and daily Web3 competition on Ronin. It has its own launch website, wallet identity, separate Free and Pass leaderboards, live Pass and paid-run payments, verified contracts, and a production persistence path independent from MATT Hub.
 
+## v3.1 Competition Studio
+
+- Present Practice, MATT Arena, Daily, Pass, and Seven-Day mines together in one clear 3-by-2 mine hub, with PvP visibly reserved as coming soon.
+- Open each competition card to inspect its exact map, loadout, rules, and dedicated leaderboard before entering.
+- Show the selected server-owned mine map for a minimum of ten seconds before gameplay begins.
+- Let authorized administrators visually draw rooms and connections, drag exact enemy, ore, loot, hazard, boss, extraction, and player placements, and configure starting loadouts.
+- Save editable drafts and publish immutable, SHA-256-addressed competition snapshots for future time windows.
+- Bind authored snapshots to runs and deterministic Arena replay so client changes cannot alter layouts, rewards, scores, or paid competition results.
+- Persist all Studio drafts and versions in the existing versioned server state and Postgres production store.
+
+PvP remains display-only and cannot be configured, published, entered, scored, or rewarded. No MATT contract or payment rule is changed by this release.
+
+See [`docs/COMPETITION_STUDIO_V31.md`](docs/COMPETITION_STUDIO_V31.md).
+
 ## v3.0 production expansion
 
 - Tune every real Guardian attack independently across all three phases with deterministic, per-boss cooldown scheduling and completed-run telemetry.

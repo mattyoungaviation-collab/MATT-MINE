@@ -237,10 +237,15 @@ export function addEconomyAudit(state, actor, action, details, timestamp = Date.
 }
 
 export class MemoryNuggetEconomyStore {
-  constructor(initialState = defaultNuggetEconomyState()) {
+  constructor(initialState = defaultNuggetEconomyState(), options = {}) {
     this.kind = 'memory';
-    this.state = normalizeNuggetEconomyState(initialState);
+    this.now = options.now || Date.now;
+    this.state = normalizeNuggetEconomyState(initialState, this.now());
     this.queue = Promise.resolve();
+  }
+
+  setClock(now) {
+    if (typeof now === 'function') this.now = now;
   }
 
   async init() {
@@ -256,7 +261,7 @@ export class MemoryNuggetEconomyStore {
     const operation = this.queue.then(async () => {
       const draft = structuredClone(this.state);
       const result = await mutator(draft);
-      this.state = normalizeNuggetEconomyState(draft);
+      this.state = normalizeNuggetEconomyState(draft, this.now());
       await this.persist();
       return structuredClone(result);
     });
@@ -270,7 +275,7 @@ export class MemoryNuggetEconomyStore {
 
 export class JsonNuggetEconomyStore extends MemoryNuggetEconomyStore {
   constructor(filePath, options = {}) {
-    super(options.initialState);
+    super(options.initialState, options);
     this.kind = 'json-file';
     this.filePath = filePath;
     this.now = options.now || Date.now;

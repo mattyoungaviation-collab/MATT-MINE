@@ -120,7 +120,10 @@ export const balanceControlMethods = {
         ? Math.max(3, this.player.dynamiteEvery - 1)
         : 5;
     }
-    if (id === 'drone') this.player.droneCount = Math.min(4, this.player.droneCount + 1);
+    if (id === 'drone') {
+      const maximumDrones = Math.max(0, Math.min(4, Math.floor(tuning.maximumDrones ?? 4)));
+      this.player.droneCount = Math.min(maximumDrones, this.player.droneCount + 1);
+    }
     if (id === 'fortune') this.run.lootMultiplier *= 1 + (tuning.runFortunePerLevel ?? .15);
     if (id === 'blastercap') {
       this.player.blasterEnergyMax += tuning.blasterCapacityPerLevel ?? 30;

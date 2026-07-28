@@ -18,7 +18,17 @@ export const pickupMethods = {
       }
 
       if (dist < pickup.radius + this.player.radius + 5) {
-        this.run.rawNuggets += pickup.value;
+        if (pickup.type === 'health') {
+          this.player.health = Math.min(this.player.maxHealth, this.player.health + Math.max(1, pickup.value || 30));
+          this.addFloater(this.player.x, this.player.y - 52, 'HEALTH', '#ff8193');
+          this.audio.play('crystal');
+        } else if (pickup.type === 'upgrade') {
+          this.gainXp(Math.max(this.player.nextXp, 1));
+          this.addFloater(this.player.x, this.player.y - 52, 'UPGRADE', '#68e6ff');
+          this.audio.play('crystal');
+        } else {
+          this.run.rawNuggets += pickup.value;
+        }
         if (pickup.type === 'crystal') {
           this.run.crystals += 1;
           this.audio.play('crystal');

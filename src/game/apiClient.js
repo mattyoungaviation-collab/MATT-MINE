@@ -27,6 +27,15 @@ export class MattMineApiClient {
     return response.status;
   }
 
+  async mineSlots() {
+    return this.request('/api/mines');
+  }
+
+  async mineSlot(slotId, period = '') {
+    const query = period ? `?${new URLSearchParams({ period })}` : '';
+    return this.request(`/api/mines/${encodeURIComponent(slotId)}${query}`);
+  }
+
   async createChallenge(address, chainId, origin = globalThis.location?.origin) {
     const response = await this.request('/api/auth/challenge', {
       method: 'POST',

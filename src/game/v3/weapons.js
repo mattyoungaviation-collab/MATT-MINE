@@ -302,7 +302,13 @@ export const weaponsMethods = {
     }
     if (ore.kind === 'cache') {
       this.player.blasterEnergy = this.player.blasterEnergyMax;
-      if (this.runContext?.mode === 'arena') {
+      if (ore.grantsWeapon === 'dynamite') {
+        this.unlockWeapon('dynamite', 3);
+        this.hooks.onToast?.('Pocket Dynamite recovered from the cache');
+      } else if (ore.grantsWeapon === 'blaster') {
+        this.unlockWeapon('blaster');
+        this.hooks.onToast?.('Crystal Blaster recovered from the cache');
+      } else if (this.runContext?.mode === 'arena') {
         this.unlockWeapon('blaster');
         this.hooks.onToast?.('Crystal Blaster recovered from the cache');
       } else this.offerBlasterUpgrade();

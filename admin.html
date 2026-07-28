@@ -37,6 +37,7 @@
         <span class="nav-label">People</span>
         <button data-tab="players"><span>Players</span><small>Search &amp; moderation</small></button>
         <span class="nav-label">Game</span>
+        <button data-tab="studio"><span>Competition Studio</span><small>Maps &amp; schedules</small></button>
         <button data-tab="tuning"><span>Game Balance</span><small>Per-lobby tuning</small></button>
         <button data-tab="expansion"><span>Modes &amp; Characters</span><small>Features &amp; roster</small></button>
         <span class="nav-label">Economy</span>
@@ -131,6 +132,69 @@
         </div>
         <div class="panel table-wrap"><table><thead><tr><th>Wallet</th><th>Status</th><th>Nuggets</th><th>Runs</th><th>Credits</th><th>Action</th></tr></thead><tbody id="wallet-rows"></tbody></table></div>
         <div id="wallet-detail" class="panel" hidden></div>
+      </section>
+
+      <section id="tab-studio" class="tab">
+        <div class="section-heading studio-heading">
+          <div><p class="eyebrow">COMPETITION STUDIO</p><h2>Build tomorrow's mines</h2><p>Design the route, place every encounter, lock the loadout, validate, and publish one immutable competition.</p></div>
+          <div id="studio-save-state" class="studio-save-state">LOADING</div>
+        </div>
+        <div id="studio-slot-tabs" class="studio-slot-tabs" role="tablist" aria-label="Competition slots"></div>
+        <div class="studio-workspace">
+          <aside class="studio-toolbox panel">
+            <div class="studio-panel-title"><span>BUILD</span><b>Map tools</b></div>
+            <div class="studio-tool-grid">
+              <button type="button" data-studio-tool="select" class="active">SELECT</button>
+              <button type="button" data-studio-tool="room">+ ROOM</button>
+              <button type="button" data-studio-tool="connect">CONNECT</button>
+              <button type="button" data-studio-tool="delete" class="danger">DELETE</button>
+            </div>
+            <label>Place object
+              <select id="studio-object-type">
+                <optgroup label="Objectives"><option value="player">Player spawn</option><option value="extraction">Extraction lift</option><option value="guardian">Guardian</option></optgroup>
+                <optgroup label="Enemies"><option value="slime">Slime</option><option value="bat">Bat</option><option value="crawler">Crawler</option><option value="beetle">Crystal beetle</option><option value="exploder">Exploder</option><option value="ranged">Ranged enemy</option></optgroup>
+                <optgroup label="Ore"><option value="stone">Stone</option><option value="copper">Copper</option><option value="gold">Gold</option><option value="crystal">MATT crystal</option></optgroup>
+                <optgroup label="Loot"><option value="treasure">Treasure chest</option><option value="weapon_blaster">Blaster cache</option><option value="weapon_dynamite">Dynamite cache</option><option value="health">Health pickup</option><option value="upgrade">Upgrade pickup</option></optgroup>
+                <optgroup label="Hazards"><option value="rockfall">Rockfall</option><option value="crystal_field">Crystal field</option></optgroup>
+              </select>
+            </label>
+            <button id="studio-place-object" type="button">PLACE OBJECT</button>
+            <div class="studio-tip"><b>HOW TO BUILD</b><span>Drag rooms and objects. Connect rooms by clicking two rooms. Everything snaps safely to the grid.</span></div>
+            <div id="studio-validation" class="studio-validation"></div>
+          </aside>
+          <div class="studio-canvas-panel panel">
+            <div class="studio-canvas-toolbar">
+              <span><b id="studio-map-name">Mine map</b><small id="studio-map-counts"></small></span>
+              <span class="studio-legend"><i class="start"></i>Start <i class="loot"></i>Loot <i class="danger"></i>Enemy <i class="boss"></i>Boss</span>
+            </div>
+            <canvas id="studio-map-canvas" width="1200" height="760" aria-label="Visual mine map builder"></canvas>
+            <div class="studio-canvas-footer"><span>DRAG TO MOVE</span><span>CLICK TO INSPECT</span><span>CONNECT TWO ROOMS</span></div>
+          </div>
+          <aside class="studio-inspector panel">
+            <div class="studio-panel-title"><span>INSPECT</span><b id="studio-inspector-title">Mine settings</b></div>
+            <div id="studio-inspector-fields"></div>
+          </aside>
+        </div>
+        <div class="studio-config-deck">
+          <details class="panel" open>
+            <summary><strong>Competition &amp; loadout</strong><span>What every player starts with</span></summary>
+            <div id="studio-competition-fields" class="tuning-grid"></div>
+          </details>
+          <details class="panel">
+            <summary><strong>Published versions</strong><span>Immutable history</span></summary>
+            <div id="studio-version-list" class="studio-version-list"></div>
+          </details>
+        </div>
+        <div class="studio-publish-bar panel">
+          <label>Required reason<input id="studio-reason" maxlength="240" placeholder="Why is this map or competition changing?" required></label>
+          <label>Goes live<input id="studio-effective-at" type="datetime-local"></label>
+          <label>Ends (optional)<input id="studio-expires-at" type="datetime-local"></label>
+          <div>
+            <button id="studio-test" type="button" class="ghost">TEST IN PRACTICE</button>
+            <button id="studio-save" type="button">SAVE DRAFT</button>
+            <button id="studio-publish" type="button">PUBLISH VERSION</button>
+          </div>
+        </div>
       </section>
 
       <section id="tab-tuning" class="tab">
@@ -335,5 +399,6 @@
   <script type="module" src="/src/admin.js"></script>
   <script type="module" src="/src/adminPlayerEditor.js"></script>
   <script type="module" src="/src/adminEconomy.js"></script>
+  <script type="module" src="/src/adminCompetitionStudio.js"></script>
 </body>
 </html>

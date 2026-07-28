@@ -54,6 +54,7 @@ export const renderWorldMethods = {
     }
 
     this.drawRoomGates(ctx);
+    this.drawCompetitionHazards(ctx);
 
     for (const rock of this.decor) {
       if (!this.inView(rock, 30)) continue;
@@ -78,6 +79,45 @@ export const renderWorldMethods = {
       ctx.lineTo(-rock.radius * 0.1, -rock.radius * 0.3);
       ctx.lineTo(rock.radius * 0.55, rock.radius * 0.02);
       ctx.stroke();
+      ctx.restore();
+    }
+  },
+
+  drawCompetitionHazards(ctx) {
+    for (const hazard of this.hazards || []) {
+      if (!this.inView(hazard, 90)) continue;
+      const pulse = 0.55 + Math.sin((hazard.phase || 0) * 5) * 0.15;
+      ctx.save();
+      ctx.translate(hazard.x, hazard.y);
+      if (hazard.type === 'crystal_field') {
+        ctx.fillStyle = `rgba(87,218,255,${0.14 + pulse * 0.12})`;
+        ctx.strokeStyle = 'rgba(156,239,255,0.78)';
+        ctx.lineWidth = 3;
+        ctx.shadowColor = '#56dfff';
+        ctx.shadowBlur = 24;
+        for (let index = 0; index < 7; index += 1) {
+          const angle = (index / 7) * TAU;
+          polygon(ctx, Math.cos(angle) * 29, Math.sin(angle) * 23, 12 + index % 3 * 3, 5);
+          ctx.fill();
+          ctx.stroke();
+        }
+      } else {
+        const active = (hazard.phase || 0) % 2.8 > 2.05;
+        ctx.fillStyle = active ? 'rgba(255,79,50,0.32)' : `rgba(255,179,66,${0.08 + pulse * 0.08})`;
+        ctx.strokeStyle = active ? '#ff5d42' : 'rgba(255,199,92,0.62)';
+        ctx.lineWidth = active ? 5 : 2;
+        ctx.setLineDash(active ? [] : [10, 9]);
+        ctx.beginPath();
+        ctx.arc(0, 0, hazard.radius, 0, TAU);
+        ctx.fill();
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#d5c6aa';
+        for (let index = 0; index < 5; index += 1) {
+          polygon(ctx, Math.cos(index * 2.1) * 31, Math.sin(index * 1.7) * 25, 8 + index % 2 * 4, 6);
+          ctx.fill();
+        }
+      }
       ctx.restore();
     }
   },

@@ -16,6 +16,10 @@ import {
   normalizeExpansionConfig,
   normalizePlayerExpansion
 } from '../src/game/expansionConfig.js';
+import {
+  defaultCompetitionStudio,
+  normalizeCompetitionStudio
+} from '../src/game/competitionStudio.js';
 
 export function defaultServerState() {
   return {
@@ -31,6 +35,7 @@ export function defaultServerState() {
     expansionConfig: defaultExpansionConfig(),
     weeklyCompetition: { weeks: {} },
     endlessCompetition: { seasons: {} },
+    competitionStudio: defaultCompetitionStudio(),
     arenaTuningSchedule: {},
     operations: defaultOperations(),
     audit: []
@@ -71,6 +76,7 @@ export function normalizeServerState(input = {}) {
     expansionConfig: safeExpansionConfig(source.expansionConfig),
     weeklyCompetition: normalizeCompetitionStore(source.weeklyCompetition, 'weeks'),
     endlessCompetition: normalizeCompetitionStore(source.endlessCompetition, 'seasons'),
+    competitionStudio: normalizeCompetitionStudio(source.competitionStudio),
     arenaTuningSchedule: normalizeArenaTuningSchedule(source.arenaTuningSchedule),
     operations: normalizeOperations(source.operations),
     audit: Array.isArray(source.audit)

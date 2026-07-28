@@ -20,6 +20,7 @@ export class ProductionMattMineService extends AdminMattMineService {
   constructor(database, options = {}) {
     super(database, options);
     this.nuggetEconomyStore = options.nuggetEconomyStore || null;
+    this.nuggetEconomyStore?.setClock?.(this.now);
     this.nuggetPaymentVerifier = options.nuggetPaymentVerifier || null;
     this.nuggetPaymentsEnabled =
       options.nuggetPaymentsEnabled === true &&

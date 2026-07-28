@@ -15,7 +15,7 @@ export const spawnTuningMethods = {
     const tuning = this.runContext?.tuning || {};
     if (tuning.usePerDepthRoomSpawns === false) {
       const result = stateMethods.generateDepth.call(this);
-      this.run.bossGoal = 1;
+      this.run.bossGoal = Math.max(1, Math.floor(this.run.customGuardianCount || 1));
       this.run.bossKills = 0;
       return result;
     }
@@ -175,11 +175,21 @@ export const spawnTuningMethods = {
       guardianReinforcement: false
     };
     this.enemies.push(enemy);
+    if (isBoss && Array.isArray(this.run?.customGuardianSpawns)) {
+      const authoredPosition = this.run.customGuardianSpawns.shift();
+      if (authoredPosition) {
+        enemy.x = authoredPosition.x;
+        enemy.y = authoredPosition.y;
+      }
+    }
     return enemy;
   },
 
   awakenGuardian(room) {
-    if (this.runContext?.tuning?.usePerDepthRoomSpawns === false) {
+    if (
+      this.runContext?.tuning?.usePerDepthRoomSpawns === false &&
+      !this.runContext?.competitionSnapshot
+    ) {
       return roomsMethods.awakenGuardian.call(this, room);
     }
     if (
@@ -213,7 +223,13 @@ export const spawnTuningMethods = {
   },
 
   killEnemy(enemy) {
-    if (!enemy?.isBoss || this.runContext?.tuning?.usePerDepthRoomSpawns === false) {
+    if (
+      !enemy?.isBoss ||
+      (
+        this.runContext?.tuning?.usePerDepthRoomSpawns === false &&
+        !this.runContext?.competitionSnapshot
+      )
+    ) {
       return enemySpawnMethods.killEnemy.call(this, enemy);
     }
 
@@ -266,6 +282,26 @@ export const spawnTuningMethods = {
     this.unlockRoom(vaultId, false);
     this.hooks.onToast?.('Guardian force defeated — return to the Lift Station');
     this.createPortal();
+  },
+
+  createPortal() {
+    if (this.run?.customExtraction) {
+      this.portal = {
+        x: this.run.customExtraction.x,
+        y: this.run.customExtraction.y,
+        radius: 58,
+        phase: 0,
+        promptShown: false
+      };
+      return;
+    }
+    this.portal = {
+      x: this.layout.startRoom.x,
+      y: this.layout.startRoom.y,
+      radius: 58,
+      phase: 0,
+      promptShown: false
+    };
   },
 
   updateObjective() {
