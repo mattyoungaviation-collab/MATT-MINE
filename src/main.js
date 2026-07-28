@@ -2271,10 +2271,13 @@ function renderControllerMappings(mapping = defaultControllerProfile().mapping) 
   </label>`).join('');
 }
 
+const CHARACTER_PORTRAIT_IDS = new Set(['ronke', 'axie', 'orc']);
+
 function renderCharacters() {
   const characters = serverPlayer?.expansion?.characters || {};
   const selected = serverPlayer?.expansion?.selectedCharacter || 'matt';
   $('#character-grid').innerHTML = Object.entries(characters).map(([id, character]) => `<article class="character-card ${selected === id ? 'selected' : ''}">
+    ${CHARACTER_PORTRAIT_IDS.has(id) ? `<span class="character-portrait character-portrait-${id}" role="img" aria-label="${escapeHtml(character.name)}"></span>` : ''}
     <div><strong>${escapeHtml(character.name)}</strong><small>${escapeHtml(character.description)}</small></div>
     <p>HP ${Math.round(character.baseHealth)} · SPEED ${Number(character.movementSpeed).toFixed(2)}× · PICKAXE ${Number(character.pickaxeDamage).toFixed(2)}× · BLASTER ${Number(character.blasterDamage).toFixed(2)}×</p>
     <button type="button" data-character-select="${id}" ${!character.enabled ? 'disabled' : ''}>${character.owned ? (selected === id ? 'SELECTED' : 'SELECT') : character.nuggetPrice > 0 ? `UNLOCK · ${Number(character.nuggetPrice).toLocaleString()} NUGGETS` : 'LOCKED'}</button>
