@@ -1,3 +1,4 @@
+import '../practiceClaimFlow.js';
 import '../nuggetShop.js';
 
 export const GAMEPLAY_PREFERENCES_KEY = 'matt-mine-gameplay-preferences-v1';
