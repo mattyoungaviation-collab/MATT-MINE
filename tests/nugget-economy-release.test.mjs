@@ -115,7 +115,8 @@ test('player and Admin interfaces expose the structured production economy witho
   assert.match(shop, /Your verified purchase history/);
   assert.match(practice, /nuggets\/practice\/quote/);
   assert.match(practice, /quoteId/);
-  assert.doesNotMatch(practice, /practice-claim-hash/);
+  assert.match(practice, /hashWrap\.hidden = true/);
+  assert.doesNotMatch(practice, /Paste a valid 32-byte/);
   assert.match(admin, /Nuggets per MATT/);
   assert.match(admin, /UTC daily purchase cap/);
   assert.match(admin, /Purchase packages/);
