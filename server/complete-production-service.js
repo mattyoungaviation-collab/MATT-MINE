@@ -38,6 +38,35 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     };
   }
 
+  async quoteNuggetPurchase(token, input = {}) {
+    await this.pruneExpiredPaymentReservations();
+    return super.quoteNuggetPurchase(token, input);
+  }
+
+  async quotePracticeClaim(token, input = {}) {
+    await this.pruneExpiredPaymentReservations();
+    return super.quotePracticeClaim(token, input);
+  }
+
+  async reserveQuote(input) {
+    await this.pruneExpiredPaymentReservations();
+    return super.reserveQuote(input);
+  }
+
+  async practiceRunClaim(token, payload = {}) {
+    const result = await super.practiceRunClaim(token, payload);
+    if (!result?.alreadyConfirmed || result.profile) return result;
+    const player = await super.me(token);
+    const state = await this.database.read();
+    const wallet = state.wallets[player.address];
+    const claim = wallet?.practiceClaims?.[payload.runId];
+    return {
+      ...result,
+      practiceClaim: structuredClone(claim || result.practiceClaim),
+      profile: structuredClone(wallet?.profile || player.profile)
+    };
+  }
+
   async finishRun(token, payload) {
     const result = await super.finishRun(token, payload);
     const runId = String(payload?.runId || '');
@@ -105,5 +134,26 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     return corrected
       ? { ...result, profile: corrected }
       : result;
+  }
+
+  async pruneExpiredPaymentReservations() {
+    if (!this.nuggetEconomyStore) return;
+    const timestamp = this.now();
+    await this.nuggetEconomyStore.transact((state) => {
+      for (const quote of Object.values(state.quotes || {})) {
+        if (quote.status !== 'verifying' || quote.expiresAt > timestamp) continue;
+        quote.status = 'expired';
+        quote.failureCode = 'quote_expired';
+        const hash = quote.transactionHash;
+        quote.transactionHash = '';
+        if (
+          hash &&
+          state.usedTransactions?.[hash]?.quoteId === quote.id &&
+          !state.usedTransactions[hash].confirmedAt
+        ) {
+          delete state.usedTransactions[hash];
+        }
+      }
+    });
   }
 }
