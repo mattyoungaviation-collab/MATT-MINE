@@ -92,6 +92,7 @@ let arenaCountdownTimer = null;
 let activeArenaRun = null;
 let activeArenaTranscript = null;
 let activePracticeClaim = null;
+let resultScreenMode = null;
 let activeBetaTools = null;
 let paidRevivePending = false;
 let pendingAvatarDataUrl = '';
@@ -627,6 +628,10 @@ function clearPracticeClaimPanel() {
 function renderPracticeClaimPanel(claim, result) {
   const panel = $('#practice-claim-panel');
   if (!panel) return;
+  if (resultScreenMode !== RUN_MODES.PRACTICE) {
+    clearPracticeClaimPanel();
+    return;
+  }
   const info = $('#practice-claim-info');
   const hashInput = $('#practice-claim-hash');
   const claimButton = $('#practice-claim-button');
@@ -762,6 +767,7 @@ async function startRunMode(mode) {
     (mode === RUN_MODES.PRACTICE && serverPlayer) ||
     [RUN_MODES.BETA, RUN_MODES.WEEKLY, RUN_MODES.ENDLESS].includes(mode);
   activePracticeClaim = null;
+  resultScreenMode = null;
   clearPracticeClaimPanel();
   if (useServer) {
     if (!serverPlayer) {
@@ -957,6 +963,7 @@ const game = new MattMineGame(canvas, profile, {
     $('#play-again-button').hidden = false;
     $('#menu-button').hidden = false;
     const mode = result.mode || RUN_MODES.PRACTICE;
+    resultScreenMode = mode;
     const serverRun = activeServerRun && activeServerRun.mode === mode ? activeServerRun : null;
     const arenaRun = activeArenaRun && mode === 'arena' ? activeArenaRun : null;
     const recorded = serverRun || arenaRun
@@ -985,6 +992,7 @@ const game = new MattMineGame(canvas, profile, {
   },
   onPaidReviveOffered(data) {
     paidRevivePending = true;
+    resultScreenMode = activeServerRun?.mode || RUN_MODES.PRACTICE;
     $('#end-kicker').textContent = 'MINER DOWN';
     $('#end-title').textContent = 'Revive This Run?';
     $('#run-mode-result').textContent = modeLabel(
@@ -1017,6 +1025,8 @@ const game = new MattMineGame(canvas, profile, {
     game.setProfile(profile);
   },
   onMenu() {
+    resultScreenMode = null;
+    clearPracticeClaimPanel();
     showScreen('menu');
     setGameplayUi(false);
     updateMenu();

@@ -1,0 +1,38 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+
+const root = fileURLToPath(new URL('../', import.meta.url));
+
+test('the production lobby presents the map and four play choices in one command deck', async () => {
+  const html = await readFile(`${root}index.html`, 'utf8');
+  assert.match(html, /class="lobby-topbar"/);
+  assert.match(html, /class="matchmaking-layout"/);
+  assert.match(html, /class="mine-briefing-column"/);
+  assert.match(html, /class="lobby-choice-column"/);
+  assert.match(html, /class="menu-bottom-deck"/);
+
+  const lobbyBlock = html.match(/<div class="run-mode-grid four-lobbies"[\s\S]*?<\/div>\s*<\/div>\s*<\/div>\s*<div class="menu-bottom-deck">/)?.[0] || '';
+  assert.equal((lobbyBlock.match(/class="run-mode-card/g) || []).length, 4);
+});
+
+test('run results use a compact two-column layout with both exit actions grouped together', async () => {
+  const html = await readFile(`${root}index.html`, 'utf8');
+  const css = await readFile(`${root}src/production.css`, 'utf8');
+  assert.match(html, /class="results-layout"/);
+  assert.match(html, /class="results-summary-column"/);
+  assert.match(html, /class="results-outcome-column"/);
+  assert.match(html, /class="results-actions"/);
+  assert.match(css, /\.results-layout\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*0\.95fr\)\s+minmax\(0,\s*1\.05fr\)/);
+  assert.match(css, /\.results-panel-v4\s*\{[\s\S]*max-height:\s*calc\(100dvh - 24px\)/);
+});
+
+test('practice reward controls remain hidden outside an active Practice result', async () => {
+  const css = await readFile(`${root}src/production.css`, 'utf8');
+  const source = await readFile(`${root}src/main.js`, 'utf8');
+  assert.match(css, /\.practice-claim-card\[hidden\]\s*\{\s*display:\s*none;/);
+  assert.match(source, /if\s*\(resultScreenMode !== RUN_MODES\.PRACTICE\)\s*\{\s*clearPracticeClaimPanel\(\);\s*return;/);
+  assert.match(source, /resultScreenMode = mode;/);
+  assert.match(source, /resultScreenMode = null;\s*clearPracticeClaimPanel\(\);/);
+});
