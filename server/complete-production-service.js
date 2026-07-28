@@ -26,6 +26,18 @@ import {
   DisabledAdvertisementVerifier,
   DisabledRevivePaymentVerifier
 } from './external-verifiers.js';
+import {
+  addEconomyAudit,
+  mergeNuggetEconomyConfig
+} from './nugget-economy.js';
+import {
+  applyEconomyLinksToExpansion,
+  applyExpansionLinksToTuning,
+  economyShadowPatch,
+  linkedAdminControlSnapshot,
+  reconcileLinkedAdminControls
+} from './admin-control-links.js';
+import { buildAdminReadiness } from './admin-readiness.js';
 
 const BETA_CAPABILITIES = Object.freeze([
   'jumpDepth', 'jumpRoom', 'triggerBoss', 'spawnBoss', 'setBossPhase',
@@ -43,6 +55,96 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     this.revivePaymentVerifier = options.revivePaymentVerifier || new DisabledRevivePaymentVerifier();
     this.reviveEligibilityValidator = options.reviveEligibilityValidator || null;
     this.competitiveReplayValidator = options.competitiveReplayValidator || null;
+    this.adminControlLinkPromise = null;
+  }
+
+  async ensureAdminControlLinks() {
+    if (this.adminControlLinkPromise) return this.adminControlLinkPromise;
+    this.adminControlLinkPromise = (async () => {
+      const timestamp = this.now();
+      const economy = this.nuggetEconomyStore ? await this.nuggetEconomyStore.read() : null;
+      const reconciled = await this.database.transact((state) => {
+        const result = reconcileLinkedAdminControls(state, economy?.config, timestamp);
+        if (result.mainChanges.length) {
+          appendAudit(state, 'ADMIN_CONTROLS_RECONCILED', result.mainChanges.join('; '), timestamp);
+        }
+        return {
+          ...result,
+          expansionConfig: structuredClone(state.expansionConfig)
+        };
+      });
+      if (this.nuggetEconomyStore && reconciled.economyChanges.length) {
+        await this.nuggetEconomyStore.transact((state) => {
+          state.config = mergeNuggetEconomyConfig(
+            state.config,
+            reconciled.shadowPatch,
+            'SERVER_ADMIN_LINK_SYNC',
+            timestamp
+          );
+          addEconomyAudit(
+            state,
+            'SERVER_ADMIN_LINK_SYNC',
+            'LINKED_CONTROLS_RECONCILED',
+            reconciled.economyChanges.join('; '),
+            timestamp
+          );
+        });
+      }
+      return reconciled;
+    })().catch((error) => {
+      this.adminControlLinkPromise = null;
+      throw error;
+    });
+    return this.adminControlLinkPromise;
+  }
+
+  async adminOverview(adminKey) {
+    this.assertAdminKey(adminKey);
+    await this.ensureAdminControlLinks();
+    const overview = await super.adminOverview(adminKey);
+    const [state, economy, database] = await Promise.all([
+      this.database.read(),
+      this.nuggetEconomyStore ? this.nuggetEconomyStore.read() : Promise.resolve(null),
+      this.database.healthCheck().catch(() => ({ ok: false, kind: this.database.kind || 'unknown' }))
+    ]);
+    const controlLinks = linkedAdminControlSnapshot(state, economy?.config);
+    const replay = this.competitiveReplayValidator?.publicStatus?.() || { configured: false, enabled: false };
+    const reviveStatus = this.revivePaymentVerifier?.publicStatus?.() || { configured: false, enabled: false };
+    const advertisementStatus = this.advertisementVerifier?.publicStatus?.() || { configured: false, enabled: false };
+    const arena = this.arenaService?.publicConfig?.() || { configured: false, enabled: false };
+    const treasurySafe = {
+      address: overview.immutable?.contracts?.safe || '',
+      owners: 3,
+      threshold: 1
+    };
+    return {
+      ...overview,
+      controlLinks,
+      readiness: buildAdminReadiness({
+        checkedAt: this.now(),
+        database,
+        payments: overview.payments,
+        rewards: overview.rewards,
+        arena,
+        replay,
+        revive: {
+          ...reviveStatus,
+          eligibilityReady: Boolean(this.reviveEligibilityValidator)
+        },
+        advertisements: advertisementStatus,
+        nuggetPayments: {
+          configured: Boolean(this.nuggetEconomyStore && this.nuggetPaymentVerifier),
+          enabled: this.nuggetPaymentsEnabled
+        },
+        treasurySafe,
+        controlLinks
+      })
+    };
+  }
+
+  async adminGameTuning(adminKey) {
+    await this.ensureAdminControlLinks();
+    return super.adminGameTuning(adminKey);
   }
 
   async startRun(token, mode) {
@@ -256,6 +358,7 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
 
   async adminExpansion(adminKey) {
     this.assertAdminKey(adminKey);
+    await this.ensureAdminControlLinks();
     const state = await this.database.read();
     return {
       schema: EXPANSION_SCHEMA,
@@ -302,7 +405,7 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     this.assertAdminKey(adminKey);
     const normalizedReason = adminReason(reason);
     const timestamp = this.now();
-    return this.database.transact((state) => {
+    const result = await this.database.transact((state) => {
       let next;
       try {
         next = normalizeExpansionPatch(patch, state.expansionConfig);
@@ -335,9 +438,38 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
       next.updatedAt = timestamp;
       next.updatedBy = 'SERVER_ADMIN';
       state.expansionConfig = next;
-      appendAudit(state, 'EXPANSION_CONFIG_UPDATED', `${normalizedReason}; revision ${next.revision}`, timestamp);
-      return { config: structuredClone(next), reason: normalizedReason };
+      const linkedChanges = applyExpansionLinksToTuning(state, next);
+      appendAudit(
+        state,
+        'EXPANSION_CONFIG_UPDATED',
+        `${normalizedReason}; revision ${next.revision}${linkedChanges.length ? `; linked: ${linkedChanges.join(', ')}` : ''}`,
+        timestamp
+      );
+      return { config: structuredClone(next), linkedChanges, reason: normalizedReason };
     });
+    this.adminControlLinkPromise = null;
+    if (this.nuggetEconomyStore) {
+      const shadowPatch = economyShadowPatch(result.config);
+      await this.nuggetEconomyStore.transact((state) => {
+        const before = {
+          advertisementRewardsEnabled: state.config.advertisementRewardsEnabled === true,
+          characterUnlockPrices: { ...state.config.characterUnlockPrices }
+        };
+        const next = mergeNuggetEconomyConfig(state.config, shadowPatch, 'SERVER_ADMIN_LINK_SYNC', timestamp);
+        const changed = JSON.stringify(before) !== JSON.stringify(shadowPatch);
+        state.config = next;
+        if (changed) {
+          addEconomyAudit(
+            state,
+            'SERVER_ADMIN_LINK_SYNC',
+            'LINKED_CONTROLS_SYNCHRONIZED',
+            `Expansion revision ${result.config.revision}; ${normalizedReason}`,
+            timestamp
+          );
+        }
+      });
+    }
+    return result;
   }
 
   async setBetaTester(adminKey, address, enabled, reason) {
@@ -649,16 +781,41 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     });
   }
 
+  async adminNuggetEconomy(adminKey) {
+    await this.ensureAdminControlLinks();
+    return super.adminNuggetEconomy(adminKey);
+  }
+
   async updateAdminNuggetEconomy(adminKey, patch, reason) {
     this.assertAdminKey(adminKey);
-    if (patch?.advertisementRewardsEnabled === true) {
+    if (
+      patch?.advertisementRewardsEnabled === true &&
+      this.advertisementVerifier?.publicStatus?.().configured !== true
+    ) {
       throw new ApiError(
         503,
         'advertisement_provider_disabled',
         'Advertisement rewards cannot be enabled until a signed provider or server-to-server completion verifier is configured.'
       );
     }
-    return super.updateAdminNuggetEconomy(adminKey, patch, reason);
+    const normalizedReason = adminReason(reason);
+    const timestamp = this.now();
+    const result = await super.updateAdminNuggetEconomy(adminKey, patch, normalizedReason);
+    this.adminControlLinkPromise = null;
+    const linkedChanges = await this.database.transact((state) => {
+      const changes = applyEconomyLinksToExpansion(state, result.editableConfig, timestamp);
+      applyExpansionLinksToTuning(state);
+      if (changes.length) {
+        appendAudit(
+          state,
+          'LINKED_ADMIN_CONTROLS_UPDATED',
+          `${changes.join('; ')}; ${normalizedReason}`,
+          timestamp
+        );
+      }
+      return changes;
+    });
+    return { ...result, linkedChanges };
   }
 
   async quoteNuggetPurchase(token, input = {}) {

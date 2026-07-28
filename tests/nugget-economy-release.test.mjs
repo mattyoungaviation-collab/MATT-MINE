@@ -102,9 +102,10 @@ test('an expired verifying quote releases its transaction reservation and UTC ca
 });
 
 test('player and Admin interfaces expose the structured production economy without manual hash claiming', async () => {
-  const [shop, practice, admin, preferences, documentation] = await Promise.all([
+  const [shop, practice, adminHtml, adminScript, preferences, documentation] = await Promise.all([
     readFile(new URL('../src/nuggetShop.js', import.meta.url), 'utf8'),
     readFile(new URL('../src/practiceClaimFlow.js', import.meta.url), 'utf8'),
+    readFile(new URL('../admin.html', import.meta.url), 'utf8'),
     readFile(new URL('../src/adminEconomy.js', import.meta.url), 'utf8'),
     readFile(new URL('../src/game/preferences.js', import.meta.url), 'utf8'),
     readFile(new URL('../docs/nugget-economy.md', import.meta.url), 'utf8')
@@ -117,9 +118,12 @@ test('player and Admin interfaces expose the structured production economy witho
   assert.match(practice, /quoteId/);
   assert.match(practice, /hashWrap\.hidden = true/);
   assert.doesNotMatch(practice, /Paste a valid 32-byte/);
-  assert.match(admin, /Nuggets per MATT/);
-  assert.match(admin, /UTC daily purchase cap/);
-  assert.match(admin, /Purchase packages/);
+  assert.match(adminHtml, /Nuggets per MATT/);
+  assert.match(adminHtml, /UTC daily purchase cap/);
+  assert.match(adminHtml, /Purchase packages/);
+  assert.match(adminScript, /nuggetsPerMatt/);
+  assert.match(adminScript, /dailyPurchaseCap/);
+  assert.match(adminScript, /data-economy-package/);
   assert.match(preferences, /practiceClaimFlow/);
   assert.match(documentation, /MATT_MINE_NUGGET_PAYMENTS_ENABLED/);
   assert.match(documentation, /No MATT is burned/);

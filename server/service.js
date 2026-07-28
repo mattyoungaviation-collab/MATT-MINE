@@ -37,6 +37,7 @@ import {
   NUGGET_LEDGER_TYPES,
   applyNuggetLedgerDelta
 } from './nugget-ledger.js';
+import { applyTuningLinksToExpansion } from './admin-control-links.js';
 import {
   consumeWeeklyAttempt,
   endlessLeaderboard,
@@ -1168,6 +1169,7 @@ export class MattMineService {
       const before = state.gameTuning[lobby];
       state.gameTuning[lobby] = { ...before, ...patch };
       const changed = Object.keys(patch).filter((key) => before[key] !== patch[key]);
+      const linkedChanges = applyTuningLinksToExpansion(state, lobby, patch, timestamp);
       let effectiveDay = null;
       if (lobby === 'arena') {
         const currentDay = utcDayKey(timestamp);
@@ -1181,13 +1183,15 @@ export class MattMineService {
         state,
         'SERVER_ADMIN',
         'GAME_TUNING_UPDATED',
-        `${lobby}: ${changed.join(', ')}${effectiveDay ? `; effective ${effectiveDay} UTC` : ''}; ${normalizedReason}`,
+        `${lobby}: ${changed.join(', ')}${linkedChanges.length ? `; linked: ${linkedChanges.join(', ')}` : ''}${effectiveDay ? `; effective ${effectiveDay} UTC` : ''}; ${normalizedReason}`,
         timestamp
       );
       return {
         lobby,
         preset: structuredClone(state.gameTuning[lobby]),
         changed,
+        linkedChanges,
+        expansionRevision: state.expansionConfig.revision,
         reason: normalizedReason,
         effectiveDay
       };
