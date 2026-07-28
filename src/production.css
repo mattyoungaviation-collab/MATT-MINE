@@ -571,6 +571,10 @@ button,
   padding: 30px 44px;
 }
 
+#menu.menu-v4:not(.active) {
+  display: none;
+}
+
 .economy-menu-card {
   width: min(1460px, calc(100vw - 88px));
   max-width: none;

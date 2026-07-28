@@ -7,6 +7,7 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 
 test('the production lobby presents the map and four play choices in one command deck', async () => {
   const html = await readFile(`${root}index.html`, 'utf8');
+  const css = await readFile(`${root}src/production.css`, 'utf8');
   assert.match(html, /class="lobby-topbar"/);
   assert.match(html, /class="matchmaking-layout"/);
   assert.match(html, /class="mine-briefing-column"/);
@@ -15,6 +16,8 @@ test('the production lobby presents the map and four play choices in one command
 
   const lobbyBlock = html.match(/<div class="run-mode-grid four-lobbies"[\s\S]*?<\/div>\s*<\/div>\s*<\/div>\s*<div class="menu-bottom-deck">/)?.[0] || '';
   assert.equal((lobbyBlock.match(/class="run-mode-card/g) || []).length, 4);
+  const productionLobby = css.slice(css.lastIndexOf('/* Production lobby:'));
+  assert.match(productionLobby, /#menu\.menu-v4:not\(\.active\)\s*\{\s*display:\s*none;/);
 });
 
 test('run results use a compact two-column layout with both exit actions grouped together', async () => {
