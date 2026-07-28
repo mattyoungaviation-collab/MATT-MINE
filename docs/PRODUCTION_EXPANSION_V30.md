@@ -29,6 +29,14 @@ The Expansion tab includes searchable structured sections:
 
 Expansion presets can be exported as JSON, imported for review, or reset to safe defaults. The server rejects unknown sections, fields, characters, and unsafe values before saving. Every applied change requires a reason and creates an audit record.
 
+### Per-depth creature tuning
+
+Each Practice, Free, Pass, and Daily Arena lobby preset now exposes every creature separately at depths 1 through 5. Slimes, bats, crawlers, crystal beetles, exploders, ranged creatures, and Guardians each have exact health, contact damage, movement speed, and XP controls. Regular creatures also have per-depth enabled switches and relative spawn weights.
+
+An exact stat value of `0` preserves the calculated base/lobby/depth value, so migrated production presets retain their current balance. Any positive value is the final stat for that creature at that depth. When every enabled creature has a spawn weight of `0`, the existing deterministic distribution remains unchanged. Positive weights enable a deterministic weighted distribution, and global creature switches continue to take priority.
+
+Depths beyond five continue using the Endless snapshot and capped growth model rather than reusing depth-five exact values.
+
 Admin can grant/revoke Beta access and character ownership. Player inspection includes permanent identity, address, ledger, activity, character history, and progression. The overview includes aggregate Guardian and character telemetry.
 
 ## Gameplay systems

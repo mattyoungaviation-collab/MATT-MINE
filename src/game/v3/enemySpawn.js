@@ -2,6 +2,7 @@ import { CONFIG } from '../config.js';
 import { randomPointInRoom, roomAt } from '../layout.js';
 import { distance, random, randomInt, randomRange } from '../utils.js';
 import { ENEMY_STATS, enemyArchetypeForRoll, roomRequiresLock } from '../combat.js';
+import { resolveEnemyDepthStats, resolveEnemySpawnType } from '../enemyDepthTuning.js';
 
 const TAU = Math.PI * 2;
 
@@ -27,26 +28,28 @@ export const enemySpawnMethods = {
       attempts += 1;
     }
 
-    const depthScale = 1 + (this.run.depth - 1) * 0.28;
     const arenaMode = this.runContext?.mode === 'arena';
     const roll = isBoss || forcedType ? 0 : random();
-    let type = isBoss
-      ? 'guardian'
-      : forcedType || (arenaMode ? legacyArenaArchetype(roll, this.run.depth) : enemyArchetypeForRoll(roll, this.run.depth));
     const tuning = this.runContext?.tuning || {};
-    const enabledTypes = [
-      ['slime', tuning.spawnSlimes !== false],
-      ['bat', tuning.spawnBats !== false],
-      ['crawler', tuning.spawnCrawlers !== false],
-      ['beetle', tuning.spawnBeetles !== false],
-      ['exploder', tuning.spawnExploders !== false],
-      ['spitter', tuning.spawnRanged !== false]
-    ].filter(([, enabled]) => enabled).map(([id]) => id);
-    if (!isBoss && !enabledTypes.includes(type)) type = enabledTypes[0] || 'slime';
+    const type = isBoss
+      ? 'guardian'
+      : forcedType || resolveEnemySpawnType({
+        roll,
+        depth: this.run.depth,
+        tuning,
+        legacySelector: arenaMode ? legacyArenaArchetype : enemyArchetypeForRoll
+      });
     const configuredStats = ENEMY_STATS[type];
     const stats = arenaMode && isBoss
       ? { ...configuredStats, health: 620, speed: 56, damage: 24, xp: 160 }
       : configuredStats;
+    const resolvedStats = resolveEnemyDepthStats({
+      type,
+      depth: this.run.depth,
+      tuning,
+      baseStats: stats,
+      isBoss
+    });
     const dormant = roomRequiresLock(room.type) && !isBoss;
 
     const enemy = {
@@ -60,11 +63,11 @@ export const enemySpawnMethods = {
       knockbackX: 0,
       knockbackY: 0,
       radius: stats.radius * (isBoss ? 1 + (this.run.depth - 1) * 0.05 : 1),
-      hp: stats.health * depthScale * (tuning.enemyHealthMultiplier || 1) * (tuning[`${type}HealthMultiplier`] || 1) * (isBoss ? tuning.bossHealthMultiplier || 1 : 1),
-      maxHp: stats.health * depthScale * (tuning.enemyHealthMultiplier || 1) * (tuning[`${type}HealthMultiplier`] || 1) * (isBoss ? tuning.bossHealthMultiplier || 1 : 1),
-      speed: stats.speed * (1 + (this.run.depth - 1) * 0.06) * (tuning.enemySpeedMultiplier || 1) * (isBoss ? tuning.bossSpeedMultiplier || 1 : 1),
-      damage: stats.damage * depthScale * (tuning.enemyDamageMultiplier ?? 1) * (isBoss ? tuning.bossDamageMultiplier ?? 1 : 1),
-      xp: Math.round(stats.xp * depthScale),
+      hp: resolvedStats.health,
+      maxHp: resolvedStats.health,
+      speed: resolvedStats.speed,
+      damage: resolvedStats.damage,
+      xp: Math.round(resolvedStats.xp),
       color: stats.color,
       hitFlash: 0,
       contactTimer: 0,

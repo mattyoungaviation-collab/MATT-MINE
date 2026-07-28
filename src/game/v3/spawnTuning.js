@@ -5,6 +5,7 @@ import { distance, random, randomInt, randomRange, weightedChoice } from '../uti
 import { enemySpawnMethods } from './enemySpawn.js';
 import { roomsMethods } from './rooms.js';
 import { stateMethods } from './state.js';
+import { resolveEnemyDepthStats, resolveEnemySpawnType } from '../enemyDepthTuning.js';
 
 const TAU = Math.PI * 2;
 const MAX_CONFIGURED_DEPTH = 5;
@@ -119,32 +120,28 @@ export const spawnTuningMethods = {
     }
 
     const tuning = this.runContext?.tuning || {};
-    const depthHealthScale = tuning.enemyDepthHealthScale ?? .28;
-    const depthSpeedScale = tuning.enemyDepthSpeedScale ?? .06;
-    const depthScale = 1 + (this.run.depth - 1) * depthHealthScale;
     const arenaMode = this.runContext?.mode === 'arena';
     const roll = isBoss || forcedType ? 0 : random();
-    let type = isBoss
+    const type = isBoss
       ? 'guardian'
-      : forcedType || (arenaMode ? legacyArenaArchetype(roll, this.run.depth) : enemyArchetypeForRoll(roll, this.run.depth));
-    const enabledTypes = [
-      ['slime', tuning.spawnSlimes !== false],
-      ['bat', tuning.spawnBats !== false],
-      ['crawler', tuning.spawnCrawlers !== false],
-      ['beetle', tuning.spawnBeetles !== false],
-      ['exploder', tuning.spawnExploders !== false],
-      ['spitter', tuning.spawnRanged !== false]
-    ].filter(([, enabled]) => enabled).map(([id]) => id);
-    if (!isBoss && !enabledTypes.includes(type)) type = enabledTypes[0] || 'slime';
+      : forcedType || resolveEnemySpawnType({
+        roll,
+        depth: this.run.depth,
+        tuning,
+        legacySelector: arenaMode ? legacyArenaArchetype : enemyArchetypeForRoll
+      });
     const configuredStats = ENEMY_STATS[type];
     const stats = arenaMode && isBoss
       ? { ...configuredStats, health: 620, speed: 56, damage: 24, xp: 160 }
       : configuredStats;
+    const resolvedStats = resolveEnemyDepthStats({
+      type,
+      depth: this.run.depth,
+      tuning,
+      baseStats: stats,
+      isBoss
+    });
     const dormant = roomRequiresLock(room.type) && !isBoss;
-    const health = stats.health * depthScale *
-      (tuning.enemyHealthMultiplier || 1) *
-      (tuning[`${type}HealthMultiplier`] || 1) *
-      (isBoss ? tuning.bossHealthMultiplier || 1 : 1);
 
     const enemy = {
       id: this.entityId++,
@@ -157,16 +154,11 @@ export const spawnTuningMethods = {
       knockbackX: 0,
       knockbackY: 0,
       radius: stats.radius * (isBoss ? 1 + (this.run.depth - 1) * .05 : 1),
-      hp: health,
-      maxHp: health,
-      speed: stats.speed *
-        (1 + (this.run.depth - 1) * depthSpeedScale) *
-        (tuning.enemySpeedMultiplier || 1) *
-        (isBoss ? tuning.bossSpeedMultiplier || 1 : 1),
-      damage: stats.damage * depthScale *
-        (tuning.enemyDamageMultiplier ?? 1) *
-        (isBoss ? tuning.bossDamageMultiplier ?? 1 : 1),
-      xp: Math.round(stats.xp * depthScale),
+      hp: resolvedStats.health,
+      maxHp: resolvedStats.health,
+      speed: resolvedStats.speed,
+      damage: resolvedStats.damage,
+      xp: Math.round(resolvedStats.xp),
       color: stats.color,
       hitFlash: 0,
       contactTimer: 0,

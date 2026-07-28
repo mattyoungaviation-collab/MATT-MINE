@@ -1,5 +1,6 @@
 import { CONFIG, ORE_TYPES } from './config.js';
 import { bossTuningSchema, validateBossThresholds } from './bossTuning.js';
+import { enemyDepthTuningSchema } from './enemyDepthTuning.js';
 
 export const GAMEPLAY_LOBBIES = Object.freeze(['practice', 'free', 'paid', 'arena']);
 export const MAX_TUNED_DEPTH = 5;
@@ -118,6 +119,7 @@ export const GAME_TUNING_SCHEMA = Object.freeze([
   number('spitterHealthMultiplier', 'Creature types', 'Ranged creature health', 1, .1, 10, .05),
 
   ...depthSpawnSchema,
+  ...enemyDepthTuningSchema(number, toggle, MAX_TUNED_DEPTH),
 
   number('bossHealthMultiplier', 'Boss', 'Health multiplier', 2.25, .1, 20, .05, 'Default targets a readable roughly 30-second final encounter for a normally upgraded miner.'),
   number('bossDamageMultiplier', 'Boss', 'Damage multiplier', 1, 0, 10, .05),
