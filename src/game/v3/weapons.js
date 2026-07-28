@@ -195,7 +195,10 @@ export const weaponsMethods = {
       return;
     }
     if (distance(projectile, this.player) <= projectile.radius + this.player.radius) {
-      this.damagePlayer(projectile.damage, Math.atan2(projectile.vy, projectile.vx));
+      this.damagePlayer(projectile.damage, Math.atan2(projectile.vy, projectile.vx), {
+        bossId: projectile.bossId,
+        bossAttack: projectile.bossAttack
+      });
       projectile.dead = true;
     }
   },
@@ -233,6 +236,9 @@ export const weaponsMethods = {
     }
 
     target.hp -= resolvedDamage;
+    if (target.isBoss && this.run?.bossTelemetry) {
+      this.run.bossTelemetry.damageDealt += Math.max(0, resolvedDamage);
+    }
     target.hitFlash = 0.1;
     this.camera.shake = Math.max(this.camera.shake, critical ? 8 : source === 'explosion' ? 11 : 3);
     this.addFloater(

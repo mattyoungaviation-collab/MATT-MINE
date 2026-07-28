@@ -10,7 +10,9 @@ export const stateMethods = {
     const isArena = this.runContext?.mode === 'arena';
     const meta = isArena ? {} : this.profile.meta;
     const tuning = this.runContext?.tuning || {};
-    const maxHealth = (tuning.playerMaxHealth || CONFIG.basePlayerHealth) + (meta.health || 0) * 8;
+    const character = this.runContext?.character || {};
+    const characterHealthScale = Number(character.baseHealth || 100) / 100;
+    const maxHealth = ((tuning.playerMaxHealth || CONFIG.basePlayerHealth) + (meta.health || 0) * 8) * characterHealthScale;
     this.run = {
       depth: 1,
       rawNuggets: 0,
@@ -26,7 +28,16 @@ export const stateMethods = {
       startedAt: Date.now(),
       lootMultiplier: 1,
       attackCounter: 0,
-      safeStartUntil: 0
+      safeStartUntil: 0,
+      bossTelemetry: {
+        encounterStartedAt: 0,
+        encounterEndedAt: 0,
+        damageDealt: 0,
+        damageReceived: 0,
+        playerDeaths: 0,
+        attacksUsed: {},
+        bosses: {}
+      }
     };
     this.player = {
       x: CONFIG.worldWidth / 2,
@@ -36,14 +47,14 @@ export const stateMethods = {
       radius: tuning.playerRadius || CONFIG.playerRadius,
       maxHealth,
       health: maxHealth,
-      speed: (tuning.playerSpeed || CONFIG.basePlayerSpeed) * (1 + (meta.speed || 0) * 0.02),
-      damage: (tuning.playerBaseDamage || CONFIG.baseDamage) * (1 + (meta.damage || 0) * 0.05),
+      speed: (tuning.playerSpeed || CONFIG.basePlayerSpeed) * (1 + (meta.speed || 0) * 0.02) * Number(character.movementSpeed || 1),
+      damage: (tuning.playerBaseDamage || CONFIG.baseDamage) * (1 + (meta.damage || 0) * 0.05) * Number(character.pickaxeDamage || 1),
       attackCooldown: tuning.pickaxeCooldown || CONFIG.baseAttackCooldown,
       attackTimer: 0,
       attackRange: tuning.pickaxeRange || CONFIG.baseAttackRange,
       critChance: tuning.playerCritChance ?? CONFIG.baseCritChance,
-      magnetRange: (tuning.playerMagnetRange || CONFIG.baseMagnetRange) + (meta.magnet || 0) * 6,
-      armor: Math.min(0.25, (meta.armor || 0) * 0.01),
+      magnetRange: ((tuning.playerMagnetRange || CONFIG.baseMagnetRange) + (meta.magnet || 0) * 6) * Number(character.magnetRange || 1),
+      armor: Math.min(0.8, (meta.armor || 0) * 0.01 + Number(character.armor || 0)),
       level: 1,
       xp: 0,
       nextXp: 45,
@@ -52,9 +63,9 @@ export const stateMethods = {
       invulnerable: 0,
       swingTimer: 0,
       dashCooldown: 0,
-      dashCooldownMax: (tuning.dashCooldown || CONFIG.baseDashCooldown) / (1 + (meta.dash || 0) * 0.02),
+      dashCooldownMax: ((tuning.dashCooldown || CONFIG.baseDashCooldown) / (1 + (meta.dash || 0) * 0.02)) * Number(character.dashCooldown || 1),
       dashTimer: 0,
-      dashSpeed: tuning.dashSpeed || CONFIG.baseDashSpeed,
+      dashSpeed: (tuning.dashSpeed || CONFIG.baseDashSpeed) * Number(character.dashStrength || 1),
       lastMoveX: 1,
       lastMoveY: 0,
       dynamiteEvery: 0,
@@ -65,10 +76,10 @@ export const stateMethods = {
       weapon: 'pickaxe',
       unlockedWeapons: { pickaxe: true, dynamite: false, blaster: !isArena },
       dynamiteAmmo: tuning.dynamiteStartAmmo ?? CONFIG.dynamiteStartAmmo,
-      blasterEnergy: tuning.blasterEnergy || CONFIG.blasterEnergyMax,
-      blasterEnergyMax: tuning.blasterEnergy || CONFIG.blasterEnergyMax,
+      blasterEnergy: (tuning.blasterEnergy || CONFIG.blasterEnergyMax) * (Number(character.blasterEnergy || 100) / 100),
+      blasterEnergyMax: (tuning.blasterEnergy || CONFIG.blasterEnergyMax) * (Number(character.blasterEnergy || 100) / 100),
       blasterEnergyRegen: tuning.blasterRecharge || CONFIG.blasterEnergyRegen,
-      blasterDamageScale: (tuning.blasterDamageMultiplier || CONFIG.blasterDamageScale) * (1 + (meta.blaster || 0) * 0.03),
+      blasterDamageScale: (tuning.blasterDamageMultiplier || CONFIG.blasterDamageScale) * (1 + (meta.blaster || 0) * 0.03) * Number(character.blasterDamage || 1),
       blasterVolley: 1,
       emptyWeaponToast: 0
     };
@@ -322,10 +333,51 @@ export const stateMethods = {
       });
     }
   },
-  damagePlayer(amount, sourceAngle) {
+  beginBossTelemetry(enemy, phase) {
+    const telemetry = this.run?.bossTelemetry;
+    if (!telemetry || !enemy?.isBoss) return;
+    if (!telemetry.encounterStartedAt) telemetry.encounterStartedAt = this.run.elapsed;
+    telemetry.bosses[enemy.id] ||= {
+      bossId: enemy.id,
+      startedAt: this.run.elapsed,
+      endedAt: 0,
+      currentPhase: phase,
+      phaseStartedAt: this.run.elapsed,
+      phaseDurations: { 1: 0, 2: 0, 3: 0 },
+      attacksUsed: {}
+    };
+  },
+  transitionBossTelemetry(enemy, phase) {
+    const boss = this.run?.bossTelemetry?.bosses?.[enemy?.id];
+    if (!boss) return;
+    const previous = boss.currentPhase || 1;
+    boss.phaseDurations[previous] += Math.max(0, this.run.elapsed - boss.phaseStartedAt);
+    boss.currentPhase = phase;
+    boss.phaseStartedAt = this.run.elapsed;
+  },
+  recordBossAttack(enemy, phase, attackType) {
+    this.beginBossTelemetry(enemy, phase);
+    const telemetry = this.run?.bossTelemetry;
+    const boss = telemetry?.bosses?.[enemy?.id];
+    if (!boss) return;
+    telemetry.attacksUsed[attackType] = (telemetry.attacksUsed[attackType] || 0) + 1;
+    boss.attacksUsed[attackType] = (boss.attacksUsed[attackType] || 0) + 1;
+  },
+  finishBossTelemetry(enemy) {
+    const telemetry = this.run?.bossTelemetry;
+    const boss = telemetry?.bosses?.[enemy?.id];
+    if (!boss || boss.endedAt) return;
+    boss.phaseDurations[boss.currentPhase] += Math.max(0, this.run.elapsed - boss.phaseStartedAt);
+    boss.endedAt = this.run.elapsed;
+    telemetry.encounterEndedAt = Math.max(telemetry.encounterEndedAt, this.run.elapsed);
+  },
+  damagePlayer(amount, sourceAngle, source = {}) {
     if (this.player.invulnerable > 0) return;
     const finalDamage = Math.max(1, amount * (1 - this.player.armor));
     this.player.health -= finalDamage;
+    if (source.bossId && this.run?.bossTelemetry) {
+      this.run.bossTelemetry.damageReceived += finalDamage;
+    }
     this.player.invulnerable = 0.5;
     this.player.hitFlash = 0.18;
     this.player.vx += Math.cos(sourceAngle) * 250;
@@ -339,7 +391,10 @@ export const stateMethods = {
       tick: Math.round(this.run.elapsed * 1_000),
       amount: finalDamage
     });
-    if (this.player.health <= 0) this.endRun(false);
+    if (this.player.health <= 0) {
+      if (this.run?.bossTelemetry?.encounterStartedAt) this.run.bossTelemetry.playerDeaths += 1;
+      this.endRun(false);
+    }
   },
   updatePickups(dt) {
     for (const pickup of this.pickups) {
@@ -386,6 +441,9 @@ export const stateMethods = {
       this.profile.totalRuns += 1;
     }
     this.run.displayedScore = projected;
+    for (const enemy of this.enemies.filter((entry) => entry.isBoss)) {
+      this.finishBossTelemetry(enemy);
+    }
     this.state = 'ended';
     this.camera.shake = 0;
     this.audio.stopBoss();
@@ -406,7 +464,8 @@ export const stateMethods = {
       depth: this.run.depth,
       kills: this.run.kills,
       oreBroken: this.run.oreBroken,
-      elapsed: this.run.elapsed
+      elapsed: this.run.elapsed,
+      bossTelemetry: structuredClone(this.run.bossTelemetry)
     });
   },
   backToMenu() {

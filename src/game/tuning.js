@@ -1,4 +1,5 @@
 import { CONFIG, ORE_TYPES } from './config.js';
+import { bossTuningSchema, validateBossThresholds } from './bossTuning.js';
 
 export const GAMEPLAY_LOBBIES = Object.freeze(['practice', 'free', 'paid', 'arena']);
 export const MAX_TUNED_DEPTH = 5;
@@ -128,6 +129,7 @@ export const GAME_TUNING_SCHEMA = Object.freeze([
   number('bossVolleySpread', 'Boss', 'Volley spread', .38, .05, 1.5, .01),
   number('bossReinforcementCount', 'Boss', 'Reinforcements per call', 3, 0, 20),
   number('bossReinforcementInterval', 'Boss', 'Reinforcement interval', 7, 1, 60, .5),
+  ...bossTuningSchema(number, toggle),
 
   number('roomWidth', 'Mine layout', 'Standard room width', CONFIG.roomWidth, 260, 900, 10),
   number('roomHeight', 'Mine layout', 'Standard room height', CONFIG.roomHeight, 200, 700, 10),
@@ -164,7 +166,7 @@ export function normalizeGameTuning(input = {}) {
   ]));
 }
 
-export function normalizeTuningPatch(input = {}) {
+export function normalizeTuningPatch(input = {}, current = {}) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('A tuning patch is required.');
   const patch = {};
   for (const [id, raw] of Object.entries(input)) {
@@ -172,6 +174,7 @@ export function normalizeTuningPatch(input = {}) {
     if (!definition) throw new Error(`Unknown game setting: ${id}`);
     patch[id] = normalizeValue(definition, raw);
   }
+  validateBossThresholds({ ...current, ...patch });
   return patch;
 }
 
@@ -182,7 +185,7 @@ export function normalizeTuningPreset(input = {}, lobby = 'practice') {
   for (const definition of GAME_TUNING_SCHEMA) {
     result[definition.id] = normalizeValue(definition, source[definition.id] ?? defaults[definition.id]);
   }
-  return result;
+  return validateBossThresholds(result);
 }
 
 export function defaultTuningPreset(lobby = 'practice') {

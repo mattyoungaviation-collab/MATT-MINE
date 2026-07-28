@@ -115,6 +115,7 @@ export const enemySpawnMethods = {
     }
 
     if (enemy.isBoss) {
+      this.finishBossTelemetry?.(enemy);
       const vaultId = this.layout.guardianRoom.id;
       for (const minion of this.enemies.filter((entry) => entry.roomId === vaultId)) this.burst(minion.x, minion.y, minion.color, 8);
       this.enemies = this.enemies.filter((entry) => entry.roomId !== vaultId);

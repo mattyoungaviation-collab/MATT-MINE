@@ -4,6 +4,7 @@ import { META_UPGRADES, metaUpgradeCost } from './game/config.js';
 import { prepareProfileImage } from './game/profileImage.js';
 import { mountDailyMinePreviews } from './game/dailyMapPreview.js';
 import { KEYBIND_ACTIONS, defaultKeybindings, normalizeKeybindings } from './game/keybindings.js';
+import { defaultControllerProfile, normalizeControllerProfile } from './game/expansionConfig.js';
 import {
   ADMIN_ROLES,
   LocalEconomyStore,
@@ -328,6 +329,8 @@ function openMinerProfile(forceSetup = false) {
   renderProfileAvatar(identity.avatarUrl || '');
   pendingKeybindings = { ...(serverPlayer.keybindings || defaultKeybindings()) };
   renderKeybindings();
+  loadControllerSettings();
+  renderCharacters();
   showScreen('miner-profile');
   if (requiresSetup) $('#profile-name').focus();
 }
@@ -401,6 +404,7 @@ async function connectWallet() {
     saveProfile(profile);
     game.setProfile(profile);
     game.input.setKeybindings(serverPlayer.keybindings || defaultKeybindings());
+    if (serverPlayer.expansion?.controller) game.input.setControllerProfile(serverPlayer.expansion.controller);
     await refreshPaymentStatus(true);
     if (serverPlayer.identity?.requiresSetup) {
       openMinerProfile(true);
@@ -430,6 +434,7 @@ async function refreshServerPlayer() {
     saveProfile(profile);
     game.setProfile(profile);
     game.input.setKeybindings(serverPlayer.keybindings || defaultKeybindings());
+    if (serverPlayer.expansion?.controller) game.input.setControllerProfile(serverPlayer.expansion.controller);
     await refreshPaymentStatus(true);
     await refreshArena(true);
     updateMenu();
@@ -475,7 +480,8 @@ async function submitServerRun(serverRun, result) {
       depth: Math.max(1, Math.floor(result.depth || 1)),
       kills: Math.max(0, Math.floor(result.kills || 0)),
       oreBroken: Math.max(0, Math.floor(result.oreBroken || 0)),
-      elapsed: Math.max(0, Number(result.elapsed || 0))
+      elapsed: Math.max(0, Number(result.elapsed || 0)),
+      bossTelemetry: result.bossTelemetry || null
     });
     profile = accepted.profile;
     saveProfile(profile);
@@ -734,7 +740,9 @@ async function startRunMode(mode) {
         day: run.day,
         week: run.week,
         rewardWeight: run.rewardWeight,
-        tuning: run.tuning
+        tuning: run.tuning,
+        characterId: run.characterId,
+        character: run.character
       });
       updateMenu();
     } catch (error) {
@@ -994,6 +1002,17 @@ $('#reset-keybinds-button').addEventListener('click', () => {
   pendingKeybindings = defaultKeybindings();
   renderKeybindings();
   toast('Default controls restored — press Save Controls to keep them');
+});
+$('#controller-dead-zone').addEventListener('input', renderControllerSettings);
+$('#controller-aim-sensitivity').addEventListener('input', renderControllerSettings);
+$('#save-controller-button').addEventListener('click', () => void saveControllerSettings());
+window.addEventListener('mattmine:controller', (event) => {
+  const status = $('#controller-status');
+  if (!status) return;
+  status.textContent = event.detail?.connected
+    ? `Controller ${Number(event.detail.index) + 1} connected.`
+    : 'Controller disconnected. The current run is paused for safety.';
+  if (event.detail?.pauseRequested && game.state === 'playing') game.state = 'paused';
 });
 $('#profile-name').addEventListener('input', () => renderProfileAvatar(pendingAvatarDataUrl || serverPlayer?.identity?.avatarUrl || ''));
 $('#profile-avatar-input').addEventListener('change', async (event) => {
@@ -2048,12 +2067,76 @@ function renderKeybindings() {
   }));
 }
 
+function renderControllerSettings() {
+  const deadZone = Number($('#controller-dead-zone')?.value || .18);
+  const sensitivity = Number($('#controller-aim-sensitivity')?.value || 1);
+  if ($('#controller-dead-zone-value')) $('#controller-dead-zone-value').textContent = `${Math.round(deadZone * 100)}%`;
+  if ($('#controller-aim-sensitivity-value')) $('#controller-aim-sensitivity-value').textContent = `${sensitivity.toFixed(2)}×`;
+}
+
+function renderCharacters() {
+  const characters = serverPlayer?.expansion?.characters || {};
+  const selected = serverPlayer?.expansion?.selectedCharacter || 'matt';
+  $('#character-grid').innerHTML = Object.entries(characters).map(([id, character]) => `<article class="character-card ${selected === id ? 'selected' : ''}">
+    <div><strong>${escapeHtml(character.name)}</strong><small>${escapeHtml(character.description)}</small></div>
+    <p>HP ${Math.round(character.baseHealth)} · SPEED ${Number(character.movementSpeed).toFixed(2)}× · PICKAXE ${Number(character.pickaxeDamage).toFixed(2)}× · BLASTER ${Number(character.blasterDamage).toFixed(2)}×</p>
+    <button type="button" data-character-select="${id}" ${!character.enabled ? 'disabled' : ''}>${character.owned ? (selected === id ? 'SELECTED' : 'SELECT') : character.nuggetPrice > 0 ? `UNLOCK · ${Number(character.nuggetPrice).toLocaleString()} NUGGETS` : 'LOCKED'}</button>
+  </article>`).join('') || '<p class="preview-note">Sign in to load your server-owned characters.</p>';
+  document.querySelectorAll('[data-character-select]').forEach((button) => button.addEventListener('click', async () => {
+    const id = button.dataset.characterSelect;
+    const character = serverPlayer.expansion.characters[id];
+    try {
+      if (!character.owned && character.nuggetPrice > 0) {
+        serverPlayer.expansion = await apiClient.purchaseCharacter(id);
+        serverPlayer.profile.bankedNuggets -= character.nuggetPrice;
+      }
+      const result = await apiClient.selectCharacter(id);
+      serverPlayer.expansion.selectedCharacter = result.selectedCharacter;
+      renderCharacters();
+      updateMenu();
+      toast(`${result.character.name} selected`);
+    } catch (error) {
+      toast(error.message);
+    }
+  }));
+}
+
+function loadControllerSettings() {
+  const controller = serverPlayer?.expansion?.controller || defaultControllerProfile();
+  $('#controller-dead-zone').value = controller.deadZone;
+  $('#controller-aim-sensitivity').value = controller.aimSensitivity;
+  $('#controller-vibration').checked = controller.vibration !== false;
+  renderControllerSettings();
+}
+
+async function saveControllerSettings() {
+  if (!serverPlayer) return toast('Connect Ronin Wallet first');
+  try {
+    const base = serverPlayer.expansion?.controller || defaultControllerProfile();
+    const controller = normalizeControllerProfile({
+      ...base,
+      deadZone: Number($('#controller-dead-zone').value),
+      aimSensitivity: Number($('#controller-aim-sensitivity').value),
+      vibration: $('#controller-vibration').checked
+    });
+    const saved = await apiClient.updateController(controller);
+    serverPlayer.expansion ||= {};
+    serverPlayer.expansion.controller = saved;
+    game.input.setControllerProfile(saved);
+    toast('Controller settings saved to your profile');
+  } catch (error) {
+    $('#profile-status').textContent = error.message;
+  }
+}
+
 async function openPlayerControls() {
   if (!serverPlayer) {
     const connected = await connectWallet();
     if (!connected) return;
   }
   openMinerProfile(false);
+  loadControllerSettings();
+  renderCharacters();
   requestAnimationFrame(() => {
     const editor = $('#keybind-editor');
     editor.classList.add('keybind-highlight');
