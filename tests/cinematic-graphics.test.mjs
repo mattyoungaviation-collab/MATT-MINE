@@ -32,6 +32,22 @@ test('the official animated MATT Dyno sprite sheet is packaged for gameplay', as
   }
 });
 
+test('Ronke, Axie, and Orc ship as optimized high-resolution weapon sprite packs', async () => {
+  const assetNames = [
+    'ronke-character-spritesheet.webp',
+    'axie-character-spritesheet.webp',
+    'orc-character-spritesheet.webp'
+  ];
+  for (const assetName of assetNames) {
+    const sprite = await stat(`${root}assets/game/${assetName}`);
+    const header = await readFile(`${root}assets/game/${assetName}`);
+    assert.ok(sprite.size > 100_000);
+    assert.ok(sprite.size < 300_000);
+    assert.equal(header.subarray(0, 4).toString('ascii'), 'RIFF');
+    assert.equal(header.subarray(8, 12).toString('ascii'), 'WEBP');
+  }
+});
+
 test('cinematic assets load lazily in browsers and remain safe in test environments', () => {
   class FakeImage {
     complete = true;
@@ -47,6 +63,9 @@ test('cinematic assets load lazily in browsers and remain safe in test environme
   assert.equal(assets.mattDynoPickaxeVertical.src, '/assets/game/matt-dyno-pickaxe-vertical-spritesheet.png');
   assert.equal(assets.mattDynoBlasterVertical.src, '/assets/game/matt-dyno-blaster-vertical-spritesheet.png');
   assert.equal(assets.mattDynoDynamiteVertical.src, '/assets/game/matt-dyno-dynamite-vertical-spritesheet.png');
+  assert.equal(assets.ronkeCharacter.src, '/assets/game/ronke-character-spritesheet.webp');
+  assert.equal(assets.axieCharacter.src, '/assets/game/axie-character-spritesheet.webp');
+  assert.equal(assets.orcCharacter.src, '/assets/game/orc-character-spritesheet.webp');
   assert.equal(imageIsReady(assets.floor), true);
   assert.deepEqual(loadVisualAssets(null), {});
 });

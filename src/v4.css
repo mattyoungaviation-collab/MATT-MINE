@@ -232,6 +232,10 @@
 .character-card{display:grid;gap:9px;padding:13px;border:1px solid rgba(255,255,255,.12);border-radius:12px;background:#081014}
 .character-card.selected{border-color:#ffc857;box-shadow:0 0 0 1px #ffc85755}
 .character-card div,.character-card small{display:grid;gap:4px}.character-card small,.character-card p{color:#9eabad;font-size:.73rem;margin:0}
+.character-portrait{display:block;width:125px;height:150px;justify-self:center;border-radius:10px;background-repeat:no-repeat;background-size:400% 500%;background-position:0 0;background-color:rgba(63,211,198,.06)}
+.character-portrait-ronke{background-image:url('/assets/game/ronke-character-spritesheet.webp')}
+.character-portrait-axie{background-image:url('/assets/game/axie-character-spritesheet.webp')}
+.character-portrait-orc{background-image:url('/assets/game/orc-character-spritesheet.webp')}
 .controller-settings{display:grid;gap:12px}.controller-settings label{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center}
 .controller-mapping-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px}.controller-mapping-grid label{display:grid;grid-template-columns:1fr auto;gap:8px}.controller-mapping-grid select{min-width:92px}
 .controller-pause-overlay{position:fixed;inset:0;z-index:120;display:grid;place-items:center;background:rgba(4,5,12,.78);backdrop-filter:blur(8px)}.controller-pause-overlay[hidden]{display:none}

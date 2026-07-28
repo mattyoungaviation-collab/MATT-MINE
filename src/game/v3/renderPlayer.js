@@ -9,6 +9,105 @@ const MATT_DYNO_DRAW_WIDTH = 108;
 const MATT_DYNO_DRAW_HEIGHT = 180;
 const MATT_DYNO_VERTICAL_DRAW_HEIGHT = 134;
 const MATT_DYNO_VERTICAL_DRAW_Y = [-102, -97];
+const ROSTER_COLUMNS = 4;
+const ROSTER_SOURCE_WIDTH = 280;
+const ROSTER_SOURCE_HEIGHT = 340;
+const ROSTER_SOURCE_ROW_Y = Object.freeze([0, 330, 620, 900, 1196]);
+const ROSTER_WEAPON_ROWS = Object.freeze({
+  pickaxe: 1,
+  blaster: 2,
+  dynamite: 3
+});
+
+export const PLAYABLE_CHARACTER_SPRITES = Object.freeze({
+  ronke: Object.freeze({
+    asset: 'ronkeCharacter',
+    drawWidth: 126,
+    drawHeight: 151,
+    drawY: -108
+  }),
+  axie: Object.freeze({
+    asset: 'axieCharacter',
+    drawWidth: 118,
+    drawHeight: 142,
+    drawY: -98
+  }),
+  orc: Object.freeze({
+    asset: 'orcCharacter',
+    drawWidth: 128,
+    drawHeight: 154,
+    drawY: -110
+  })
+});
+
+function drawRosterCharacter(game, ctx, player, movement, visualAngle) {
+  const sprite = PLAYABLE_CHARACTER_SPRITES[game.runContext?.characterId];
+  const image = sprite ? game.visualAssets?.[sprite.asset] : null;
+  if (!sprite || !imageIsReady(image)) return false;
+
+  const attacking = player.swingTimer > 0;
+  const moving = movement > 22;
+  const actionDuration =
+    player.weapon === 'dynamite' ? 0.24 :
+      player.weapon === 'blaster' ? 0.14 :
+        0.16;
+  const actionProgress = attacking
+    ? Math.max(0, Math.min(0.999, 1 - player.swingTimer / actionDuration))
+    : 0;
+  const knockedOut = player.health <= 0;
+  const row = knockedOut || player.hitFlash > 0
+    ? 4
+    : attacking
+      ? ROSTER_WEAPON_ROWS[player.weapon] ?? 1
+      : 0;
+  const frame = knockedOut
+    ? 3
+    : player.hitFlash > 0
+      ? 0
+      : attacking
+        ? Math.floor(actionProgress * ROSTER_COLUMNS)
+        : moving
+          ? Math.floor(game.run.elapsed * (player.dashTimer > 0 ? 12 : 7)) % ROSTER_COLUMNS
+          : 0;
+  const columnWidth = image.naturalWidth / ROSTER_COLUMNS;
+  const sourceX = Math.max(
+    0,
+    Math.min(image.naturalWidth - ROSTER_SOURCE_WIDTH, frame * columnWidth - 12)
+  );
+  const sourceY = Math.min(
+    image.naturalHeight - ROSTER_SOURCE_HEIGHT,
+    ROSTER_SOURCE_ROW_Y[row]
+  );
+  const facesRight = Math.cos(visualAngle) >= 0;
+  const stepBob = moving
+    ? Math.abs(Math.sin(game.run.elapsed * (player.dashTimer > 0 ? 12 : 7) * Math.PI)) * 2
+    : Math.sin(game.run.elapsed * 3.2) * 0.8;
+  const lunge = attacking ? Math.sin(actionProgress * Math.PI) * 4 : 0;
+
+  ctx.save();
+  ctx.translate(Math.cos(visualAngle) * lunge, -stepBob + Math.sin(visualAngle) * lunge);
+  ctx.scale(facesRight ? 1 : -1, 1);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.filter = player.hitFlash > 0
+    ? 'sepia(1) saturate(6) hue-rotate(310deg) brightness(1.15)'
+    : player.dashTimer > 0
+      ? 'brightness(1.12)'
+      : 'none';
+  ctx.drawImage(
+    image,
+    sourceX,
+    sourceY,
+    ROSTER_SOURCE_WIDTH,
+    ROSTER_SOURCE_HEIGHT,
+    -sprite.drawWidth / 2,
+    sprite.drawY,
+    sprite.drawWidth,
+    sprite.drawHeight
+  );
+  ctx.restore();
+  return true;
+}
 
 export const renderPlayerMethods = {
   drawPlayer(ctx) {
@@ -39,6 +138,24 @@ export const renderPlayerMethods = {
     ctx.fillStyle = 'rgba(0,0,0,0.46)';
     ctx.beginPath(); ctx.ellipse(3, 23, 21, 7, 0, 0, TAU); ctx.fill();
 
+    const moving = movement > 22;
+    const visualAngle = player.swingTimer > 0 || !moving
+      ? player.angle
+      : Math.atan2(player.vy, player.vx);
+    if (drawRosterCharacter(this, ctx, player, movement, visualAngle)) {
+      ctx.restore();
+      if (player.weapon === 'pickaxe' && player.swingTimer > 0) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(245,209,66,0.5)';
+        ctx.lineWidth = 10;
+        ctx.beginPath();
+        ctx.arc(player.x, player.y, player.attackRange * 0.84, player.angle - 0.72, player.angle + 0.72);
+        ctx.stroke();
+        ctx.restore();
+      }
+      return;
+    }
+
     const sideAssets = {
       pickaxe: this.visualAssets?.mattDyno,
       blaster: this.visualAssets?.mattDynoBlaster,
@@ -49,10 +166,6 @@ export const renderPlayerMethods = {
       blaster: this.visualAssets?.mattDynoBlasterVertical,
       dynamite: this.visualAssets?.mattDynoDynamiteVertical
     };
-    const moving = movement > 22;
-    const visualAngle = player.swingTimer > 0 || !moving
-      ? player.angle
-      : Math.atan2(player.vy, player.vx);
     const verticalFacing = Math.abs(Math.sin(visualAngle)) > Math.abs(Math.cos(visualAngle));
     const requestedAsset = verticalFacing
       ? verticalAssets[player.weapon]

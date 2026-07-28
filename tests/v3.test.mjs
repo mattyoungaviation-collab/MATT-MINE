@@ -215,3 +215,51 @@ test('MATT Dyno swaps weapon sheets and uses front and back walking rows', async
   assert.equal(draws.at(-1)[6], -127);
   assert.equal(draws.at(-1)[8], 180);
 });
+
+test('Ronke, Axie, and Orc use their own walk, Pickaxe, Blaster, and Dynamite rows', async () => {
+  const { canvas, profile, context } = installBrowserStubs(true);
+  const { MattMineGame } = await import('../src/game/GameV3.js');
+  const image = (id) => ({
+    id,
+    complete: true,
+    naturalWidth: 1024,
+    naturalHeight: 1536
+  });
+  const characters = [
+    ['ronke', 'ronkeCharacter'],
+    ['axie', 'axieCharacter'],
+    ['orc', 'orcCharacter']
+  ];
+
+  for (const [characterId, asset] of characters) {
+    const game = new MattMineGame(canvas, profile);
+    const draws = [];
+    context.drawImage = (...args) => draws.push(args);
+    game.visualAssets = { [asset]: image(characterId) };
+    game.runContext = { mode: 'practice', characterId, tuning: {}, character: {} };
+    game.startRun();
+
+    game.player.vx = 70;
+    game.drawPlayer(context);
+    assert.equal(draws.at(-1)[0].id, characterId);
+    assert.equal(draws.at(-1)[2], 0);
+
+    for (const [weapon, expectedRow] of [
+      ['pickaxe', 330],
+      ['blaster', 620],
+      ['dynamite', 900]
+    ]) {
+      game.player.weapon = weapon;
+      game.player.swingTimer = weapon === 'dynamite' ? 0.12 : weapon === 'blaster' ? 0.07 : 0.08;
+      game.drawPlayer(context);
+      assert.equal(draws.at(-1)[0].id, characterId);
+      assert.equal(draws.at(-1)[2], expectedRow);
+    }
+
+    game.player.health = 0;
+    game.player.swingTimer = 0;
+    game.drawPlayer(context);
+    assert.equal(draws.at(-1)[1], 744);
+    assert.equal(draws.at(-1)[2], 1196);
+  }
+});
