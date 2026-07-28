@@ -1213,6 +1213,39 @@ test('the Ronin adapter submits a zero-value reward claim from the actively sele
   assert.equal(sent.params[0].value, '0x0');
 });
 
+test('the Ronin adapter reports a revive payment hash immediately after wallet broadcast', async () => {
+  const transactionHash = `0x${'4'.repeat(64)}`;
+  const broadcasts = [];
+  const provider = {
+    async request(payload) {
+      if (payload.method === 'eth_requestAccounts') return [account.address];
+      if (payload.method === 'eth_chainId') return `0x${RONIN_CHAINS.MAINNET.toString(16)}`;
+      if (payload.method === 'eth_sendTransaction') return transactionHash;
+      if (payload.method === 'eth_getTransactionReceipt') return { status: '0x1' };
+      throw new Error(`Unexpected method ${payload.method}`);
+    }
+  };
+  const adapter = new RoninWalletAdapter({
+    api: { hasSession: () => true },
+    window: { ronin: { provider } }
+  });
+  adapter.player = { address: account.address.toLowerCase() };
+  adapter.provider = provider;
+
+  const returned = await adapter.sendPreparedTransaction({
+    to: '0xBacE355D23d378a6E1adD986E53a18Dd12E6EeAc',
+    value: '0x8ac7230489e80000',
+    data: '0x'
+  }, {
+    onBroadcast(hash) {
+      broadcasts.push(hash);
+    }
+  });
+
+  assert.equal(returned, transactionHash);
+  assert.deepEqual(broadcasts, [transactionHash]);
+});
+
 test('the Ronin adapter sends Arena approval and entry transactions to the wallet in order', async () => {
   const calls = [];
   const transactionHashes = [

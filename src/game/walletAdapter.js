@@ -141,6 +141,9 @@ export class RoninWalletAdapter {
     if (!/^0x[a-fA-F0-9]{64}$/.test(transactionHash || '')) {
       throw new Error('Ronin Wallet did not return a valid transaction hash.');
     }
+    if (typeof options.onBroadcast === 'function') {
+      options.onBroadcast(transactionHash);
+    }
     await waitForWalletReceipt(this.provider, transactionHash);
     if (options.verifyBroadcast) {
       await verifyBroadcastTransaction(this.provider, transactionHash, transaction);

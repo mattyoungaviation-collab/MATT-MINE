@@ -95,6 +95,8 @@ let activePracticeClaim = null;
 let resultScreenMode = null;
 let activeBetaTools = null;
 let paidRevivePending = false;
+let paidReviveBusy = false;
+let paidReviveContext = null;
 let pendingAvatarDataUrl = '';
 let abandonConfirmUntil = 0;
 let abandonResetTimer = null;
@@ -841,35 +843,92 @@ async function startRunMode(mode) {
 }
 
 async function purchasePaidRevive() {
-  if (!paidRevivePending || !activeServerRun || !activeArenaTranscript) return;
   const button = $('#paid-revive-button');
+  if (paidReviveBusy) return;
+  if (!paidRevivePending) {
+    toast('This revive offer is no longer active.');
+    return;
+  }
+  const context = paidReviveContext || (
+    activeServerRun && activeArenaTranscript
+      ? {
+          runId: activeServerRun.runId,
+          transcript: activeArenaTranscript,
+          pending: null,
+          transactionHash: ''
+        }
+      : null
+  );
+  if (!context?.runId || !context?.transcript) {
+    button.disabled = true;
+    button.textContent = 'REVIVE UNAVAILABLE';
+    $('#economy-result').innerHTML =
+      '<strong>REVIVE UNAVAILABLE</strong><span>The verified run session is no longer active.</span><small>End the run safely and start another mine.</small>';
+    toast('The verified run session expired. End this run and start another mine.');
+    return;
+  }
+  paidReviveContext = context;
+  paidReviveBusy = true;
   button.disabled = true;
-  button.textContent = 'VERIFYING KNOCKOUT...';
-  let serverPending = false;
+  let serverPending = Boolean(context.pending);
   try {
-    const checkpoint = await activeArenaTranscript.flush();
-    const pending = await apiClient.requestPaidRevive(activeServerRun.runId, {
-      checkpoint
-    });
-    serverPending = true;
-    button.textContent = `CONFIRM ${formatRonWei(pending.priceRonWei)} RON`;
-    const transactionHash = await wallet.sendPreparedTransaction(pending.transaction);
+    if (!context.pending) {
+      button.textContent = 'VERIFYING KNOCKOUT...';
+      $('#economy-result').innerHTML =
+        '<strong>VERIFYING KNOCKOUT</strong><span>Securing the latest server replay checkpoint.</span><small>Ronin Wallet opens after the server confirms this revive is eligible.</small>';
+      const checkpoint = await context.transcript.flush();
+      if (!checkpoint) throw new Error('The verified run checkpoint is unavailable.');
+      context.pending = await apiClient.requestPaidRevive(context.runId, { checkpoint });
+      serverPending = true;
+    }
+    if (!context.transactionHash) {
+      button.textContent = `CONFIRM ${formatRonWei(context.pending.priceRonWei)} RON`;
+      $('#economy-result').innerHTML = `
+        <strong>RONIN CONFIRMATION REQUIRED</strong>
+        <span>Approve exactly ${formatRonWei(context.pending.priceRonWei)} RON in Ronin Wallet.</span>
+        <small>Keep this page open while the transaction confirms.</small>
+      `;
+      context.transactionHash = await wallet.sendPreparedTransaction(context.pending.transaction, {
+        onBroadcast(transactionHash) {
+          context.transactionHash = transactionHash;
+        }
+      });
+    }
     button.textContent = 'CONFIRMING ON RONIN...';
-    await apiClient.confirmPaidRevive(activeServerRun.runId, transactionHash);
+    $('#economy-result').innerHTML =
+      '<strong>PAYMENT SENT</strong><span>Waiting for the verified Ronin receipt.</span><small>Do not close the game. Confirmation can be retried without paying again.</small>';
+    await apiClient.confirmPaidRevive(context.runId, context.transactionHash);
     if (!game.applyPaidRevive()) throw new Error('The saved run could not resume safely.');
+    paidRevivePending = false;
+    paidReviveContext = null;
   } catch (error) {
-    if (serverPending) {
-      await apiClient.cancelPaidRevive(activeServerRun.runId).catch(() => undefined);
+    if (serverPending && !context.transactionHash) {
+      await apiClient.cancelPaidRevive(context.runId).catch(() => undefined);
+      context.pending = null;
     }
     button.disabled = false;
-    button.textContent = 'REVIVE WITH RON';
+    button.textContent = context.transactionHash ? 'RETRY CONFIRMATION' : 'REVIVE WITH RON';
+    $('#economy-result').innerHTML = `
+      <strong>${context.transactionHash ? 'CONFIRMATION NEEDS RETRY' : 'REVIVE NOT STARTED'}</strong>
+      <span>${escapeHtml(error.message || 'The revive could not be completed.')}</span>
+      <small>${context.transactionHash
+        ? 'Your payment hash is saved in this open game. Retry confirmation without sending another payment.'
+        : 'No RON was accepted. You can try again or safely end the run.'}</small>
+    `;
     toast(error.message);
+  } finally {
+    paidReviveBusy = false;
   }
 }
 
 function declinePaidRevive() {
   if (!paidRevivePending) return;
+  if (paidReviveBusy || paidReviveContext?.transactionHash) {
+    toast('Finish confirming the broadcast revive payment before ending this run.');
+    return;
+  }
   paidRevivePending = false;
+  paidReviveContext = null;
   game.declinePaidRevive();
 }
 
@@ -890,6 +949,9 @@ function formatRonWei(value) {
 
 const game = new MattMineGame(canvas, profile, {
   onRunStart() {
+    paidRevivePending = false;
+    paidReviveBusy = false;
+    paidReviveContext = null;
     resetAbandonButton();
     showScreen();
     setGameplayUi(true);
@@ -959,6 +1021,8 @@ const game = new MattMineGame(canvas, profile, {
   },
   onRunEnd(result) {
     paidRevivePending = false;
+    paidReviveBusy = false;
+    paidReviveContext = null;
     $('#paid-revive-panel').hidden = true;
     $('#play-again-button').hidden = false;
     $('#menu-button').hidden = false;
@@ -992,6 +1056,15 @@ const game = new MattMineGame(canvas, profile, {
   },
   onPaidReviveOffered(data) {
     paidRevivePending = true;
+    paidReviveBusy = false;
+    paidReviveContext = activeServerRun && activeArenaTranscript
+      ? {
+          runId: activeServerRun.runId,
+          transcript: activeArenaTranscript,
+          pending: null,
+          transactionHash: ''
+        }
+      : null;
     resultScreenMode = activeServerRun?.mode || RUN_MODES.PRACTICE;
     $('#end-kicker').textContent = 'MINER DOWN';
     $('#end-title').textContent = 'Revive This Run?';
@@ -1006,6 +1079,10 @@ const game = new MattMineGame(canvas, profile, {
       <div><span>Ore Broken</span><strong>${data.oreBroken}</strong></div>
     `;
     $('#economy-result').innerHTML = '<strong>RUN PAUSED</strong><span>Your rooms, weapons, upgrades, boss progress, and score are preserved.</span>';
+    const reviveButton = $('#paid-revive-button');
+    reviveButton.disabled = !paidReviveContext;
+    reviveButton.textContent = paidReviveContext ? 'REVIVE WITH RON' : 'REVIVE UNAVAILABLE';
+    $('#paid-revive-decline').disabled = false;
     $('#paid-revive-panel').hidden = false;
     $('#play-again-button').hidden = true;
     $('#menu-button').hidden = true;
@@ -1014,6 +1091,8 @@ const game = new MattMineGame(canvas, profile, {
   },
   onPaidReviveApplied() {
     paidRevivePending = false;
+    paidReviveBusy = false;
+    paidReviveContext = null;
     $('#paid-revive-panel').hidden = true;
     showScreen();
     setGameplayUi(true);
@@ -1026,6 +1105,9 @@ const game = new MattMineGame(canvas, profile, {
   },
   onMenu() {
     resultScreenMode = null;
+    paidRevivePending = false;
+    paidReviveBusy = false;
+    paidReviveContext = null;
     clearPracticeClaimPanel();
     showScreen('menu');
     setGameplayUi(false);
