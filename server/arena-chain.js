@@ -473,7 +473,7 @@ export class RoninArenaChain {
         kind: 'approve',
         chainId: 2020,
         to: this.mattTokenAddress,
-        value: '0',
+        value: '0x0',
         data: encodeFunctionData({
           abi: ARENA_ERC20_ABI,
           functionName: 'approve',
@@ -487,7 +487,7 @@ export class RoninArenaChain {
       kind: 'enter',
       chainId: 2020,
       to: this.contractAddress,
-      value: '0',
+      value: '0x0',
       data: encodeFunctionData({
         abi: DAILY_ARENA_ABI,
         functionName: 'enter',
@@ -524,7 +524,7 @@ export class RoninArenaChain {
         kind: 'claim_refund',
         chainId: 2020,
         to: this.contractAddress,
-        value: '0',
+        value: '0x0',
         data: encodeFunctionData({
           abi: DAILY_ARENA_ABI,
           functionName: 'claimEntryRefund',

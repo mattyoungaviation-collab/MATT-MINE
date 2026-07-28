@@ -463,10 +463,23 @@ test('Arena quote emits exact approval only when needed, then enter(dayId)', asy
   const chain = arenaChain(client);
   const quote = await chain.quoteEntry(PLAYER, DAY, FEE_RAW);
   assert.deepEqual(quote.transactions.map((transaction) => transaction.kind), ['approve', 'enter']);
-  assert.equal(quote.transactions.every((transaction) => transaction.value === '0'), true);
+  assert.equal(quote.transactions.every((transaction) => transaction.value === '0x0'), true);
   allowance = BigInt(FEE_RAW);
   const approved = await chain.quoteEntry(PLAYER, DAY, FEE_RAW);
   assert.deepEqual(approved.transactions.map((transaction) => transaction.kind), ['enter']);
+});
+
+test('Arena refund quote emits a wallet-valid zero-value transaction', async () => {
+  const client = fakeChainClient({
+    readContract({ functionName }) {
+      if (functionName === 'refundableMatt') return BigInt(FEE_RAW);
+      throw new Error(`unexpected read ${functionName}`);
+    }
+  });
+  const quote = await arenaChain(client).quoteRefund(PLAYER, DAY);
+  assert.equal(quote.refundRaw, FEE_RAW);
+  assert.equal(quote.transaction.kind, 'claim_refund');
+  assert.equal(quote.transaction.value, '0x0');
 });
 
 test('Arena confirmation verifies enter calldata and the exact ContestEntered log', async () => {
