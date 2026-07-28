@@ -61,11 +61,15 @@ async function signIn(harness, signer = account) {
     origin: ORIGIN
   });
   const signature = await signer.signMessage({ message: challenge.message });
-  return harness.service.verifyChallenge({
+  const session = await harness.service.verifyChallenge({
     address: signer.address,
     nonce: challenge.nonce,
     signature
   });
+  if (session.identity?.requiresSetup) {
+    await harness.service.setPlayerIdentity(session.token, { name: 'LedgerTester' });
+  }
+  return session;
 }
 
 test('run rewards create immutable run extraction ledger entries', async () => {
