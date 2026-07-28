@@ -11,7 +11,7 @@ import {
 import { RoninRewardChain } from '../server/reward-chain.js';
 import { RewardManager } from '../server/reward-manager.js';
 import { MemoryRewardStore, PostgresRewardStore } from '../server/reward-store.js';
-import { ProductionMattMineService } from '../server/production-service.js';
+import { CompleteProductionMattMineService } from '../server/complete-production-service.js';
 import { DailyArenaService } from '../server/arena-service.js';
 import {
   RONIN_ARENA_DEPLOYMENT,
@@ -109,7 +109,7 @@ const arenaService = arenaEnabled
       liveEnabled: arenaLiveRequested
     }).init()
   : null;
-const service = new ProductionMattMineService(database, {
+const service = new CompleteProductionMattMineService(database, {
   publicOrigin: process.env.MATT_MINE_PUBLIC_ORIGIN || null,
   adminKey: process.env.MATT_MINE_ADMIN_KEY || '',
   mainnetTransactionsEnabled,
