@@ -293,90 +293,104 @@
 
       <section id="menu" class="screen menu-v4" aria-labelledby="game-title">
         <button id="home-button" class="home-chip" type="button" aria-label="Return to MATT Mine website">← HOME</button>
-        <div class="brand-lockup compact-brand">
-          <div class="brand-mark" aria-hidden="true">⛏</div>
-          <p class="eyebrow">A MATT TOKEN GAME</p>
-          <h1 id="game-title"><span>MATT</span> MINE</h1>
-          <p class="tagline">DIG DEEP. FIGHT HARD. GET OUT ALIVE.</p>
-        </div>
-
         <div class="menu-card economy-menu-card">
-          <div class="matchmaking-heading">
-            <div>
-              <p class="eyebrow">CHOOSE WHERE TO PLAY</p>
-              <h2>Pick a mine</h2>
-              <p>Every mine uses the same simple controls. The prize rules are different.</p>
+          <header class="lobby-topbar">
+            <div class="brand-lockup compact-brand">
+              <div class="brand-mark" aria-hidden="true">⛏</div>
+              <div class="compact-brand-copy">
+                <p class="eyebrow">A MATT TOKEN GAME</p>
+                <h1 id="game-title"><span>MATT</span> MINE</h1>
+                <p class="tagline">DIG DEEP. FIGHT HARD. GET OUT ALIVE.</p>
+              </div>
             </div>
-            <span class="matchmaking-day"><small>TODAY</small><strong id="menu-date">JUL 26</strong></span>
-          </div>
-
-          <div class="menu-mine-overview">
-            <div class="menu-map-heading">
-              <span><b>ACTUAL FREE DAILY MAP</b><small>7 rooms → beat the boss → return to the lift</small></span>
-              <em>SAME FREE MAP FOR EVERY RANKED PLAYER</em>
+            <div class="matchmaking-heading">
+              <div>
+                <p class="eyebrow">CHOOSE WHERE TO PLAY</p>
+                <h2>Pick a mine</h2>
+                <p>Choose a lobby, enter the mine, beat the boss, and return to the lift.</p>
+              </div>
+              <span class="matchmaking-day"><small>TODAY</small><strong id="menu-date">JUL 26</strong></span>
             </div>
-            <div class="mine-route-map" role="img" aria-label="Actual top-down preview of today's Free Daily Mine">
-              <canvas data-daily-mine-preview width="1100" height="280" aria-hidden="true"></canvas>
+          </header>
+
+          <div class="matchmaking-layout">
+            <div class="mine-briefing-column">
+              <div class="menu-mine-overview">
+                <div class="menu-map-heading">
+                  <span><b>ACTUAL FREE DAILY MAP</b><small>7 rooms → beat the boss → return to the lift</small></span>
+                  <em>SAME MAP FOR EVERY RANKED PLAYER</em>
+                </div>
+                <div class="mine-route-map" role="img" aria-label="Actual top-down preview of today's Free Daily Mine">
+                  <canvas data-daily-mine-preview width="1100" height="280" aria-hidden="true"></canvas>
+                </div>
+              </div>
+              <div class="quick-play-guide" aria-label="How to play">
+                <span><b>1</b><strong>MOVE</strong><small>WASD, arrows, or joystick</small></span>
+                <span><b>2</b><strong>FIGHT</strong><small>Aim, attack, and collect upgrades</small></span>
+                <span><b>3</b><strong>ESCAPE</strong><small>Beat the boss, then use the lift</small></span>
+              </div>
+            </div>
+
+            <div class="lobby-choice-column">
+              <div class="lobby-choice-heading">
+                <span>SELECT A LOBBY</span>
+                <small>Practice is always free. Ranked mines save your score.</small>
+              </div>
+              <div class="run-mode-grid four-lobbies" aria-label="Choose one of four play lobbies">
+                <button id="free-run-button" class="run-mode-card free-run-card">
+                  <span class="lobby-number">1</span>
+                  <span class="mode-kicker">FREE DAILY MINE</span>
+                  <strong>Play once for free</strong>
+                  <small>One ranked run today. Earn leaderboard rewards.</small>
+                  <span class="lobby-status"><strong id="free-run-status">AVAILABLE</strong><small>Resets 00:00 UTC</small></span>
+                  <b id="free-run-cta">PLAY FREE</b>
+                </button>
+                <button id="paid-run-button" class="run-mode-card paid-run-card">
+                  <span class="lobby-number">2</span>
+                  <span class="mode-kicker">PASS MINE</span>
+                  <strong>Use a run credit</strong>
+                  <small>Pass holders compete for the larger weekly pool.</small>
+                  <span class="lobby-status"><strong id="pass-status">FREE TIER</strong><small id="pass-days">Pass needed</small></span>
+                  <span class="lobby-credit"><b id="paid-credit-count">0</b> credits · <small id="paid-daily-status">0 / 10 today</small></span>
+                  <b id="paid-run-cta">GET MINE PASS</b>
+                </button>
+                <button id="arena-button" class="run-mode-card arena-run-card" type="button">
+                  <span class="lobby-number">3</span>
+                  <span class="mode-kicker">MATT ARENA</span>
+                  <strong>Enter with MATT</strong>
+                  <small>Unlimited entries. Your best score counts.</small>
+                  <span class="lobby-status"><strong id="arena-menu-pool">—</strong><small>Today's prize pool</small></span>
+                  <b id="arena-menu-action">ENTER ARENA</b>
+                </button>
+                <button id="practice-run-button" class="run-mode-card practice-run-card">
+                  <span class="lobby-number">4</span>
+                  <span class="mode-kicker">PRACTICE MINE</span>
+                  <strong>Learn with no risk</strong>
+                  <small>Free and unlimited. No prizes. Great for learning.</small>
+                  <span class="lobby-status"><strong>ALWAYS OPEN</strong><small>No wallet needed</small></span>
+                  <b>START PRACTICE</b>
+                </button>
+              </div>
             </div>
           </div>
 
-          <div class="run-mode-grid four-lobbies" aria-label="Choose one of four play lobbies">
-            <button id="free-run-button" class="run-mode-card free-run-card">
-              <span class="lobby-number">1</span>
-              <span class="mode-kicker">FREE DAILY MINE</span>
-              <strong>Play once for free</strong>
-              <small>One ranked run today. Earn leaderboard rewards.</small>
-              <span class="lobby-status"><strong id="free-run-status">AVAILABLE</strong><small>Resets 00:00 UTC</small></span>
-              <b id="free-run-cta">PLAY FREE</b>
-            </button>
-            <button id="paid-run-button" class="run-mode-card paid-run-card">
-              <span class="lobby-number">2</span>
-              <span class="mode-kicker">PASS MINE</span>
-              <strong>Use a run credit</strong>
-              <small>Pass holders compete for the larger weekly pool.</small>
-              <span class="lobby-status"><strong id="pass-status">FREE TIER</strong><small id="pass-days">Pass needed</small></span>
-              <span class="lobby-credit"><b id="paid-credit-count">0</b> credits · <small id="paid-daily-status">0 / 10 today</small></span>
-              <b id="paid-run-cta">GET MINE PASS</b>
-            </button>
-            <button id="arena-button" class="run-mode-card arena-run-card" type="button">
-              <span class="lobby-number">3</span>
-              <span class="mode-kicker">MATT ARENA</span>
-              <strong>Enter with MATT</strong>
-              <small>Unlimited entries. Your best score counts.</small>
-              <span class="lobby-status"><strong id="arena-menu-pool">—</strong><small>Today's prize pool</small></span>
-              <b id="arena-menu-action">ENTER ARENA</b>
-            </button>
-            <button id="practice-run-button" class="run-mode-card practice-run-card">
-              <span class="lobby-number">4</span>
-              <span class="mode-kicker">PRACTICE MINE</span>
-              <strong>Learn with no risk</strong>
-              <small>Free and unlimited. No prizes. Great for learning.</small>
-              <span class="lobby-status"><strong>ALWAYS OPEN</strong><small>No wallet needed</small></span>
-              <b>START PRACTICE</b>
-            </button>
-          </div>
+          <div class="menu-bottom-deck">
+            <div class="menu-stats compact-stats">
+              <div><span>Banked Nuggets</span><strong id="menu-nuggets">0</strong></div>
+              <div><span>Best Depth</span><strong id="menu-depth">0</strong></div>
+              <div><span>Best Run</span><strong id="menu-score">0</strong></div>
+            </div>
 
-          <div class="quick-play-guide" aria-label="How to play">
-            <span><b>1</b><strong>MOVE</strong><small>WASD, arrows, or joystick</small></span>
-            <span><b>2</b><strong>AIM &amp; ATTACK</strong><small>Mouse, Space, or attack button</small></span>
-            <span><b>3</b><strong>BEAT THE BOSS</strong><small>Then use the exit lift</small></span>
-          </div>
-
-          <div class="menu-stats compact-stats">
-            <div><span>Banked Nuggets</span><strong id="menu-nuggets">0</strong></div>
-            <div><span>Best Depth</span><strong id="menu-depth">0</strong></div>
-            <div><span>Best Run</span><strong id="menu-score">0</strong></div>
-          </div>
-
-          <div class="menu-nav-grid">
-            <button id="leaderboards-button" class="secondary-button">LEADERBOARDS</button>
-            <button id="pass-button" class="secondary-button">MINE PASS</button>
-            <button id="upgrades-button" class="secondary-button">UPGRADES</button>
-            <button id="profile-button" class="secondary-button">PROFILE</button>
-            <button id="controls-button" class="secondary-button controls-nav-button">CONTROLS</button>
-            <button id="sound-button" class="secondary-button">SOUND</button>
-            <button id="shake-toggle-button" class="secondary-button preference-toggle" type="button" aria-pressed="true">SHAKE ON</button>
-            <button id="admin-button" class="secondary-button admin-nav" hidden>ADMIN TEST</button>
+            <div class="menu-nav-grid" aria-label="Player menu">
+              <button id="leaderboards-button" class="secondary-button">LEADERBOARDS</button>
+              <button id="pass-button" class="secondary-button">MINE PASS</button>
+              <button id="upgrades-button" class="secondary-button">UPGRADES</button>
+              <button id="profile-button" class="secondary-button">PROFILE</button>
+              <button id="controls-button" class="secondary-button controls-nav-button">CONTROLS</button>
+              <button id="sound-button" class="secondary-button">SOUND</button>
+              <button id="shake-toggle-button" class="secondary-button preference-toggle" type="button" aria-pressed="true">SHAKE ON</button>
+              <button id="admin-button" class="secondary-button admin-nav" hidden>ADMIN TEST</button>
+            </div>
           </div>
         </div>
 
@@ -715,34 +729,44 @@
 
       <section id="run-end" class="screen" aria-labelledby="end-title">
         <div class="panel choice-panel results-panel-v4">
-          <p id="end-kicker" class="eyebrow">RUN COMPLETE</p>
-          <h2 id="end-title">Loot Secured</h2>
-          <div id="run-mode-result" class="run-mode-result">PRACTICE RUN</div>
-          <div id="run-cosmetic-result" class="run-cosmetic-result"></div>
-          <div id="end-stats" class="end-stats"></div>
-          <div id="economy-result" class="economy-result"></div>
-          <section id="paid-revive-panel" class="practice-claim-card" hidden>
-            <p class="eyebrow">ONE LAST CHANCE</p>
-            <div class="run-claim-info">
-              <strong>Revive at full health</strong>
-              <span>Pay the exact RON amount shown by the server and continue this same run.</span>
-              <small>One revive only. Verified payments are final and non-refundable.</small>
+          <header class="results-heading">
+            <p id="end-kicker" class="eyebrow">RUN COMPLETE</p>
+            <h2 id="end-title">Loot Secured</h2>
+          </header>
+          <div class="results-layout">
+            <div class="results-summary-column">
+              <div id="run-mode-result" class="run-mode-result">PRACTICE RUN</div>
+              <div id="run-cosmetic-result" class="run-cosmetic-result"></div>
+              <div id="end-stats" class="end-stats"></div>
             </div>
-            <button id="paid-revive-button" class="primary-button" type="button">REVIVE WITH RON</button>
-            <button id="paid-revive-decline" class="secondary-button" type="button">KEEP 50% AND END RUN</button>
-          </section>
-          <section id="practice-claim-panel" class="practice-claim-card" hidden>
-            <p class="eyebrow">PRACTICE CLAIM</p>
-            <div id="practice-claim-info" class="run-claim-info"></div>
-            <label class="input-wrap">
-              <span>Practice reward transaction hash</span>
-              <input id="practice-claim-hash" type="text" inputmode="latin" autocomplete="off" placeholder="0x..." />
-            </label>
-            <button id="practice-claim-button" class="primary-button" type="button">CLAIM PRACTICE REWARDS</button>
-            <button id="practice-decline-button" class="secondary-button" type="button">DECLINE REWARDS</button>
-          </section>
-          <button id="play-again-button" class="primary-button">CHOOSE NEXT RUN</button>
-          <button id="menu-button" class="secondary-button">BACK TO BASE</button>
+            <div class="results-outcome-column">
+              <div id="economy-result" class="economy-result"></div>
+              <section id="paid-revive-panel" class="practice-claim-card" hidden>
+                <p class="eyebrow">ONE LAST CHANCE</p>
+                <div class="run-claim-info">
+                  <strong>Revive at full health</strong>
+                  <span>Pay the exact RON amount shown by the server and continue this same run.</span>
+                  <small>One revive only. Verified payments are final and non-refundable.</small>
+                </div>
+                <button id="paid-revive-button" class="primary-button" type="button">REVIVE WITH RON</button>
+                <button id="paid-revive-decline" class="secondary-button" type="button">KEEP 50% AND END RUN</button>
+              </section>
+              <section id="practice-claim-panel" class="practice-claim-card" hidden>
+                <p class="eyebrow">PRACTICE CLAIM</p>
+                <div id="practice-claim-info" class="run-claim-info"></div>
+                <label class="input-wrap">
+                  <span>Practice reward transaction hash</span>
+                  <input id="practice-claim-hash" type="text" inputmode="latin" autocomplete="off" placeholder="0x..." />
+                </label>
+                <button id="practice-claim-button" class="primary-button" type="button">CLAIM PRACTICE REWARDS</button>
+                <button id="practice-decline-button" class="secondary-button" type="button">DECLINE REWARDS</button>
+              </section>
+            </div>
+          </div>
+          <div class="results-actions">
+            <button id="play-again-button" class="primary-button">CHOOSE NEXT RUN</button>
+            <button id="menu-button" class="secondary-button">BACK TO BASE</button>
+          </div>
         </div>
       </section>
 
