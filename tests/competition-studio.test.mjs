@@ -239,13 +239,50 @@ test('published weekly mines descend through all five authored maps before extra
   assert.equal(buildCompetitiveChallenge(run).maxDepth, 5);
 });
 
+test('Admin Practice playtests begin on the selected authored depth', async () => {
+  installBrowserStubs();
+  const { MattMineGame } = await import('../src/game/GameV4.js');
+  const snapshot = structuredClone(defaultCompetitionStudio(NOW).slots.practice.draft);
+  snapshot.id = 'admin-depth-five-test';
+  snapshot.status = 'test';
+  snapshot.fingerprint = 'ADMIN-TEST';
+  snapshot.depths[3].map.name = 'Admin Playtest Depth Four';
+  snapshot.depths[4].map.name = 'Admin Playtest Depth Five';
+
+  for (const startingDepth of [4, 5]) {
+    const game = new MattMineGame(browserCanvas(), defaultProfile(), { headless: true });
+    game.startRun({
+      mode: 'practice',
+      seed: `ADMIN-PLAYTEST-${startingDepth}`,
+      startingDepth,
+      tuning: { usePerDepthRoomSpawns: false, _competitionSnapshot: snapshot },
+      competitionSnapshot: snapshot
+    });
+    assert.equal(game.run.depth, startingDepth);
+    assert.equal(
+      game.layout.source.name,
+      startingDepth === 4 ? 'Admin Playtest Depth Four' : 'Admin Playtest Depth Five'
+    );
+  }
+
+  const ordinaryPractice = new MattMineGame(browserCanvas(), defaultProfile(), { headless: true });
+  ordinaryPractice.startRun({
+    mode: 'practice',
+    seed: 'ORDINARY-PRACTICE',
+    startingDepth: 5,
+    competitionSnapshot: { ...snapshot, status: 'live' }
+  });
+  assert.equal(ordinaryPractice.run.depth, 1, 'only explicit Admin test snapshots may skip depths');
+});
+
 test('production surfaces include the six-card hub, exact-map loading screen, and visual Admin editor', async () => {
-  const [admin, main, hub, loading, productionCss, ...mineCardAssets] = await Promise.all([
+  const [admin, main, hub, loading, productionCss, studioJs, ...mineCardAssets] = await Promise.all([
     readFile(new URL('../admin.html', import.meta.url), 'utf8'),
     readFile(new URL('../src/main.js', import.meta.url), 'utf8'),
     readFile(new URL('../src/game/mineHub.js', import.meta.url), 'utf8'),
     readFile(new URL('../src/game/mineLoadingScreen.js', import.meta.url), 'utf8'),
     readFile(new URL('../src/production.css', import.meta.url), 'utf8'),
+    readFile(new URL('../src/adminCompetitionStudio.js', import.meta.url), 'utf8'),
     ...COMPETITION_SLOTS.map((slot) =>
       readFile(new URL(`../assets/game/mine-cards/${slot.id}.webp`, import.meta.url))
     )
@@ -262,6 +299,8 @@ test('production surfaces include the six-card hub, exact-map loading screen, an
   assert.ok(mineCardAssets.every((asset) => asset.byteLength > 20_000));
   assert.match(loading, /MINIMUM_LOADING_MS = 10_000/);
   assert.match(main, /competitionSnapshot/);
+  assert.match(main, /startingDepth: testDepth/);
+  assert.match(studioJs, /testDepth: studio\.depth/);
 });
 
 function installBrowserStubs() {

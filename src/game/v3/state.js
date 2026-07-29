@@ -19,7 +19,7 @@ export const stateMethods = {
     const characterHealthScale = Number(character.baseHealth || 100) / 100;
     const maxHealth = ((tuning.playerMaxHealth || CONFIG.basePlayerHealth) + (meta.health || 0) * 8) * characterHealthScale;
     this.run = {
-      depth: 1,
+      depth: this.runContext?.startingDepth || 1,
       rawNuggets: 0,
       displayedScore: 0,
       kills: 0,

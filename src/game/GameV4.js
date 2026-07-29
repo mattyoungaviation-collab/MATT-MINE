@@ -18,6 +18,14 @@ const DETERMINISTIC_SERVER_MODES = new Set(['arena', 'free', 'paid', 'weekly', '
  */
 export class MattMineGame extends V3MattMineGame {
   startRun(context = {}) {
+    const competitionSnapshot = context.competitionSnapshot && typeof context.competitionSnapshot === 'object'
+      ? structuredClone(context.competitionSnapshot)
+      : context.tuning?._competitionSnapshot && typeof context.tuning._competitionSnapshot === 'object'
+        ? structuredClone(context.tuning._competitionSnapshot)
+        : null;
+    const startingDepth = context.mode === 'practice' && competitionSnapshot?.status === 'test'
+      ? Math.max(1, Math.min(5, Math.floor(Number(context.startingDepth) || 1)))
+      : 1;
     this.runContext = {
       mode: context.mode || 'practice',
       seed: context.seed || `MATT-PRACTICE-${Date.now()}`,
@@ -28,11 +36,8 @@ export class MattMineGame extends V3MattMineGame {
       character: context.character && typeof context.character === 'object' ? { ...context.character } : {},
       weeklyStage: context.weeklyStage && typeof context.weeklyStage === 'object' ? { ...context.weeklyStage } : null,
       endlessSnapshot: context.endlessSnapshot && typeof context.endlessSnapshot === 'object' ? { ...context.endlessSnapshot } : null,
-      competitionSnapshot: context.competitionSnapshot && typeof context.competitionSnapshot === 'object'
-        ? structuredClone(context.competitionSnapshot)
-        : context.tuning?._competitionSnapshot && typeof context.tuning._competitionSnapshot === 'object'
-          ? structuredClone(context.tuning._competitionSnapshot)
-          : null,
+      competitionSnapshot,
+      startingDepth,
       allowPaidRevive: context.allowPaidRevive === true,
       reviveInvulnerabilitySeconds: Math.max(0, Number(context.reviveInvulnerabilitySeconds || 3)),
       tuning: context.tuning && typeof context.tuning === 'object' ? { ...context.tuning } : {}
