@@ -596,6 +596,14 @@
   color: #777f8d;
 }
 
+.launch-economy-section .launch-section-heading h2 {
+  line-height: 1.02;
+}
+
+.launch-economy-section .launch-section-heading h2 span {
+  display: inline-block;
+}
+
 .launch-section-copy {
   max-width: 690px;
   margin: 24px 0 0;
@@ -607,6 +615,10 @@
 .centered .launch-section-copy {
   margin-left: auto;
   margin-right: auto;
+}
+
+.launch-economy-section .launch-section-copy {
+  margin-top: 34px;
 }
 
 .launch-loop-grid {

@@ -930,10 +930,28 @@ export class MattMineGame {
   updateCamera(dt) {
     const lookAheadX = clamp(this.player.vx * 0.23, -120, 120);
     const lookAheadY = clamp(this.player.vy * 0.18, -80, 80);
-    const targetX = clamp(this.player.x - this.viewportWidth / 2 + lookAheadX, 0, CONFIG.worldWidth - this.viewportWidth);
-    const targetY = clamp(this.player.y - this.viewportHeight / 2 + lookAheadY, 0, CONFIG.worldHeight - this.viewportHeight);
+    const bounds = this.cameraBounds();
+    const targetX = clamp(this.player.x - this.viewportWidth / 2 + lookAheadX, bounds.minX, bounds.maxX);
+    const targetY = clamp(this.player.y - this.viewportHeight / 2 + lookAheadY, bounds.minY, bounds.maxY);
     this.camera.x += (targetX - this.camera.x) * Math.min(1, dt * 6.5);
     this.camera.y += (targetY - this.camera.y) * Math.min(1, dt * 6.5);
+  }
+
+  cameraBounds() {
+    const rooms = this.layout?.rooms || [];
+    const centersX = rooms.map((room) => room.x);
+    const centersY = rooms.map((room) => room.y);
+    const edgePadding = 72;
+    const minCenterX = centersX.length ? Math.min(...centersX) : this.viewportWidth / 2;
+    const maxCenterX = centersX.length ? Math.max(...centersX) : CONFIG.worldWidth - this.viewportWidth / 2;
+    const minCenterY = centersY.length ? Math.min(...centersY) : this.viewportHeight / 2;
+    const maxCenterY = centersY.length ? Math.max(...centersY) : CONFIG.worldHeight - this.viewportHeight / 2;
+    return {
+      minX: Math.min(0, minCenterX - this.viewportWidth / 2 - edgePadding),
+      maxX: Math.max(CONFIG.worldWidth - this.viewportWidth, maxCenterX - this.viewportWidth / 2 + edgePadding),
+      minY: Math.min(0, minCenterY - this.viewportHeight / 2 - edgePadding),
+      maxY: Math.max(CONFIG.worldHeight - this.viewportHeight, maxCenterY - this.viewportHeight / 2 + edgePadding)
+    };
   }
 
   updateCurrentRoom() {

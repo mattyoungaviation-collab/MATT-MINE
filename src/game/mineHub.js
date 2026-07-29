@@ -89,12 +89,12 @@ export async function mountMineHub(apiClient) {
 
 function renderCards(container, slots) {
   container.innerHTML = slots.map((slot) => `
-    <button type="button" class="competition-slot-card slot-${slot.id} ${slot.comingSoon ? 'disabled' : ''}" data-mine-slot="${slot.id}" ${slot.comingSoon ? 'disabled' : ''} style="--slot-color:${slot.color}">
+    <button type="button" class="competition-slot-card slot-${slot.id} ${slot.comingSoon ? 'disabled' : ''}" data-mine-slot="${slot.id}" ${slot.comingSoon ? 'disabled' : ''} style="--slot-color:${slot.color}" aria-label="${slot.comingSoon ? `${escapeHtml(slot.name)} coming soon` : `Open ${escapeHtml(slot.snapshot?.name || slot.name)}`}">
       <span class="slot-number">0${slot.number}</span>
       <span class="slot-state">${slot.comingSoon ? 'COMING SOON' : slot.state === 'live' ? 'LIVE NOW' : 'OPEN'}</span>
       <strong>${escapeHtml(slot.snapshot?.name || slot.name)}</strong>
       <small>${escapeHtml(slot.snapshot?.subtitle || slot.subtitle || '')}</small>
-      <span class="slot-meta">${slot.leaderboard ? 'VIEW LEADERBOARD' : slot.comingSoon ? 'PVP IN DEVELOPMENT' : 'NO LEADERBOARD'}</span>
+      <span class="slot-meta">${slot.comingSoon ? 'IN DEVELOPMENT' : slot.id === 'practice' ? 'OPEN PRACTICE →' : 'OPEN MINE + BOARD →'}</span>
     </button>`).join('');
 }
 

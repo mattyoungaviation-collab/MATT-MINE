@@ -154,6 +154,19 @@ h1 span { color: var(--yellow); }
   font-size: 26px;
 }
 
+.panel > .close-button {
+  position: sticky;
+  z-index: 40;
+  top: 0;
+  right: auto;
+  float: right;
+  margin: -2px -2px -38px 12px;
+  background: rgba(31, 35, 45, 0.94);
+  border: 1px solid rgba(255,255,255,0.12);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 7px 18px rgba(0,0,0,.32);
+}
+
 .level-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 22px; }
 .level-card {
   min-height: 220px;
