@@ -299,6 +299,10 @@ test('production surfaces include the six-card hub, exact-map loading screen, an
   assert.ok(mineCardAssets.every((asset) => asset.byteLength > 20_000));
   assert.match(loading, /MINIMUM_LOADING_MS = 10_000/);
   assert.match(main, /competitionSnapshot/);
+  assert.match(
+    main,
+    /import \{ COMPETITION_DEPTH_COUNT \} from '\.\/game\/competitionStudio\.js';/
+  );
   assert.match(main, /startingDepth: testDepth/);
   assert.match(studioJs, /testDepth: studio\.depth/);
 });
