@@ -15,6 +15,7 @@ import {
 import { defaultProfile } from '../src/game/storage.js';
 import { MemoryDatabase } from '../server/database.js';
 import { MattMineService } from '../server/service.js';
+import { buildCompetitiveChallenge, competitiveMaximumDepth } from '../server/arena-engine.js';
 import { defaultWalletState, normalizeServerState } from '../server/state.js';
 
 const NOW = Date.UTC(2026, 6, 28, 18, 0, 0);
@@ -142,6 +143,8 @@ test('authored maps materialize exact player, Guardian, extraction, loot, and ha
   });
   draft.depths[1].map.name = 'Independent Depth Two';
   draft.depths[1].map.rooms.find((room) => room.id === 'lift').x = 2.5;
+  draft.depths[3].map.name = 'Published Depth Four';
+  draft.depths[4].map.name = 'Published Depth Five';
   const snapshot = {
     ...draft,
     map: draft.depths[0].map,
@@ -179,6 +182,61 @@ test('authored maps materialize exact player, Guardian, extraction, loot, and ha
     game.layout.startRoom.cellX,
     materializeCompetitionMap(draft.depths[0].map).startRoom.cellX
   );
+
+  game.run.depth = 4;
+  game.generateDepth();
+  assert.equal(game.layout.source.name, 'Published Depth Four');
+  game.run.depth = 5;
+  game.generateDepth();
+  assert.equal(game.layout.source.name, 'Published Depth Five');
+});
+
+test('published weekly mines descend through all five authored maps before extraction', async () => {
+  installBrowserStubs();
+  const { MattMineGame } = await import('../src/game/GameV4.js');
+  const snapshot = structuredClone(defaultCompetitionStudio(NOW).slots.weekly.draft);
+  snapshot.id = 'snapshot-weekly-five-depths';
+  snapshot.status = 'live';
+  snapshot.fingerprint = 'b'.repeat(64);
+  snapshot.depths.forEach((entry, index) => {
+    entry.map.name = `Weekly Authored Depth ${index + 1}`;
+  });
+  snapshot.map = snapshot.depths[0].map;
+  const commands = [];
+  const game = new MattMineGame(browserCanvas(), defaultProfile(), {
+    headless: true,
+    onArenaInput(event) {
+      if (event.command) commands.push(event.command);
+    }
+  });
+  game.startRun({
+    mode: 'weekly',
+    seed: 'WEEKLY-FIVE-DEPTHS',
+    tuning: { usePerDepthRoomSpawns: false, _competitionSnapshot: snapshot },
+    competitionSnapshot: snapshot
+  });
+
+  for (let nextDepth = 2; nextDepth <= COMPETITION_DEPTH_COUNT; nextDepth += 1) {
+    game.state = 'depthchoice';
+    game.descend();
+    assert.equal(game.run.depth, nextDepth);
+    assert.equal(game.layout.source.name, `Weekly Authored Depth ${nextDepth}`);
+    assert.equal(game.state, 'playing');
+  }
+
+  game.state = 'depthchoice';
+  game.descend();
+  assert.equal(game.state, 'ended');
+  assert.deepEqual(commands, ['descend', 'descend', 'descend', 'descend', 'extract']);
+
+  const run = {
+    mode: 'weekly',
+    seed: 'c'.repeat(64),
+    competitionSnapshot: snapshot,
+    tuning: { _competitionSnapshot: snapshot }
+  };
+  assert.equal(competitiveMaximumDepth(run), 5);
+  assert.equal(buildCompetitiveChallenge(run).maxDepth, 5);
 });
 
 test('production surfaces include the six-card hub, exact-map loading screen, and visual Admin editor', async () => {

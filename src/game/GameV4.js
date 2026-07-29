@@ -177,12 +177,16 @@ export class MattMineGame extends V3MattMineGame {
   }
 
   descend() {
-    if (this.runContext?.mode === 'weekly' && this.state === 'depthchoice') {
-      this.recordArenaCommand('extract');
-      return super.extract();
-    }
-    if (this.runContext?.mode === 'arena' && this.state === 'depthchoice') {
-      if ((this.run?.depth || 0) >= 5) return this.extract();
+    if (
+      DETERMINISTIC_SERVER_MODES.has(this.runContext?.mode) &&
+      this.runContext?.mode !== 'endless' &&
+      this.state === 'depthchoice'
+    ) {
+      const publishedDepths = this.runContext?.competitionSnapshot?.depths?.length;
+      const maximumDepth = Number.isSafeInteger(publishedDepths)
+        ? Math.max(1, Math.min(5, publishedDepths))
+        : 5;
+      if ((this.run?.depth || 0) >= maximumDepth) return this.extract();
       this.recordArenaCommand('descend');
     }
     if (this.runContext?.mode === 'endless' && this.state === 'depthchoice') {
