@@ -691,7 +691,7 @@ export class MattMineService {
         baseTuning.enemyDamageMultiplier = (baseTuning.enemyDamageMultiplier || 1) * weeklyStage.difficulty;
         baseTuning.roomsPerDepth = weeklyStage.roomCount;
         for (let depth = 1; depth <= 5; depth += 1) {
-          baseTuning[`depth${depth}GuardianBosses`] = depth === 1 ? weeklyStage.bossCount : 0;
+          baseTuning[`depth${depth}GuardianBosses`] = weeklyStage.bossCount;
         }
       }
       let immutableEndlessSnapshot = null;

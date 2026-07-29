@@ -56,10 +56,19 @@ export function buildCompetitiveChallenge(run) {
     dailySeed: run.seed,
     tickMs: ARENA_TICK_MS,
     maxTicks: ARENA_MAX_TICKS,
-    maxDepth: run.mode === 'weekly' ? 1 : run.mode === 'endless' ? 1_000 : 5,
+    maxDepth: competitiveMaximumDepth(run),
     verificationMode: 'deterministic-input-replay',
     tuning: structuredClone(run.tuning || {})
   };
+}
+
+export function competitiveMaximumDepth(run = {}) {
+  if (run.mode === 'endless') return 1_000;
+  const publishedDepths = run.competitionSnapshot?.depths?.length
+    ?? run.tuning?._competitionSnapshot?.depths?.length;
+  return Number.isSafeInteger(publishedDepths)
+    ? Math.max(1, Math.min(5, publishedDepths))
+    : 5;
 }
 
 /**

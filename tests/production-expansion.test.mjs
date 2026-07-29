@@ -213,6 +213,14 @@ test('Beta and Weekly runs enforce their server entitlements and daily attempt l
   const weekly = await service.startRun(token, 'weekly');
   assert.equal(weekly.mode, 'weekly');
   assert.equal(weekly.weeklyStage.day, 1);
+  assert.equal(weekly.competitionSnapshot.depths.length, 5);
+  for (let depth = 1; depth <= 5; depth += 1) {
+    assert.equal(
+      weekly.tuning[`depth${depth}GuardianBosses`],
+      weekly.weeklyStage.bossCount,
+      `weekly depth ${depth} must remain completable`
+    );
+  }
   await assert.rejects(() => service.startRun(token, 'weekly'), (error) =>
     ['ranked_run_active', 'weekly_attempt_used'].includes(error.code)
   );
