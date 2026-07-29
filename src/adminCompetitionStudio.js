@@ -457,6 +457,7 @@ function testDraft() {
   if (!validation.valid) throw new Error(validation.errors[0]);
   localStorage.setItem('matt-mine-studio-test-v1', JSON.stringify({
     ...normalizeCompetitionDraft(studio.draft, studio.slotId),
+    testDepth: studio.depth,
     id: `admin-test-${Date.now()}`,
     fingerprint: 'ADMIN-TEST',
     status: 'test'

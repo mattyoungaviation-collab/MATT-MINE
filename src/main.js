@@ -2671,16 +2671,21 @@ async function startCompetitionStudioTest() {
     toast('Studio test map was not found. Return to Admin and press Test in Practice.');
     return false;
   }
+  const testDepth = Math.max(
+    1,
+    Math.min(COMPETITION_DEPTH_COUNT, Math.floor(Number(snapshot.testDepth) || 1))
+  );
   await showMineLoadingScreen({
     id: 'practice',
     name: snapshot.name || 'Studio Test Mine',
     snapshot
-  }, { minimumMs: 2_500 });
+  }, { minimumMs: 2_500, depth: testDepth });
   game.startRun({
     mode: RUN_MODES.PRACTICE,
     seed: `STUDIO-TEST-${snapshot.id || Date.now()}`,
     day: new Date().toISOString().slice(0, 10),
     rewardWeight: 0,
+    startingDepth: testDepth,
     tuning: {
       usePerDepthRoomSpawns: false,
       _competitionSnapshot: snapshot,
