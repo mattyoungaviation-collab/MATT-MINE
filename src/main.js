@@ -46,6 +46,7 @@ import {
   normalizeArenaPlayer
 } from './game/arena.js';
 import { ArenaTranscript } from './game/arenaTranscript.js';
+import { COMPETITION_DEPTH_COUNT } from './game/competitionStudio.js';
 import { mountMineHub } from './game/mineHub.js';
 import { showMineLoadingScreen } from './game/mineLoadingScreen.js';
 import { loadProfile, saveProfile } from './game/storage.js';
