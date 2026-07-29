@@ -182,11 +182,15 @@ test('authored maps materialize exact player, Guardian, extraction, loot, and ha
 });
 
 test('production surfaces include the six-card hub, exact-map loading screen, and visual Admin editor', async () => {
-  const [admin, main, hub, loading] = await Promise.all([
+  const [admin, main, hub, loading, productionCss, ...mineCardAssets] = await Promise.all([
     readFile(new URL('../admin.html', import.meta.url), 'utf8'),
     readFile(new URL('../src/main.js', import.meta.url), 'utf8'),
     readFile(new URL('../src/game/mineHub.js', import.meta.url), 'utf8'),
-    readFile(new URL('../src/game/mineLoadingScreen.js', import.meta.url), 'utf8')
+    readFile(new URL('../src/game/mineLoadingScreen.js', import.meta.url), 'utf8'),
+    readFile(new URL('../src/production.css', import.meta.url), 'utf8'),
+    ...COMPETITION_SLOTS.map((slot) =>
+      readFile(new URL(`../assets/game/mine-cards/${slot.id}.webp`, import.meta.url))
+    )
   ]);
   assert.match(admin, /id="tab-studio"/);
   assert.match(admin, /id="studio-map-canvas"/);
@@ -194,6 +198,10 @@ test('production surfaces include the six-card hub, exact-map loading screen, an
   assert.match(admin, /PUBLISH VERSION/);
   assert.match(hub, /competition-slot-grid/);
   assert.match(hub, /PvP Mine/);
+  assert.match(hub, /OPEN MINE \+ BOARD/);
+  assert.match(productionCss, /--mine-card-image/);
+  assert.equal(mineCardAssets.length, 6);
+  assert.ok(mineCardAssets.every((asset) => asset.byteLength > 20_000));
   assert.match(loading, /MINIMUM_LOADING_MS = 10_000/);
   assert.match(main, /competitionSnapshot/);
 });

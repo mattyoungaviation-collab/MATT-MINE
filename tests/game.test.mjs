@@ -132,3 +132,31 @@ test('guardian and extraction flow banks the projected payout', async () => {
   assert.equal(profile.bankedNuggets, 100);
   assert.equal(profile.totalRuns, 1);
 });
+
+test('camera can center rooms placed at every authored map edge', async () => {
+  globalThis.window = { addEventListener() {}, devicePixelRatio: 1 };
+  globalThis.document = { querySelector() { return null; } };
+  globalThis.requestAnimationFrame = () => 0;
+
+  const { MattMineGame } = await import('../src/game/Game.js');
+  const game = new MattMineGame({}, {
+    meta: { health: 0, damage: 0, speed: 0, luck: 0 }
+  }, { headless: true });
+  game.layout = {
+    rooms: [
+      { x: 300, y: 280 },
+      { x: 2100, y: 1320 }
+    ]
+  };
+
+  const bounds = game.cameraBounds();
+  assert.ok(bounds.minX < 0);
+  assert.ok(bounds.minY < 0);
+  assert.ok(bounds.maxX > 2400 - game.viewportWidth);
+  assert.ok(bounds.maxY > 1600 - game.viewportHeight);
+
+  game.player = { x: 2100, y: 280, vx: 0, vy: 0 };
+  game.updateCamera(1);
+  assert.ok(Math.abs((game.player.x - game.camera.x) - game.viewportWidth / 2) <= 72);
+  assert.ok(Math.abs((game.player.y - game.camera.y) - game.viewportHeight / 2) <= 72);
+});
