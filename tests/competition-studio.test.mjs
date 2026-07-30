@@ -130,6 +130,29 @@ test('published competition snapshots are scheduled, immutable, and selected by 
   assert.equal(after.competitionStudio.snapshots[published.snapshot.id].name, 'Tomorrow’s Crystal Gauntlet');
 });
 
+test('public mine cards expose authoritative entry pauses without hiding leaderboards', async () => {
+  const database = new MemoryDatabase();
+  const service = new MattMineService(database, {
+    now: () => NOW,
+    chainId: 2020,
+    adminKey: 'competition-admin'
+  });
+  await service.updateMineOperations(
+    'competition-admin',
+    'daily',
+    { entriesPaused: true },
+    'Pause Daily Mine entries for maintenance.'
+  );
+
+  const overview = await service.publicMineSlots();
+  assert.equal(overview.slots.find((slot) => slot.id === 'daily').entriesPaused, true);
+  assert.equal(overview.slots.find((slot) => slot.id === 'practice').entriesPaused, false);
+
+  const detail = await service.publicMineSlot('daily');
+  assert.equal(detail.slot.entriesPaused, true);
+  assert.ok(detail.leaderboard, 'paused mine details still expose the leaderboard');
+});
+
 test('authored maps materialize exact player, Guardian, extraction, loot, and hazard positions', async () => {
   installBrowserStubs();
   const { MattMineGame } = await import('../src/game/GameV4.js');
@@ -295,7 +318,10 @@ test('production surfaces include the six-card hub, exact-map loading screen, an
   assert.match(hub, /competition-slot-grid/);
   assert.match(hub, /PvP Mine/);
   assert.match(hub, /OPEN MINE \+ BOARD/);
+  assert.match(hub, /VIEW BOARD · ENTRY PAUSED/);
+  assert.match(hub, /MINE PAUSED/);
   assert.match(productionCss, /--mine-card-image/);
+  assert.match(productionCss, /\.competition-slot-card\.paused/);
   assert.equal(mineCardAssets.length, 6);
   assert.ok(mineCardAssets.every((asset) => asset.byteLength > 20_000));
   assert.match(loading, /MINIMUM_LOADING_MS = 10_000/);

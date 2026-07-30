@@ -1141,6 +1141,43 @@ button,
   cursor: not-allowed;
 }
 
+.competition-slot-card.paused {
+  filter: grayscale(1) saturate(0);
+  opacity: .58;
+}
+
+.competition-slot-card.paused::before {
+  background:
+    linear-gradient(90deg, rgba(8,9,12,.98) 0%, rgba(8,9,12,.92) 55%, rgba(8,9,12,.76) 100%),
+    linear-gradient(0deg, rgba(5,7,11,.96), transparent 60%);
+}
+
+.competition-slot-card.paused::after {
+  height: 4px;
+  background: #8c919c;
+}
+
+.competition-slot-card.paused:hover,
+.competition-slot-card.paused:focus-visible {
+  transform: translateY(-2px);
+  border-color: #8c919c;
+  box-shadow: 0 14px 30px rgba(0,0,0,.42);
+}
+
+.competition-slot-card.paused .slot-state {
+  width: max-content;
+  padding: 5px 9px;
+  border: 1px solid rgba(255,255,255,.38);
+  border-radius: 999px;
+  background: rgba(0,0,0,.68);
+  color: #fff;
+}
+
+.competition-slot-card.paused .slot-meta {
+  border-color: rgba(255,255,255,.26);
+  color: #c7cad1;
+}
+
 .competition-slot-card .slot-number {
   position: absolute;
   right: 15px;
