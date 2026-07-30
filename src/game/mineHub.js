@@ -51,7 +51,7 @@ export async function mountMineHub(apiClient) {
     if (event.target === modal) closeModal(modal);
   });
   modal.querySelector('[data-mine-enter]').addEventListener('click', () => {
-    if (!state.selected || state.selected.comingSoon) return;
+    if (!state.selected || state.selected.comingSoon || state.selected.entriesPaused) return;
     closeModal(modal);
     window.dispatchEvent(new CustomEvent('mattmine:slot-enter', { detail: { slot: state.selected } }));
   });
@@ -88,14 +88,36 @@ export async function mountMineHub(apiClient) {
 }
 
 function renderCards(container, slots) {
-  container.innerHTML = slots.map((slot) => `
-    <button type="button" class="competition-slot-card slot-${slot.id} ${slot.comingSoon ? 'disabled' : ''}" data-mine-slot="${slot.id}" ${slot.comingSoon ? 'disabled' : ''} style="--slot-color:${slot.color}" aria-label="${slot.comingSoon ? `${escapeHtml(slot.name)} coming soon` : `Open ${escapeHtml(slot.snapshot?.name || slot.name)}`}">
+  container.innerHTML = slots.map((slot) => {
+    const paused = slot.entriesPaused === true;
+    const stateLabel = slot.comingSoon
+      ? 'COMING SOON'
+      : paused
+        ? 'PAUSED'
+        : slot.state === 'live'
+          ? 'LIVE NOW'
+          : 'OPEN';
+    const actionLabel = slot.comingSoon
+      ? 'IN DEVELOPMENT'
+      : paused
+        ? 'VIEW BOARD · ENTRY PAUSED →'
+        : slot.id === 'practice'
+          ? 'OPEN PRACTICE →'
+          : 'OPEN MINE + BOARD →';
+    const accessibleLabel = slot.comingSoon
+      ? `${escapeHtml(slot.name)} coming soon`
+      : paused
+        ? `${escapeHtml(slot.snapshot?.name || slot.name)} paused. Open status and leaderboard`
+        : `Open ${escapeHtml(slot.snapshot?.name || slot.name)}`;
+    return `
+    <button type="button" class="competition-slot-card slot-${slot.id} ${slot.comingSoon ? 'disabled' : ''} ${paused ? 'paused' : ''}" data-mine-slot="${slot.id}" ${slot.comingSoon ? 'disabled' : ''} style="--slot-color:${slot.color}" aria-label="${accessibleLabel}">
       <span class="slot-number">0${slot.number}</span>
-      <span class="slot-state">${slot.comingSoon ? 'COMING SOON' : slot.state === 'live' ? 'LIVE NOW' : 'OPEN'}</span>
+      <span class="slot-state">${stateLabel}</span>
       <strong>${escapeHtml(slot.snapshot?.name || slot.name)}</strong>
       <small>${escapeHtml(slot.snapshot?.subtitle || slot.subtitle || '')}</small>
-      <span class="slot-meta">${slot.comingSoon ? 'IN DEVELOPMENT' : slot.id === 'practice' ? 'OPEN PRACTICE →' : 'OPEN MINE + BOARD →'}</span>
-    </button>`).join('');
+      <span class="slot-meta">${actionLabel}</span>
+    </button>`;
+  }).join('');
 }
 
 function renderDetail(modal, slot, leaderboard) {
@@ -104,7 +126,11 @@ function renderDetail(modal, slot, leaderboard) {
   modal.querySelector('[data-mine-kicker]').textContent = slot.leaderboard ? 'OFFICIAL COMPETITION' : 'TRAINING MINE';
   modal.querySelector('[data-mine-name]').textContent = snapshot.name || slot.name;
   modal.querySelector('[data-mine-subtitle]').textContent = snapshot.subtitle || '';
-  modal.querySelector('[data-mine-state]').textContent = slot.state === 'coming-soon' ? 'COMING SOON' : 'LIVE';
+  modal.querySelector('[data-mine-state]').textContent = slot.entriesPaused
+    ? 'PAUSED'
+    : slot.state === 'coming-soon'
+      ? 'COMING SOON'
+      : 'LIVE';
   modal.querySelector('[data-board-title]').textContent = snapshot.rules?.leaderboardTitle || (slot.leaderboard ? 'LEADERBOARD' : 'PRACTICE BRIEFING');
   modal.querySelector('[data-board-period]').textContent = leaderboard?.week || leaderboard?.day || 'CURRENT COMPETITION';
   modal.querySelector('[data-mine-loadout]').innerHTML = `
@@ -120,7 +146,15 @@ function renderDetail(modal, slot, leaderboard) {
       ? rows.slice(0, 100).map((row) => `<tr><td>${row.rank || '—'}</td><td>${escapeHtml(row.identity?.name || row.walletId || shortAddress(row.address))}</td><td>${format(row.score)}</td><td>${row.depth || row.completedDays || '—'}</td></tr>`).join('')
       : '<tr><td colspan="4">Be the first miner on this board.</td></tr>'
     : '<tr><td colspan="4">Practice is unlimited and never affects a ranked leaderboard.</td></tr>';
-  modal.querySelector('[data-mine-enter]').textContent = slot.id === 'practice' ? 'START PRACTICE' : slot.id === 'arena' ? 'ENTER ARENA' : 'ENTER THIS MINE';
+  const enterButton = modal.querySelector('[data-mine-enter]');
+  enterButton.textContent = slot.entriesPaused
+    ? 'MINE PAUSED'
+    : slot.id === 'practice'
+      ? 'START PRACTICE'
+      : slot.id === 'arena'
+        ? 'ENTER ARENA'
+        : 'ENTER THIS MINE';
+  enterButton.disabled = slot.entriesPaused === true;
   modal.dataset.depth = '1';
   modal.querySelector('[data-mine-depth-tabs]').innerHTML = Array.from(
     { length: COMPETITION_DEPTH_COUNT },

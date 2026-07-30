@@ -1031,7 +1031,7 @@ export class MattMineService {
       generatedAt: timestamp,
       slots: COMPETITION_SLOTS.map((definition) => {
         const snapshot = resolveCompetitionSnapshot(state.competitionStudio, definition.id, timestamp);
-        return publicCompetitionSlot(definition, snapshot);
+        return publicCompetitionSlot(definition, snapshot, state.operations);
       })
     };
   }
@@ -1068,7 +1068,7 @@ export class MattMineService {
       };
     }
     return {
-      slot: publicCompetitionSlot(definition, snapshot),
+      slot: publicCompetitionSlot(definition, snapshot, state.operations),
       leaderboard
     };
   }
@@ -2150,10 +2150,18 @@ function publicLeaderboardAppearance(wallet) {
   };
 }
 
-function publicCompetitionSlot(definition, snapshot) {
+function publicCompetitionSlot(definition, snapshot, operations = {}) {
+  const mineOperations = operations.mines?.[definition.id] || {};
+  const entriesPaused = definition.comingSoon
+    ? false
+    : operations.maintenanceMode === true
+      || mineOperations.entriesPaused === true
+      || (definition.id === 'daily' && operations.freeRankedPaused === true)
+      || (definition.id === 'pass' && operations.passRankedPaused === true);
   return {
     ...definition,
     state: definition.comingSoon ? 'coming-soon' : snapshot?.status || 'draft',
+    entriesPaused,
     snapshot: snapshot ? {
       id: snapshot.id,
       name: snapshot.name,
