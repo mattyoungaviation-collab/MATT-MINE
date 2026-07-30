@@ -5,6 +5,10 @@ import { imageIsReady } from './visualAssets.js';
 
 export function drawEnemyBody(ctx, enemy, visualAssets = {}) {
   ctx.globalAlpha = enemy.hidden ? 0.22 : 1;
+  if (enemy.isBoss && imageIsReady(visualAssets.guardianAnimated)) {
+    drawAnimatedGuardian(ctx, enemy, visualAssets.guardianAnimated);
+    return;
+  }
   if (enemy.isBoss && imageIsReady(visualAssets.guardian)) {
     drawCinematicGuardian(ctx, enemy, visualAssets.guardian);
     return;
@@ -112,6 +116,74 @@ export function drawEnemyBody(ctx, enemy, visualAssets = {}) {
       polygon(ctx, 0, 2, 15, 5); ctx.fill();
     }
   }
+}
+
+export function guardianAnimationFrame(enemy) {
+  const animation = enemy.guardianAnimation;
+  const actionActive = animation && Number(animation.endsAt) > Number(enemy.phase);
+  let row = Math.hypot(Number(enemy.vx) || 0, Number(enemy.vy) || 0) > 12 ? 1 : 0;
+  let progress = 0;
+  if (actionActive) {
+    row = animation.attack === 'slam'
+      ? 2
+      : animation.attack === 'radial'
+        ? 4
+        : 3;
+    const span = Math.max(0.001, animation.endsAt - animation.startedAt);
+    progress = Math.max(0, Math.min(0.999, (enemy.phase - animation.startedAt) / span));
+  }
+  const column = actionActive
+    ? Math.floor(progress * 6)
+    : Math.floor(Math.max(0, Number(enemy.phase) || 0) * (row === 1 ? 1.8 : 1.15)) % 6;
+  return { row, column, index: row * 6 + column };
+}
+
+function drawAnimatedGuardian(ctx, enemy, image) {
+  const phase = bossPhaseForHealth(enemy.hp, enemy.maxHp);
+  const frame = guardianAnimationFrame(enemy);
+  const frameWidth = image.naturalWidth / 6;
+  const frameHeight = image.naturalHeight / 5;
+  const size = enemy.radius * (phase === 3 ? 4.05 : 3.82);
+  const pulse = 0.98 + Math.sin(enemy.phase * (phase === 3 ? 3.2 : 2.1)) * 0.025;
+
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.7)';
+  ctx.filter = 'blur(5px)';
+  ctx.beginPath();
+  ctx.ellipse(7, enemy.radius * 0.88, enemy.radius * 1.55, enemy.radius * 0.58, 0, 0, TAU);
+  ctx.fill();
+  ctx.filter = 'none';
+  ctx.scale(pulse, pulse);
+  ctx.shadowColor = phase === 3 ? '#65f5ff' : '#9f45ed';
+  ctx.shadowBlur = phase === 3 ? 28 : 18;
+  ctx.globalAlpha = enemy.hitFlash > 0 ? 0.62 : 1;
+  ctx.drawImage(
+    image,
+    frame.column * frameWidth,
+    frame.row * frameHeight,
+    frameWidth,
+    frameHeight,
+    -size / 2,
+    -size / 2 - enemy.radius * 0.06,
+    size,
+    size
+  );
+  if (enemy.hitFlash > 0) {
+    ctx.globalCompositeOperation = 'screen';
+    ctx.globalAlpha = 0.62;
+    ctx.drawImage(
+      image,
+      frame.column * frameWidth,
+      frame.row * frameHeight,
+      frameWidth,
+      frameHeight,
+      -size / 2,
+      -size / 2 - enemy.radius * 0.06,
+      size,
+      size
+    );
+  }
+  ctx.restore();
 }
 
 function drawCinematicGuardian(ctx, enemy, image) {

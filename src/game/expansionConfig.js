@@ -183,23 +183,36 @@ export const CONTROLLER_ACTIONS = Object.freeze([
   'confirm', 'cancel', 'menuUp', 'menuDown', 'menuLeft', 'menuRight'
 ]);
 
+const LEGACY_CONTROLLER_MAPPING = Object.freeze({
+  attack: 0, dash: 1, pickaxe: 4, dynamite: 2, blaster: 5, interact: 3,
+  pause: 9, confirm: 0, cancel: 1, menuUp: 12, menuDown: 13, menuLeft: 14, menuRight: 15
+});
+
+const DEFAULT_CONTROLLER_MAPPING = Object.freeze({
+  attack: 7, dash: 10, pickaxe: 4, dynamite: 2, blaster: 5, interact: 3,
+  pause: 9, confirm: 0, cancel: 1, menuUp: 12, menuDown: 13, menuLeft: 14, menuRight: 15
+});
+
 export function defaultControllerProfile() {
   return {
+    layoutVersion: 2,
     deadZone: .18,
     aimSensitivity: 1,
     vibration: true,
     activeIndex: 0,
-    mapping: {
-      attack: 0, dash: 1, pickaxe: 4, dynamite: 2, blaster: 5, interact: 3,
-      pause: 9, confirm: 0, cancel: 1, menuUp: 12, menuDown: 13, menuLeft: 14, menuRight: 15
-    }
+    mapping: { ...DEFAULT_CONTROLLER_MAPPING }
   };
 }
 
 export function normalizeControllerProfile(input = {}) {
   const source = record(input);
   const defaults = defaultControllerProfile();
-  const mappingSource = record(source.mapping);
+  const suppliedMapping = record(source.mapping);
+  const shouldMigrateLegacyDefaults = Number(source.layoutVersion || 0) < 2 &&
+    CONTROLLER_ACTIONS.every((action) =>
+      Number(suppliedMapping[action] ?? LEGACY_CONTROLLER_MAPPING[action]) === LEGACY_CONTROLLER_MAPPING[action]
+    );
+  const mappingSource = shouldMigrateLegacyDefaults ? defaults.mapping : suppliedMapping;
   const mapping = {};
   const used = new Set();
   for (const action of CONTROLLER_ACTIONS) {
@@ -211,6 +224,7 @@ export function normalizeControllerProfile(input = {}) {
     mapping[action] = button;
   }
   return {
+    layoutVersion: 2,
     deadZone: finite(source.deadZone, 0, .5, defaults.deadZone),
     aimSensitivity: finite(source.aimSensitivity, .25, 3, defaults.aimSensitivity),
     vibration: source.vibration !== false,

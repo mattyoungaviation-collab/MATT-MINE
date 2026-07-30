@@ -1,6 +1,7 @@
 const VISUAL_ASSET_PATHS = Object.freeze({
   floor: '/assets/game/mine-floor-cinematic.webp',
   guardian: '/assets/game/guardian-cinematic.webp',
+  guardianAnimated: '/assets/game/guardian-animated-spritesheet.webp',
   mattDyno: '/assets/game/matt-dyno-spritesheet.png',
   mattDynoBlaster: '/assets/game/matt-dyno-blaster-spritesheet.png',
   mattDynoDynamite: '/assets/game/matt-dyno-dynamite-spritesheet.png',

@@ -1017,6 +1017,7 @@ const game = new MattMineGame(canvas, profile, {
     }
     showScreen('level-up');
     setGameplayUi(false);
+    focusControllerChoice(container.querySelector('.level-card'));
   },
   onUpgradeChosen(upgrade) {
     showScreen();
@@ -1030,6 +1031,7 @@ const game = new MattMineGame(canvas, profile, {
       : data.depth >= 5 ? 'MAX DEPTH — EXTRACT' : 'DESCEND DEEPER';
     showScreen('depth-choice');
     setGameplayUi(false);
+    focusControllerChoice($('#extract-button'));
   },
   onDepthStarted() {
     showScreen();
@@ -2514,6 +2516,14 @@ function moveControllerFocus(direction, pad, profile) {
       strongMagnitude: 0
     }).catch(() => {});
   }
+}
+
+function focusControllerChoice(element) {
+  requestAnimationFrame(() => {
+    if (!(element instanceof HTMLElement)) return;
+    element.focus();
+    element.scrollIntoView({ block: 'nearest' });
+  });
 }
 
 requestAnimationFrame(pollControllerMenus);
