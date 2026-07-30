@@ -7,7 +7,7 @@ export class InputController {
     this.canvas = canvas;
     this.keys = new Set();
     this.pressed = new Set();
-    this.pointer = { x: 0, y: 0, down: false, active: false };
+    this.pointer = { x: 0, y: 0, down: false, active: false, updatedAt: 0 };
     this.mobileMove = { x: 0, y: 0 };
     this.mobileAttack = false;
     this.mobileDashQueued = false;
@@ -21,7 +21,9 @@ export class InputController {
       previous: [],
       current: [],
       movement: { x: 0, y: 0 },
-      aim: { x: 0, y: 0 }
+      aim: { x: 0, y: 0 },
+      lastDirection: { x: 1, y: 0 },
+      updatedAt: 0
     };
     this.gamepadPolledThisTask = false;
     this.bindKeyboard();
@@ -68,12 +70,24 @@ export class InputController {
     this.gamepad.index = pad.index;
     this.gamepad.previous = this.gamepad.current;
     this.gamepad.current = pad.buttons.map((button) => button.pressed || button.value >= .55);
-    this.gamepad.movement = deadZoneVector(pad.axes[0] || 0, pad.axes[1] || 0, this.controllerProfile.deadZone);
+    const stickMovement = deadZoneVector(pad.axes[0] || 0, pad.axes[1] || 0, this.controllerProfile.deadZone);
+    const dpadMovement = {
+      x: (this.gamepad.current[15] ? 1 : 0) - (this.gamepad.current[14] ? 1 : 0),
+      y: (this.gamepad.current[13] ? 1 : 0) - (this.gamepad.current[12] ? 1 : 0)
+    };
+    this.gamepad.movement = Math.hypot(dpadMovement.x, dpadMovement.y) > 0
+      ? normalizeVector(dpadMovement.x, dpadMovement.y)
+      : stickMovement;
     const aim = deadZoneVector(pad.axes[2] || 0, pad.axes[3] || 0, this.controllerProfile.deadZone);
     this.gamepad.aim = {
       x: aim.x * this.controllerProfile.aimSensitivity,
       y: aim.y * this.controllerProfile.aimSensitivity
     };
+    const explicitAim = Math.hypot(this.gamepad.aim.x, this.gamepad.aim.y) > .05;
+    const explicitMove = Math.hypot(this.gamepad.movement.x, this.gamepad.movement.y) > .05;
+    if (explicitAim) this.gamepad.lastDirection = normalizeVector(this.gamepad.aim.x, this.gamepad.aim.y);
+    else if (explicitMove) this.gamepad.lastDirection = normalizeVector(this.gamepad.movement.x, this.gamepad.movement.y);
+    if (explicitAim || explicitMove || this.gamepad.current.some(Boolean)) this.gamepad.updatedAt = inputTimestamp();
   }
 
   controllerHeld(action) {
@@ -112,6 +126,7 @@ export class InputController {
       this.pointer.x = ((event.clientX - rect.left) / rect.width) * logicalWidth;
       this.pointer.y = ((event.clientY - rect.top) / rect.height) * logicalHeight;
       this.pointer.active = true;
+      this.pointer.updatedAt = inputTimestamp();
     };
     this.canvas.addEventListener('pointermove', updatePointer);
     this.canvas.addEventListener('pointerdown', (event) => {
@@ -264,7 +279,9 @@ export class InputController {
 
   aimVector() {
     this.pollGamepad();
-    return { ...this.gamepad.aim };
+    if (!this.gamepad.connected || this.gamepad.updatedAt < this.pointer.updatedAt) return { x: 0, y: 0 };
+    if (Math.hypot(this.gamepad.aim.x, this.gamepad.aim.y) > .05) return { ...this.gamepad.aim };
+    return { ...this.gamepad.lastDirection };
   }
 }
 
@@ -273,4 +290,13 @@ export function deadZoneVector(x, y, deadZone = .18) {
   if (length <= deadZone) return { x: 0, y: 0 };
   const scaled = Math.min(1, (length - deadZone) / Math.max(.001, 1 - deadZone));
   return { x: (x / length) * scaled, y: (y / length) * scaled };
+}
+
+function normalizeVector(x, y) {
+  const length = Math.hypot(x, y) || 1;
+  return { x: x / length, y: y / length };
+}
+
+function inputTimestamp() {
+  return globalThis.performance?.now?.() ?? Date.now();
 }

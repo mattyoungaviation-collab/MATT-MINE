@@ -50,6 +50,7 @@ export const guardianAIMethods = {
     ).length;
     const attack = selectBossAttack(enemy, tuning, phase, this.run.elapsed, activeSummons);
     if (attack) {
+      setGuardianAnimation(enemy, attack.id, attack.windup + attack.duration);
       this.executeGuardianAttack(enemy, phase, phaseConfig, attack, activeSummons);
     }
   },
@@ -120,15 +121,18 @@ export const guardianAIMethods = {
 
     if (phase === 1 && enemy.attackTimer <= 0) {
       enemy.attackTimer = 2;
+      setGuardianAnimation(enemy, 'slam', 0.9);
       this.guardianSlam(enemy, 185, enemy.damage * 0.9);
     }
     if (phase === 2) {
       if (enemy.attackTimer <= 0) {
         enemy.attackTimer = 1.45;
+        setGuardianAnimation(enemy, 'volley', 0.9);
         this.fireEnemyVolley(enemy, 5, 0.56, 330);
       }
       if (enemy.summonTimer <= 0) {
         enemy.summonTimer = 5.2;
+        setGuardianAnimation(enemy, 'summon', 1.1);
         for (const type of ['bat', 'slime']) {
           const reinforcement = this.spawnEnemy(false, this.layout.guardianRoom, type);
           reinforcement.awake = true;
@@ -138,8 +142,22 @@ export const guardianAIMethods = {
     }
     if (phase === 3 && enemy.attackTimer <= 0) {
       enemy.attackTimer = 1.05;
-      if (Math.floor(enemy.phase) % 2 === 0) this.fireEnemyVolley(enemy, 10, TAU, 390, true);
-      else this.guardianSlam(enemy, 230, enemy.damage * 1.08);
+      if (Math.floor(enemy.phase) % 2 === 0) {
+        setGuardianAnimation(enemy, 'radial', 0.85);
+        this.fireEnemyVolley(enemy, 10, TAU, 390, true);
+      } else {
+        setGuardianAnimation(enemy, 'slam', 0.85);
+        this.guardianSlam(enemy, 230, enemy.damage * 1.08);
+      }
     }
   }
 };
+
+function setGuardianAnimation(enemy, attack, durationSeconds) {
+  const duration = Math.max(0.5, Number(durationSeconds) || 0);
+  enemy.guardianAnimation = {
+    attack,
+    startedAt: enemy.phase,
+    endsAt: enemy.phase + duration * 3
+  };
+}

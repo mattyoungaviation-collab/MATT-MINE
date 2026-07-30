@@ -10,10 +10,13 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 test('cinematic mine and Guardian assets are packaged as optimized WebP files', async () => {
   const floor = await stat(`${root}assets/game/mine-floor-cinematic.webp`);
   const guardian = await stat(`${root}assets/game/guardian-cinematic.webp`);
+  const animatedGuardian = await stat(`${root}assets/game/guardian-animated-spritesheet.webp`);
   assert.ok(floor.size > 100_000);
   assert.ok(guardian.size > 100_000);
+  assert.ok(animatedGuardian.size > 250_000);
   assert.ok(floor.size < 1_000_000);
   assert.ok(guardian.size < 1_000_000);
+  assert.ok(animatedGuardian.size < 1_000_000);
 });
 
 test('the official animated MATT Dyno sprite sheet is packaged for gameplay', async () => {
@@ -57,6 +60,7 @@ test('cinematic assets load lazily in browsers and remain safe in test environme
   const assets = loadVisualAssets(FakeImage);
   assert.equal(assets.floor.src, '/assets/game/mine-floor-cinematic.webp');
   assert.equal(assets.guardian.src, '/assets/game/guardian-cinematic.webp');
+  assert.equal(assets.guardianAnimated.src, '/assets/game/guardian-animated-spritesheet.webp');
   assert.equal(assets.mattDyno.src, '/assets/game/matt-dyno-spritesheet.png');
   assert.equal(assets.mattDynoBlaster.src, '/assets/game/matt-dyno-blaster-spritesheet.png');
   assert.equal(assets.mattDynoDynamite.src, '/assets/game/matt-dyno-dynamite-spritesheet.png');

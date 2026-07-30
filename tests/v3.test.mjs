@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { bossPhaseForHealth, enemyArchetypeForRoll, frontArmorMultiplier, roomRequiresLock } from '../src/game/combat.js';
+import { drawEnemyBody, guardianAnimationFrame } from '../src/game/v3/renderEnemyBody.js';
 
 function installBrowserStubs(rendering = false) {
   globalThis.window = { addEventListener() {}, devicePixelRatio: 1 };
@@ -158,6 +159,67 @@ test('cinematic floor and Guardian assets render without breaking the combat fra
   game.player.x = game.layout.guardianRoom.x;
   game.player.y = game.layout.guardianRoom.y;
   assert.doesNotThrow(() => game.render());
+});
+
+test('the Guardian animation uses all 30 sprite frames across idle, walk, and attacks', () => {
+  const enemy = {
+    phase: 0,
+    vx: 0,
+    vy: 0
+  };
+  const seen = new Set();
+  for (let row = 0; row < 5; row += 1) {
+    for (let column = 0; column < 6; column += 1) {
+      if (row === 0) {
+        enemy.guardianAnimation = null;
+        enemy.vx = 0;
+        enemy.phase = column / 1.15;
+      } else if (row === 1) {
+        enemy.guardianAnimation = null;
+        enemy.vx = 40;
+        enemy.phase = column / 1.8;
+      } else {
+        enemy.vx = 0;
+        enemy.phase = column;
+        enemy.guardianAnimation = {
+          attack: row === 2 ? 'slam' : row === 4 ? 'radial' : 'volley',
+          startedAt: 0,
+          endsAt: 6
+        };
+      }
+      seen.add(guardianAnimationFrame(enemy).index);
+    }
+  }
+  assert.deepEqual([...seen].sort((left, right) => left - right), Array.from({ length: 30 }, (_, index) => index));
+});
+
+test('animated Guardian rendering crops one cell from the 6 by 5 sprite sheet', () => {
+  const { context } = installBrowserStubs(true);
+  const draws = [];
+  context.drawImage = (...args) => draws.push(args);
+  const guardianAnimated = { complete: true, naturalWidth: 1_368, naturalHeight: 1_145 };
+  drawEnemyBody(context, {
+    isBoss: true,
+    hidden: false,
+    phase: 2,
+    vx: 0,
+    vy: 0,
+    hp: 100,
+    maxHp: 100,
+    radius: 64,
+    hitFlash: 0
+  }, {
+    guardianAnimated
+  });
+  const guardianDraw = draws.find((args) => args[0] === guardianAnimated);
+  assert.ok(guardianDraw);
+  assert.deepEqual({
+    sourceWidth: guardianDraw[3],
+    sourceHeight: guardianDraw[4]
+  }, {
+    sourceWidth: 228,
+    sourceHeight: 229
+  });
 });
 
 test('MATT Dyno swaps weapon sheets and uses front and back walking rows', async () => {

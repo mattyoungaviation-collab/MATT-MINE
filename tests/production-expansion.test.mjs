@@ -6,6 +6,7 @@ import { MemoryDatabase } from '../server/database.js';
 import { CompleteProductionMattMineService } from '../server/complete-production-service.js';
 import {
   EXPANSION_SCHEMA,
+  defaultControllerProfile,
   defaultExpansionConfig,
   defaultPlayerExpansion,
   endlessScale,
@@ -274,6 +275,30 @@ test('controller profiles normalize remaps and dead zones without duplicate game
     ...profile,
     mapping: { ...profile.mapping, attack: 1, dash: 1 }
   }), /assigned more than once/);
+  assert.deepEqual(defaultControllerProfile().mapping, {
+    attack: 7,
+    dash: 10,
+    pickaxe: 4,
+    dynamite: 2,
+    blaster: 5,
+    interact: 3,
+    pause: 9,
+    confirm: 0,
+    cancel: 1,
+    menuUp: 12,
+    menuDown: 13,
+    menuLeft: 14,
+    menuRight: 15
+  });
+  const migrated = normalizeControllerProfile({
+    mapping: {
+      attack: 0, dash: 1, pickaxe: 4, dynamite: 2, blaster: 5, interact: 3,
+      pause: 9, confirm: 0, cancel: 1, menuUp: 12, menuDown: 13, menuLeft: 14, menuRight: 15
+    }
+  });
+  assert.equal(migrated.layoutVersion, 2);
+  assert.equal(migrated.mapping.attack, 7);
+  assert.equal(migrated.mapping.dash, 10);
 });
 
 test('production profile and Admin surfaces expose remapping and every expansion section', async () => {
@@ -284,6 +309,8 @@ test('production profile and Admin surfaces expose remapping and every expansion
   ]);
   assert.match(index, /controller-mapping-grid/);
   assert.match(index, /controller-pause-overlay/);
+  assert.match(index, /id="extract-button"/);
+  assert.match(index, /id="descend-button"/);
   assert.match(admin, /tab-expansion/);
   assert.match(admin, /reset-expansion/);
   for (const section of [

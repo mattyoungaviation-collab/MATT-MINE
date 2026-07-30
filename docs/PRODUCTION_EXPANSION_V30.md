@@ -59,7 +59,11 @@ The default base reward is 250,000 nuggets. The server atomically validates inve
 
 ### Controller
 
-The Gamepad API supports left-stick movement, right-stick aiming, attacks, three weapon selections, dash, interaction, pause, menu movement, confirm, and back. Players can remap buttons and save dead zone, sensitivity, vibration, active controller, and mapping to their wallet profile. Menu focus is visible and a disconnected active controller pauses the run with a resumable overlay.
+The Gamepad API supports left-stick and D-pad movement, right-stick aiming, attacks, three weapon selections, dash, interaction, pause, menu movement, confirm, and back. Right-stick input takes aim ownership; when released, the miner keeps facing the last controller direction instead of snapping back to the mouse. Upgrade choices and Extract/Descend use D-pad left/right plus A/Cross confirmation.
+
+New and untouched legacy profiles use the production layout: RT/R2 Attack, Left Stick Dash, LB/L1 Pickaxe, X/Square Dynamite, RB/R1 Blaster, Y/Triangle Interact, Menu/Options Pause, A/Cross Confirm, B/Circle Back, and D-pad menu navigation. Custom mappings remain unchanged. Players can remap buttons and save dead zone, sensitivity, vibration, active controller, and mapping to their wallet profile. Menu focus is visible and a disconnected active controller pauses the run with a resumable overlay.
+
+The Guardian uses one optimized 6×5 WebP sheet with 30 purpose-built frames: idle, chase, slam, volley/summon, and radial/enraged animation rows. A single sheet keeps the encounter visually alive without 30 network requests.
 
 ### Characters
 
