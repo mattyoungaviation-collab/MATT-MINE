@@ -309,6 +309,34 @@ export class RoninRewardChain {
     };
   }
 
+  async claimStatuses(plan, entries = []) {
+    const status = await this.epochStatus(plan);
+    if (!status.published) {
+      return {
+        ...status,
+        entries: entries.map((entry) => ({
+          address: entry.address,
+          claimed: false,
+          status: 'not_published'
+        }))
+      };
+    }
+    const claims = await Promise.all(entries.map(async (entry) => {
+      const claimed = await this.client.readContract({
+        address: this.rewardsAddress,
+        abi: REWARDS_ABI,
+        functionName: 'isClaimed',
+        args: [BigInt(plan.epoch), plan.board, getAddress(entry.address)]
+      });
+      return {
+        address: String(entry.address).toLowerCase(),
+        claimed: claimed === true,
+        status: claimed === true ? 'paid' : 'unpaid'
+      };
+    }));
+    return { ...status, entries: claims };
+  }
+
   async assertClaimable(plan, playerAddress) {
     const status = await this.epochStatus(plan, playerAddress);
     assertApi(status.published, 409, 'reward_not_published', 'This reward epoch is not published on Ronin yet.');

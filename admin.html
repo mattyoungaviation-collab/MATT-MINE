@@ -33,7 +33,7 @@
       <nav id="tabs" aria-label="Admin sections">
         <span class="nav-label">Status</span>
         <button class="active" data-tab="overview"><span>Overview</span><small>Health &amp; readiness</small></button>
-        <button data-tab="operations"><span>Live Operations</span><small>Immediate gates</small></button>
+        <button data-tab="operations"><span>Mine Operations</span><small>Pause, close &amp; pay</small></button>
         <span class="nav-label">People</span>
         <button data-tab="players"><span>Players</span><small>Search &amp; moderation</small></button>
         <span class="nav-label">Game</span>
@@ -42,7 +42,6 @@
         <button data-tab="expansion"><span>Modes &amp; Characters</span><small>Features &amp; roster</small></button>
         <span class="nav-label">Economy</span>
         <button data-tab="nugget-economy"><span>Nugget Economy</span><small>Prices &amp; packages</small></button>
-        <button data-tab="rewards"><span>MATT Rewards</span><small>Weekly claims</small></button>
         <button data-tab="arena"><span>Daily Arena</span><small>Pool &amp; settlement</small></button>
         <span class="nav-label">System</span>
         <button data-tab="contracts"><span>Onchain Actions</span><small>Safe transaction files</small></button>
@@ -114,15 +113,38 @@
 
       <section id="tab-operations" class="tab">
         <div class="section-heading">
-          <div><p class="eyebrow">SERVER LAYER</p><h2>Immediate controls</h2></div>
-          <p>These controls take effect immediately and create an audit entry.</p>
+          <div><p class="eyebrow">LIVE OPERATIONS</p><h2>Run every mine from one place</h2><p>Open play, stop payments, close competition, publish rewards, and track every unpaid winner.</p></div>
+          <button id="refresh-mine-operations" type="button" class="ghost">Refresh live status</button>
         </div>
-        <form id="operations-form" class="panel">
-          <div id="operation-toggles" class="toggle-grid"></div>
-          <label>Player announcement<textarea id="announcement" maxlength="280" rows="3" placeholder="Optional status message shown during maintenance"></textarea></label>
-          <label>Required reason<input id="operations-reason" maxlength="240" placeholder="Why are these settings changing?" required></label>
-          <button type="submit">Apply server controls</button>
-        </form>
+        <div class="notice operations-guide"><strong>Simple rule:</strong> green means players can use it. Pausing a mine never deletes completed scores, confirmed payments, or unpaid rewards.</div>
+        <details class="panel structured-card">
+          <summary><strong>Whole-site emergency controls</strong><span>Use only when more than one mine is affected</span></summary>
+          <form id="operations-form">
+            <div id="operation-toggles" class="toggle-grid"></div>
+            <label>Player announcement<textarea id="announcement" maxlength="280" rows="3" placeholder="Optional status message shown during maintenance"></textarea></label>
+            <label>Required reason<input id="operations-reason" maxlength="240" placeholder="Why are these settings changing?" required></label>
+            <button type="submit">Apply global controls</button>
+          </form>
+        </details>
+        <div class="section-heading compact">
+          <div><p class="eyebrow">MINE-BY-MINE CONTROL</p><h2>Five independent control rooms</h2></div>
+          <p>Every change is immediate and audit logged.</p>
+        </div>
+        <label class="panel operations-reason">Reason for the next mine control
+          <input id="mine-control-reason" maxlength="240" placeholder="Example: Closing Daily Mine after the weekly timer ended">
+        </label>
+        <div id="mine-operations-grid" class="mine-operations-grid"></div>
+        <div class="section-heading compact reward-desk-heading">
+          <div><p class="eyebrow">FREE + PASS PAYOUT DESK</p><h2>Leaderboard to MATT claim</h2><p>Complete the numbered steps. The server keeps the exact amount owed to every wallet until it is paid or the claim period closes.</p></div>
+        </div>
+        <div class="panel reward-period-bar">
+          <label>Closed competition week (Monday UTC)<input id="reward-week" type="date" required></label>
+          <button id="load-reward-week" type="button" class="ghost">Load Free + Pass</button>
+          <span id="reward-week-help" class="muted">Choose the Monday that started the finished week.</span>
+        </div>
+        <div id="reward-operations-summary" class="reward-operations-summary"></div>
+        <div id="reward-transaction-result" class="panel" hidden></div>
+        <div id="reward-drafts" hidden></div>
       </section>
 
       <section id="tab-players" class="tab">
@@ -294,23 +316,6 @@
           <summary><strong>Economy audit</strong><span>Latest changes</span></summary>
           <div id="economy-audit-list" class="timeline"></div>
         </details>
-      </section>
-
-      <section id="tab-rewards" class="tab">
-        <div class="section-heading"><div><p class="eyebrow">MATT PAYOUTS</p><h2>Reward pipeline</h2></div><button id="refresh-rewards" class="ghost">Refresh</button></div>
-        <div class="notice">Reward drafts still require the independent approver. Published roots and player claims cannot be edited here.</div>
-        <form id="reward-create-form" class="panel">
-          <h2>Create reward draft</h2>
-          <div class="grid two">
-            <label>Leaderboard<select id="reward-mode"><option value="free">Free</option><option value="paid">Pass</option></select></label>
-            <label>Finalized week (Monday UTC)<input id="reward-week" type="date" required></label>
-            <label>Pool (MATT, maximum 5,000,000)<input id="reward-pool" type="number" min="1" max="5000000" step="1" required></label>
-            <label>Claim window (days)<input id="reward-claim-days" type="number" min="1" max="90" value="30" required></label>
-          </div>
-          <button type="submit">Create immutable draft</button>
-        </form>
-        <div id="reward-transaction-result" class="panel" hidden></div>
-        <div id="reward-drafts" class="cards"></div>
       </section>
 
       <section id="tab-arena" class="tab">

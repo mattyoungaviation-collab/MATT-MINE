@@ -329,6 +329,7 @@ export class MattMineService {
     this.assertPaymentsEnabled();
     const before = await this.database.read();
     assertApi(!before.operations.purchasesPaused, 503, 'server_purchases_paused', 'Pass purchases are temporarily paused by MATT Mine.');
+    assertMineOperationOpen(before.operations, 'pass', 'payments', 'Pass payments are paused in the Mine Operations console.');
     const wallet = requireWallet(before, session.address);
     assertApi(!wallet.suspended, 403, 'wallet_suspended', 'This wallet is suspended from Pass purchases.');
     const verified = await this.paymentVerifier.verifyPassPurchase(transactionHash, session.address);
@@ -478,6 +479,7 @@ export class MattMineService {
     this.assertPaymentsEnabled();
     const state = await this.database.read();
     assertApi(!state.operations.purchasesPaused, 503, 'server_purchases_paused', 'Paid-run purchases are temporarily paused by MATT Mine.');
+    assertMineOperationOpen(state.operations, 'pass', 'payments', 'Pass Mine payments are paused.');
     const wallet = requireWallet(state, session.address);
     assertApi(!wallet.suspended, 403, 'wallet_suspended', 'This wallet is suspended from paid-run purchases.');
     return this.paymentVerifier.quotePaidRun(session.address);
@@ -488,6 +490,7 @@ export class MattMineService {
     this.assertPaymentsEnabled();
     const before = await this.database.read();
     assertApi(!before.operations.purchasesPaused, 503, 'server_purchases_paused', 'Paid-run purchases are temporarily paused by MATT Mine.');
+    assertMineOperationOpen(before.operations, 'pass', 'payments', 'Pass Mine payments are paused.');
     const wallet = requireWallet(before, session.address);
     assertApi(!wallet.suspended, 403, 'wallet_suspended', 'This wallet is suspended from paid-run purchases.');
     const verified = await this.paymentVerifier.verifyPaidRunPurchase(transactionHash, session.address);
@@ -536,6 +539,10 @@ export class MattMineService {
     }
     if (normalizedMode === SERVER_RUN_MODES.PAID) {
       assertApi(!operationState.operations.passRankedPaused, 503, 'pass_ranked_paused', 'Pass ranked runs are temporarily paused.');
+    }
+    const operationMine = mineForRunMode(normalizedMode);
+    if (operationMine) {
+      assertMineOperationOpen(operationState.operations, operationMine, 'entries', `${mineDisplayName(operationMine)} is not accepting new runs.`);
     }
     if (normalizedMode === SERVER_RUN_MODES.BETA) {
       assertApi(operationState.expansionConfig.settings.betaModeEnabled, 503, 'beta_mode_disabled', 'Beta Testing is currently disabled.');
@@ -784,6 +791,10 @@ export class MattMineService {
       assertApi(run.status === 'active', 409, 'run_already_finished', 'This run was already submitted.');
       assertApi(run.expiresAt > timestamp, 410, 'run_expired', 'The run expired before it was submitted.');
       assertApi(safeTokenEqual(run.tokenHash, hashToken(runToken)), 401, 'run_token_rejected', 'The run token is invalid.');
+      const operationMine = mineForRunMode(run.mode);
+      if (operationMine) {
+        assertMineOperationOpen(state.operations, operationMine, 'results', `${mineDisplayName(operationMine)} result submission is paused. This active run remains recoverable.`);
+      }
       if (![SERVER_RUN_MODES.PRACTICE, SERVER_RUN_MODES.BETA].includes(run.mode)) {
         assertApi(!wallet.suspended, 403, 'wallet_suspended', 'This wallet is suspended from ranked score submission.');
       }
@@ -915,6 +926,8 @@ export class MattMineService {
       }
 
       assertApi(this.mainnetTransactionsEnabled, 503, 'practice_claims_disabled', 'Practice claims are currently blocked until verified payment integration is enabled.');
+      assertMineOperationOpen(state.operations, 'practice', 'payments', 'Practice reward payments are paused.');
+      assertMineOperationOpen(state.operations, 'practice', 'rewards', 'Practice reward finalization is paused.');
       assertApi(transactionHash, 400, 'invalid_transaction_hash', 'A valid payment transaction hash is required to claim practice rewards.');
       const duplicate = findPracticeClaimByTransactionHash(wallet.practiceClaims, transactionHash);
       assertApi(!duplicate || duplicate.runId === runId, 409, 'transaction_duplicate', 'This transaction hash was already used for another practice claim.');
@@ -1156,27 +1169,81 @@ export class MattMineService {
     assertApi(this.rewardManager, 503, 'reward_pipeline_unavailable', 'MATT reward claims are not configured.');
     const state = await this.database.read();
     assertApi(!state.operations.claimsPaused, 503, 'server_claims_paused', 'MATT reward claims are temporarily paused.');
+    const mine = String(draftId || '').endsWith('_paid') ? 'pass' : 'daily';
+    assertMineOperationOpen(state.operations, mine, 'rewards', `${mineDisplayName(mine)} reward claims are paused.`);
     return this.rewardManager.prepareClaim(session.address, draftId);
   }
 
   async createRewardDraft(adminKey, input) {
     assertApi(this.rewardManager, 503, 'reward_pipeline_unavailable', 'The reward pipeline is not configured.');
+    const state = await this.database.read();
+    const mine = String(input?.mode || '') === 'paid' ? 'pass' : 'daily';
+    assertMineOperationOpen(state.operations, mine, 'rewards', `${mineDisplayName(mine)} reward processing is paused.`);
     return this.rewardManager.createDraft(adminKey, input);
   }
 
   async approveRewardDraft(approverKey, draftId) {
     assertApi(this.rewardManager, 503, 'reward_pipeline_unavailable', 'The reward pipeline is not configured.');
+    const state = await this.database.read();
+    const mine = String(draftId || '').endsWith('_paid') ? 'pass' : 'daily';
+    assertMineOperationOpen(state.operations, mine, 'rewards', `${mineDisplayName(mine)} reward processing is paused.`);
     return this.rewardManager.approveDraft(approverKey, draftId);
   }
 
   async syncRewardDraft(adminKey, draftId, transactionHash) {
     assertApi(this.rewardManager, 503, 'reward_pipeline_unavailable', 'The reward pipeline is not configured.');
+    const state = await this.database.read();
+    const mine = String(draftId || '').endsWith('_paid') ? 'pass' : 'daily';
+    assertMineOperationOpen(state.operations, mine, 'rewards', `${mineDisplayName(mine)} reward processing is paused.`);
     return this.rewardManager.syncDraft(adminKey, draftId, transactionHash);
   }
 
   async listRewardDrafts(adminKey) {
     assertApi(this.rewardManager, 503, 'reward_pipeline_unavailable', 'The reward pipeline is not configured.');
     return this.rewardManager.listDrafts(adminKey);
+  }
+
+  async adminMineOperations(adminKey, week) {
+    this.assertAdminKey(adminKey);
+    const state = await this.database.read();
+    const timestamp = this.now();
+    const runs = Object.values(state.runs);
+    const mineCards = ['practice', 'arena', 'daily', 'pass', 'weekly'].map((mine) => {
+      const mineRuns = runs.filter((run) => mineForRunMode(run.mode) === mine);
+      const payments = mine === 'pass'
+        ? Object.values(state.paidEntitlements)
+        : mine === 'practice'
+          ? Object.values(state.wallets).flatMap((wallet) => Object.values(wallet.practiceClaims || {}))
+          : [];
+      return {
+        id: mine,
+        name: mineDisplayName(mine),
+        controls: structuredClone(state.operations.mines?.[mine] || {}),
+        availableControls: mineOperationCapabilities(mine),
+        activeRuns: mineRuns.filter((run) => run.status === 'active' && run.expiresAt > timestamp).length,
+        finishedRuns: mineRuns.filter((run) => run.status === 'finished').length,
+        pendingPayments: payments.filter((payment) =>
+          mine === 'pass'
+            ? !payment.consumedAt && !payment.usedRunId
+            : payment.status === 'pending'
+        ).length,
+        paidRecords: payments.filter((payment) =>
+          mine === 'pass'
+            ? Boolean(payment.confirmedAt)
+            : payment.status === 'claimed'
+        ).length
+      };
+    });
+    const rewardWeek = week || previousUtcWeek(timestamp);
+    const rewards = this.rewardManager
+      ? await this.rewardManager.operationsOverview(adminKey, rewardWeek)
+      : { week: rewardWeek, available: false, boards: [] };
+    return {
+      generatedAt: timestamp,
+      global: structuredClone(state.operations),
+      mines: mineCards,
+      rewards
+    };
   }
 
   async hydratePlayerScores(player) {
@@ -1443,12 +1510,72 @@ export class MattMineService {
           next[key] = value;
         }
       }
+      next.mines ||= {};
+      if (Object.hasOwn(patch, 'freeRankedPaused')) next.mines.daily.entriesPaused = patch.freeRankedPaused;
+      if (Object.hasOwn(patch, 'passRankedPaused')) next.mines.pass.entriesPaused = patch.passRankedPaused;
+      if (Object.hasOwn(patch, 'purchasesPaused')) {
+        next.mines.practice.paymentsPaused = patch.purchasesPaused;
+        next.mines.pass.paymentsPaused = patch.purchasesPaused;
+      }
+      if (Object.hasOwn(patch, 'claimsPaused')) {
+        next.mines.daily.rewardsPaused = patch.claimsPaused;
+        next.mines.pass.rewardsPaused = patch.claimsPaused;
+      }
       next.updatedAt = timestamp;
       next.updatedBy = 'SERVER_ADMIN';
       state.operations = next;
       this.cachedOperations = next;
       addAudit(state, 'SERVER_ADMIN', 'OPERATIONS_UPDATED', `${normalizedReason}: ${JSON.stringify(patch)}`, timestamp);
       return { operations: structuredClone(next), reason: normalizedReason };
+    });
+  }
+
+  async updateMineOperations(adminKey, mine, patch, reason) {
+    this.assertAdminKey(adminKey);
+    const normalizedMine = String(mine || '');
+    assertApi(['practice', 'arena', 'daily', 'pass', 'weekly'].includes(normalizedMine), 404, 'mine_operation_unknown', 'Choose a playable mine.');
+    assertApi(patch && typeof patch === 'object' && !Array.isArray(patch), 400, 'mine_operations_patch_invalid', 'Mine control changes must be an object.');
+    const allowed = new Set(['entriesPaused', 'resultsPaused', 'paymentsPaused', 'rewardsPaused']);
+    assertApi(Object.keys(patch).length > 0, 400, 'mine_operations_patch_empty', 'Choose at least one mine control.');
+    assertApi(Object.keys(patch).every((key) => allowed.has(key)), 400, 'mine_operations_field_locked', 'One or more mine controls are protected.');
+    const available = new Set(mineOperationCapabilities(normalizedMine).map((operation) => `${operation}Paused`));
+    assertApi(
+      Object.keys(patch).every((key) => available.has(key)),
+      400,
+      'mine_operation_not_applicable',
+      'That control does not apply to this mine.'
+    );
+    assertApi(Object.values(patch).every((value) => typeof value === 'boolean'), 400, 'mine_operations_value_invalid', 'Mine controls must be true or false.');
+    const normalizedReason = normalizeAdminReason(reason);
+    const timestamp = this.now();
+    return this.database.transact((state) => {
+      const current = state.operations.mines[normalizedMine];
+      const next = {
+        ...current,
+        ...patch,
+        updatedAt: timestamp,
+        updatedBy: 'SERVER_ADMIN'
+      };
+      state.operations.mines[normalizedMine] = next;
+      if (normalizedMine === 'daily' && Object.hasOwn(patch, 'entriesPaused')) {
+        state.operations.freeRankedPaused = patch.entriesPaused;
+      }
+      if (normalizedMine === 'pass' && Object.hasOwn(patch, 'entriesPaused')) {
+        state.operations.passRankedPaused = patch.entriesPaused;
+      }
+      this.cachedOperations = state.operations;
+      addAudit(
+        state,
+        'SERVER_ADMIN',
+        'MINE_OPERATIONS_UPDATED',
+        `${normalizedMine}: ${JSON.stringify(patch)}; ${normalizedReason}`,
+        timestamp
+      );
+      return {
+        mine: normalizedMine,
+        controls: structuredClone(next),
+        reason: normalizedReason
+      };
     });
   }
 
@@ -1529,17 +1656,17 @@ export class MattMineService {
   }
 
   async quoteArenaEntry(token, input = {}) {
-    const { session } = await this.arenaPlayer(token);
+    const { session } = await this.arenaPlayer(token, { operation: 'payments' });
     return this.arenaService.quoteEntry(session.address, input);
   }
 
   async confirmArenaEntry(token, enterTransactionHash) {
-    const { session } = await this.arenaPlayer(token);
+    const { session } = await this.arenaPlayer(token, { operation: 'payments' });
     return this.arenaService.confirmEntry(session.address, enterTransactionHash);
   }
 
   async startArenaRun(token, input = {}) {
-    const { session } = await this.arenaPlayer(token);
+    const { session } = await this.arenaPlayer(token, { operation: 'entries' });
     return this.arenaService.startRun(session.address, input);
   }
 
@@ -1549,7 +1676,7 @@ export class MattMineService {
   }
 
   async finishArenaRun(token, payload) {
-    const { session } = await this.arenaPlayer(token);
+    const { session } = await this.arenaPlayer(token, { operation: 'results' });
     const result = await this.arenaService.finishRun(session.address, payload);
     const state = await this.database.read();
     return {
@@ -1623,6 +1750,7 @@ export class MattMineService {
     this.assertAdminKey(adminKey);
     this.assertArenaEnabled();
     const state = await this.database.read();
+    assertMineOperationOpen(state.operations, 'arena', 'rewards', 'MATT Arena settlement preparation is paused.');
     const result = await this.arenaService.createSettlement(
       day,
       suspendedWalletAddresses(state),
@@ -1658,6 +1786,14 @@ export class MattMineService {
     }
     if (!options.allowMaintenance) {
       assertApi(!state.operations.maintenanceMode, 503, 'maintenance_mode', state.operations.announcement || 'MATT Mine is temporarily under maintenance.');
+    }
+    if (options.operation) {
+      assertMineOperationOpen(
+        state.operations,
+        'arena',
+        options.operation,
+        `MATT Arena ${options.operation} are paused in the Mine Operations console.`
+      );
     }
     return { session, wallet };
   }
@@ -2099,8 +2235,52 @@ function awaitlessPublicOperations(operations) {
     passRankedPaused: source.passRankedPaused === true,
     purchasesPaused: source.purchasesPaused === true,
     claimsPaused: source.claimsPaused === true,
+    mines: structuredClone(source.mines || {}),
     announcement: typeof source.announcement === 'string' ? source.announcement : ''
   };
+}
+
+function mineForRunMode(mode) {
+  if (mode === SERVER_RUN_MODES.PRACTICE || mode === SERVER_RUN_MODES.BETA) return 'practice';
+  if (mode === SERVER_RUN_MODES.FREE) return 'daily';
+  if (mode === SERVER_RUN_MODES.PAID) return 'pass';
+  if (mode === SERVER_RUN_MODES.WEEKLY) return 'weekly';
+  return null;
+}
+
+function mineDisplayName(mine) {
+  return {
+    practice: 'Practice Mine',
+    arena: 'MATT Arena',
+    daily: 'Daily Mine',
+    pass: 'Pass Mine',
+    weekly: 'Seven-Day Mine'
+  }[mine] || 'Mine';
+}
+
+function mineOperationCapabilities(mine) {
+  return {
+    practice: ['entries', 'results', 'payments', 'rewards'],
+    arena: ['entries', 'results', 'payments', 'rewards'],
+    daily: ['entries', 'results', 'rewards'],
+    pass: ['entries', 'results', 'payments', 'rewards'],
+    weekly: ['entries', 'results']
+  }[mine] || [];
+}
+
+function assertMineOperationOpen(operations, mine, operation, message) {
+  const key = `${operation}Paused`;
+  assertApi(
+    operations?.mines?.[mine]?.[key] !== true,
+    503,
+    `${mine}_${operation}_paused`,
+    message
+  );
+}
+
+function previousUtcWeek(timestamp) {
+  const current = utcWeekKey(timestamp);
+  return utcWeekKey(Date.parse(`${current}T00:00:00.000Z`) - 1);
 }
 
 async function expireOldRuns(state, timestamp, transaction) {

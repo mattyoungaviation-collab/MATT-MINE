@@ -112,6 +112,106 @@ export class RewardManager {
     };
   }
 
+  async operationsOverview(adminKey, week) {
+    this.assertPrimary(adminKey);
+    this.assertAvailable();
+    const normalizedWeek = normalizeRewardWeek(week);
+    const drafts = await this.store.listDrafts();
+    const boards = await Promise.all(['free', 'paid'].map(async (mode) => {
+      const snapshot = await this.store.finalizedSnapshot(mode, normalizedWeek);
+      const stored = drafts.find((draft) => draft.week === normalizedWeek && draft.mode === mode);
+      if (!stored) {
+        return {
+          mode,
+          week: normalizedWeek,
+          snapshotFinalized: Boolean(snapshot?.finalized),
+          participantCount: Number(snapshot?.participantCount || 0),
+          runCount: Number(snapshot?.runCount || 0),
+          status: snapshot?.finalized ? 'ready_to_create' : 'waiting_for_finalization',
+          nextAction: snapshot?.finalized
+            ? 'Create the immutable payout obligation.'
+            : 'Wait for the week to close and its leaderboard snapshot to finalize.'
+        };
+      }
+      const draft = adminRewardDraft(stored);
+      let chain = {
+        published: false,
+        claimedRaw: '0',
+        paused: false,
+        closed: false,
+        unavailable: false,
+        entries: draft.entries.map((entry) => ({
+          address: entry.address,
+          claimed: false,
+          status: draft.status === 'published' ? 'unpaid' : 'not_published'
+        }))
+      };
+      if (['approved', 'published'].includes(draft.status)) {
+        try {
+          chain = typeof this.chain.claimStatuses === 'function'
+            ? await this.chain.claimStatuses(draft, draft.entries)
+            : {
+                ...(await this.chain.epochStatus(draft)),
+                entries: await Promise.all(draft.entries.map(async (entry) => {
+                  const entryStatus = await this.chain.epochStatus(draft, entry.address);
+                  return {
+                    address: entry.address,
+                    claimed: entryStatus.claimed === true,
+                    status: entryStatus.claimed === true ? 'paid' : 'unpaid'
+                  };
+                }))
+              };
+        } catch (error) {
+          chain.unavailable = true;
+          chain.errorCode = error?.code || 'reward_chain_status_failed';
+        }
+      }
+      const entryStatuses = new Map((chain.entries || []).map((entry) => [
+        String(entry.address).toLowerCase(),
+        entry
+      ]));
+      const obligations = draft.entries.map((entry) => {
+        const claim = entryStatuses.get(String(entry.address).toLowerCase()) || {};
+        return {
+          address: entry.address,
+          rank: entry.rank,
+          score: entry.score,
+          amountMatt: entry.amountMatt,
+          amountRaw: entry.amountRaw,
+          status: claim.claimed ? 'paid' : chain.published ? 'unpaid' : 'awaiting_publication'
+        };
+      });
+      const paidMatt = obligations
+        .filter((entry) => entry.status === 'paid')
+        .reduce((sum, entry) => sum + entry.amountMatt, 0);
+      const unpaidMatt = obligations
+        .filter((entry) => entry.status !== 'paid')
+        .reduce((sum, entry) => sum + entry.amountMatt, 0);
+      return {
+        mode,
+        week: normalizedWeek,
+        snapshotFinalized: Boolean(snapshot?.finalized),
+        participantCount: draft.participantCount,
+        runCount: Number(snapshot?.runCount || 0),
+        status: rewardOperationsStatus(draft, chain),
+        nextAction: rewardNextAction(draft, chain),
+        draft,
+        chain,
+        obligations,
+        paidMatt,
+        unpaidMatt,
+        paidCount: obligations.filter((entry) => entry.status === 'paid').length,
+        unpaidCount: obligations.filter((entry) => entry.status !== 'paid').length
+      };
+    }));
+    return {
+      week: normalizedWeek,
+      publicationEnabled: this.publicationEnabled,
+      maxBoardMatt: this.maxBoardMatt,
+      boards
+    };
+  }
+
   async playerRewards(address) {
     this.assertAvailable();
     const player = getAddress(address).toLowerCase();
@@ -291,4 +391,29 @@ function secretsEqual(left, right) {
   const leftHash = Buffer.from(createHash('sha256').update(String(left)).digest('hex'));
   const rightHash = Buffer.from(createHash('sha256').update(String(right)).digest('hex'));
   return leftHash.length === rightHash.length && timingSafeEqual(leftHash, rightHash);
+}
+
+function rewardOperationsStatus(draft, chain) {
+  if (chain.unavailable) return 'chain_status_unavailable';
+  if (chain.published && draft.status !== 'published') return 'server_sync_required';
+  if (chain.published) {
+    if (chain.closed) return 'closed';
+    return 'claims_open';
+  }
+  if (draft.status === 'approved') return 'safe_approval_required';
+  if (draft.status === 'draft') return 'independent_approval_required';
+  return draft.status;
+}
+
+function rewardNextAction(draft, chain) {
+  if (chain.unavailable) return 'Ronin status is unavailable. Do not publish or recover funds until it returns.';
+  if (chain.published && draft.status !== 'published') {
+    return 'Ronin contains the exact epoch. Click Check Ronin + synchronize so players can claim.';
+  }
+  if (chain.published) {
+    if (chain.closed) return 'The epoch is closed. Review unpaid balances before preparing recovery.';
+    return 'Claims are live. Monitor unpaid winners until the claim deadline.';
+  }
+  if (draft.status === 'approved') return 'Download the Safe JSON, obtain 2-of-3 approval, execute it, then synchronize the transaction.';
+  return 'Enter the independent approver key to lock the allocation and create the Safe JSON.';
 }

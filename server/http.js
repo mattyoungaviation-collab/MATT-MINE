@@ -497,6 +497,26 @@ async function handleApiRequest({
     sendJson(response, 200, { ok: true, ...result });
     return;
   }
+  if (method === 'GET' && path === '/api/admin/mine-operations') {
+    const result = await service.adminMineOperations(
+      request.headers['x-matt-admin-key'],
+      requestUrl.searchParams.get('week') || ''
+    );
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
+  const mineOperationsMatch = path.match(/^\/api\/admin\/mine-operations\/(practice|arena|daily|pass|weekly)$/);
+  if (method === 'PUT' && mineOperationsMatch) {
+    const body = await readJson(request, maxRequestBytes);
+    const result = await service.updateMineOperations(
+      request.headers['x-matt-admin-key'],
+      mineOperationsMatch[1],
+      body.patch,
+      body.reason
+    );
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
   if (method === 'GET' && path === '/api/admin/audit') {
     const result = await service.adminAudit(request.headers['x-matt-admin-key'], {
       action: requestUrl.searchParams.get('action'),

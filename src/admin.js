@@ -16,6 +16,7 @@ const state = {
   tuningDrafts: {},
   expansion: null,
   expansionDraft: null,
+  mineOperations: null,
   controlIndex: [],
   activeTab: 'overview',
   overviewTimer: null
@@ -71,7 +72,7 @@ async function activateTab(name) {
   if (name === 'tuning') await loadTuning();
   if (name === 'expansion') await loadExpansion();
   if (name === 'nugget-economy') await window.mattMineAdminEconomy?.load?.();
-  if (name === 'rewards') await loadRewards();
+  if (name === 'operations') await loadMineOperations();
   if (name === 'arena') await loadArenaAdmin();
   if (name === 'audit') await loadAudit();
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -471,39 +472,218 @@ $('#beta-access-form').addEventListener('submit', async (event) => {
   showAlert('Beta Testing access updated.');
 });
 
-$('#refresh-rewards').addEventListener('click', loadRewards);
-$('#reward-create-form').addEventListener('submit', async (event) => {
-  event.preventDefault();
-  if (!await confirmAction('Create reward draft?', 'The finalized leaderboard snapshot and allocations become immutable once the draft is created.')) return;
-  await api('/api/admin/rewards/drafts', {
-    method: 'POST',
-    body: {
-      mode: $('#reward-mode').value,
-      week: $('#reward-week').value,
-      poolMatt: Number($('#reward-pool').value),
-      claimDays: Number($('#reward-claim-days').value)
-    }
-  });
-  await loadRewards();
-  showAlert('Reward draft created from the finalized leaderboard.');
-});
-async function loadRewards() {
+$('#refresh-mine-operations').addEventListener('click', () => loadMineOperations(true));
+$('#load-reward-week').addEventListener('click', () => loadMineOperations(true));
+
+async function loadMineOperations(showSuccess = false) {
+  const weekInput = $('#reward-week');
+  if (!weekInput.value) weekInput.value = previousUtcWeek();
   try {
-    const data = await api('/api/admin/rewards/drafts');
-    $('#reward-drafts').innerHTML = data.drafts.map((draft) => `<article class="card">
-      <div class="action-row"><span class="badge">${escapeHtml(draft.status)}</span><strong>${escapeHtml(draft.id)}</strong></div>
-      <p>${Number(draft.totalMatt).toLocaleString()} MATT · ${draft.allocations?.length || 0} players</p>
-      <div class="code">Merkle root: ${escapeHtml(draft.merkleRoot)}</div>
-      <div class="action-row">
-        ${draft.status === 'draft' ? `<button data-reward-approve="${draft.id}">Independent approve</button>` : ''}
-        ${['approved', 'published'].includes(draft.status) ? `<button class="ghost" data-reward-sync="${draft.id}">Sync Ronin publication</button>` : ''}
-      </div>
-    </article>`).join('') || '<div class="panel">No reward drafts yet.</div>';
-    document.querySelectorAll('[data-reward-approve]').forEach((button) => button.addEventListener('click', () => approveReward(button.dataset.rewardApprove)));
-    document.querySelectorAll('[data-reward-sync]').forEach((button) => button.addEventListener('click', () => syncReward(button.dataset.rewardSync)));
+    const data = await api(`/api/admin/mine-operations?week=${encodeURIComponent(weekInput.value)}`);
+    state.mineOperations = data;
+    renderMineOperations(data);
+    renderRewardOperations(data.rewards);
+    if (showSuccess) showAlert('Mine operations and unpaid rewards refreshed from the server and Ronin.');
   } catch (error) {
-    $('#reward-drafts').innerHTML = `<div class="panel">${escapeHtml(error.message)}</div>`;
+    $('#mine-operations-grid').innerHTML = `<article class="panel">${escapeHtml(error.message)}</article>`;
+    $('#reward-operations-summary').innerHTML = `<article class="panel">${escapeHtml(error.message)}</article>`;
   }
+}
+
+function renderMineOperations(data) {
+  $('#mine-operations-grid').innerHTML = (data.mines || []).map((mine) => {
+    const controls = mine.controls || {};
+    const available = new Set(mine.availableControls || []);
+    const gates = [
+      ['entries', 'New runs', controls.entriesPaused, available.has('entries')],
+      ['results', 'Finish runs', controls.resultsPaused, available.has('results')],
+      ['payments', 'Payments', controls.paymentsPaused, available.has('payments')],
+      ['rewards', 'Rewards', controls.rewardsPaused, available.has('rewards')]
+    ];
+    const applicableGates = gates.filter(([, , , isAvailable]) => isAvailable);
+    return `<article class="panel mine-operations-card" data-mine="${escapeHtml(mine.id)}">
+      <div class="mine-operations-title">
+        <div><span class="mine-number">${mineNumber(mine.id)}</span><h3>${escapeHtml(mine.name)}</h3></div>
+        <span class="badge ${applicableGates.some(([, , paused]) => paused) ? 'warning' : ''}">${applicableGates.every(([, , paused]) => !paused) ? 'OPEN' : 'LIMITED'}</span>
+      </div>
+      <div class="mine-live-counts">
+        <span><b>${Number(mine.activeRuns || 0).toLocaleString()}</b> active</span>
+        <span><b>${Number(mine.finishedRuns || 0).toLocaleString()}</b> finished</span>
+        <span><b>${available.has('payments') ? Number(mine.pendingPayments || 0).toLocaleString() : '—'}</b>${available.has('payments') ? ' pending payments' : ' no payment flow'}</span>
+      </div>
+      <div class="mine-gates">${gates.map(([gate, label, paused, isAvailable]) => `
+        <button type="button" class="mine-gate ${!isAvailable ? 'unavailable' : paused ? 'paused' : 'open'}"
+          ${isAvailable ? `data-mine-control="${escapeHtml(mine.id)}" data-mine-gate="${gate}" data-next-paused="${paused ? 'false' : 'true'}"` : 'disabled'}>
+          <span>${escapeHtml(label)}</span><strong>${!isAvailable ? 'NOT USED' : paused ? 'PAUSED' : 'OPEN'}</strong><small>${!isAvailable ? 'No such flow in this mine' : paused ? 'Click to resume' : 'Click to pause'}</small>
+        </button>`).join('')}</div>
+      <div class="mine-next-action"><strong>NEXT</strong><span>${escapeHtml(mineNextAction(mine, controls))}</span></div>
+      <div class="action-row mine-links">
+        <button type="button" class="ghost" data-operations-tab="studio">Edit future map</button>
+        ${mine.id === 'arena'
+          ? '<button type="button" class="ghost" data-operations-tab="arena">Schedule or settle Arena</button>'
+          : ['daily', 'pass'].includes(mine.id)
+            ? '<button type="button" class="ghost" data-scroll-payouts="true">Open payout desk</button>'
+            : ''}
+      </div>
+      ${mine.id === 'arena' ? '<p class="mine-footnote">Server controls are here. Contract entry and settlement controls remain in Daily Arena.</p>' : ''}
+    </article>`;
+  }).join('');
+}
+
+$('#mine-operations-grid').addEventListener('click', async (event) => {
+  const tabLink = event.target.closest('[data-operations-tab]');
+  if (tabLink) {
+    await activateTab(tabLink.dataset.operationsTab);
+    return;
+  }
+  if (event.target.closest('[data-scroll-payouts]')) {
+    $('.reward-desk-heading').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return;
+  }
+  const button = event.target.closest('[data-mine-control]');
+  if (!button) return;
+  const mine = button.dataset.mineControl;
+  const gate = button.dataset.mineGate;
+  const paused = button.dataset.nextPaused === 'true';
+  const reason = $('#mine-control-reason').value;
+  if (!reason.trim()) {
+    showAlert('Write a reason before changing a mine control.', true);
+    $('#mine-control-reason').focus();
+    return;
+  }
+  if (!await confirmAction(`${paused ? 'Pause' : 'Resume'} ${words(mine)} ${gate}?`, 'This takes effect immediately and is audit logged. Existing records are preserved.')) return;
+  await api(`/api/admin/mine-operations/${encodeURIComponent(mine)}`, {
+    method: 'PUT',
+    body: { patch: { [`${gate}Paused`]: paused }, reason }
+  });
+  $('#mine-control-reason').value = '';
+  await refreshOverview();
+  await loadMineOperations();
+  showAlert(`${words(mine)} ${gate} ${paused ? 'paused' : 'resumed'}.`);
+});
+
+function renderRewardOperations(rewards = {}) {
+  $('#reward-week-help').textContent = rewards.publicationEnabled
+    ? `Live publishing enabled · maximum ${Number(rewards.maxBoardMatt || 0).toLocaleString()} MATT per board`
+    : 'Publishing is not enabled on this server.';
+  $('#reward-operations-summary').innerHTML = (rewards.boards || []).map((board) => {
+    const label = board.mode === 'paid' ? 'Pass Ranked' : 'Free Ranked';
+    const draft = board.draft || null;
+    const obligations = board.obligations || [];
+    return `<article class="panel reward-board" data-board="${escapeHtml(board.mode)}">
+      <div class="reward-board-header">
+        <div><p class="eyebrow">${escapeHtml(label)}</p><h3>${escapeHtml(rewards.week || board.week)}</h3></div>
+        <span class="reward-stage">STEP ${rewardStep(board)} OF 6</span>
+      </div>
+      <ol class="reward-steps">
+        ${rewardStepItem(1, 'Leaderboard closed', board.snapshotFinalized, board.snapshotFinalized ? `${Number(board.participantCount || 0)} eligible miners` : 'Waiting for the immutable server snapshot')}
+        ${rewardStepItem(2, 'Payout obligation created', Boolean(draft), draft ? `${Number(draft.allocatedMatt || 0).toLocaleString()} MATT locked to ${draft.entries?.length || 0} wallets` : 'Choose the pool below')}
+        ${rewardStepItem(3, 'Independent approval', draft?.status === 'approved' || draft?.status === 'published', draft ? words(draft.status) : 'Waiting')}
+        ${rewardStepItem(4, 'Safe executed', board.chain?.published === true, board.chain?.published ? 'Exact epoch found on Ronin' : 'Download and execute the Safe JSON')}
+        ${rewardStepItem(5, 'Server synchronized', draft?.status === 'published', draft?.status === 'published' ? 'Players can claim' : 'Sync after the Safe transaction is mined')}
+        ${rewardStepItem(6, 'Claims monitored', board.unpaidCount === 0 && obligations.length > 0, obligations.length ? `${Number(board.paidCount || 0)} paid · ${Number(board.unpaidCount || 0)} unpaid` : 'Starts after publication')}
+      </ol>
+      ${draft ? `<div class="reward-terms">
+        <span><small>POOL</small><strong>${Number(draft.allocatedMatt || 0).toLocaleString()} MATT</strong></span>
+        <span><small>CLAIM DEADLINE</small><strong>${formatRewardDeadline(draft.claimDeadline)}</strong></span>
+        <span><small>PAID</small><strong>${Number(board.paidMatt || 0).toLocaleString()} MATT</strong></span>
+        <span class="${Number(board.unpaidMatt || 0) > 0 ? 'unpaid' : ''}"><small>STILL OWED</small><strong>${Number(board.unpaidMatt || 0).toLocaleString()} MATT</strong></span>
+      </div>` : ''}
+      <div class="reward-next"><strong>DO THIS NEXT</strong><p>${escapeHtml(board.nextAction || 'Refresh status.')}</p></div>
+      ${!draft && board.snapshotFinalized ? `<div class="reward-create-row">
+        <label>Total ${escapeHtml(label)} pool (MATT)<input data-reward-pool="${escapeHtml(board.mode)}" type="number" min="1" max="${Number(rewards.maxBoardMatt || 5000000)}" step="1" value="${board.mode === 'paid' ? 5000000 : 2500000}"></label>
+        <label>Claim window (days)<input data-reward-days="${escapeHtml(board.mode)}" type="number" min="1" max="90" value="30"></label>
+        <button type="button" data-create-reward="${escapeHtml(board.mode)}">Create exact obligation</button>
+      </div>` : ''}
+      ${draft ? `<div class="reward-actions action-row">
+        ${draft.status === 'draft' ? `<button type="button" data-reward-approve="${escapeHtml(draft.id)}">Approve + create Safe JSON</button>` : ''}
+        ${draft.status === 'approved' && !board.chain?.published ? `<button type="button" data-reward-approve="${escapeHtml(draft.id)}">Rebuild Safe JSON</button>` : ''}
+        ${['approved', 'published'].includes(draft.status) ? `<button type="button" class="ghost" data-reward-sync="${escapeHtml(draft.id)}">Check Ronin + synchronize</button>` : ''}
+      </div>
+      <details class="reward-obligations" ${board.unpaidCount ? 'open' : ''}>
+        <summary><strong>Unpaid obligations</strong><span>${Number(board.unpaidMatt || 0).toLocaleString()} MATT still owed</span></summary>
+        ${rewardObligationTable(obligations)}
+      </details>` : ''}
+    </article>`;
+  }).join('') || '<article class="panel">The reward pipeline is unavailable.</article>';
+}
+
+$('#reward-operations-summary').addEventListener('click', async (event) => {
+  const create = event.target.closest('[data-create-reward]');
+  if (create) {
+    const mode = create.dataset.createReward;
+    const poolMatt = Number($(`[data-reward-pool="${mode}"]`).value);
+    const claimDays = Number($(`[data-reward-days="${mode}"]`).value);
+    if (!await confirmAction('Create this exact payout obligation?', 'Winner wallets and amounts become immutable. Verify the week, board, total pool, and leaderboard first.')) return;
+    await api('/api/admin/rewards/drafts', {
+      method: 'POST',
+      body: { mode, week: $('#reward-week').value, poolMatt, claimDays }
+    });
+    await loadMineOperations();
+    showAlert('Immutable payout obligation created. Complete independent approval next.');
+    return;
+  }
+  const approve = event.target.closest('[data-reward-approve]');
+  if (approve) {
+    await approveReward(approve.dataset.rewardApprove);
+    return;
+  }
+  const sync = event.target.closest('[data-reward-sync]');
+  if (sync) await syncReward(sync.dataset.rewardSync);
+});
+
+function rewardObligationTable(obligations) {
+  if (!obligations.length) return '<p>No player obligations were created.</p>';
+  return `<div class="table-wrap"><table><thead><tr><th>Rank</th><th>Wallet</th><th>Score</th><th>MATT owed</th><th>Payment</th></tr></thead><tbody>${obligations.map((entry) => `<tr>
+    <td>#${Number(entry.rank || 0)}</td><td>${escapeHtml(short(entry.address))}</td><td>${Number(entry.score || 0).toLocaleString()}</td>
+    <td>${Number(entry.amountMatt || 0).toLocaleString()}</td><td><span class="badge ${entry.status === 'paid' ? '' : 'warning'}">${escapeHtml(words(entry.status))}</span></td>
+  </tr>`).join('')}</tbody></table></div>`;
+}
+
+function rewardStep(board) {
+  if (!board.snapshotFinalized) return 1;
+  if (!board.draft) return 2;
+  if (board.draft.status === 'draft') return 3;
+  if (!board.chain?.published) return 4;
+  if (board.draft.status !== 'published') return 5;
+  return 6;
+}
+
+function rewardStepItem(number, label, complete, detail) {
+  return `<li class="${complete ? 'complete' : ''}"><span>${complete ? '✓' : number}</span><div><strong>${escapeHtml(label)}</strong><small>${escapeHtml(detail)}</small></div></li>`;
+}
+
+function formatRewardDeadline(value) {
+  const timestamp = Number(value || 0) * 1000;
+  if (!Number.isFinite(timestamp) || timestamp <= 0) return 'Not set';
+  return new Date(timestamp).toLocaleString([], {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short'
+  });
+}
+
+function mineNumber(mine) {
+  return { practice: '01', arena: '02', daily: '03', pass: '04', weekly: '05' }[mine] || '—';
+}
+
+function mineNextAction(mine, controls) {
+  if (controls.entriesPaused && !controls.resultsPaused) return 'New entries are closed. Let active runs finish, then pause Finish runs.';
+  if (controls.entriesPaused && controls.resultsPaused) {
+    if (mine.id === 'arena') return 'Competition is closed. Open Daily Arena and prepare the full-pool settlement.';
+    if (['daily', 'pass'].includes(mine.id)) return 'Competition is closed. Use the payout desk after the weekly leaderboard finalizes.';
+    return 'Competition is closed. Review results before reopening.';
+  }
+  if (controls.paymentsPaused) return 'Play is open, but payments are stopped. Resume only after payment verification is healthy.';
+  if (controls.rewardsPaused) return 'Play is open, but payouts and claims are stopped. Review obligations before resuming.';
+  if (mine.id === 'daily') return 'Mine is live. Monitor active runs; use the payout desk after the weekly board closes.';
+  if (mine.id === 'weekly') return 'Mine is live. Monitor active runs and pause New runs first when closing.';
+  if (mine.id === 'practice') return 'Mine is live. Monitor active runs and paid Practice reward claims.';
+  if (mine.id === 'arena') return 'Arena is live. Monitor entries here and settle the full pool from Daily Arena after close.';
+  return 'Mine is live. Monitor active runs and paid credits; pause New runs first when closing.';
 }
 
 function renderReadiness(readiness = {}) {
@@ -570,13 +750,13 @@ async function approveReward(id) {
     <div class="code">${escapeHtml(JSON.stringify(transactions, null, 2))}</div>`;
   $('#download-reward-safe-json').addEventListener('click', () => downloadJson(result.safeFileName, result.safeTransactionBuilderFile));
   $('#copy-reward-safe-json').addEventListener('click', () => navigator.clipboard.writeText(JSON.stringify(result.safeTransactionBuilderFile, null, 2)));
-  await loadRewards();
+  await loadMineOperations();
 }
 
 async function syncReward(id) {
   const transactionHash = prompt('Paste the Ronin publication transaction hash (optional if the exact epoch is already on-chain).') || '';
   await api(`/api/admin/rewards/drafts/${id}/sync`, { method: 'POST', body: { transactionHash } });
-  await loadRewards();
+  await loadMineOperations();
   showAlert('Reward draft synchronized with Ronin.');
 }
 
@@ -1045,6 +1225,12 @@ function words(value) { return String(value).replace(/[-_]/g, ' ').replace(/([a-
 function argumentHint(type) { return type === 'address' ? '0x…' : type === 'board' ? 'free or paid' : type === 'ron' ? 'RON amount' : type === 'matt' ? 'MATT amount' : 'Whole number'; }
 function nextUtcDay() {
   return new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+}
+function previousUtcWeek() {
+  const now = new Date();
+  const day = now.getUTCDay() || 7;
+  const currentMonday = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - day + 1);
+  return new Date(currentMonday - 7 * 86_400_000).toISOString().slice(0, 10);
 }
 function mattDisplay(value) {
   if (value === undefined || value === null || value === '') return '0';

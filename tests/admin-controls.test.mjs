@@ -19,6 +19,7 @@ import { MemoryDatabase } from '../server/database.js';
 import { createMattMineHttpServer } from '../server/http.js';
 import { MattMineService } from '../server/service.js';
 import { RONIN_CHAINS, SERVER_RUN_MODES } from '../server/constants.js';
+import { normalizeServerState } from '../server/state.js';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const PRIVATE_KEY = '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
@@ -99,6 +100,119 @@ test('server operations are authenticated, audited, and gate each production sur
   const audit = await harness.service.adminAudit('admin-secret', { action: 'OPERATIONS' });
   assert.equal(audit.entries.length, 1);
   assert.match(audit.entries[0].details, /Weekly competition review/);
+});
+
+test('mine operations pause one mine surface without losing an active run', async () => {
+  const harness = serviceHarness();
+  const session = await signIn(harness.service);
+
+  await harness.service.updateMineOperations(
+    'admin-secret',
+    'practice',
+    { entriesPaused: true },
+    'Close Practice entry while testing controls'
+  );
+  await assert.rejects(
+    () => harness.service.startRun(session.token, SERVER_RUN_MODES.PRACTICE),
+    (error) => error.code === 'practice_entries_paused'
+  );
+
+  await harness.service.updateMineOperations(
+    'admin-secret',
+    'practice',
+    { entriesPaused: false },
+    'Reopen Practice entry'
+  );
+  const run = await harness.service.startRun(session.token, SERVER_RUN_MODES.PRACTICE);
+  harness.advance(60_000);
+  await harness.service.updateMineOperations(
+    'admin-secret',
+    'practice',
+    { resultsPaused: true },
+    'Temporarily stop result processing'
+  );
+  await assert.rejects(
+    () => harness.service.finishRun(session.token, {
+      runId: run.runId,
+      runToken: run.runToken,
+      result: {
+        extracted: true,
+        projected: 1_000,
+        banked: 1_000,
+        depth: 1,
+        kills: 5,
+        oreBroken: 5,
+        elapsed: 60
+      }
+    }),
+    (error) => error.code === 'practice_results_paused'
+  );
+  let snapshot = await harness.database.read();
+  assert.equal(snapshot.runs[run.runId].status, 'active');
+
+  await harness.service.updateMineOperations(
+    'admin-secret',
+    'practice',
+    { resultsPaused: false },
+    'Resume result processing'
+  );
+  const finished = await harness.service.finishRun(session.token, {
+    runId: run.runId,
+    runToken: run.runToken,
+    result: {
+      extracted: true,
+      projected: 1_000,
+      banked: 1_000,
+      depth: 1,
+      kills: 5,
+      oreBroken: 5,
+      elapsed: 60
+    }
+  });
+  assert.equal(finished.run.status, 'finished');
+  const audit = await harness.service.adminAudit('admin-secret', { action: 'MINE_OPERATIONS_UPDATED' });
+  assert.equal(audit.entries.length, 4);
+});
+
+test('legacy global pause state migrates into the matching mine controls', () => {
+  const migrated = normalizeServerState({
+    version: 14,
+    operations: {
+      freeRankedPaused: true,
+      passRankedPaused: true,
+      purchasesPaused: true,
+      claimsPaused: true
+    }
+  });
+  assert.equal(migrated.operations.mines.daily.entriesPaused, true);
+  assert.equal(migrated.operations.mines.pass.entriesPaused, true);
+  assert.equal(migrated.operations.mines.practice.paymentsPaused, true);
+  assert.equal(migrated.operations.mines.pass.paymentsPaused, true);
+  assert.equal(migrated.operations.mines.daily.rewardsPaused, true);
+  assert.equal(migrated.operations.mines.pass.rewardsPaused, true);
+  assert.equal(migrated.operations.mines.arena.entriesPaused, false);
+});
+
+test('mine operations reject controls that have no real flow to pause', async () => {
+  const harness = serviceHarness();
+  await assert.rejects(
+    () => harness.service.updateMineOperations(
+      'admin-secret',
+      'daily',
+      { paymentsPaused: true },
+      'Daily Mine is free and has no payment flow'
+    ),
+    (error) => error.code === 'mine_operation_not_applicable'
+  );
+  await assert.rejects(
+    () => harness.service.updateMineOperations(
+      'admin-secret',
+      'weekly',
+      { rewardsPaused: true },
+      'Seven-Day Mine has no separate MATT claim flow'
+    ),
+    (error) => error.code === 'mine_operation_not_applicable'
+  );
 });
 
 test('game tuning is lobby-specific, audited, and stages Daily Arena changes for the next UTC day', async () => {
@@ -347,6 +461,31 @@ test('admin HTTP routes reject missing credentials and apply audited controls', 
   });
   assert.equal(updated.status, 200);
   assert.equal((await updated.json()).operations.freeRankedPaused, true);
+
+  const mineUpdated = await fetch(`${base}/api/admin/mine-operations/practice`, {
+    method: 'PUT',
+    headers: {
+      'content-type': 'application/json',
+      'x-matt-admin-key': 'admin-secret'
+    },
+    body: JSON.stringify({
+      patch: { entriesPaused: true },
+      reason: 'HTTP mine control route test'
+    })
+  });
+  assert.equal(mineUpdated.status, 200);
+  assert.equal((await mineUpdated.json()).controls.entriesPaused, true);
+
+  const mineOverview = await fetch(`${base}/api/admin/mine-operations?week=2026-07-13`, {
+    headers: { 'x-matt-admin-key': 'admin-secret' }
+  });
+  assert.equal(mineOverview.status, 200);
+  const minePayload = await mineOverview.json();
+  assert.equal(minePayload.mines.find((mine) => mine.id === 'practice').controls.entriesPaused, true);
+  assert.deepEqual(
+    minePayload.mines.find((mine) => mine.id === 'daily').availableControls,
+    ['entries', 'results', 'rewards']
+  );
 
   const overview = await fetch(`${base}/api/admin/overview`, {
     headers: { 'x-matt-admin-key': 'admin-secret' }
