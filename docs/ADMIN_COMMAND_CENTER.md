@@ -11,12 +11,13 @@ It is not linked from the public game and search engines are told not to index i
 ## What it controls
 
 - Production overview, player counts, run counts, payments, reward status, and deployed addresses
-- Immediate server maintenance, Free ranked, Pass ranked, paid purchase, and claim pauses
+- Five independent mine operation cards with separate new-run, result, payment, and reward pauses
+- Immediate whole-site maintenance, Free ranked, Pass ranked, paid purchase, and claim emergency pauses
 - Player search, suspension, restoration, session revocation, stuck-run expiry, and restoration of a legitimate daily free attempt
 - Separate Practice, Free, Pass, and Daily Arena tuning for player stats, weapons, enemies, creature availability, Guardian behavior, room layout, ore, XP, score, and knockout rules
 - Permanent-name or wallet lookup with a per-player activity timeline
 - Audited player awards for banked nuggets, Pass XP, Pass chests, and existing cosmetics
-- Reward draft creation from finalized weekly snapshots, independent approval, Safe transaction output, and Ronin publication sync
+- A guided Free + Pass payout desk covering finalized snapshots, immutable obligations, independent approval, Safe output, Ronin synchronization, deadlines, and per-wallet paid/unpaid status
 - Prepared Ronin transactions for contract pauses, unpauses, price updates, treasury destinations, swap executor changes, and expired/unallocated reward recovery
 - Searchable audit history with a required written reason for every mutation
 
@@ -58,3 +59,5 @@ Actions assigned to a separate role wallet do not produce a Safe file. The comma
 3. Have the emergency pauser sign the pause.
 4. Record the incident and investigation in the admin reason.
 5. Unpause only after the server and contract states are both verified.
+
+The day-to-day closing, payout, unpaid-obligation, and Arena settlement procedures are in [MINE_OPERATIONS_RUNBOOK.md](MINE_OPERATIONS_RUNBOOK.md).

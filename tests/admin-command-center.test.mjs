@@ -51,6 +51,8 @@ test('global Admin search indexes every schema and finds deeply nested balance c
 
   const claims = searchAdminControls(index, 'pause claims');
   assert.equal(claims[0].tab, 'operations');
+  assert.equal(searchAdminControls(index, 'unpaid MATT')[0].tab, 'operations');
+  assert.equal(searchAdminControls(index, 'pause practice mine')[0].tab, 'operations');
 
   assert.equal(searchAdminControls(index, 'competition map builder')[0].id, 'studio:maps');
   assert.equal(searchAdminControls(index, 'daily purchase cap')[0].id, 'economy:daily-cap');
@@ -156,6 +158,9 @@ test('Admin page has one organized control suite with unique element identifiers
   assert.match(html, /id="control-search"/);
   assert.match(html, /id="readiness-monitors"/);
   assert.match(html, /id="tab-nugget-economy"/);
+  assert.match(html, /id="mine-operations-grid"/);
+  assert.match(html, /id="reward-operations-summary"/);
+  assert.doesNotMatch(html, /id="tab-rewards"/);
   assert.match(html, /data-linked-control="advertisement-rewards-enabled"/);
   assert.match(css, /#dashboard\s*\{[\s\S]*grid-template-columns:\s*235px/);
   assert.match(css, /\.search-results/);

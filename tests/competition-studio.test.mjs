@@ -17,6 +17,7 @@ import { MemoryDatabase } from '../server/database.js';
 import { MattMineService } from '../server/service.js';
 import { buildCompetitiveChallenge, competitiveMaximumDepth } from '../server/arena-engine.js';
 import { defaultWalletState, normalizeServerState } from '../server/state.js';
+import { SERVER_STATE_VERSION } from '../server/constants.js';
 
 const NOW = Date.UTC(2026, 6, 28, 18, 0, 0);
 
@@ -50,7 +51,7 @@ test('state migration adds safe Competition Studio drafts without disturbing leg
       }
     }
   });
-  assert.equal(migrated.version, 14);
+  assert.equal(migrated.version, SERVER_STATE_VERSION);
   assert.equal(Object.keys(migrated.competitionStudio.slots).length, 6);
   assert.equal(migrated.competitionStudio.slots.practice.draft.slotId, 'practice');
   assert.equal(migrated.competitionStudio.slots.practice.draft.depths.length, 5);

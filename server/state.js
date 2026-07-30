@@ -92,6 +92,7 @@ export function defaultOperations() {
     passRankedPaused: false,
     purchasesPaused: false,
     claimsPaused: false,
+    mines: defaultMineOperations(),
     announcement: '',
     updatedAt: 0,
     updatedBy: ''
@@ -106,12 +107,48 @@ function normalizeOperations(input) {
     passRankedPaused: source.passRankedPaused === true,
     purchasesPaused: source.purchasesPaused === true,
     claimsPaused: source.claimsPaused === true,
+    mines: normalizeMineOperations(source.mines, source),
     announcement: typeof source.announcement === 'string'
       ? source.announcement.trim().slice(0, 280)
       : '',
     updatedAt: safeTimestamp(source.updatedAt),
     updatedBy: typeof source.updatedBy === 'string' ? source.updatedBy.slice(0, 80) : ''
   };
+}
+
+export function defaultMineOperations() {
+  return Object.fromEntries(['practice', 'arena', 'daily', 'pass', 'weekly'].map((mine) => [mine, {
+    entriesPaused: false,
+    resultsPaused: false,
+    paymentsPaused: false,
+    rewardsPaused: false,
+    updatedAt: 0,
+    updatedBy: ''
+  }]));
+}
+
+function normalizeMineOperations(input, legacy = {}) {
+  const source = isRecord(input) ? input : {};
+  const defaults = defaultMineOperations();
+  return Object.fromEntries(Object.entries(defaults).map(([mine, fallback]) => {
+    const value = isRecord(source[mine]) ? source[mine] : {};
+    const legacyEntriesPaused =
+      mine === 'daily' ? legacy.freeRankedPaused === true :
+      mine === 'pass' ? legacy.passRankedPaused === true :
+      false;
+    const legacyPaymentsPaused =
+      mine === 'pass' || mine === 'practice' ? legacy.purchasesPaused === true : false;
+    const legacyRewardsPaused =
+      mine === 'daily' || mine === 'pass' ? legacy.claimsPaused === true : false;
+    return [mine, {
+      entriesPaused: value.entriesPaused === true || legacyEntriesPaused,
+      resultsPaused: value.resultsPaused === true,
+      paymentsPaused: value.paymentsPaused === true || legacyPaymentsPaused,
+      rewardsPaused: value.rewardsPaused === true || legacyRewardsPaused,
+      updatedAt: safeTimestamp(value.updatedAt),
+      updatedBy: typeof value.updatedBy === 'string' ? value.updatedBy.slice(0, 80) : fallback.updatedBy
+    }];
+  }));
 }
 
 function normalizePaidEntitlements(input) {
