@@ -298,7 +298,7 @@ export class DailyArenaService {
     };
   }
 
-  async appendEvents(address, payload) {
+  async appendEvents(address, payload, playerProfile = {}) {
     this.assertLive();
     assertApi(payload && typeof payload === 'object' && !Array.isArray(payload), 400, 'arena_events_invalid', 'A Daily Arena event batch is required.');
     const run = await this.#authenticatedRun(address, payload.runId, payload.runToken);
@@ -356,7 +356,7 @@ export class DailyArenaService {
     replayArenaTranscript(
       buildArenaChallenge((await this.store.getDay(run.day)).deterministicSeed, run.tuning),
       [...existingEvents, ...receivedEvents].map(publicTranscriptEvent),
-      { profile: run.tuning?._playerProfile }
+      { profile: run.tuning?._playerProfile || playerProfile }
     );
     const nextCheckpoint = this.#checkpoint({
       runId: run.runId,
@@ -378,7 +378,7 @@ export class DailyArenaService {
     };
   }
 
-  async finishRun(address, payload) {
+  async finishRun(address, payload, playerProfile = {}) {
     this.assertLive();
     assertApi(payload && typeof payload === 'object' && !Array.isArray(payload), 400, 'arena_finish_invalid', 'A Daily Arena finish request is required.');
     assertApi(
@@ -408,7 +408,7 @@ export class DailyArenaService {
       storedEvents.map(publicTranscriptEvent),
       {
         requireTerminal: true,
-        profile: run.tuning?._playerProfile
+        profile: run.tuning?._playerProfile || playerProfile
       }
     );
     const result = {
