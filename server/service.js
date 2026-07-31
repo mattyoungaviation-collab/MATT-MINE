@@ -1838,7 +1838,8 @@ export function validateRunResult(input, run, timestamp) {
   const oreBroken = strictInteger(input.oreBroken, 'oreBroken', 0, 10_000);
   const elapsed = strictNumber(input.elapsed, 'elapsed', 0, RUN_TTL_MS / 1000);
   const wallElapsed = Math.max(0, (timestamp - run.startedAt) / 1000);
-  const bossTelemetry = normalizeBossTelemetry(input.bossTelemetry, elapsed);
+  const verifiedReviveCount = Array.isArray(run.revives) ? run.revives.length : 0;
+  const bossTelemetry = normalizeBossTelemetry(input.bossTelemetry, elapsed, verifiedReviveCount + 1);
 
   assertApi(elapsed <= wallElapsed + 15, 422, 'elapsed_time_impossible', 'Reported gameplay time exceeds the server run window.');
   assertApi(kills <= 25 + Math.ceil(elapsed * 8), 422, 'kill_rate_impossible', 'Enemy count exceeds the accepted run rate.');
@@ -1866,7 +1867,7 @@ export function validateRunResult(input, run, timestamp) {
   };
 }
 
-function normalizeBossTelemetry(input, elapsed) {
+function normalizeBossTelemetry(input, elapsed, maximumPlayerDeaths = 1) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     return {
       encounterDuration: 0,
@@ -1907,7 +1908,12 @@ function normalizeBossTelemetry(input, elapsed) {
     }, { 1: 0, 2: 0, 3: 0 }),
     damageDealt: strictNumber(input.damageDealt || 0, 'bossTelemetry.damageDealt', 0, 25_000_000),
     damageReceived: strictNumber(input.damageReceived || 0, 'bossTelemetry.damageReceived', 0, 1_000_000),
-    playerDeaths: strictInteger(input.playerDeaths || 0, 'bossTelemetry.playerDeaths', 0, 1),
+    playerDeaths: strictInteger(
+      input.playerDeaths || 0,
+      'bossTelemetry.playerDeaths',
+      0,
+      maximumPlayerDeaths
+    ),
     attacksUsed,
     bosses
   };
