@@ -204,6 +204,73 @@ test('Arena transcript sends only changed raw controls and commands with ordered
   assert.equal(Object.hasOwn(calls[0].events[0], 'score'), false);
 });
 
+test('Arena transcript retries temporary server failures without losing or reordering events', async () => {
+  let attempts = 0;
+  const accepted = [];
+  const temporaryFailure = Object.assign(new Error('Temporary database interruption.'), {
+    status: 503,
+    code: 'server_unavailable'
+  });
+  const transcript = new ArenaTranscript({}, {
+    runId: 'arena_run_retry',
+    runToken: 'token',
+    checkpoint: { throughSeq: 0, transcriptHash: 'genesis', signature: 'start' }
+  }, {
+    flushSize: 2,
+    retryDelays: [0],
+    wait: async () => undefined,
+    async appendEvents(runId, runToken, checkpoint, events) {
+      attempts += 1;
+      if (attempts === 1) throw temporaryFailure;
+      accepted.push(...events);
+      return {
+        throughSeq: events.at(-1).seq,
+        transcriptHash: `hash-${events.at(-1).seq}`,
+        signature: `sig-${events.at(-1).seq}`
+      };
+    }
+  });
+
+  transcript.record({
+    type: 'input', tick: 0, moveX: 1_000, moveY: 0,
+    aim: null, attack: false, dash: false, weapon: ''
+  });
+  transcript.record({ type: 'finish', tick: 20 });
+  const checkpoint = await transcript.close();
+
+  assert.equal(attempts, 2);
+  assert.equal(checkpoint.throughSeq, 2);
+  assert.deepEqual(accepted.map((event) => event.seq), [1, 2]);
+  assert.deepEqual(accepted.map((event) => event.type), ['input', 'finish']);
+});
+
+test('Arena transcript never retries a replay-validation rejection', async () => {
+  let attempts = 0;
+  const validationFailure = Object.assign(new Error('The replayed upgrade was rejected.'), {
+    status: 422,
+    code: 'arena_upgrade_rejected'
+  });
+  const transcript = new ArenaTranscript({}, {
+    runId: 'arena_run_invalid',
+    runToken: 'token',
+    checkpoint: { throughSeq: 0, transcriptHash: 'genesis', signature: 'start' }
+  }, {
+    retryDelays: [0, 0],
+    wait: async () => undefined,
+    async appendEvents() {
+      attempts += 1;
+      throw validationFailure;
+    }
+  });
+
+  transcript.record({ type: 'finish', tick: 20 });
+
+  await assert.rejects(() => transcript.close(), (error) =>
+    error === validationFailure
+  );
+  assert.equal(attempts, 1);
+});
+
 test('Arena screen promises the locked economic rules without test-token copy', () => {
   const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   assert.match(html, /Unlimited entries/);

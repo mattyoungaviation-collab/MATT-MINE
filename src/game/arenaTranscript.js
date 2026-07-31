@@ -1,4 +1,5 @@
 const ALLOWED_EVENT_TYPES = new Set(['input', 'command', 'finish']);
+const DEFAULT_RETRY_DELAYS_MS = Object.freeze([150, 400, 900]);
 
 export class ArenaTranscript {
   constructor(api, run, options = {}) {
@@ -10,7 +11,13 @@ export class ArenaTranscript {
     this.pending = [];
     this.flushSize = Math.max(1, Number(options.flushSize || 64));
     this.appendEvents = options.appendEvents || ((...args) => this.api.appendArenaEvents(...args));
-    this.queue = Promise.resolve();
+    this.retryDelays = Array.isArray(options.retryDelays)
+      ? options.retryDelays.map((delay) => Math.max(0, Number(delay) || 0))
+      : DEFAULT_RETRY_DELAYS_MS;
+    this.wait = options.wait || ((delay) => new Promise((resolve) => setTimeout(resolve, delay)));
+    this.batches = [];
+    this.drainPromise = null;
+    this.fatalError = null;
     this.closed = false;
     this.lastInput = '';
   }
@@ -31,37 +38,91 @@ export class ArenaTranscript {
       this.lastInput = signature;
     }
     this.pending.push({ seq: this.nextSequence++, ...normalized });
-    if (this.pending.length >= this.flushSize) void this.flush();
+    if (this.pending.length >= this.flushSize) {
+      // A failed background flush remains queued for close() to retry. Avoid
+      // turning a recoverable connection interruption into an unhandled
+      // browser rejection.
+      void this.flush().catch(() => undefined);
+    }
   }
 
   flush() {
-    if (!this.pending.length) return this.queue.then(() => this.checkpoint);
-    const events = this.pending.splice(0, this.pending.length);
-    this.queue = this.queue.then(async () => {
-      this.checkpoint = await this.appendEvents(
-        this.runId,
-        this.runToken,
-        this.checkpoint,
-        events
-      );
-      return this.checkpoint;
-    });
-    return this.queue;
+    if (this.pending.length) {
+      this.batches.push(this.pending.splice(0, this.pending.length));
+    }
+    if (this.fatalError) return Promise.reject(this.fatalError);
+    if (!this.batches.length) {
+      return this.drainPromise || Promise.resolve(this.checkpoint);
+    }
+    if (!this.drainPromise) {
+      const work = this.#drainBatches();
+      const settled = work.finally(() => {
+        if (this.drainPromise === settled) this.drainPromise = null;
+      });
+      this.drainPromise = settled;
+    }
+    return this.drainPromise;
   }
 
   async close() {
     this.closed = true;
-    return this.flush();
+    try {
+      return await this.flush();
+    } catch (error) {
+      // A background batch may have exhausted its short retry window just as
+      // the run ended. Give retryable transport/server failures one final
+      // ordered drain; validation failures remain immediate and final.
+      if (!isRetryableAppendError(error)) throw error;
+      return this.flush();
+    }
   }
 
   async discard() {
     this.closed = true;
     this.pending = [];
+    this.batches = [];
     try {
-      await this.queue;
+      await this.drainPromise;
     } catch {
       // A forfeited run can still close cleanly if an earlier transcript
       // write failed.
+    }
+  }
+
+  async #drainBatches() {
+    while (this.batches.length) {
+      const events = this.batches[0];
+      try {
+        this.checkpoint = await this.#appendWithRetry(events);
+      } catch (error) {
+        if (!isRetryableAppendError(error)) this.fatalError = error;
+        throw error;
+      }
+      this.batches.shift();
+    }
+    return this.checkpoint;
+  }
+
+  async #appendWithRetry(events) {
+    let attempt = 0;
+    while (true) {
+      try {
+        return await this.appendEvents(
+          this.runId,
+          this.runToken,
+          this.checkpoint,
+          events
+        );
+      } catch (error) {
+        if (
+          !isRetryableAppendError(error) ||
+          attempt >= this.retryDelays.length
+        ) {
+          throw error;
+        }
+        await this.wait(this.retryDelays[attempt]);
+        attempt += 1;
+      }
     }
   }
 }
@@ -94,4 +155,13 @@ function normalizeClientEvent(event) {
   return base;
 }
 
-export { ALLOWED_EVENT_TYPES };
+function isRetryableAppendError(error) {
+  const status = Number(error?.status);
+  return status === 0 ||
+    status === 408 ||
+    status === 425 ||
+    status === 429 ||
+    status >= 500;
+}
+
+export { ALLOWED_EVENT_TYPES, isRetryableAppendError };

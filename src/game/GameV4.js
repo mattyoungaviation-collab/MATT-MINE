@@ -94,12 +94,24 @@ export class MattMineGame extends V3MattMineGame {
 
   update(dt) {
     if (!DETERMINISTIC_SERVER_MODES.has(this.runContext?.mode)) return super.update(dt);
+    if (this.state !== 'playing') {
+      // Ranked replays advance only while the mine is actively playing.
+      // Banking browser-frame time behind an upgrade, depth choice, pause, or
+      // revive screen causes a large catch-up burst and desynchronizes the
+      // signed client transcript from the server replay.
+      this.arenaAccumulator = 0;
+      return;
+    }
     this.arenaAccumulator += Math.max(0, Math.min(Number(dt) || 0, 0.25));
     const stepSeconds = ARENA_FIXED_STEP_MS / 1_000;
-    while (this.arenaAccumulator + Number.EPSILON >= stepSeconds && this.state === 'playing') {
+    while (this.arenaAccumulator + Number.EPSILON >= stepSeconds) {
       const control = captureArenaControlState(this.input, this);
       this.applyArenaControlStep(control, true);
       this.arenaAccumulator -= stepSeconds;
+      if (this.state !== 'playing') {
+        this.arenaAccumulator = 0;
+        break;
+      }
     }
   }
 
