@@ -1675,6 +1675,7 @@ function renderArena() {
                 : `BUY ENTRY · ${formatMattRaw(config.feeRaw)}`;
 
   const startButton = $('#start-arena-run-button');
+  const strandedActiveRun = Boolean(player.activeRunId) && !activeArenaRun;
   const canStart =
     Boolean(serverPlayer) &&
     !serverPlayer.suspended &&
@@ -1682,8 +1683,10 @@ function renderArena() {
     runWindowOpen &&
     config.status === 'open' &&
     player.unusedAttempts > 0;
-  startButton.disabled = arenaBusy || !canStart;
-  startButton.textContent = !serverPlayer
+  startButton.disabled = arenaBusy || (!canStart && !strandedActiveRun);
+  startButton.textContent = strandedActiveRun
+    ? 'RELEASE ACTIVE ARENA RUN'
+    : !serverPlayer
     ? 'CONNECT RONIN TO PLAY'
     : serverPlayer.suspended
       ? 'WALLET SUSPENDED'
@@ -1732,9 +1735,11 @@ function renderArena() {
   refundButton.textContent = player.refundRaw
     ? `CLAIM ${formatMattRaw(player.refundRaw)} REFUND`
     : 'CLAIM CANCELED ENTRY REFUND';
-  $('#arena-note').textContent = !config.enabled
-    ? 'Today\'s Arena is closed. Check back after the next daily reset.'
-    : `Unlimited entries · ${formatNumber(config.entryCount || leaderboard.entryCount)} total entries · ${formatNumber(config.uniquePlayers || leaderboard.participantCount)} unique miners · Best verified score per wallet.`;
+  $('#arena-note').textContent = strandedActiveRun
+    ? 'An earlier Arena run is still active. Release it to continue. Its consumed entry will not be refunded and no score will be recorded.'
+    : !config.enabled
+      ? 'Today\'s Arena is closed. Check back after the next daily reset.'
+      : `Unlimited entries · ${formatNumber(config.entryCount || leaderboard.entryCount)} total entries · ${formatNumber(config.uniquePlayers || leaderboard.participantCount)} unique miners · Best verified score per wallet.`;
 
   clearInterval(arenaCountdownTimer);
   updateArenaCountdown();
@@ -1800,6 +1805,10 @@ async function purchaseArenaEntry() {
 }
 
 async function startArenaRun() {
+  if (arenaPlayer.activeRunId && !activeArenaRun) {
+    await releaseActiveArenaRun();
+    return;
+  }
   if (
     arenaBusy ||
     !serverPlayer ||
@@ -1841,6 +1850,29 @@ async function startArenaRun() {
     await refreshArena(true);
   } finally {
     arenaBusy = false;
+  }
+}
+
+async function releaseActiveArenaRun() {
+  if (arenaBusy || !arenaPlayer.activeRunId) return;
+  const approved = window.confirm(
+    'Release the unfinished Daily Arena run?\n\n' +
+    'This clears the active-run lock. The consumed Arena entry remains used and no score will be recorded.'
+  );
+  if (!approved) return;
+  arenaBusy = true;
+  renderArena();
+  try {
+    await apiClient.abandonActiveArenaRun();
+    activeArenaRun = null;
+    activeArenaTranscript = null;
+    toast('Active Arena run released. You can start another purchased attempt.');
+    await refreshArena(true);
+  } catch (error) {
+    toast(error.message || 'The active Arena run could not be released.');
+  } finally {
+    arenaBusy = false;
+    renderArena();
   }
 }
 

@@ -213,6 +213,14 @@ export class MattMineApiClient {
     });
   }
 
+  async abandonActiveArenaRun() {
+    return this.request('/api/arena/runs/abandon-active', {
+      method: 'POST',
+      authenticated: true,
+      body: {}
+    });
+  }
+
   async prepareArenaRefund(day = '') {
     return this.request('/api/arena/refunds/prepare', {
       method: 'POST',

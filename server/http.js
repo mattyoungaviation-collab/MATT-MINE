@@ -216,6 +216,12 @@ async function handleApiRequest({
     sendJson(response, 200, { ok: true, ...result });
     return;
   }
+  if (method === 'POST' && path === '/api/arena/runs/abandon-active') {
+    await readJson(request, maxRequestBytes);
+    const result = await service.abandonActiveArenaRun(bearerToken(request));
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
   if (method === 'POST' && path === '/api/arena/refunds/prepare') {
     const body = await readJson(request, maxRequestBytes);
     const result = await service.prepareArenaRefund(

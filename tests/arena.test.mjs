@@ -760,6 +760,33 @@ test('abandoning a Daily Arena run consumes its entry but releases the active-ru
   assert.equal((await store.unusedEntries(PLAYER, DAY)).length, 0);
 });
 
+test('a signed-in wallet can release a stranded Daily Arena run without its lost run token', async () => {
+  const store = await new MemoryArenaStore().init();
+  await store.ensureDay(dayRecord({ chainStatus: 1, configurationState: 'confirmed' }));
+  await store.confirmEntry(entryRecord(1, HASH_A));
+  const arena = await new DailyArenaService({
+    store,
+    chain: fakeArenaAdapter(() => scheduledChainDay()),
+    receiptSecret: 'r'.repeat(64),
+    seedSecret: 's'.repeat(64),
+    safeAddress: SAFE,
+    liveEnabled: true,
+    now: () => Date.parse(`${DAY}T12:00:00Z`)
+  }).init();
+
+  const started = await arena.startRun(PLAYER);
+  const released = await arena.abandonActiveRun(PLAYER);
+  assert.equal(released.runId, started.run.runId);
+  assert.equal(released.status, 'expired');
+  assert.equal(released.entryConsumed, true);
+  assert.equal(await store.activeRun(PLAYER), null);
+  assert.equal((await store.unusedEntries(PLAYER, DAY)).length, 0);
+  await assert.rejects(
+    () => arena.abandonActiveRun(PLAYER),
+    (error) => error.code === 'arena_active_run_missing'
+  );
+});
+
 test('paid entry, one-time run token, raw controls, server replay, and leaderboard finish end to end', async () => {
   const store = await new MemoryArenaStore().init();
   await store.ensureDay(dayRecord({ chainStatus: 1, configurationState: 'confirmed' }));
