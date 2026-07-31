@@ -1283,6 +1283,10 @@ button,
   transition: opacity .16s ease;
 }
 
+/* Loading is an exclusive production state. A solid backdrop prevents old
+   lobby or home-screen layers from flashing through between mine routes. */
+.mine-loading-screen { background: #030407; backdrop-filter: none; }
+
 .mine-detail[hidden],
 .mine-loading-screen[hidden] { display: none; }
 .mine-detail.active,

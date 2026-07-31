@@ -144,6 +144,18 @@ const arenaService = arenaEnabled
         );
         const characterId = competitionSnapshot?.loadout?.characterId || 'matt';
         tuning._competitionSnapshot = competitionSnapshot;
+        if (competitionSnapshot) {
+          tuning.safeStartSeconds = competitionSnapshot.rules.safeStartSeconds;
+          tuning.playerMaxHealth = competitionSnapshot.loadout.startingHealth;
+          tuning.dynamiteStartAmmo = competitionSnapshot.loadout.startingDynamite;
+          tuning.blasterEnergy = competitionSnapshot.loadout.blasterEnergy;
+          tuning.ignorePermanentUpgrades = !competitionSnapshot.loadout.permanentUpgrades;
+          tuning.disableRunUpgrades = !competitionSnapshot.loadout.runUpgrades;
+          tuning.maximumDrones = competitionSnapshot.loadout.maximumDrones;
+          // Published maps contain the authoritative enemies and loot. Do not
+          // layer legacy procedural room spawns over the Studio snapshot.
+          tuning.usePerDepthRoomSpawns = false;
+        }
         tuning._competitionCharacter = structuredClone(
           state.expansionConfig?.characters?.[characterId] ||
           state.expansionConfig?.characters?.matt ||

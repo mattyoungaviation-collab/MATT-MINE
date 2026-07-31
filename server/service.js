@@ -1852,6 +1852,9 @@ export class MattMineService {
   async finishArenaRun(token, payload) {
     const { session, state, wallet } = await this.arenaPlayer(token, { operation: 'results' });
     const result = await this.arenaService.finishRun(session.address, payload, wallet.profile);
+    if (result.accepted === false) {
+      return result;
+    }
     return {
       ...result,
       leaderboard: enrichLeaderboardAppearances(result.leaderboard, state)

@@ -980,6 +980,29 @@ test('leaderboard counts every eligible wallet while returning top ten and per-w
   assert.equal(board.rows[0].entries, 2);
 });
 
+test('server replay rejection restores the paid Arena entry without recording a score', async () => {
+  const store = await new MemoryArenaStore().init();
+  await store.ensureDay(dayRecord());
+  await store.confirmEntry(entryRecord(1, HASH_A));
+  await store.consumeEntry(PLAYER, DAY, 'arena_entry_1', runRecord('arena_run_recovery', 1_000));
+
+  const recovered = await store.recoverRejectedRun(
+    'arena_run_recovery',
+    Object.assign(new Error('Replay mismatch'), { code: 'arena_upgrade_not_offered' }),
+    2_000
+  );
+
+  assert.equal(recovered.attemptRestored, true);
+  assert.equal(recovered.run.status, 'rejected');
+  assert.equal(recovered.run.result.rejectionCode, 'arena_upgrade_not_offered');
+  assert.equal((await store.unusedEntries(PLAYER, DAY)).length, 1);
+  const board = await store.leaderboard(DAY, [], Date.parse(`${DAY}T12:00:00Z`));
+  assert.equal(board.rows.length, 0);
+
+  await store.consumeEntry(PLAYER, DAY, 'arena_entry_1', runRecord('arena_run_replacement', 3_000));
+  assert.equal((await store.getRun('arena_run_replacement')).status, 'active');
+});
+
 test('independent pause controls require the emergency pauser directly and Arena admin actions enter the main audit log', async () => {
   const store = await new MemoryArenaStore().init();
   const chain = fakeArenaAdapter(() => unscheduledChainDay({

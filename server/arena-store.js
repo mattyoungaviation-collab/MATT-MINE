@@ -178,6 +178,26 @@ export class MemoryArenaStore {
     });
   }
 
+  async recoverRejectedRun(runId, error, timestamp) {
+    return this.#mutate(() => {
+      const run = this.runs.get(runId);
+      assertApi(run, 404, 'arena_run_missing', 'The Daily Arena run was not found.');
+      if (run.status === 'rejected' && run.result?.attemptRestored === true) {
+        return { run: clone(run), attemptRestored: true, alreadyRecovered: true };
+      }
+      assertApi(run.status === 'active', 409, 'arena_run_not_active', 'The Daily Arena run is no longer active.');
+      run.status = 'rejected';
+      run.finishedAt = timestamp;
+      run.result = replayRecoveryResult(error);
+      const entry = this.entries.get(run.entryId);
+      if (entry?.runId === runId) {
+        entry.runId = '';
+        entry.consumedAt = 0;
+      }
+      return { run: clone(run), attemptRestored: true, alreadyRecovered: false };
+    });
+  }
+
   async expireActiveRuns(address = '', timestamp) {
     return this.#mutate(() => {
       const expired = [];
@@ -629,6 +649,56 @@ export class PostgresArenaStore {
     return this.getRun(runId);
   }
 
+  async recoverRejectedRun(runId, error, timestamp) {
+    await this.init();
+    return this.retryTransient(
+      () => this.#recoverRejectedRunAttempt(runId, error, timestamp),
+      { maxAttempts: 12, label: 'Arena paid-attempt recovery' }
+    );
+  }
+
+  async #recoverRejectedRunAttempt(runId, error, timestamp) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const selected = await client.query(
+        'SELECT * FROM matt_mine_arena.runs WHERE run_id=$1 FOR UPDATE',
+        [runId]
+      );
+      assertApi(selected.rows[0], 404, 'arena_run_missing', 'The Daily Arena run was not found.');
+      const run = formatRunRow(selected.rows[0]);
+      if (run.status === 'rejected' && run.result?.attemptRestored === true) {
+        await client.query('COMMIT');
+        return { run, attemptRestored: true, alreadyRecovered: true };
+      }
+      assertApi(run.status === 'active', 409, 'arena_run_not_active', 'The Daily Arena run is no longer active.');
+      const result = replayRecoveryResult(error);
+      await client.query(
+        `UPDATE matt_mine_arena.runs
+         SET status='rejected',finished_at_ms=$2,result=$3::jsonb
+         WHERE run_id=$1`,
+        [runId, timestamp, JSON.stringify(result)]
+      );
+      await client.query(
+        `UPDATE matt_mine_arena.entries
+         SET run_id='',consumed_at_ms=0
+         WHERE entry_id=$1 AND run_id=$2`,
+        [run.entryId, runId]
+      );
+      await client.query('COMMIT');
+      return {
+        run: { ...run, status: 'rejected', finishedAt: timestamp, result },
+        attemptRestored: true,
+        alreadyRecovered: false
+      };
+    } catch (recoveryError) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw recoveryError;
+    } finally {
+      client.release();
+    }
+  }
+
   async expireActiveRuns(address = '', timestamp) {
     await this.init();
     const result = address
@@ -974,6 +1044,11 @@ export async function createArenaPostgresSchema(pool) {
       result JSONB
     )`);
   await pool.query(`ALTER TABLE matt_mine_arena.runs ADD COLUMN IF NOT EXISTS tuning JSONB NOT NULL DEFAULT '{}'::jsonb`);
+  // A rejected server replay may safely return the paid entry to its wallet.
+  // Keep the rejected run for audit history while allowing the same entry to
+  // back a replacement attempt that can produce at most one accepted score.
+  await pool.query(`ALTER TABLE matt_mine_arena.runs DROP CONSTRAINT IF EXISTS runs_entry_id_key`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS runs_entry_id_idx ON matt_mine_arena.runs(entry_id)`);
   await pool.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS runs_one_active_wallet_idx
     ON matt_mine_arena.runs(address) WHERE status='active'`);
@@ -1200,6 +1275,15 @@ function formatRunRow(row) {
     tuning: typeof row.tuning === 'string' ? JSON.parse(row.tuning) : row.tuning,
     result: typeof row.result === 'string' ? JSON.parse(row.result) : row.result
   });
+}
+
+function replayRecoveryResult(error) {
+  return {
+    accepted: false,
+    attemptRestored: true,
+    rejectionCode: String(error?.code || 'arena_replay_mismatch'),
+    rejectionMessage: String(error?.message || 'The authoritative replay could not finalize this run.')
+  };
 }
 
 function formatStoredArenaEvent(row) {
