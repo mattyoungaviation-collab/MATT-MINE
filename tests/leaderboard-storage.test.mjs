@@ -4,6 +4,10 @@ import { EventEmitter } from 'node:events';
 
 import { PostgresDatabase } from '../server/database.js';
 import { SERVER_STATE_VERSION } from '../server/constants.js';
+import {
+  isTransientPostgresError,
+  retryTransientPostgres
+} from '../server/postgres-resilience.js';
 import { defaultServerState, defaultWalletState } from '../server/state.js';
 
 const START = Date.UTC(2026, 6, 25, 12, 0, 0);
@@ -29,6 +33,80 @@ test('idle PostgreSQL connection errors are reported without crashing the server
 
   await database.close();
   assert.equal(pool.listenerCount('error'), 0);
+});
+
+test('checked-out PostgreSQL client errors are guarded and never become uncaught events', async () => {
+  const pool = new EventEmitter();
+  const client = new EventEmitter();
+  const reported = [];
+  const database = new PostgresDatabase(null, {
+    pool,
+    onPoolError(error) {
+      reported.push(error.message);
+    }
+  });
+
+  pool.emit('connect', client);
+  assert.doesNotThrow(() => {
+    client.emit('error', new Error('Connection terminated unexpectedly'));
+  });
+  assert.deepEqual(reported, ['Connection terminated unexpectedly']);
+  client.emit('end');
+  assert.equal(client.listenerCount('error'), 0);
+
+  await database.close();
+  assert.equal(pool.listenerCount('connect'), 0);
+  assert.equal(client.listenerCount('error'), 0);
+});
+
+test('PostgreSQL recovery failures retry reads but never retry non-transient errors', async () => {
+  let attempts = 0;
+  const delays = [];
+  const result = await retryTransientPostgres(async () => {
+    attempts += 1;
+    if (attempts < 3) {
+      const error = new Error('the database system is in recovery mode');
+      error.code = '57P03';
+      throw error;
+    }
+    return 'recovered';
+  }, {
+    maxAttempts: 4,
+    baseDelayMs: 10,
+    sleep: async (delayMs) => delays.push(delayMs)
+  });
+
+  assert.equal(result, 'recovered');
+  assert.equal(attempts, 3);
+  assert.deepEqual(delays, [10, 20]);
+  assert.equal(isTransientPostgresError({ code: '57P03' }), true);
+  assert.equal(isTransientPostgresError(new Error('bad SQL syntax')), false);
+});
+
+test('PostgreSQL startup retries an interrupted recovery without replacing server state', async () => {
+  let initializationAttempts = 0;
+  const pool = createRecordingPool({
+    handler(normalized) {
+      if (normalized.startsWith('CREATE TABLE IF NOT EXISTS MATT_MINE_STATE')) {
+        initializationAttempts += 1;
+        if (initializationAttempts === 1) {
+          const error = new Error('the database system is in recovery mode');
+          error.code = '57P03';
+          throw error;
+        }
+      }
+      return undefined;
+    }
+  });
+  const database = await new PostgresDatabase(null, {
+    pool,
+    startupRetryAttempts: 3,
+    retryBaseDelayMs: 0,
+    retrySleep: async () => undefined
+  }).init();
+
+  assert.equal(initializationAttempts, 2);
+  assert.equal((await database.read()).version, SERVER_STATE_VERSION);
 });
 
 test('PostgreSQL initialization migrates legacy finished runs into normalized run and score tables', async () => {

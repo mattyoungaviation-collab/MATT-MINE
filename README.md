@@ -354,6 +354,12 @@ The included `render.yaml` creates one Node web service and one PostgreSQL datab
 
 See [`docs/STANDALONE_LAUNCH_V10.md`](docs/STANDALONE_LAUNCH_V10.md) for the deployment and go-live checklist and [`docs/LEADERBOARD_STORAGE_V11.md`](docs/LEADERBOARD_STORAGE_V11.md) for the normalized leaderboard migration.
 
+The production PostgreSQL layer tolerates managed-database restarts without
+terminating Node: checked-out clients are guarded, safe reads and startup schema
+checks use bounded transient retries, and the health endpoint reports a live but
+degraded service until the database reconnects. Payment and state-changing
+transactions are not automatically replayed.
+
 ## Important live-payment boundary
 
 Pass and paid-run transactions require the player to click the purchase button and approve the exact transaction in Ronin Wallet. v1.2 adds player-signed MATT claims, but only after an immutable snapshot, capped allocation, independent approval, Safe publication, and exact on-chain verification. Production reward publication remains disabled by default.

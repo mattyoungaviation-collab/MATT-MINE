@@ -3,6 +3,10 @@ import { dirname } from 'node:path';
 import pg from 'pg';
 import { utcWeekKey } from '../src/game/economy.js';
 import { defaultServerState, normalizeServerState } from './state.js';
+import {
+  guardPostgresPool,
+  retryTransientPostgres
+} from './postgres-resilience.js';
 
 const { Pool } = pg;
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -100,38 +104,43 @@ export class PostgresDatabase {
       max: positiveInteger(options.maxConnections, 10),
       idleTimeoutMillis: positiveInteger(options.idleTimeoutMillis, 30_000),
       connectionTimeoutMillis: positiveInteger(options.connectionTimeoutMillis, 10_000),
+      keepAlive: true,
+      keepAliveInitialDelayMillis: positiveInteger(options.keepAliveInitialDelayMillis, 10_000),
       ...(options.ssl ? { ssl: { rejectUnauthorized: options.rejectUnauthorized === true } } : {})
     });
     this.ownsPool = !options.pool;
     this.now = options.now || Date.now;
     this.initialized = false;
     this.initPromise = null;
+    this.startupRetryAttempts = positiveInteger(options.startupRetryAttempts, 90);
+    this.queryRetryAttempts = positiveInteger(options.queryRetryAttempts, 5);
+    this.retryBaseDelayMs = nonNegativeInteger(options.retryBaseDelayMs, 100);
+    this.retryMaxDelayMs = positiveInteger(options.retryMaxDelayMs, 2_000);
+    this.retrySleep = options.retrySleep;
     const reportPoolError = typeof options.onPoolError === 'function'
       ? options.onPoolError
       : (error) => {
           console.error(
-            '[MATT Mine] PostgreSQL idle connection failed; the pool will replace it.',
+            '[MATT Mine] PostgreSQL connection failed; the pool will replace it.',
             error?.message || error
           );
         };
-    this.poolErrorListener = (error) => {
-      try {
-        reportPoolError(error);
-      } catch {
-        // A logging or telemetry failure must never turn a recoverable pool error
-        // into an application crash.
-      }
-    };
-    this.pool.on?.('error', this.poolErrorListener);
+    this.poolGuard = guardPostgresPool(this.pool, { onError: reportPoolError });
   }
 
   async init() {
     if (this.initialized) return this;
     if (!this.initPromise) {
-      this.initPromise = this.#initialize().catch((error) => {
-        this.initPromise = null;
-        throw error;
-      });
+      this.initPromise = this.retryTransient(
+        () => this.#initialize(),
+        {
+          maxAttempts: this.startupRetryAttempts,
+          label: 'database startup'
+        }
+      ).catch((error) => {
+          this.initPromise = null;
+          throw error;
+        });
     }
     await this.initPromise;
     this.initialized = true;
@@ -191,8 +200,34 @@ export class PostgresDatabase {
 
   async read() {
     await this.init();
-    const result = await this.pool.query('SELECT data FROM matt_mine_state WHERE id = 1');
+    const result = await this.query(
+      'SELECT data FROM matt_mine_state WHERE id = 1'
+    );
     return normalizeServerState(parseJsonValue(result.rows[0]?.data));
+  }
+
+  async query(sql, params = []) {
+    await this.init();
+    return this.retryTransient(
+      () => this.pool.query(sql, params),
+      { maxAttempts: this.queryRetryAttempts, label: 'database query' }
+    );
+  }
+
+  async retryTransient(operation, options = {}) {
+    return retryTransientPostgres(operation, {
+      maxAttempts: options.maxAttempts,
+      baseDelayMs: this.retryBaseDelayMs,
+      maxDelayMs: this.retryMaxDelayMs,
+      ...(this.retrySleep ? { sleep: this.retrySleep } : {}),
+      onRetry: (error, retry) => {
+        console.warn(
+          `[MATT Mine] PostgreSQL ${options.label || 'operation'} unavailable; retrying ` +
+          `${retry.nextAttempt}/${retry.maxAttempts} in ${retry.delayMs}ms.`,
+          error?.code || error?.message || error
+        );
+      }
+    });
   }
 
   async transact(mutator) {
@@ -231,6 +266,8 @@ export class PostgresDatabase {
   async healthCheck() {
     const startedAt = Date.now();
     await this.init();
+    // This is a liveness probe. Do not stack normal request retries here or a
+    // short database failover can make the web service itself look dead.
     await this.pool.query('SELECT 1');
     return {
       ok: true,
@@ -241,7 +278,7 @@ export class PostgresDatabase {
 
   async close() {
     if (this.ownsPool) await this.pool.end();
-    this.pool.off?.('error', this.poolErrorListener);
+    this.poolGuard.close();
   }
 
   async leaderboard(mode, week, viewerAddress, options = {}) {
@@ -841,4 +878,9 @@ function parseJsonValue(value) {
 function positiveInteger(value, fallback) {
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function nonNegativeInteger(value, fallback) {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : fallback;
 }

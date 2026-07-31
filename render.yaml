@@ -61,7 +61,11 @@ services:
       - key: MATT_MINE_ARENA_LIVE
         value: "true"
       - key: MATT_MINE_DATABASE_POOL_SIZE
-        value: "10"
+        value: "5"
+      - key: MATT_MINE_DATABASE_STARTUP_RETRY_ATTEMPTS
+        value: "90"
+      - key: MATT_MINE_DATABASE_QUERY_RETRY_ATTEMPTS
+        value: "5"
 
 databases:
   - name: matt-mine-db

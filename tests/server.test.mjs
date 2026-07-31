@@ -972,6 +972,51 @@ test('PostgreSQL storage initializes, serializes transactions, and reports readi
   assert.equal(Number.isSafeInteger(health.latencyMs), true);
 });
 
+test('server health stays live and reports degradation during a PostgreSQL recovery', async () => {
+  const databaseError = new Error('the database system is in recovery mode');
+  databaseError.code = '57P03';
+  const service = new MattMineService({
+    kind: 'postgresql',
+    async healthCheck() {
+      throw databaseError;
+    },
+    async read() {
+      throw databaseError;
+    }
+  });
+
+  const health = await service.health();
+  assert.equal(health.degraded, true);
+  assert.deepEqual(health.database, {
+    ok: false,
+    kind: 'postgresql',
+    temporarilyUnavailable: true
+  });
+});
+
+test('HTTP APIs return retryable 503 responses instead of crashing during database recovery', async (context) => {
+  const databaseError = new Error('Connection terminated unexpectedly');
+  databaseError.code = '08006';
+  const server = createMattMineHttpServer({
+    root: fileURLToPath(new URL('../', import.meta.url)),
+    service: {
+      publicOrigin: null,
+      async publicMineSlots() {
+        throw databaseError;
+      }
+    }
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  context.after(() => new Promise((resolve) => server.close(resolve)));
+  const address = server.address();
+
+  const response = await fetch(`http://127.0.0.1:${address.port}/api/mines`);
+  const body = await response.json();
+  assert.equal(response.status, 503);
+  assert.equal(response.headers.get('retry-after'), '2');
+  assert.equal(body.error.code, 'database_temporarily_unavailable');
+});
+
 test('the HTTP server exposes same-origin APIs, security headers, and authenticated player data', async (context) => {
   const harness = createHarness();
   const server = createMattMineHttpServer({
