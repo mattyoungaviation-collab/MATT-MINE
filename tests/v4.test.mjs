@@ -65,3 +65,23 @@ test('v0.4 run results carry leaderboard and reward metadata', async () => {
   assert.equal(result.week, '2026-07-20');
   assert.equal(result.rewardWeight, 2);
 });
+
+test('ranked simulation clocks discard time while a choice screen is open', async () => {
+  const { MattMineGame } = await import('../src/game/GameV4.js');
+  const { canvas, profile } = browserStubs();
+  const game = new MattMineGame(canvas, profile);
+  game.startRun({ mode: 'arena', seed: 'ARENA-PAUSED-CLOCK' });
+  const elapsedBeforeChoice = game.run.elapsed;
+
+  game.state = 'levelup';
+  for (let frame = 0; frame < 20; frame += 1) game.update(0.25);
+
+  assert.equal(game.run.elapsed, elapsedBeforeChoice);
+  assert.equal(game.arenaAccumulator, 0);
+
+  game.state = 'playing';
+  game.update(0.02);
+
+  assert.ok(Math.abs(game.run.elapsed - elapsedBeforeChoice - 0.02) < 0.000_001);
+  assert.equal(game.arenaAccumulator, 0);
+});
