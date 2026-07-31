@@ -17,7 +17,7 @@ import {
   RONIN_PAYMENT_CONTRACTS,
   RoninPaymentVerifier
 } from '../server/payment-verifier.js';
-import { MattMineService } from '../server/service.js';
+import { MattMineService, validateRunResult } from '../server/service.js';
 import { AUTH_CHALLENGE_TTL_MS, RONIN_CHAINS, SERVER_RUN_MODES } from '../server/constants.js';
 import { PASS_CHEST_ID } from '../src/game/passRewards.js';
 
@@ -29,6 +29,61 @@ const START = Date.UTC(2026, 6, 25, 12, 0, 0);
 const ORIGIN = 'http://localhost:4173';
 const UNSUPPORTED_CHAIN_ID = 1;
 const VALID_AVATAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+
+function knockoutResult(playerDeaths) {
+  return {
+    extracted: false,
+    projected: 1_000,
+    banked: 350,
+    depth: 1,
+    kills: 5,
+    oreBroken: 5,
+    elapsed: 60,
+    bossTelemetry: {
+      encounterStartedAt: 20,
+      encounterEndedAt: 60,
+      damageDealt: 500,
+      damageReceived: 100,
+      playerDeaths,
+      attacksUsed: {},
+      bosses: {}
+    }
+  };
+}
+
+test('boss death telemetry accepts the final knockout plus verified paid revives only', () => {
+  const timestamp = START + 60_000;
+  const baseRun = {
+    mode: SERVER_RUN_MODES.FREE,
+    startedAt: START,
+    tuning: { deathKeepFraction: 0.35 }
+  };
+
+  assert.equal(
+    validateRunResult(knockoutResult(1), baseRun, timestamp).bossTelemetry.playerDeaths,
+    1
+  );
+  assert.equal(
+    validateRunResult(
+      knockoutResult(2),
+      { ...baseRun, revives: [{ transactionHash: `0x${'ab'.repeat(32)}` }] },
+      timestamp
+    ).bossTelemetry.playerDeaths,
+    2
+  );
+  assert.throws(
+    () => validateRunResult(knockoutResult(2), baseRun, timestamp),
+    (error) => error.status === 422 && error.code === 'invalid_bossTelemetry.playerDeaths'
+  );
+  assert.throws(
+    () => validateRunResult(
+      knockoutResult(3),
+      { ...baseRun, revives: [{ transactionHash: `0x${'ab'.repeat(32)}` }] },
+      timestamp
+    ),
+    (error) => error.status === 422 && error.code === 'invalid_bossTelemetry.playerDeaths'
+  );
+});
 
 function createHarness(options = {}) {
   let timestamp = options.timestamp ?? START;

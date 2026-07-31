@@ -139,9 +139,12 @@ test('paid revive preserves the same run and resumes once at a safe full-health 
     reviveInvulnerabilitySeconds: 4
   });
   const run = game.run;
-  game.player.health = 0;
-  game.endRun(false);
+  game.run.bossTelemetry.encounterStartedAt = 1;
+  game.player.health = 1;
+  game.player.invulnerable = 0;
+  game.damagePlayer(10, 0, { bossId: 1 });
   assert.equal(game.state, 'awaitingrevive');
+  assert.equal(game.run.bossTelemetry.playerDeaths, 1);
   assert.equal(events.at(-1).command, 'death');
   assert.equal(game.applyPaidRevive(), true);
   assert.equal(game.run, run);
@@ -149,9 +152,11 @@ test('paid revive preserves the same run and resumes once at a safe full-health 
   assert.equal(game.player.invulnerable, 4);
   assert.equal(game.state, 'playing');
   assert.equal(events.at(-1).command, 'revive');
-  game.player.health = 0;
-  game.endRun(false);
+  game.player.health = 1;
+  game.player.invulnerable = 0;
+  game.damagePlayer(10, 0, { bossId: 1 });
   assert.equal(game.state, 'ended');
+  assert.equal(game.run.bossTelemetry.playerDeaths, 2);
   assert.equal(events.at(-1).type, 'finish');
 });
 
