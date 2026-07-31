@@ -1,11 +1,12 @@
 const SESSION_STORAGE_KEY = 'matt-mine-server-session-v1';
 
 export class MattMineApiError extends Error {
-  constructor(message, status = 0, code = 'request_failed') {
+  constructor(message, status = 0, code = 'request_failed', details = null) {
     super(message);
     this.name = 'MattMineApiError';
     this.status = status;
     this.code = code;
+    this.details = details;
   }
 }
 
@@ -452,7 +453,8 @@ export class MattMineApiClient {
       throw new MattMineApiError(
         payload?.error?.message || `Server request failed (${response.status}).`,
         response.status,
-        payload?.error?.code || 'request_failed'
+        payload?.error?.code || 'request_failed',
+        payload?.error?.details || null
       );
     }
     return payload;

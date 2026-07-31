@@ -1764,14 +1764,21 @@ async function purchaseArenaEntry() {
     toast('Daily Arena entries are not open.');
     return;
   }
-  const approved = window.confirm(
-    `Enter today's MATT Arena for ${formatMattRaw(arenaConfig.feeRaw)}? Every accepted MATT enters the player prize pool. Ronin Wallet may request an approval transaction followed by the Arena entry transaction.`
-  );
-  if (!approved) return;
   arenaBusy = true;
   renderArena();
   try {
     const quote = await apiClient.arenaEntryQuote(arenaConfig.day);
+    const balanceLine = quote.balanceRaw
+      ? `\n\nWallet balance: ${formatMattRaw(quote.balanceRaw)} MATT`
+      : '';
+    const gasLine = quote.ronBalanceRaw
+      ? `\nGas balance: ${formatRonWei(quote.ronBalanceRaw)} RON`
+      : '';
+    const approved = window.confirm(
+      `Enter today's MATT Arena for ${formatMattRaw(quote.amountRaw || arenaConfig.feeRaw)}?` +
+      `${balanceLine}${gasLine}\n\nEvery accepted MATT enters the player prize pool. Ronin Wallet may request an approval transaction followed by the Arena entry transaction.`
+    );
+    if (!approved) return;
     const transactions = quote.transactions || quote.transaction;
     const transactionHashes = await wallet.purchaseArenaEntry(transactions);
     const entryTransactionHash = transactionHashes.at(-1);

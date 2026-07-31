@@ -30,6 +30,13 @@ export const RONIN_ARENA_DEPLOYMENT = Object.freeze({
 export const ARENA_ERC20_ABI = [
   {
     type: 'function',
+    name: 'balanceOf',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ type: 'uint256' }]
+  },
+  {
+    type: 'function',
     name: 'allowance',
     stateMutability: 'view',
     inputs: [
@@ -461,12 +468,35 @@ export class RoninArenaChain {
     assertApi(!status.entriesPaused, 503, 'arena_entries_paused', 'Daily Arena entries are paused onchain.');
     assertApi(status.entryFeeRaw === String(expectedFeeRaw), 409, 'arena_fee_snapshot_mismatch', 'The onchain Arena fee does not match the immutable server snapshot.');
     const fee = BigInt(status.entryFeeRaw);
-    const allowance = await this.client.readContract({
-      address: this.mattTokenAddress,
-      abi: ARENA_ERC20_ABI,
-      functionName: 'allowance',
-      args: [player, this.contractAddress]
-    });
+    const [balance, allowance, ronBalance] = await Promise.all([
+      this.client.readContract({
+        address: this.mattTokenAddress,
+        abi: ARENA_ERC20_ABI,
+        functionName: 'balanceOf',
+        args: [player]
+      }),
+      this.client.readContract({
+        address: this.mattTokenAddress,
+        abi: ARENA_ERC20_ABI,
+        functionName: 'allowance',
+        args: [player, this.contractAddress]
+      }),
+      typeof this.client.getBalance === 'function'
+        ? this.client.getBalance({ address: player })
+        : null
+    ]);
+    const mattBalance = BigInt(balance);
+    assertApi(
+      mattBalance >= fee,
+      409,
+      'arena_matt_balance_insufficient',
+      `Arena entry costs ${formatMattAtomic(fee)} MATT, but this wallet currently has ${formatMattAtomic(mattBalance)} MATT on Ronin Mainnet.`,
+      {
+        requiredRaw: fee.toString(),
+        balanceRaw: mattBalance.toString(),
+        shortfallRaw: (fee - mattBalance).toString()
+      }
+    );
     const transactions = [];
     if (BigInt(allowance) < fee) {
       transactions.push({
@@ -501,6 +531,8 @@ export class RoninArenaChain {
       day,
       dayId: status.dayId,
       amountRaw: fee.toString(),
+      balanceRaw: mattBalance.toString(),
+      ronBalanceRaw: ronBalance === null ? null : BigInt(ronBalance).toString(),
       allowanceRaw: BigInt(allowance).toString(),
       transactions
     };
@@ -621,6 +653,18 @@ export class RoninArenaChain {
       blockTimestampMs: block ? Number(block.timestamp) * 1_000 : 0
     };
   }
+}
+
+function formatMattAtomic(value) {
+  const raw = BigInt(value);
+  const scale = 10n ** 18n;
+  const whole = raw / scale;
+  const fraction = (raw % scale)
+    .toString()
+    .padStart(18, '0')
+    .slice(0, 4)
+    .replace(/0+$/, '');
+  return `${whole.toLocaleString('en-US')}${fraction ? `.${fraction}` : ''}`;
 }
 
 function normalizeDayTuple(value) {
