@@ -106,6 +106,23 @@ export class PostgresDatabase {
     this.now = options.now || Date.now;
     this.initialized = false;
     this.initPromise = null;
+    const reportPoolError = typeof options.onPoolError === 'function'
+      ? options.onPoolError
+      : (error) => {
+          console.error(
+            '[MATT Mine] PostgreSQL idle connection failed; the pool will replace it.',
+            error?.message || error
+          );
+        };
+    this.poolErrorListener = (error) => {
+      try {
+        reportPoolError(error);
+      } catch {
+        // A logging or telemetry failure must never turn a recoverable pool error
+        // into an application crash.
+      }
+    };
+    this.pool.on?.('error', this.poolErrorListener);
   }
 
   async init() {
@@ -224,6 +241,7 @@ export class PostgresDatabase {
 
   async close() {
     if (this.ownsPool) await this.pool.end();
+    this.pool.off?.('error', this.poolErrorListener);
   }
 
   async leaderboard(mode, week, viewerAddress, options = {}) {
