@@ -1828,8 +1828,11 @@ export class MattMineService {
   }
 
   async startArenaRun(token, input = {}) {
-    const { session } = await this.arenaPlayer(token, { operation: 'entries' });
-    return this.arenaService.startRun(session.address, input);
+    const { session, wallet } = await this.arenaPlayer(token, { operation: 'entries' });
+    return this.arenaService.startRun(session.address, {
+      ...input,
+      playerProfile: structuredClone(wallet.profile)
+    });
   }
 
   async appendArenaEvents(token, payload) {
