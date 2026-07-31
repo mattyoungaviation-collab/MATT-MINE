@@ -13,7 +13,12 @@ const MAX_CONFIGURED_DEPTH = 5;
 export const spawnTuningMethods = {
   generateDepth() {
     const tuning = this.runContext?.tuning || {};
-    if (tuning.usePerDepthRoomSpawns === false) {
+    const competitionSnapshot = this.runContext?.competitionSnapshot ||
+      tuning._competitionSnapshot;
+    // A published Admin Studio snapshot is the authoritative source for both
+    // geometry and placed objects. Per-depth procedural spawn tuning is only
+    // allowed when no authored competition map exists.
+    if (competitionSnapshot || tuning.usePerDepthRoomSpawns === false) {
       const result = stateMethods.generateDepth.call(this);
       this.run.bossGoal = Math.max(1, Math.floor(this.run.customGuardianCount || 1));
       this.run.bossKills = 0;
