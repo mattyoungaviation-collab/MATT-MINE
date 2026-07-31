@@ -4,10 +4,14 @@ import { spawnTuningMethods } from './spawnTuning.js';
 export const enemyCapMethods = {
   generateDepth() {
     const result = spawnTuningMethods.generateDepth.call(this);
-    if (this.runContext?.tuning?.usePerDepthRoomSpawns !== false) {
+    const tuning = this.runContext?.tuning || {};
+    const authoredCompetitionMap = Boolean(
+      this.runContext?.competitionSnapshot || tuning._competitionSnapshot
+    );
+    if (!authoredCompetitionMap && tuning.usePerDepthRoomSpawns !== false) {
       const maximum = Math.max(
         0,
-        Math.floor(Number(this.runContext?.tuning?.enemyMaximum ?? CONFIG.maxEnemiesBase))
+        Math.floor(Number(tuning.enemyMaximum ?? CONFIG.maxEnemiesBase))
       );
       this.enemies = this.enemies.slice(0, maximum);
     }
