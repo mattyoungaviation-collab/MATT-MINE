@@ -240,6 +240,8 @@ export class DailyArenaService {
       ? entryCandidates.find((entry) => entry.entryId === entryId)
       : entryCandidates[0];
     assertApi(selected, 409, 'arena_attempt_required', 'Confirm an unused Daily Arena entry before starting.');
+    const tuning = structuredClone(await this.getTuning(day));
+    tuning._playerProfile = structuredClone(input.playerProfile || {});
     const receipt = {
       version: ARENA_TRANSCRIPT_VERSION,
       runId,
@@ -251,7 +253,7 @@ export class DailyArenaService {
       issuedAt: startedAt,
       expiresAt,
       nonce: this.randomHex(16),
-      tuning: await this.getTuning(day)
+      tuning
     };
     const receiptSignature = this.#sign('run-receipt', receipt);
     const transcriptHash = createHash('sha256')
@@ -296,7 +298,7 @@ export class DailyArenaService {
     };
   }
 
-  async appendEvents(address, payload) {
+  async appendEvents(address, payload, playerProfile = {}) {
     this.assertLive();
     assertApi(payload && typeof payload === 'object' && !Array.isArray(payload), 400, 'arena_events_invalid', 'A Daily Arena event batch is required.');
     const run = await this.#authenticatedRun(address, payload.runId, payload.runToken);
@@ -353,7 +355,8 @@ export class DailyArenaService {
     const existingEvents = await this.store.getEvents(run.runId);
     replayArenaTranscript(
       buildArenaChallenge((await this.store.getDay(run.day)).deterministicSeed, run.tuning),
-      [...existingEvents, ...receivedEvents].map(publicTranscriptEvent)
+      [...existingEvents, ...receivedEvents].map(publicTranscriptEvent),
+      { profile: run.tuning?._playerProfile || playerProfile }
     );
     const nextCheckpoint = this.#checkpoint({
       runId: run.runId,
@@ -375,7 +378,7 @@ export class DailyArenaService {
     };
   }
 
-  async finishRun(address, payload) {
+  async finishRun(address, payload, playerProfile = {}) {
     this.assertLive();
     assertApi(payload && typeof payload === 'object' && !Array.isArray(payload), 400, 'arena_finish_invalid', 'A Daily Arena finish request is required.');
     assertApi(
@@ -403,7 +406,10 @@ export class DailyArenaService {
     const replayed = replayArenaTranscript(
       challenge,
       storedEvents.map(publicTranscriptEvent),
-      { requireTerminal: true }
+      {
+        requireTerminal: true,
+        profile: run.tuning?._playerProfile || playerProfile
+      }
     );
     const result = {
       ...replayed,

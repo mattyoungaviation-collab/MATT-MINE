@@ -1828,18 +1828,21 @@ export class MattMineService {
   }
 
   async startArenaRun(token, input = {}) {
-    const { session } = await this.arenaPlayer(token, { operation: 'entries' });
-    return this.arenaService.startRun(session.address, input);
+    const { session, wallet } = await this.arenaPlayer(token, { operation: 'entries' });
+    return this.arenaService.startRun(session.address, {
+      ...input,
+      playerProfile: structuredClone(wallet.profile)
+    });
   }
 
   async appendArenaEvents(token, payload) {
-    const { session } = await this.arenaPlayer(token);
-    return this.arenaService.appendEvents(session.address, payload);
+    const { session, wallet } = await this.arenaPlayer(token);
+    return this.arenaService.appendEvents(session.address, payload, wallet.profile);
   }
 
   async finishArenaRun(token, payload) {
-    const { session, state } = await this.arenaPlayer(token, { operation: 'results' });
-    const result = await this.arenaService.finishRun(session.address, payload);
+    const { session, state, wallet } = await this.arenaPlayer(token, { operation: 'results' });
+    const result = await this.arenaService.finishRun(session.address, payload, wallet.profile);
     return {
       ...result,
       leaderboard: enrichLeaderboardAppearances(result.leaderboard, state)
@@ -1964,7 +1967,7 @@ export class MattMineService {
         `MATT Arena ${options.operation} are paused in the Mine Operations console.`
       );
     }
-    return { session, wallet };
+    return { session, wallet, state };
   }
 
   async authenticate(token) {
