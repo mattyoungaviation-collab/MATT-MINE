@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises';
 import {
   COMPETITION_DEPTH_COUNT,
   COMPETITION_SLOTS,
+  MAP_OBJECT_KINDS,
   competitionMapForDepth,
   defaultCompetitionStudio,
   materializeCompetitionMap,
@@ -263,10 +264,17 @@ test('authored maps materialize exact player, Guardian, extraction, loot, and ha
   game.startRun({
     mode: 'practice',
     seed: 'AUTHORED-MAP',
-    tuning: { usePerDepthRoomSpawns: false, _competitionSnapshot: snapshot },
+    tuning: { usePerDepthRoomSpawns: true, enemyMaximum: 0, _competitionSnapshot: snapshot },
     competitionSnapshot: snapshot
   });
   assert.equal(game.layout.rooms.length, draft.map.rooms.length);
+  assert.equal(
+    game.enemies.length,
+    draft.map.objects
+      .filter((object) => MAP_OBJECT_KINDS.enemy.includes(object.type))
+      .reduce((sum, object) => sum + object.quantity, 0),
+    'authored enemy placements must not be deleted by the procedural enemy cap'
+  );
   assert.equal(game.hazards.length, 1);
   assert.equal(game.run.customExtraction.x, extractionPlacement.x);
   assert.equal(game.run.customExtraction.y, extractionPlacement.y);
