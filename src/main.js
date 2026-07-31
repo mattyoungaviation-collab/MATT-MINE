@@ -1835,13 +1835,16 @@ async function startArenaRun() {
       name: run.challenge?.tuning?._competitionSnapshot?.name || 'MATT Arena',
       snapshot: run.challenge?.tuning?._competitionSnapshot
     });
+    const arenaCompetitionSnapshot = run.challenge?.tuning?._competitionSnapshot;
     game.startRun({
       mode: 'arena',
       seed: run.dailySeed || run.seed,
       day: run.day,
       rewardWeight: 0,
       tuning: run.challenge?.tuning || {},
-      competitionSnapshot: run.challenge?.tuning?._competitionSnapshot
+      competitionSnapshot: arenaCompetitionSnapshot,
+      characterId: arenaCompetitionSnapshot?.loadout?.characterId || 'matt',
+      character: run.challenge?.tuning?._competitionCharacter || {}
     });
   } catch (error) {
     activeArenaRun = null;

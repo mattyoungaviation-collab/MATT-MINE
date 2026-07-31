@@ -10,6 +10,10 @@ import {
   drawCompetitionMap,
   mapBounds
 } from './game/mineMapRenderer.js';
+import {
+  CHARACTER_DEFAULTS,
+  CHARACTER_IDS
+} from './game/expansionConfig.js';
 
 const studio = {
   payload: null,
@@ -82,12 +86,10 @@ function bindOnce() {
   $('#studio-save').addEventListener('click', () => void runAction(saveDraft));
   $('#studio-publish').addEventListener('click', () => void runAction(publishSnapshot));
   $('#studio-test').addEventListener('click', () => void runAction(testDraft));
-  if (!$('#studio-effective-at').value) {
-    const tomorrow = new Date();
-    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-    tomorrow.setUTCHours(0, 0, 0, 0);
-    $('#studio-effective-at').value = localDateTimeValue(tomorrow);
-  }
+  $('#studio-version-list').addEventListener('click', (event) => {
+    const button = event.target.closest('[data-activate-version]');
+    if (button) void runAction(() => activateVersion(button.dataset.activateVersion));
+  });
 }
 
 function selectSlot(slotId) {
@@ -112,6 +114,7 @@ function renderAll() {
   renderCompetition();
   renderVersions();
   renderValidation();
+  renderLiveSource();
 }
 
 function selectDepth(depth) {
@@ -358,7 +361,7 @@ function renderCompetition() {
   $('#studio-competition-fields').innerHTML = `
     ${field('Competition name', 'competition.name', draft.name, 'text')}
     ${field('Card description', 'competition.subtitle', draft.subtitle, 'text')}
-    ${field('Locked character', 'loadout.characterId', draft.loadout.characterId, 'text')}
+    <label class="tuning-field">Locked character<select data-competition="loadout.characterId">${CHARACTER_IDS.map((characterId) => `<option value="${characterId}" ${draft.loadout.characterId === characterId ? 'selected' : ''}>${escapeHtml(CHARACTER_DEFAULTS[characterId]?.name || titleCase(characterId))}</option>`).join('')}</select></label>
     <label class="tuning-field">Starting weapon<select data-competition="loadout.startingWeapon">${['pickaxe','dynamite','blaster'].map((weapon) => `<option value="${weapon}" ${draft.loadout.startingWeapon === weapon ? 'selected' : ''}>${titleCase(weapon)}</option>`).join('')}</select></label>
     ${['pickaxe','dynamite','blaster'].map((weapon) => `<label class="tuning-field studio-check">${titleCase(weapon)} available<input data-competition="loadout.availableWeapons" data-weapon="${weapon}" type="checkbox" ${(draft.loadout.availableWeapons || []).includes(weapon) ? 'checked' : ''} ${weapon === 'pickaxe' ? 'disabled' : ''}></label>`).join('')}
     ${field('Starting health', 'loadout.startingHealth', draft.loadout.startingHealth, 'number', '1', '1000', '1', true)}
@@ -408,12 +411,29 @@ function renderValidation() {
 
 function renderVersions() {
   const ids = studio.payload.studio.slots[studio.slotId].scheduledSnapshotIds || [];
+  const liveId = studio.payload.active?.[studio.slotId]?.id || '';
   $('#studio-version-list').innerHTML = ids.length
     ? [...ids].reverse().map((id) => {
         const snapshot = studio.payload.studio.snapshots[id];
-        return `<article><span><b>${escapeHtml(snapshot.name)}</b><small>${new Date(snapshot.effectiveAt).toLocaleString()}${snapshot.expiresAt ? ` → ${new Date(snapshot.expiresAt).toLocaleString()}` : ''}</small></span><code>${snapshot.fingerprint.slice(0, 16)}</code><em>${snapshot.status}</em></article>`;
+        if (!snapshot) return '';
+        const isLive = id === liveId;
+        return `<article>
+          <span><b>${escapeHtml(snapshot.name)}</b><small>${snapshot.effectiveAt ? new Date(snapshot.effectiveAt).toLocaleString() : 'Built-in safe version'}${snapshot.expiresAt ? ` → ${new Date(snapshot.expiresAt).toLocaleString()}` : ''}</small></span>
+          <code>${escapeHtml(snapshot.fingerprint.slice(0, 16))}</code>
+          <em>${isLive ? 'LIVE NOW' : snapshot.status}</em>
+          ${isLive ? '' : `<button type="button" class="ghost" data-activate-version="${escapeHtml(id)}">MAKE LIVE NOW</button>`}
+        </article>`;
       }).join('')
-    : '<p class="muted">No published versions yet. The safe default map remains active.</p>';
+    : '<p class="muted">The built-in safe version is live.</p>';
+}
+
+function renderLiveSource() {
+  const snapshot = studio.payload.active?.[studio.slotId];
+  const node = $('#studio-live-source');
+  if (!node || !snapshot) return;
+  node.innerHTML = `<strong>LIVE NOW · ${escapeHtml(snapshot.name)}</strong>
+    <span>${escapeHtml(snapshot.depths?.[0]?.map?.name || snapshot.map?.name || 'Mine map')} · ${escapeHtml(CHARACTER_DEFAULTS[snapshot.loadout?.characterId || 'matt']?.name || titleCase(snapshot.loadout?.characterId || 'matt'))} · ${escapeHtml(titleCase(snapshot.loadout?.startingWeapon || 'pickaxe'))}</span>
+    <code>${escapeHtml(snapshot.fingerprint || snapshot.id)}</code>`;
 }
 
 async function saveDraft() {
@@ -435,21 +455,54 @@ async function publishSnapshot() {
   const validation = validateCompetitionDraft(studio.draft);
   if (!validation.valid) throw new Error(validation.errors[0]);
   await saveDraft();
-  const effectiveAt = dateValue($('#studio-effective-at').value, Date.now());
+  const scheduledValue = $('#studio-effective-at').value;
+  const requestedEffectiveAt = scheduledValue ? dateValue(scheduledValue, Date.now()) : null;
   const expiresAt = $('#studio-expires-at').value ? dateValue($('#studio-expires-at').value, 0) : 0;
-  if (expiresAt && expiresAt <= effectiveAt) throw new Error('The competition end must be after its start.');
-  if (!confirm(`Publish all five immutable ${studio.slotId} depth maps?\n\nEvery player and server replay will use this exact version.`)) return;
+  if (expiresAt && requestedEffectiveAt !== null && expiresAt <= requestedEffectiveAt) throw new Error('The competition end must be after its start.');
+  const timing = scheduledValue ? new Date(requestedEffectiveAt).toLocaleString() : 'immediately';
+  if (!confirm(`Apply all five immutable ${studio.slotId} depth maps ${timing}?\n\nNew runs will use this exact map, character, loadout, and rules. Active runs stay pinned.`)) return;
   setSaveState('PUBLISHING', 'working');
   const result = await adminApi(`/api/admin/competition-studio/${studio.slotId}/publish`, {
     method: 'POST',
-    body: { effectiveAt, expiresAt, reason }
+    body: {
+      ...(requestedEffectiveAt === null ? {} : { effectiveAt: requestedEffectiveAt }),
+      expiresAt,
+      reason
+    }
   });
   studio.payload.studio.snapshots[result.snapshot.id] = result.snapshot;
   studio.payload.studio.slots[studio.slotId].scheduledSnapshotIds.push(result.snapshot.id);
-  studio.payload.studio.slots[studio.slotId].activeSnapshotId = effectiveAt <= Date.now() ? result.snapshot.id : studio.payload.studio.slots[studio.slotId].activeSnapshotId;
+  if (result.snapshot.effectiveAt <= Date.now()) {
+    studio.payload.studio.slots[studio.slotId].activeSnapshotId = result.snapshot.id;
+    studio.payload.active[studio.slotId] = result.snapshot;
+  }
   $('#studio-reason').value = '';
-  setSaveState('VERSION PUBLISHED', 'ready');
+  $('#studio-effective-at').value = '';
+  setSaveState(result.snapshot.effectiveAt <= Date.now() ? 'LIVE NOW' : 'VERSION SCHEDULED', 'ready');
   renderVersions();
+  renderLiveSource();
+}
+
+async function activateVersion(snapshotId) {
+  const reason = requiredReason();
+  const snapshot = studio.payload.studio.snapshots[snapshotId];
+  if (!snapshot) throw new Error('That published version no longer exists.');
+  if (!confirm(`Make “${snapshot.name}” live now?\n\nThis creates a new audited live version. Active runs remain pinned.`)) return;
+  setSaveState('ACTIVATING', 'working');
+  const result = await adminApi(`/api/admin/competition-studio/${studio.slotId}/versions/${encodeURIComponent(snapshotId)}/activate`, {
+    method: 'POST',
+    body: { reason }
+  });
+  studio.payload.studio.snapshots[result.snapshot.id] = result.snapshot;
+  studio.payload.studio.slots[studio.slotId].scheduledSnapshotIds.push(result.snapshot.id);
+  studio.payload.studio.slots[studio.slotId].activeSnapshotId = result.snapshot.id;
+  studio.payload.studio.slots[studio.slotId].draft = structuredClone(result.snapshot);
+  studio.payload.active[studio.slotId] = result.snapshot;
+  studio.draft = normalizeCompetitionDraft(result.snapshot, studio.slotId);
+  studio.selected = null;
+  $('#studio-reason').value = '';
+  setSaveState('LIVE NOW', 'ready');
+  renderAll();
 }
 
 function testDraft() {
@@ -602,11 +655,6 @@ function requiredReason() {
 function dateValue(value, fallback) {
   const timestamp = Date.parse(value);
   return Number.isFinite(timestamp) ? timestamp : fallback;
-}
-
-function localDateTimeValue(date) {
-  const offset = date.getTimezoneOffset() * 60_000;
-  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
 }
 
 async function adminApi(path, options = {}) {

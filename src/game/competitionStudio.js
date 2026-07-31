@@ -1,3 +1,5 @@
+import { CHARACTER_IDS } from './expansionConfig.js';
+
 export const COMPETITION_SLOTS = Object.freeze([
   Object.freeze({ id: 'practice', number: 1, name: 'Practice Mine', mode: 'practice', leaderboard: false, color: '#55dfb4' }),
   Object.freeze({ id: 'arena', number: 2, name: 'MATT Arena', mode: 'arena', leaderboard: true, color: '#ffcf32' }),
@@ -23,6 +25,7 @@ const MAX_OBJECTS = 300;
 export const COMPETITION_DEPTH_COUNT = 5;
 
 export function defaultCompetitionStudio(timestamp = Date.now()) {
+  const snapshots = {};
   const slots = Object.fromEntries(COMPETITION_SLOTS.map((slot) => {
     const depths = createStarterDepths(slot.id);
     const draft = normalizeCompetitionDraft({
@@ -32,20 +35,22 @@ export function defaultCompetitionStudio(timestamp = Date.now()) {
       loadout: defaultLoadout(),
       rules: defaultSlotRules(slot.id)
     }, slot.id);
+    const snapshot = createBootstrapSnapshot(draft);
+    snapshots[snapshot.id] = snapshot;
     return [slot.id, {
       draft,
-      activeSnapshotId: '',
-      scheduledSnapshotIds: [],
+      activeSnapshotId: snapshot.id,
+      scheduledSnapshotIds: [snapshot.id],
       updatedAt: timestamp
     }];
   }));
-  return { version: 1, slots, snapshots: {}, updatedAt: timestamp };
+  return { version: 2, slots, snapshots, updatedAt: timestamp };
 }
 
 export function normalizeCompetitionStudio(input, timestamp = Date.now()) {
   const defaults = defaultCompetitionStudio(timestamp);
   if (!isRecord(input)) return defaults;
-  const snapshots = {};
+  const snapshots = structuredClone(defaults.snapshots);
   for (const [id, value] of Object.entries(isRecord(input.snapshots) ? input.snapshots : {}).slice(-500)) {
     if (!isRecord(value) || !COMPETITION_SLOTS.some((slot) => slot.id === value.slotId)) continue;
     try {
@@ -68,18 +73,25 @@ export function normalizeCompetitionStudio(input, timestamp = Date.now()) {
     try {
       draft = normalizeCompetitionDraft(source.draft, definition.id);
     } catch {}
+    const bootstrapId = defaults.slots[definition.id].activeSnapshotId;
+    const sourceSnapshotIds = Array.isArray(source.scheduledSnapshotIds)
+      ? source.scheduledSnapshotIds.filter((id) => snapshots[id]?.slotId === definition.id)
+      : [];
+    const scheduledSnapshotIds = [
+      bootstrapId,
+      ...[...new Set(sourceSnapshotIds.filter((id) => id !== bootstrapId))].slice(-89)
+    ];
+    const requestedActiveId = String(source.activeSnapshotId || '');
     return [definition.id, {
       draft,
-      activeSnapshotId: snapshots[source.activeSnapshotId]?.slotId === definition.id
-        ? source.activeSnapshotId
-        : '',
-      scheduledSnapshotIds: Array.isArray(source.scheduledSnapshotIds)
-        ? [...new Set(source.scheduledSnapshotIds.filter((id) => snapshots[id]?.slotId === definition.id))].slice(-90)
-        : [],
+      activeSnapshotId: snapshots[requestedActiveId]?.slotId === definition.id
+        ? requestedActiveId
+        : bootstrapId,
+      scheduledSnapshotIds,
       updatedAt: safeTimestamp(source.updatedAt)
     }];
   }));
-  return { version: 1, slots, snapshots, updatedAt: safeTimestamp(input.updatedAt) };
+  return { version: 2, slots, snapshots, updatedAt: safeTimestamp(input.updatedAt) };
 }
 
 export function normalizeCompetitionDraft(input, forcedSlotId = '') {
@@ -269,17 +281,13 @@ export function resolveCompetitionSnapshot(studioInput, slotId, timestamp = Date
       snapshot.effectiveAt <= timestamp &&
       (!snapshot.expiresAt || snapshot.expiresAt > timestamp)
     )
-    .sort((a, b) => b.effectiveAt - a.effectiveAt || b.publishedAt - a.publishedAt);
+    .sort((a, b) =>
+      b.effectiveAt - a.effectiveAt ||
+      b.publishedAt - a.publishedAt ||
+      Number(b.id === slot.activeSnapshotId) - Number(a.id === slot.activeSnapshotId)
+    );
   const snapshot = candidates[0] || null;
-  return snapshot ? { ...structuredClone(snapshot), status: 'live' } : {
-    ...structuredClone(slot.draft),
-    id: `default-${slotId}`,
-    status: 'live',
-    effectiveAt: 0,
-    expiresAt: 0,
-    publishedAt: 0,
-    fingerprint: `default-${slotId}`
-  };
+  return snapshot ? { ...structuredClone(snapshot), status: 'live' } : null;
 }
 
 export function materializeCompetitionMap(input) {
@@ -375,6 +383,20 @@ function createStarterDepths(slotId) {
   }));
 }
 
+function createBootstrapSnapshot(draft) {
+  const id = `bootstrap_${draft.slotId}_v1`;
+  return {
+    ...structuredClone(draft),
+    id,
+    status: 'live',
+    effectiveAt: 0,
+    expiresAt: 0,
+    publishedAt: 0,
+    publishedBy: 'SYSTEM_BOOTSTRAP',
+    fingerprint: id
+  };
+}
+
 function defaultLoadout() {
   return {
     characterId: 'matt',
@@ -397,8 +419,9 @@ function normalizeLoadout(input) {
     ? [...new Set(source.availableWeapons.filter((weapon) => weapons.includes(weapon)))]
     : [...weapons];
   if (!availableWeapons.includes('pickaxe')) availableWeapons.unshift('pickaxe');
+  const requestedCharacterId = cleanId(source.characterId || 'matt');
   return {
-    characterId: cleanId(source.characterId || 'matt'),
+    characterId: CHARACTER_IDS.includes(requestedCharacterId) ? requestedCharacterId : 'matt',
     startingWeapon: availableWeapons.includes(source.startingWeapon) ? source.startingWeapon : 'pickaxe',
     availableWeapons,
     startingHealth: boundedNumber(source.startingHealth, 1, 1000, 100),

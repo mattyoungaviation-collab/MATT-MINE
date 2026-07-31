@@ -481,6 +481,18 @@ async function handleApiRequest({
     sendJson(response, 201, { ok: true, ...result });
     return;
   }
+  const competitionActivateMatch = path.match(/^\/api\/admin\/competition-studio\/(practice|arena|daily|pass|weekly)\/versions\/([A-Za-z0-9_-]+)\/activate$/);
+  if (method === 'POST' && competitionActivateMatch) {
+    const body = await readJson(request, maxRequestBytes);
+    const result = await service.activateCompetitionSnapshot(
+      request.headers['x-matt-admin-key'],
+      competitionActivateMatch[1],
+      competitionActivateMatch[2],
+      body.reason
+    );
+    sendJson(response, 201, { ok: true, ...result });
+    return;
+  }
   const gameTuningMatch = path.match(/^\/api\/admin\/game-tuning\/(practice|free|paid|arena)$/);
   if (method === 'PUT' && gameTuningMatch) {
     const body = await readJson(request, maxRequestBytes);
@@ -518,6 +530,17 @@ async function handleApiRequest({
       request.headers['x-matt-admin-key'],
       mineOperationsMatch[1],
       body.patch,
+      body.reason
+    );
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
+  const terminateMineRunsMatch = path.match(/^\/api\/admin\/mine-operations\/(practice|arena|daily|pass|weekly)\/terminate-runs$/);
+  if (method === 'POST' && terminateMineRunsMatch) {
+    const body = await readJson(request, maxRequestBytes);
+    const result = await service.adminTerminateMineRuns(
+      request.headers['x-matt-admin-key'],
+      terminateMineRunsMatch[1],
       body.reason
     );
     sendJson(response, 200, { ok: true, ...result });

@@ -140,6 +140,13 @@ export class MemoryArenaStore {
     ) || null);
   }
 
+  async activeRuns(address = '') {
+    await this.queue;
+    return [...this.runs.values()]
+      .filter((run) => run.status === 'active' && (!address || run.address === address))
+      .map(clone);
+  }
+
   async getEvents(runId) {
     await this.queue;
     return clone(this.events.get(runId) || []);
@@ -167,6 +174,19 @@ export class MemoryArenaStore {
         run.finishedAt = timestamp;
       }
       return clone(run || null);
+    });
+  }
+
+  async expireActiveRuns(address = '', timestamp) {
+    return this.#mutate(() => {
+      const expired = [];
+      for (const run of this.runs.values()) {
+        if (run.status !== 'active' || (address && run.address !== address)) continue;
+        run.status = 'expired';
+        run.finishedAt = timestamp;
+        expired.push(clone(run));
+      }
+      return expired;
     });
   }
 
@@ -510,6 +530,23 @@ export class PostgresArenaStore {
     return result.rows[0] ? formatRunRow(result.rows[0]) : null;
   }
 
+  async activeRuns(address = '') {
+    await this.init();
+    const result = address
+      ? await this.pool.query(
+          `SELECT * FROM matt_mine_arena.runs
+           WHERE address=$1 AND status='active'
+           ORDER BY started_at_ms DESC`,
+          [address]
+        )
+      : await this.pool.query(
+          `SELECT * FROM matt_mine_arena.runs
+           WHERE status='active'
+           ORDER BY started_at_ms DESC`
+        );
+    return result.rows.map(formatRunRow);
+  }
+
   async getEvents(runId) {
     await this.init();
     const result = await this.pool.query(
@@ -562,6 +599,26 @@ export class PostgresArenaStore {
       [runId, timestamp]
     );
     return this.getRun(runId);
+  }
+
+  async expireActiveRuns(address = '', timestamp) {
+    await this.init();
+    const result = address
+      ? await this.pool.query(
+          `UPDATE matt_mine_arena.runs
+           SET status='expired',finished_at_ms=$2
+           WHERE address=$1 AND status='active'
+           RETURNING *`,
+          [address, timestamp]
+        )
+      : await this.pool.query(
+          `UPDATE matt_mine_arena.runs
+           SET status='expired',finished_at_ms=$1
+           WHERE status='active'
+           RETURNING *`,
+          [timestamp]
+        );
+    return result.rows.map(formatRunRow);
   }
 
   async finishRun(runId, result, timestamp) {

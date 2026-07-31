@@ -123,8 +123,14 @@ export function replayArenaTranscript(challenge, inputEvents, options = {}) {
     day: options.day || '',
     week: options.week || '',
     tuning: challenge.tuning || {},
-    characterId: options.characterId || 'matt',
-    character: options.character || {},
+    characterId:
+      options.characterId ||
+      challenge.tuning?._competitionSnapshot?.loadout?.characterId ||
+      'matt',
+    character:
+      options.character ||
+      challenge.tuning?._competitionCharacter ||
+      {},
     weeklyStage: options.weeklyStage || null,
     endlessSnapshot: options.endlessSnapshot || null,
     allowPaidRevive: options.allowPaidRevive === true,

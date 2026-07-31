@@ -12,9 +12,12 @@ It is not linked from the public game and search engines are told not to index i
 
 - Production overview, player counts, run counts, payments, reward status, and deployed addresses
 - Five independent mine operation cards with separate new-run, result, payment, and reward pauses
+- Immediate mine-wide termination of active runs during an incident, with a required reason and complete audit record
 - Immediate whole-site maintenance, Free ranked, Pass ranked, paid purchase, and claim emergency pauses
-- Player search, suspension, restoration, session revocation, stuck-run expiry, and restoration of a legitimate daily free attempt
+- Player search, suspension, restoration, session revocation, forced active-run termination, exact state correction, and restoration of a legitimate daily free attempt
 - Separate Practice, Free, Pass, and Daily Arena tuning for player stats, weapons, enemies, creature availability, Guardian behavior, room layout, ore, XP, score, and knockout rules
+- Competition Studio drafts that remain private until **Apply Live Version**, plus one-click immediate restoration of any prior published version
+- Exact live-source panels and public mine cards that use the same published map, character, starting weapon, and rules as new runs
 - Permanent-name or wallet lookup with a per-player activity timeline
 - Audited player awards for banked nuggets, Pass XP, Pass chests, and existing cosmetics
 - A guided Free + Pass payout desk covering finalized snapshots, immutable obligations, independent approval, Safe output, Ronin synchronization, deadlines, and per-wallet paid/unpaid status
@@ -40,8 +43,12 @@ Actions assigned to a separate role wallet do not produce a Safe file. The comma
 ## Game tuning rules
 
 - Practice, Free, Pass, and Daily Arena each have their own preset.
-- New Free, Pass, and Practice runs snapshot the saved preset when the run starts.
-- Daily Arena changes are staged for the next UTC day. Today keeps its original preset so every competitor receives the same rules.
+- Saving a tuning preset applies immediately to every new run in that lobby, including Daily Arena.
+- Every run snapshots its exact tuning and published Competition Studio version when it starts.
+- Existing runs keep their pinned snapshot so Admin changes cannot invalidate deterministic replay.
+- Competition Studio drafts are never live. **Apply Live Version** publishes an immutable version immediately unless Admin deliberately supplies a future start time.
+- **Make Live Now** creates an audited immutable restoration of a prior version and applies it to all new runs immediately.
+- Admin can pause one mine, terminate that mine’s active runs, or explicitly end one player’s active runs and apply a state correction without waiting.
 - Active runs and completed scores are never rewritten by a tuning change.
 - Every save requires a written reason and appears in the audit history.
 

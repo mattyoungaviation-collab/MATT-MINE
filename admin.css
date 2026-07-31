@@ -1351,6 +1351,35 @@ dialog::backdrop {
   color: #ff8b9b;
 }
 
+.studio-live-source {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px 14px;
+  align-items: center;
+  margin-bottom: 12px;
+  border-color: rgba(85, 223, 180, .28);
+  background: rgba(85, 223, 180, .055);
+}
+
+.studio-live-source strong {
+  color: var(--green);
+  font-size: .73rem;
+  letter-spacing: .08em;
+}
+
+.studio-live-source span {
+  min-width: 0;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-live-source code {
+  color: var(--muted);
+  font-size: .66rem;
+}
+
 .studio-slot-tabs {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -1687,7 +1716,7 @@ dialog::backdrop {
   border-radius: 9px;
   display: grid;
   gap: 8px;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   padding: 10px;
 }
 
@@ -1701,6 +1730,12 @@ dialog::backdrop {
 .studio-version-list article em {
   color: #7e899a;
   font-size: .62rem;
+}
+
+.studio-version-list article button {
+  min-height: 30px;
+  padding: 6px 9px;
+  font-size: .61rem;
 }
 
 .studio-version-list article em {
@@ -1741,6 +1776,10 @@ dialog::backdrop {
 
   .studio-publish-bar {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .studio-live-source {
+    grid-template-columns: 1fr;
   }
 }
 

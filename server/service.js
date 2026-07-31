@@ -664,12 +664,17 @@ export class MattMineService {
         : wallet.expansion?.selectedCharacter || 'matt';
       const lockedCharacterId = competitionSnapshot?.loadout?.characterId || selectedCharacterId;
       const selectedCharacter = state.expansionConfig?.characters?.[lockedCharacterId];
+      const lockedByCompetition = Boolean(competitionSnapshot?.loadout?.characterId);
       assertApi(
-        selectedCharacter?.enabled === true &&
-        (
-          normalizedMode === SERVER_RUN_MODES.WEEKLY ||
-          lockedCharacterId === competitionSnapshot?.loadout?.characterId ||
-          wallet.expansion?.ownedCharacters?.includes(lockedCharacterId)
+        selectedCharacter && (
+          lockedByCompetition ||
+          (
+            selectedCharacter.enabled === true &&
+            (
+              normalizedMode === SERVER_RUN_MODES.WEEKLY ||
+              wallet.expansion?.ownedCharacters?.includes(lockedCharacterId)
+            )
+          )
         ),
         409,
         'selected_character_unavailable',
@@ -1119,10 +1124,17 @@ export class MattMineService {
     const definition = COMPETITION_SLOTS.find((slot) => slot.id === slotId && !slot.comingSoon);
     assertApi(definition, 404, 'mine_slot_locked', 'That mine slot cannot be published.');
     const normalizedReason = normalizeAdminReason(input.reason);
-    const effectiveAt = strictInteger(Number(input.effectiveAt), 'effective_at', 0, 9_007_199_254_740_991);
+    const timestamp = this.now();
+    const effectiveAt = strictInteger(
+      input.effectiveAt === undefined || input.effectiveAt === null || input.effectiveAt === ''
+        ? timestamp
+        : Number(input.effectiveAt),
+      'effective_at',
+      0,
+      9_007_199_254_740_991
+    );
     const expiresAt = strictInteger(Number(input.expiresAt || 0), 'expires_at', 0, 9_007_199_254_740_991);
     assertApi(!expiresAt || expiresAt > effectiveAt, 422, 'competition_window_invalid', 'The end time must be after the start time.');
-    const timestamp = this.now();
     return this.database.transact((state) => {
       const draft = normalizeCompetitionDraft(state.competitionStudio.slots[slotId].draft, slotId);
       const validation = validateCompetitionDraft(draft);
@@ -1141,7 +1153,11 @@ export class MattMineService {
         fingerprint
       };
       state.competitionStudio.snapshots[id] = snapshot;
-      state.competitionStudio.slots[slotId].scheduledSnapshotIds.push(id);
+      state.competitionStudio.slots[slotId].scheduledSnapshotIds = appendCompetitionSnapshotId(
+        state.competitionStudio.slots[slotId].scheduledSnapshotIds,
+        slotId,
+        id
+      );
       if (effectiveAt <= timestamp && (!expiresAt || expiresAt > timestamp)) {
         state.competitionStudio.slots[slotId].activeSnapshotId = id;
       }
@@ -1152,6 +1168,53 @@ export class MattMineService {
         'SERVER_ADMIN',
         'COMPETITION_SNAPSHOT_PUBLISHED',
         `${slotId} ${id} ${fingerprint}; ${normalizedReason}`,
+        timestamp
+      );
+      return { snapshot: structuredClone(snapshot), validation, reason: normalizedReason };
+    });
+  }
+
+  async activateCompetitionSnapshot(adminKey, slotId, snapshotId, reason) {
+    this.assertAdminKey(adminKey);
+    const definition = COMPETITION_SLOTS.find((slot) => slot.id === slotId && !slot.comingSoon);
+    assertApi(definition, 404, 'mine_slot_locked', 'That mine slot cannot be activated.');
+    const normalizedReason = normalizeAdminReason(reason);
+    const timestamp = this.now();
+    return this.database.transact((state) => {
+      const source = state.competitionStudio.snapshots[String(snapshotId || '')];
+      assertApi(source?.slotId === slotId, 404, 'competition_snapshot_missing', 'That published mine version was not found.');
+      const draft = normalizeCompetitionDraft(source, slotId);
+      const validation = validateCompetitionDraft(draft);
+      assertApi(validation.valid, 422, 'competition_map_invalid', validation.errors[0] || 'The published map is not playable.');
+      const id = `snapshot_${slotId}_${this.randomHex(10)}`;
+      const canonical = JSON.stringify({ ...draft, effectiveAt: timestamp, expiresAt: 0 });
+      const fingerprint = createHash('sha256').update(canonical).digest('hex');
+      const snapshot = {
+        ...structuredClone(draft),
+        id,
+        status: 'live',
+        effectiveAt: timestamp,
+        expiresAt: 0,
+        publishedAt: timestamp,
+        publishedBy: 'SERVER_ADMIN',
+        fingerprint,
+        restoredFrom: source.id
+      };
+      state.competitionStudio.snapshots[id] = snapshot;
+      state.competitionStudio.slots[slotId].scheduledSnapshotIds = appendCompetitionSnapshotId(
+        state.competitionStudio.slots[slotId].scheduledSnapshotIds,
+        slotId,
+        id
+      );
+      state.competitionStudio.slots[slotId].activeSnapshotId = id;
+      state.competitionStudio.slots[slotId].draft = structuredClone(draft);
+      state.competitionStudio.slots[slotId].updatedAt = timestamp;
+      state.competitionStudio.updatedAt = timestamp;
+      addAudit(
+        state,
+        'SERVER_ADMIN',
+        'COMPETITION_SNAPSHOT_ACTIVATED',
+        `${slotId} ${id} restored from ${source.id}; ${normalizedReason}`,
         timestamp
       );
       return { snapshot: structuredClone(snapshot), validation, reason: normalizedReason };
@@ -1208,6 +1271,7 @@ export class MattMineService {
     const state = await this.database.read();
     const timestamp = this.now();
     const runs = Object.values(state.runs);
+    const arenaActiveRuns = await Promise.resolve(this.arenaService?.adminActiveRuns?.()).catch(() => []) || [];
     const mineCards = ['practice', 'arena', 'daily', 'pass', 'weekly'].map((mine) => {
       const mineRuns = runs.filter((run) => mineForRunMode(run.mode) === mine);
       const payments = mine === 'pass'
@@ -1220,7 +1284,9 @@ export class MattMineService {
         name: mineDisplayName(mine),
         controls: structuredClone(state.operations.mines?.[mine] || {}),
         availableControls: mineOperationCapabilities(mine),
-        activeRuns: mineRuns.filter((run) => run.status === 'active' && run.expiresAt > timestamp).length,
+        activeRuns: mine === 'arena'
+          ? arenaActiveRuns.length
+          : mineRuns.filter((run) => run.status === 'active' && run.expiresAt > timestamp).length,
         finishedRuns: mineRuns.filter((run) => run.status === 'finished').length,
         pendingPayments: payments.filter((payment) =>
           mine === 'pass'
@@ -1419,20 +1485,11 @@ export class MattMineService {
       state.gameTuning[lobby] = { ...before, ...patch };
       const changed = Object.keys(patch).filter((key) => before[key] !== patch[key]);
       const linkedChanges = applyTuningLinksToExpansion(state, lobby, patch, timestamp);
-      let effectiveDay = null;
-      if (lobby === 'arena') {
-        const currentDay = utcDayKey(timestamp);
-        const nextDay = utcDayKey(timestamp + 86_400_000);
-        state.arenaTuningSchedule ||= {};
-        state.arenaTuningSchedule[currentDay] ||= structuredClone(before);
-        state.arenaTuningSchedule[nextDay] = structuredClone(state.gameTuning.arena);
-        effectiveDay = nextDay;
-      }
       addAudit(
         state,
         'SERVER_ADMIN',
         'GAME_TUNING_UPDATED',
-        `${lobby}: ${changed.join(', ')}${linkedChanges.length ? `; linked: ${linkedChanges.join(', ')}` : ''}${effectiveDay ? `; effective ${effectiveDay} UTC` : ''}; ${normalizedReason}`,
+        `${lobby}: ${changed.join(', ')}${linkedChanges.length ? `; linked: ${linkedChanges.join(', ')}` : ''}; effective immediately for new runs; ${normalizedReason}`,
         timestamp
       );
       return {
@@ -1442,7 +1499,7 @@ export class MattMineService {
         linkedChanges,
         expansionRevision: state.expansionConfig.revision,
         reason: normalizedReason,
-        effectiveDay
+        effectiveAt: timestamp
       };
     });
   }
@@ -1579,6 +1636,53 @@ export class MattMineService {
     });
   }
 
+  async adminTerminateMineRuns(adminKey, mine, reason) {
+    this.assertAdminKey(adminKey);
+    const normalizedMine = String(mine || '');
+    assertApi(['practice', 'arena', 'daily', 'pass', 'weekly'].includes(normalizedMine), 404, 'mine_operation_unknown', 'Choose a playable mine.');
+    const normalizedReason = normalizeAdminReason(reason);
+    const timestamp = this.now();
+    const arenaResult = normalizedMine === 'arena' && this.arenaService?.adminExpireActiveRuns
+      ? await this.arenaService.adminExpireActiveRuns()
+      : { affected: 0, runIds: [] };
+    const result = await this.database.transact(async (state, transaction) => {
+      const runIds = [];
+      for (const run of Object.values(state.runs)) {
+        if (
+          mineForRunMode(run.mode) !== normalizedMine ||
+          run.status !== 'active'
+        ) continue;
+        run.status = 'expired';
+        run.expiresAt = Math.min(run.expiresAt, timestamp);
+        run.finishedAt = timestamp;
+        run.adminTerminatedAt = timestamp;
+        run.adminTerminationReason = normalizedReason;
+        await transaction?.upsertRun(run);
+        runIds.push(run.id);
+      }
+      const affected = runIds.length + arenaResult.affected;
+      addAudit(
+        state,
+        'SERVER_ADMIN',
+        'MINE_ACTIVE_RUNS_TERMINATED',
+        `${normalizedMine}: ended ${affected} active run${affected === 1 ? '' : 's'}; ${normalizedReason}`,
+        timestamp
+      );
+      return { runIds, affected };
+    });
+    const allRunIds = [...result.runIds, ...arenaResult.runIds];
+    for (const runId of allRunIds) {
+      await this.competitiveReplayValidator?.finalize?.(runId, 'admin_terminated').catch(() => undefined);
+    }
+    return {
+      mine: normalizedMine,
+      affected: result.affected,
+      runIds: allRunIds,
+      reason: normalizedReason,
+      effectiveAt: timestamp
+    };
+  }
+
   async adminWalletAction(adminKey, address, action, reason) {
     this.assertAdminKey(adminKey);
     const normalizedAddress = normalizeAddress(address);
@@ -1586,9 +1690,13 @@ export class MattMineService {
     assertApi(['revoke_sessions', 'expire_active_runs', 'restore_free_run'].includes(normalizedAction), 400, 'wallet_action_invalid', 'Unknown wallet administration action.');
     const normalizedReason = normalizeAdminReason(reason);
     const timestamp = this.now();
-    return this.database.transact(async (state, transaction) => {
+    const arenaResult = normalizedAction === 'expire_active_runs' && this.arenaService?.adminExpireActiveRuns
+      ? await this.arenaService.adminExpireActiveRuns(normalizedAddress)
+      : { affected: 0, runIds: [] };
+    const result = await this.database.transact(async (state, transaction) => {
       requireWallet(state, normalizedAddress);
-      let affected = 0;
+      let affected = arenaResult.affected;
+      const runIds = [...arenaResult.runIds];
       if (normalizedAction === 'revoke_sessions') {
         for (const [key, session] of Object.entries(state.sessions)) {
           if (session.address !== normalizedAddress) continue;
@@ -1601,8 +1709,12 @@ export class MattMineService {
           if (run.address !== normalizedAddress || run.status !== 'active') continue;
           run.status = 'expired';
           run.expiresAt = Math.min(run.expiresAt, timestamp);
+          run.finishedAt = timestamp;
+          run.adminTerminatedAt = timestamp;
+          run.adminTerminationReason = normalizedReason;
           await transaction?.upsertRun(run);
           affected += 1;
+          runIds.push(run.id);
         }
       }
       if (normalizedAction === 'restore_free_run') {
@@ -1613,8 +1725,12 @@ export class MattMineService {
         }
       }
       addAudit(state, 'SERVER_ADMIN', `WALLET_${normalizedAction.toUpperCase()}`, `${normalizedAddress}: ${normalizedReason}; affected ${affected}`, timestamp);
-      return { address: normalizedAddress, action: normalizedAction, affected, reason: normalizedReason };
+      return { address: normalizedAddress, action: normalizedAction, affected, runIds, reason: normalizedReason };
     });
+    for (const runId of result.runIds) {
+      await this.competitiveReplayValidator?.finalize?.(runId, 'admin_terminated').catch(() => undefined);
+    }
+    return result;
   }
 
   async adminAudit(adminKey, options = {}) {
@@ -2279,6 +2395,17 @@ function mineDisplayName(mine) {
     pass: 'Pass Mine',
     weekly: 'Seven-Day Mine'
   }[mine] || 'Mine';
+}
+
+function appendCompetitionSnapshotId(snapshotIds, slotId, snapshotId) {
+  const bootstrapId = `bootstrap_${slotId}_v1`;
+  return [
+    bootstrapId,
+    ...[...new Set([
+      ...(Array.isArray(snapshotIds) ? snapshotIds : []),
+      snapshotId
+    ].filter((id) => id && id !== bootstrapId))].slice(-89)
+  ];
 }
 
 function mineOperationCapabilities(mine) {

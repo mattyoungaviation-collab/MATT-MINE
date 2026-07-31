@@ -174,6 +174,26 @@ test('mine operations pause one mine surface without losing an active run', asyn
   assert.equal(audit.entries.length, 4);
 });
 
+test('mine-wide termination also clears stale active records immediately', async () => {
+  const harness = serviceHarness();
+  const session = await signIn(harness.service);
+  const run = await harness.service.startRun(session.token, SERVER_RUN_MODES.PRACTICE);
+  await harness.database.transact((state) => {
+    state.runs[run.runId].expiresAt = START - 1;
+  });
+
+  const result = await harness.service.adminTerminateMineRuns(
+    'admin-secret',
+    'practice',
+    'Clear every stranded Practice run'
+  );
+  const state = await harness.database.read();
+  assert.equal(result.affected, 1);
+  assert.deepEqual(result.runIds, [run.runId]);
+  assert.equal(state.runs[run.runId].status, 'expired');
+  assert.equal(state.runs[run.runId].adminTerminationReason, 'Clear every stranded Practice run');
+});
+
 test('legacy global pause state migrates into the matching mine controls', () => {
   const migrated = normalizeServerState({
     version: 14,
@@ -215,7 +235,7 @@ test('mine operations reject controls that have no real flow to pause', async ()
   );
 });
 
-test('game tuning is lobby-specific, audited, and stages Daily Arena changes for the next UTC day', async () => {
+test('game tuning is lobby-specific, audited, and applies immediately to every new run', async () => {
   const harness = serviceHarness();
   const free = await harness.service.updateAdminGameTuning(
     'admin-secret',
@@ -224,21 +244,22 @@ test('game tuning is lobby-specific, audited, and stages Daily Arena changes for
     'Raise Free lobby survivability'
   );
   assert.equal(free.preset.playerMaxHealth, 175);
-  assert.equal(free.effectiveDay, null);
+  assert.equal(free.effectiveAt, START);
 
   const arena = await harness.service.updateAdminGameTuning(
     'admin-secret',
     'arena',
     { bossHealthMultiplier: 2.5 },
-    'Prepare tomorrow boss test'
+    'Apply boss test now'
   );
-  assert.equal(arena.effectiveDay, '2026-07-26');
+  assert.equal(arena.effectiveAt, START);
   const state = await harness.database.read();
-  assert.equal(state.arenaTuningSchedule['2026-07-25'].bossHealthMultiplier, 1);
-  assert.equal(state.arenaTuningSchedule['2026-07-26'].bossHealthMultiplier, 2.5);
+  assert.equal(state.gameTuning.arena.bossHealthMultiplier, 2.5);
+  assert.equal(Object.hasOwn(state, 'arenaTuningSchedule'), false);
   assert.equal((await harness.service.publicGameTuning('free')).preset.playerMaxHealth, 175);
   const audit = await harness.service.adminAudit('admin-secret', { action: 'GAME_TUNING_UPDATED' });
   assert.equal(audit.entries.length, 2);
+  assert.ok(audit.entries.every((entry) => entry.details.includes('effective immediately for new runs')));
 });
 
 test('player search uses permanent names and audited awards appear in individual activity', async () => {
@@ -447,6 +468,8 @@ test('admin HTTP routes reject missing credentials and apply audited controls', 
 
   const rejected = await fetch(`${base}/api/admin/overview`);
   assert.equal(rejected.status, 401);
+  const playerSession = await signIn(harness.service);
+  const activeRun = await harness.service.startRun(playerSession.token, SERVER_RUN_MODES.PRACTICE);
 
   const updated = await fetch(`${base}/api/admin/operations`, {
     method: 'PUT',
@@ -486,6 +509,20 @@ test('admin HTTP routes reject missing credentials and apply audited controls', 
     minePayload.mines.find((mine) => mine.id === 'daily').availableControls,
     ['entries', 'results', 'rewards']
   );
+
+  const terminated = await fetch(`${base}/api/admin/mine-operations/practice/terminate-runs`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-matt-admin-key': 'admin-secret'
+    },
+    body: JSON.stringify({ reason: 'End this mine immediately for incident response' })
+  });
+  assert.equal(terminated.status, 200);
+  const termination = await terminated.json();
+  assert.equal(termination.affected, 1);
+  assert.deepEqual(termination.runIds, [activeRun.runId]);
+  assert.equal((await harness.database.read()).runs[activeRun.runId].status, 'expired');
 
   const overview = await fetch(`${base}/api/admin/overview`, {
     headers: { 'x-matt-admin-key': 'admin-secret' }

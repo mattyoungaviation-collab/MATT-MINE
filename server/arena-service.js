@@ -450,6 +450,18 @@ export class DailyArenaService {
     };
   }
 
+  async adminActiveRuns(address = '') {
+    return this.store.activeRuns(address);
+  }
+
+  async adminExpireActiveRuns(address = '') {
+    const runs = await this.store.expireActiveRuns(address, this.now());
+    return {
+      affected: runs.length,
+      runIds: runs.map((run) => run.runId)
+    };
+  }
+
   async leaderboard(dayInput, suspendedAddresses = []) {
     const timestamp = this.now();
     const day = normalizeDay(dayInput || '', timestamp);
