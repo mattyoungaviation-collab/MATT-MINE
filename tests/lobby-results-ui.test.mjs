@@ -39,3 +39,15 @@ test('practice reward controls remain hidden outside an active Practice result',
   assert.match(source, /resultScreenMode = mode;/);
   assert.match(source, /resultScreenMode = null;\s*clearPracticeClaimPanel\(\);/);
 });
+
+test('the Arena lobby exposes a signed-in recovery action for a stranded active run', async () => {
+  const source = await readFile(`${root}src/main.js`, 'utf8');
+  const apiSource = await readFile(`${root}src/game/apiClient.js`, 'utf8');
+  const httpSource = await readFile(`${root}server/http.js`, 'utf8');
+
+  assert.match(source, /RELEASE ACTIVE ARENA RUN/);
+  assert.match(source, /await apiClient\.abandonActiveArenaRun\(\)/);
+  assert.match(source, /consumed Arena entry remains used and no score will be recorded/);
+  assert.match(apiSource, /\/api\/arena\/runs\/abandon-active/);
+  assert.match(httpSource, /service\.abandonActiveArenaRun\(bearerToken\(request\)\)/);
+});

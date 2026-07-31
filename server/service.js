@@ -1690,6 +1690,15 @@ export class MattMineService {
     return this.arenaService.abandonRun(session.address, payload);
   }
 
+  async abandonActiveArenaRun(token) {
+    const { session } = await this.arenaPlayer(token, {
+      allowSuspended: true,
+      allowMaintenance: true,
+      allowIdentityMissing: true
+    });
+    return this.arenaService.abandonActiveRun(session.address);
+  }
+
   async arenaLeaderboard(day = '') {
     this.assertArenaEnabled();
     const state = await this.database.read();

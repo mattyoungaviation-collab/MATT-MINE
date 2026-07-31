@@ -433,6 +433,23 @@ export class DailyArenaService {
     };
   }
 
+  async abandonActiveRun(address) {
+    const run = await this.store.activeRun(address);
+    assertApi(
+      run,
+      404,
+      'arena_active_run_missing',
+      'This wallet does not have an active Daily Arena run.'
+    );
+    const abandoned = await this.store.expireRun(run.runId, this.now());
+    return {
+      abandoned: true,
+      runId: abandoned.runId,
+      status: abandoned.status,
+      entryConsumed: true
+    };
+  }
+
   async leaderboard(dayInput, suspendedAddresses = []) {
     const timestamp = this.now();
     const day = normalizeDay(dayInput || '', timestamp);
