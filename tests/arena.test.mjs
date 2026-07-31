@@ -456,6 +456,7 @@ test('Arena quote emits exact approval only when needed, then enter(dayId)', asy
       if (functionName === 'entriesPaused') return false;
       if (functionName === 'settlementPaused') return false;
       if (functionName === 'matt') return TOKEN;
+      if (functionName === 'balanceOf') return BigInt(FEE_RAW) * 2n;
       if (functionName === 'allowance') return allowance;
       throw new Error(`unexpected read ${functionName}`);
     }
@@ -467,6 +468,33 @@ test('Arena quote emits exact approval only when needed, then enter(dayId)', asy
   allowance = BigInt(FEE_RAW);
   const approved = await chain.quoteEntry(PLAYER, DAY, FEE_RAW);
   assert.deepEqual(approved.transactions.map((transaction) => transaction.kind), ['enter']);
+});
+
+test('Arena quote blocks a wallet below the exact MATT entry fee before opening Ronin Wallet', async () => {
+  const balance = BigInt(FEE_RAW) - 1n;
+  const client = fakeChainClient({
+    readContract({ functionName }) {
+      if (functionName === 'getDay') return dayTuple();
+      if (functionName === 'entriesPaused') return false;
+      if (functionName === 'settlementPaused') return false;
+      if (functionName === 'matt') return TOKEN;
+      if (functionName === 'balanceOf') return balance;
+      if (functionName === 'allowance') return 0n;
+      throw new Error(`unexpected read ${functionName}`);
+    }
+  });
+
+  await assert.rejects(
+    () => arenaChain(client).quoteEntry(PLAYER, DAY, FEE_RAW),
+    (error) => {
+      assert.equal(error.code, 'arena_matt_balance_insufficient');
+      assert.equal(error.details.requiredRaw, FEE_RAW);
+      assert.equal(error.details.balanceRaw, balance.toString());
+      assert.equal(error.details.shortfallRaw, '1');
+      assert.match(error.message, /Arena entry costs 25,000 MATT/);
+      return true;
+    }
+  );
 });
 
 test('Arena refund quote emits a wallet-valid zero-value transaction', async () => {

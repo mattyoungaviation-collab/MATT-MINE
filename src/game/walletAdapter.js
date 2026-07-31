@@ -136,7 +136,7 @@ export class RoninWalletAdapter {
         }]
       });
     } catch (error) {
-      throw new Error(walletTransactionError(error));
+      throw new Error(walletTransactionError(error, transaction));
     }
     if (!/^0x[a-fA-F0-9]{64}$/.test(transactionHash || '')) {
       throw new Error('Ronin Wallet did not return a valid transaction hash.');
@@ -181,7 +181,7 @@ export class RoninWalletAdapter {
   }
 }
 
-function walletTransactionError(error) {
+function walletTransactionError(error, transaction = {}) {
   const code = Number(error?.code);
   if (code === 4001) return 'The transaction was canceled in Ronin Wallet.';
   const message = String(
@@ -191,7 +191,15 @@ function walletTransactionError(error) {
     ''
   ).replace(/^Error:\s*/i, '').trim();
   if (/insufficient funds/i.test(message)) {
-    return 'This wallet needs a small amount of RON for network gas.';
+    const action = transaction.kind === 'approve'
+      ? 'MATT approval'
+      : transaction.kind === 'enter'
+        ? 'Arena entry'
+        : 'transaction';
+    return `Ronin Wallet reported insufficient RON for network gas during the ${action}. MATT cannot pay Ronin gas; add RON to the signed-in wallet and try again.`;
+  }
+  if (/erc20insufficientbalance|transfer amount exceeds balance|insufficient token balance/i.test(message)) {
+    return 'The signed-in wallet does not have enough MATT for this Arena entry. Refresh the Arena to load its exact onchain balance.';
   }
   if (/revert|execution reverted/i.test(message)) {
     return 'Ronin rejected the claim during its safety check. Refresh the leaderboard and try again.';

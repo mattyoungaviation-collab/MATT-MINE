@@ -110,7 +110,7 @@ function renderCards(container, slots) {
         ? `${escapeHtml(slot.snapshot?.name || slot.name)} paused. Open status and leaderboard`
         : `Open ${escapeHtml(slot.snapshot?.name || slot.name)}`;
     return `
-    <button type="button" class="competition-slot-card slot-${slot.id} ${slot.comingSoon ? 'disabled' : ''} ${paused ? 'paused' : ''}" data-mine-slot="${slot.id}" ${slot.comingSoon ? 'disabled' : ''} style="--slot-color:${slot.color}" aria-label="${accessibleLabel}">
+    <button type="button" class="competition-slot-card slot-${slot.id} ${slot.comingSoon ? 'disabled' : ''} ${paused ? 'paused' : ''}" data-mine-slot="${slot.id}" ${slot.comingSoon ? 'disabled' : ''} aria-label="${accessibleLabel}">
       <span class="slot-number">0${slot.number}</span>
       <span class="slot-state">${stateLabel}</span>
       <strong>${escapeHtml(slot.snapshot?.name || slot.name)}</strong>
@@ -122,7 +122,8 @@ function renderCards(container, slots) {
 
 function renderDetail(modal, slot, leaderboard) {
   const snapshot = slot.snapshot || {};
-  modal.style.setProperty('--slot-color', slot.color || '#ffd43b');
+  modal.classList.remove('slot-practice', 'slot-arena', 'slot-daily', 'slot-pass', 'slot-weekly', 'slot-pvp');
+  modal.classList.add(`slot-${slot.id}`);
   modal.querySelector('[data-mine-kicker]').textContent = slot.leaderboard ? 'OFFICIAL COMPETITION' : 'TRAINING MINE';
   modal.querySelector('[data-mine-name]').textContent = snapshot.name || slot.name;
   modal.querySelector('[data-mine-subtitle]').textContent = snapshot.subtitle || '';

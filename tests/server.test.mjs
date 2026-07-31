@@ -1306,6 +1306,35 @@ test('the Ronin adapter sends Arena approval and entry transactions to the walle
   assert.equal(sent.every((entry) => entry.params[0].value === '0x0'), true);
 });
 
+test('the Ronin adapter identifies native RON gas failures separately from MATT balance failures', async () => {
+  const provider = {
+    async request(payload) {
+      if (payload.method === 'eth_requestAccounts') return [account.address];
+      if (payload.method === 'eth_chainId') return `0x${RONIN_CHAINS.MAINNET.toString(16)}`;
+      if (payload.method === 'eth_sendTransaction') {
+        throw new Error('insufficient funds for gas * price + value');
+      }
+      throw new Error(`Unexpected method ${payload.method}`);
+    }
+  };
+  const adapter = new RoninWalletAdapter({
+    api: { hasSession: () => true },
+    window: { ronin: { provider } }
+  });
+  adapter.player = { address: account.address.toLowerCase() };
+  adapter.provider = provider;
+
+  await assert.rejects(
+    () => adapter.purchaseArenaEntry([{
+      kind: 'enter',
+      to: '0x506f969279F8264fd629BBB0Df861Ab91343b12C',
+      value: '0x0',
+      data: '0x2ff2e9dc'
+    }]),
+    /insufficient RON for network gas during the Arena entry/
+  );
+});
+
 test('the Ronin adapter blocks a claim when the wallet account differs from the signed-in account', async () => {
   const provider = {
     async request(payload) {

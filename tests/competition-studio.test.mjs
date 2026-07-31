@@ -320,6 +320,7 @@ test('production surfaces include the six-card hub, exact-map loading screen, an
   assert.match(hub, /OPEN MINE \+ BOARD/);
   assert.match(hub, /VIEW BOARD · ENTRY PAUSED/);
   assert.match(hub, /MINE PAUSED/);
+  assert.doesNotMatch(hub, /style="--slot-color/);
   assert.match(productionCss, /--mine-card-image/);
   assert.match(productionCss, /\.competition-slot-card\.paused/);
   assert.equal(mineCardAssets.length, 6);

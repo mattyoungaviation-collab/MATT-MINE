@@ -102,8 +102,9 @@ test('an expired verifying quote releases its transaction reservation and UTC ca
 });
 
 test('player and Admin interfaces expose the structured production economy without manual hash claiming', async () => {
-  const [shop, practice, adminHtml, adminScript, preferences, documentation] = await Promise.all([
+  const [shop, productionCss, practice, adminHtml, adminScript, preferences, documentation] = await Promise.all([
     readFile(new URL('../src/nuggetShop.js', import.meta.url), 'utf8'),
+    readFile(new URL('../src/production.css', import.meta.url), 'utf8'),
     readFile(new URL('../src/practiceClaimFlow.js', import.meta.url), 'utf8'),
     readFile(new URL('../admin.html', import.meta.url), 'utf8'),
     readFile(new URL('../src/adminEconomy.js', import.meta.url), 'utf8'),
@@ -114,6 +115,8 @@ test('player and Admin interfaces expose the structured production economy witho
   assert.match(shop, /purchases\/quote/);
   assert.match(shop, /purchases\/confirm/);
   assert.match(shop, /Your verified purchase history/);
+  assert.doesNotMatch(shop, /createElement\(['"]style['"]\)/);
+  assert.match(productionCss, /\.nugget-shop-panel/);
   assert.match(practice, /nuggets\/practice\/quote/);
   assert.match(practice, /quoteId/);
   assert.match(practice, /hashWrap\.hidden = true/);
