@@ -816,9 +816,23 @@ export class MattMineService {
       }
       assertApi(run, 404, 'run_not_found', 'The server run was not found.');
       assertApi(run.address === session.address, 403, 'run_owner_mismatch', 'This run belongs to another wallet.');
+      assertApi(safeTokenEqual(run.tokenHash, hashToken(runToken)), 401, 'run_token_rejected', 'The run token is invalid.');
+      if (run.status === 'finished' && run.result) {
+        return {
+          accepted: true,
+          alreadyFinished: true,
+          run: publicRun(run),
+          practiceClaim: structuredClone(wallet.practiceClaims?.[runId] || null),
+          profile: structuredClone(wallet.profile),
+          passProgress: publicPassProgress(wallet),
+          passInventory: publicPassInventory(wallet),
+          passRewardsUnlocked: [],
+          mode: run.mode,
+          week: run.week
+        };
+      }
       assertApi(run.status === 'active', 409, 'run_already_finished', 'This run was already submitted.');
       assertApi(run.expiresAt > timestamp, 410, 'run_expired', 'The run expired before it was submitted.');
-      assertApi(safeTokenEqual(run.tokenHash, hashToken(runToken)), 401, 'run_token_rejected', 'The run token is invalid.');
       const operationMine = mineForRunMode(run.mode);
       if (operationMine) {
         assertMineOperationOpen(state.operations, operationMine, 'results', `${mineDisplayName(operationMine)} result submission is paused. This active run remains recoverable.`);
@@ -904,16 +918,25 @@ export class MattMineService {
         week: run.week
       };
     });
-    const state = await this.database.read();
-    const leaderboard = completed.mode === SERVER_RUN_MODES.WEEKLY
-      ? { mode: 'weekly', week: completed.week, rows: weeklyLeaderboard(state.weeklyCompetition, completed.week) }
-      : completed.mode === SERVER_RUN_MODES.ENDLESS
-        ? { mode: 'endless', season: completed.week, rows: endlessLeaderboard(state.endlessCompetition.seasons?.[completed.week]?.results || []) }
-        : completed.mode === SERVER_RUN_MODES.BETA
-          ? { mode: 'beta', rows: [], excludedFromRewards: true }
-          : await this.leaderboardFor(completed.mode, completed.week, session.address);
+    let leaderboard;
+    try {
+      if (completed.mode === SERVER_RUN_MODES.WEEKLY || completed.mode === SERVER_RUN_MODES.ENDLESS) {
+        const state = await this.database.read();
+        leaderboard = completed.mode === SERVER_RUN_MODES.WEEKLY
+          ? { mode: 'weekly', week: completed.week, rows: weeklyLeaderboard(state.weeklyCompetition, completed.week) }
+          : { mode: 'endless', season: completed.week, rows: endlessLeaderboard(state.endlessCompetition.seasons?.[completed.week]?.results || []) };
+      } else if (completed.mode === SERVER_RUN_MODES.BETA) {
+        leaderboard = { mode: 'beta', rows: [], excludedFromRewards: true };
+      } else {
+        leaderboard = await this.leaderboardFor(completed.mode, completed.week, session.address);
+      }
+    } catch (error) {
+      if (!isTransientPostgresError(error)) throw error;
+      leaderboard = finalizationLeaderboardFallback(completed);
+    }
     return {
       accepted: completed.accepted,
+      alreadyFinished: completed.alreadyFinished === true,
       run: completed.run,
       practiceClaim: completed.practiceClaim || null,
       profile: completed.profile,
@@ -1815,9 +1838,8 @@ export class MattMineService {
   }
 
   async finishArenaRun(token, payload) {
-    const { session } = await this.arenaPlayer(token, { operation: 'results' });
+    const { session, state } = await this.arenaPlayer(token, { operation: 'results' });
     const result = await this.arenaService.finishRun(session.address, payload);
-    const state = await this.database.read();
     return {
       ...result,
       leaderboard: enrichLeaderboardAppearances(result.leaderboard, state)
@@ -1925,8 +1947,7 @@ export class MattMineService {
 
   async arenaPlayer(token, options = {}) {
     this.assertArenaEnabled();
-    const session = await this.authenticate(token);
-    const state = await this.database.read();
+    const { session, state } = await this.authenticateWithState(token);
     const wallet = requireWallet(state, session.address);
     if (!options.allowIdentityMissing) assertIdentityReady(wallet);
     if (!options.allowSuspended) {
@@ -1947,6 +1968,10 @@ export class MattMineService {
   }
 
   async authenticate(token) {
+    return (await this.authenticateWithState(token)).session;
+  }
+
+  async authenticateWithState(token) {
     const rawToken = assertToken(token);
     const tokenHash = hashToken(rawToken);
     const state = await this.database.read();
@@ -1954,7 +1979,7 @@ export class MattMineService {
     assertApi(session, 401, 'session_missing', 'Sign in with Ronin Wallet to continue.');
     assertApi(session.expiresAt > this.now(), 401, 'session_expired', 'The wallet session expired. Sign in again.');
     requireWallet(state, session.address);
-    return session;
+    return { session, state };
   }
 
   assertAdminKey(candidate) {
@@ -2354,6 +2379,19 @@ function enrichLeaderboardAppearances(leaderboard, state) {
       identity: publicIdentity(state.wallets[row.address]),
       appearance: publicLeaderboardAppearance(state.wallets[row.address])
     }))
+  };
+}
+
+function finalizationLeaderboardFallback(completed) {
+  const score = Math.max(0, Number(completed?.run?.result?.score || 0));
+  return {
+    mode: completed.mode,
+    week: completed.week,
+    rows: [],
+    playerScore: score,
+    playerRank: 0,
+    temporarilyUnavailable: true,
+    message: 'Your run is saved. The leaderboard is reconnecting to PostgreSQL.'
   };
 }
 

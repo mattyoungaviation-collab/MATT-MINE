@@ -88,14 +88,14 @@ test('knockout rewards keep the same balance while append-only entries classify 
   assert.equal(wallet.nuggetLedger.at(-1).runId, run.runId);
   assert.equal(wallet.activity.at(-1).action, 'RUN_DEATH_RETENTION_RECORDED');
 
-  await assert.rejects(
-    harness.service.finishRun(session.token, {
-      runId: run.runId,
-      runToken: run.runToken,
-      result
-    }),
-    (error) => error.code === 'run_already_finished'
-  );
+  const retry = await harness.service.finishRun(session.token, {
+    runId: run.runId,
+    runToken: run.runToken,
+    result: { ...result, projected: 999_999, banked: 999_999 }
+  });
+  assert.equal(retry.accepted, true);
+  assert.equal(retry.alreadyFinished, true);
+  assert.equal(retry.run.result.banked, 500);
   const repeated = await harness.database.read();
   assert.equal(repeated.wallets[account.address.toLowerCase()].nuggetLedger.length, 3);
 });

@@ -6,6 +6,7 @@ import {
 } from 'node:crypto';
 import { encodeFunctionData, formatUnits, getAddress, parseUnits } from 'viem';
 import { ApiError, assertApi } from './errors.js';
+import { isTransientPostgresError } from './postgres-resilience.js';
 import {
   ARENA_MAX_BATCH_EVENTS,
   ARENA_TICK_MS,
@@ -385,7 +386,7 @@ export class DailyArenaService {
     );
     let run = await this.#authenticatedRun(address, payload.runId, payload.runToken);
     if (run.status === 'finished') {
-      const leaderboard = await this.store.leaderboard(run.day, [], this.now());
+      const leaderboard = await this.#leaderboardAfterFinalization(run);
       return { accepted: true, alreadyFinished: true, result: run.result, leaderboard };
     }
     const timestamp = this.now();
@@ -411,13 +412,38 @@ export class DailyArenaService {
     };
     const finished = await this.store.finishRun(run.runId, result, timestamp);
     run = finished.run;
-    const leaderboard = await this.store.leaderboard(run.day, [], timestamp);
+    const leaderboard = await this.#leaderboardAfterFinalization(run, timestamp);
     return {
       accepted: true,
       alreadyFinished: finished.alreadyFinished,
       result: run.result,
       leaderboard
     };
+  }
+
+  async #leaderboardAfterFinalization(run, timestamp = this.now()) {
+    try {
+      return await this.store.leaderboard(run.day, [], timestamp);
+    } catch (error) {
+      if (!isTransientPostgresError(error)) throw error;
+      return {
+        day: run.day,
+        status: 'reconnecting',
+        closed: false,
+        provisional: true,
+        finalized: false,
+        participantCount: 0,
+        entryCount: 0,
+        entryPoolRaw: '0',
+        seedRaw: '0',
+        prizePoolRaw: '0',
+        rows: [],
+        playerScore: Number(run.result?.score || 0),
+        playerRank: 0,
+        temporarilyUnavailable: true,
+        message: 'Your Arena score is saved. The leaderboard is reconnecting to PostgreSQL.'
+      };
+    }
   }
 
   async abandonRun(address, payload) {

@@ -882,6 +882,22 @@ test('paid entry, one-time run token, raw controls, server replay, and leaderboa
     checkpoint: appended.checkpoint
   });
   assert.equal(retry.alreadyFinished, true);
+
+  store.leaderboard = async () => {
+    throw Object.assign(new Error('the database system is in recovery mode'), {
+      code: '57P03'
+    });
+  };
+  const recoveryRetry = await arena.finishRun(PLAYER, {
+    runId: started.run.runId,
+    runToken: started.run.runToken,
+    checkpoint: appended.checkpoint
+  });
+  assert.equal(recoveryRetry.accepted, true);
+  assert.equal(recoveryRetry.alreadyFinished, true);
+  assert.equal(recoveryRetry.result.score, finished.result.score);
+  assert.equal(recoveryRetry.leaderboard.temporarilyUnavailable, true);
+  assert.equal(recoveryRetry.leaderboard.playerScore, finished.result.score);
 });
 
 test('entry cutoff reserves run TTL plus confirmation buffer and confirmation stays bound to its event day across midnight', async () => {

@@ -1,5 +1,14 @@
 const ALLOWED_EVENT_TYPES = new Set(['input', 'command', 'finish']);
 const DEFAULT_RETRY_DELAYS_MS = Object.freeze([150, 400, 900]);
+const DEFAULT_FINALIZATION_RETRY_DELAYS_MS = Object.freeze([
+  250,
+  500,
+  1_000,
+  2_000,
+  3_000,
+  5_000,
+  8_000
+]);
 
 export class ArenaTranscript {
   constructor(api, run, options = {}) {
@@ -162,6 +171,34 @@ function isRetryableAppendError(error) {
     status === 425 ||
     status === 429 ||
     status >= 500;
+}
+
+export async function retryRunFinalization(operation, options = {}) {
+  if (typeof operation !== 'function') throw new TypeError('A run finalization function is required.');
+  const delays = Array.isArray(options.retryDelays)
+    ? options.retryDelays.map((delay) => Math.max(0, Number(delay) || 0))
+    : DEFAULT_FINALIZATION_RETRY_DELAYS_MS;
+  const wait = options.wait || ((delay) => new Promise((resolve) => setTimeout(resolve, delay)));
+  const onRetry = typeof options.onRetry === 'function' ? options.onRetry : () => undefined;
+  let attempt = 0;
+  while (true) {
+    try {
+      return await operation(attempt + 1);
+    } catch (error) {
+      if (!isRetryableAppendError(error) || attempt >= delays.length) throw error;
+      try {
+        onRetry(error, {
+          attempt: attempt + 1,
+          nextAttempt: attempt + 2,
+          delayMs: delays[attempt]
+        });
+      } catch {
+        // UI reporting must not prevent a score-save retry.
+      }
+      await wait(delays[attempt]);
+      attempt += 1;
+    }
+  }
 }
 
 export { ALLOWED_EVENT_TYPES, isRetryableAppendError };
