@@ -554,10 +554,13 @@ export class PostgresArenaStore {
   async getEvents(runId) {
     await this.init();
     const result = await this.pool.query(
-      'SELECT event_json FROM matt_mine_arena.events WHERE run_id=$1 ORDER BY seq',
+      `SELECT seq,tick,event_type,event_json
+       FROM matt_mine_arena.events
+       WHERE run_id=$1
+       ORDER BY seq`,
       [runId]
     );
-    return result.rows.map((row) => typeof row.event_json === 'string' ? JSON.parse(row.event_json) : row.event_json);
+    return result.rows.map(formatStoredArenaEvent);
   }
 
   async appendEvents(runId, expectedThroughSeq, events, patch) {
@@ -1197,6 +1200,27 @@ function formatRunRow(row) {
     tuning: typeof row.tuning === 'string' ? JSON.parse(row.tuning) : row.tuning,
     result: typeof row.result === 'string' ? JSON.parse(row.result) : row.result
   });
+}
+
+function formatStoredArenaEvent(row) {
+  let event = row.event_json;
+  for (let attempt = 0; attempt < 2 && typeof event === 'string'; attempt += 1) {
+    try {
+      event = JSON.parse(event);
+    } catch {
+      event = {};
+    }
+  }
+  if (!event || typeof event !== 'object' || Array.isArray(event)) event = {};
+  return {
+    ...event,
+    // These normalized columns are written in the same transaction and are
+    // the authoritative ordering fields. They also repair legacy JSON rows
+    // whose duplicated seq/tick/type properties were missing or stringified.
+    seq: Number(row.seq),
+    tick: Number(row.tick),
+    type: String(row.event_type || event.type || '')
+  };
 }
 
 function formatScoreRow(row) {
