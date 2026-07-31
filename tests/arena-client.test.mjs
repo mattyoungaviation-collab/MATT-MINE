@@ -12,7 +12,10 @@ import {
   normalizeArenaPlayer,
   projectedArenaPayouts
 } from '../src/game/arena.js';
-import { ArenaTranscript } from '../src/game/arenaTranscript.js';
+import {
+  ArenaTranscript,
+  retryRunFinalization
+} from '../src/game/arenaTranscript.js';
 
 test('Arena config separates unlimited player entries, Treasury seed, and total pool', () => {
   const config = normalizeArenaConfig({
@@ -267,6 +270,38 @@ test('Arena transcript never retries a replay-validation rejection', async () =>
 
   await assert.rejects(() => transcript.close(), (error) =>
     error === validationFailure
+  );
+  assert.equal(attempts, 1);
+});
+
+test('run finalization retries database recovery but never retries replay rejection', async () => {
+  let attempts = 0;
+  const recovered = await retryRunFinalization(async () => {
+    attempts += 1;
+    if (attempts < 3) {
+      throw Object.assign(new Error('PostgreSQL is reconnecting.'), {
+        status: 503,
+        code: 'database_temporarily_unavailable'
+      });
+    }
+    return { accepted: true };
+  }, {
+    retryDelays: [0, 0],
+    wait: async () => undefined
+  });
+  assert.equal(recovered.accepted, true);
+  assert.equal(attempts, 3);
+
+  attempts = 0;
+  await assert.rejects(
+    () => retryRunFinalization(async () => {
+      attempts += 1;
+      throw Object.assign(new Error('Replay mismatch.'), {
+        status: 422,
+        code: 'arena_upgrade_rejected'
+      });
+    }, { retryDelays: [0, 0], wait: async () => undefined }),
+    (error) => error.code === 'arena_upgrade_rejected'
   );
   assert.equal(attempts, 1);
 });

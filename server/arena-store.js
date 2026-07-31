@@ -1,5 +1,6 @@
 import { ApiError, assertApi } from './errors.js';
 import { compareArenaScores } from './arena-settlement.js';
+import { retryTransientPostgres } from './postgres-resilience.js';
 
 export const ARENA_SEED_CAP_RAW = '10000000000000000000000000';
 const DAY_MS = 86_400_000;
@@ -321,6 +322,9 @@ export class PostgresArenaStore {
   constructor(databaseOrPool) {
     this.kind = 'postgresql';
     this.pool = databaseOrPool?.pool || databaseOrPool;
+    this.retryTransient = typeof databaseOrPool?.retryTransient === 'function'
+      ? databaseOrPool.retryTransient.bind(databaseOrPool)
+      : (operation, options = {}) => retryTransientPostgres(operation, options);
     assertApi(this.pool?.query && this.pool?.connect, 500, 'arena_database_invalid', 'Daily Arena PostgreSQL storage requires a connection pool.');
     this.initialized = false;
     this.initPromise = null;
@@ -566,15 +570,36 @@ export class PostgresArenaStore {
       const run = formatRunRow(selected.rows[0]);
       assertApi(run.status === 'active', 409, 'arena_run_not_active', 'The Daily Arena run is no longer active.');
       assertApi(run.throughSeq === expectedThroughSeq, 409, 'arena_checkpoint_stale', 'The Daily Arena checkpoint is stale.');
-      for (const event of events) {
-        await client.query(
-          `INSERT INTO matt_mine_arena.events
-           (run_id,seq,tick,event_type,target_id,amount,event_json,event_hash,received_at_ms)
-           VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9)`,
-          [runId, event.seq, event.tick, event.type, event.targetId || '',
-            event.amount || 0, JSON.stringify(event), event.eventHash, event.receivedAt]
-        );
-      }
+      const eventBatch = events.map((event) => ({
+        seq: event.seq,
+        tick: event.tick,
+        eventType: event.type,
+        targetId: event.targetId || '',
+        amount: event.amount || 0,
+        eventJson: event,
+        eventHash: event.eventHash,
+        receivedAtMs: event.receivedAt
+      }));
+      await client.query(
+        `INSERT INTO matt_mine_arena.events
+         (run_id,seq,tick,event_type,target_id,amount,event_json,event_hash,received_at_ms)
+         SELECT $1,b.seq,b.tick,b.event_type,b.target_id,b.amount,b.event_json,b.event_hash,b.received_at_ms
+         FROM jsonb_to_recordset($2::jsonb) AS b(
+           seq integer,tick integer,event_type text,target_id text,amount integer,
+           event_json jsonb,event_hash text,received_at_ms bigint
+         )
+         ORDER BY b.seq`,
+        [runId, JSON.stringify(eventBatch.map((event) => ({
+          seq: event.seq,
+          tick: event.tick,
+          event_type: event.eventType,
+          target_id: event.targetId,
+          amount: event.amount,
+          event_json: event.eventJson,
+          event_hash: event.eventHash,
+          received_at_ms: event.receivedAtMs
+        })))]
+      );
       await client.query(
         `UPDATE matt_mine_arena.runs SET
            through_seq=$2,through_tick=$3,transcript_hash=$4,checkpoint_signature=$5
@@ -623,6 +648,15 @@ export class PostgresArenaStore {
 
   async finishRun(runId, result, timestamp) {
     await this.init();
+    // Finalization is idempotent: if PostgreSQL drops the socket after COMMIT,
+    // the retry observes the finished row and returns the original result.
+    return this.retryTransient(
+      () => this.#finishRunAttempt(runId, result, timestamp),
+      { maxAttempts: 12, label: 'Arena score finalization' }
+    );
+  }
+
+  async #finishRunAttempt(runId, result, timestamp) {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
@@ -913,6 +947,9 @@ export async function createArenaPostgresSchema(pool) {
   await pool.query(`
     CREATE INDEX IF NOT EXISTS entries_wallet_day_unused_idx
     ON matt_mine_arena.entries(address,day_key,confirmed_at_ms) WHERE run_id=''`);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS entries_day_address_idx
+    ON matt_mine_arena.entries(day_key,address)`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS matt_mine_arena.runs (
       run_id TEXT PRIMARY KEY,

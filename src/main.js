@@ -45,7 +45,11 @@ import {
   normalizeArenaLeaderboard,
   normalizeArenaPlayer
 } from './game/arena.js';
-import { ArenaTranscript } from './game/arenaTranscript.js';
+import {
+  ArenaTranscript,
+  isRetryableAppendError,
+  retryRunFinalization
+} from './game/arenaTranscript.js';
 import { COMPETITION_DEPTH_COUNT } from './game/competitionStudio.js';
 import { mountMineHub } from './game/mineHub.js';
 import { showMineLoadingScreen } from './game/mineLoadingScreen.js';
@@ -81,6 +85,8 @@ let serverConfig = null;
 let serverPlayer = null;
 let pendingKeybindings = defaultKeybindings();
 let activeServerRun = null;
+let pendingRunFinalization = null;
+let runFinalizationBusy = false;
 let paymentStatus = null;
 let publicPaymentStatus = null;
 let walletBusy = false;
@@ -496,27 +502,38 @@ async function refreshPaymentStatus(silent = false) {
 }
 
 async function submitServerRun(serverRun, result) {
+  if (runFinalizationBusy) return;
+  runFinalizationBusy = true;
+  showFinalizationBusy('SERVER VERIFYING');
   const transcript = activeArenaTranscript;
-  activeServerRun = null;
-  activeArenaTranscript = null;
   activePracticeClaim = null;
   clearPracticeClaimPanel();
   $('#economy-result').innerHTML = '<strong>SERVER VERIFYING</strong><span>Checking entitlement, run token, score rules, and replay protection…</span>';
   try {
-    const competitiveCheckpoint = transcript ? await transcript.close() : null;
+    const competitiveCheckpoint = transcript
+      ? await retryRunFinalization(() => transcript.close(), {
+          onRetry: showDatabaseReconnect
+        })
+      : null;
     if (serverRun.verification === 'fixed-step-input-replay' && !competitiveCheckpoint) {
       throw new Error('The competitive transcript was not checkpointed.');
     }
-    const accepted = await apiClient.finishRun(serverRun.runId, serverRun.runToken, {
-      extracted: Boolean(result.extracted),
-      projected: Math.max(0, Math.floor(result.projected || 0)),
-      banked: Math.max(0, Math.floor(result.banked || 0)),
-      depth: Math.max(1, Math.floor(result.depth || 1)),
-      kills: Math.max(0, Math.floor(result.kills || 0)),
-      oreBroken: Math.max(0, Math.floor(result.oreBroken || 0)),
-      elapsed: Math.max(0, Number(result.elapsed || 0)),
-      bossTelemetry: result.bossTelemetry || null
-    }, competitiveCheckpoint);
+    const accepted = await retryRunFinalization(
+      () => apiClient.finishRun(serverRun.runId, serverRun.runToken, {
+        extracted: Boolean(result.extracted),
+        projected: Math.max(0, Math.floor(result.projected || 0)),
+        banked: Math.max(0, Math.floor(result.banked || 0)),
+        depth: Math.max(1, Math.floor(result.depth || 1)),
+        kills: Math.max(0, Math.floor(result.kills || 0)),
+        oreBroken: Math.max(0, Math.floor(result.oreBroken || 0)),
+        elapsed: Math.max(0, Number(result.elapsed || 0)),
+        bossTelemetry: result.bossTelemetry || null
+      }, competitiveCheckpoint),
+      { onRetry: showDatabaseReconnect }
+    );
+    if (activeServerRun === serverRun) activeServerRun = null;
+    if (activeArenaTranscript === transcript) activeArenaTranscript = null;
+    clearPendingFinalization();
     profile = accepted.profile;
     saveProfile(profile);
     game.setProfile(profile);
@@ -570,32 +587,52 @@ async function submitServerRun(serverRun, result) {
     toast('Run accepted by the MATT Mine server');
     await refreshServerPlayer();
   } catch (error) {
+    const retryable = isRetryableAppendError(error);
+    if (retryable) {
+      queueFinalizationRetry(() => submitServerRun(serverRun, result));
+    } else {
+      if (activeServerRun === serverRun) activeServerRun = null;
+      if (activeArenaTranscript === transcript) activeArenaTranscript = null;
+      clearPendingFinalization();
+    }
     $('#economy-result').innerHTML = `
-      <strong>SERVER REJECTED RUN</strong>
+      <strong>${retryable ? 'SCORE SAVE INTERRUPTED' : 'SERVER REJECTED RUN'}</strong>
       <span>${escapeHtml(error.message)}</span>
-      <small>No leaderboard score was recorded. The server profile remains authoritative.</small>
+      <small>${retryable
+        ? 'Your run is still held on this screen. Press RETRY SCORE SAVE when PostgreSQL reconnects.'
+        : 'No leaderboard score was recorded. The server profile remains authoritative.'}</small>
     `;
     if (serverRun.mode === RUN_MODES.PRACTICE) clearPracticeClaimPanel();
     toast(error.message);
     await refreshServerPlayer();
+  } finally {
+    runFinalizationBusy = false;
   }
 }
 
 async function submitArenaRun(run) {
+  if (runFinalizationBusy) return;
+  runFinalizationBusy = true;
+  showFinalizationBusy('SAVING ARENA SCORE');
   const transcript = activeArenaTranscript;
-  activeArenaRun = null;
-  activeArenaTranscript = null;
   $('#economy-result').innerHTML =
     '<strong>ARENA REPLAY IN PROGRESS</strong><span>The server is replaying the signed event transcript and calculating the authoritative score…</span>';
   try {
-    const checkpoint = await transcript?.close();
+    const checkpoint = await retryRunFinalization(() => transcript?.close(), {
+      onRetry: showDatabaseReconnect
+    });
     if (!checkpoint) throw new Error('The Arena transcript was not checkpointed.');
-    const accepted = await apiClient.finishArenaRun(run.runId, run.runToken, checkpoint);
+    const accepted = await retryRunFinalization(
+      () => apiClient.finishArenaRun(run.runId, run.runToken, checkpoint),
+      { onRetry: showDatabaseReconnect }
+    );
+    if (activeArenaRun === run) activeArenaRun = null;
+    if (activeArenaTranscript === transcript) activeArenaTranscript = null;
+    clearPendingFinalization();
     const result = accepted.result || {};
     const leaderboard = accepted.leaderboard || {};
     arenaPlayer = normalizeArenaPlayer({
       ...arenaPlayer,
-      unusedAttempts: Math.max(0, arenaPlayer.unusedAttempts - 1),
       bestScore: leaderboard.playerScore ?? result.score ?? arenaPlayer.bestScore,
       rank: leaderboard.playerRank ?? arenaPlayer.rank
     });
@@ -607,14 +644,67 @@ async function submitArenaRun(run) {
     toast('Daily Arena score verified');
     await refreshArena(true);
   } catch (error) {
+    const retryable = isRetryableAppendError(error);
+    if (retryable) {
+      queueFinalizationRetry(() => submitArenaRun(run));
+    } else {
+      if (activeArenaRun === run) activeArenaRun = null;
+      if (activeArenaTranscript === transcript) activeArenaTranscript = null;
+      clearPendingFinalization();
+    }
     $('#economy-result').innerHTML = `
-      <strong>ARENA RUN REJECTED</strong>
+      <strong>${retryable ? 'ARENA SCORE SAVE INTERRUPTED' : 'ARENA RUN REJECTED'}</strong>
       <span>${escapeHtml(error.message || 'The server could not verify this run.')}</span>
-      <small>No Arena leaderboard score was recorded.</small>
+      <small>${retryable
+        ? 'Your paid entry and finished run are still held here. Press RETRY SCORE SAVE after PostgreSQL reconnects.'
+        : 'The deterministic replay rejected this run and no Arena score was recorded.'}</small>
     `;
     toast(error.message || 'Arena verification failed.');
     await refreshArena(true);
+  } finally {
+    runFinalizationBusy = false;
   }
+}
+
+function showFinalizationBusy(label) {
+  pendingRunFinalization = null;
+  const retryButton = $('#play-again-button');
+  const menuButton = $('#menu-button');
+  retryButton.hidden = false;
+  retryButton.disabled = true;
+  retryButton.textContent = `${label}...`;
+  menuButton.hidden = false;
+  menuButton.disabled = true;
+}
+
+function showDatabaseReconnect(_error, retry) {
+  $('#economy-result').innerHTML = `
+    <strong>DATABASE RECONNECTING</strong>
+    <span>Your run is preserved. Saving attempt ${retry.nextAttempt} will begin automatically.</span>
+    <small>Do not close this page or start another run.</small>
+  `;
+}
+
+function queueFinalizationRetry(retry) {
+  pendingRunFinalization = retry;
+  const retryButton = $('#play-again-button');
+  retryButton.hidden = false;
+  retryButton.disabled = false;
+  retryButton.textContent = 'RETRY SCORE SAVE';
+  const menuButton = $('#menu-button');
+  menuButton.hidden = false;
+  menuButton.disabled = true;
+}
+
+function clearPendingFinalization() {
+  pendingRunFinalization = null;
+  const retryButton = $('#play-again-button');
+  retryButton.hidden = false;
+  retryButton.disabled = false;
+  retryButton.textContent = 'CHOOSE NEXT RUN';
+  const menuButton = $('#menu-button');
+  menuButton.hidden = false;
+  menuButton.disabled = false;
 }
 
 function clearPracticeClaimPanel() {
@@ -1240,7 +1330,15 @@ $('#wallet-button').addEventListener('click', () => {
     void connectWallet();
   }
 });
-$('#play-again-button').addEventListener('click', () => game.backToMenu());
+$('#play-again-button').addEventListener('click', () => {
+  if (pendingRunFinalization) {
+    const retry = pendingRunFinalization;
+    pendingRunFinalization = null;
+    void retry();
+    return;
+  }
+  game.backToMenu();
+});
 $('#menu-button').addEventListener('click', () => game.backToMenu());
 $('#practice-claim-button').addEventListener('click', () => void claimPracticeRewards());
 $('#practice-decline-button').addEventListener('click', () => void declinePracticeRewards());

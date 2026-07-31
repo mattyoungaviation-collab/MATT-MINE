@@ -408,10 +408,16 @@ test('the server owns the free entitlement, run token, replay protection, profil
     (error) => error.code === 'invalid_leaderboard_week'
   );
 
-  await assert.rejects(
-    () => finish(harness.service, session, run, extractedResult()),
-    (error) => error.code === 'run_already_finished'
-  );
+  const retried = await finish(harness.service, session, run, {
+    ...extractedResult(),
+    projected: 999_999,
+    banked: 999_999
+  });
+  assert.equal(retried.accepted, true);
+  assert.equal(retried.alreadyFinished, true);
+  assert.equal(retried.run.result.score, 1_000);
+  assert.equal(retried.profile.bankedNuggets, 1_000);
+  assert.equal(retried.profile.totalRuns, 1);
   await assert.rejects(
     () => harness.service.startRun(session.token, SERVER_RUN_MODES.FREE),
     (error) => error.code === 'free_run_used'

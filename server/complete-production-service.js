@@ -635,12 +635,11 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
   }
 
   async requestPaidRevive(token, input = {}) {
-    const session = await this.authenticate(token);
+    const { session, state: currentState } = await this.authenticateWithState(token);
     if (!this.revivePaymentVerifier?.publicStatus?.().configured || !this.reviveEligibilityValidator) {
       throw new ApiError(503, 'revive_payment_verifier_missing', 'Paid revives are disabled until exact payment and death replay verification are configured.');
     }
     const runId = String(input.runId || '');
-    const currentState = await this.database.read();
     const currentRun = currentState.runs?.[runId];
     if (!currentRun || currentRun.address !== session.address) {
       throw new ApiError(404, 'run_not_found', 'The active run was not found.');
@@ -673,14 +672,13 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
   }
 
   async confirmPaidRevive(token, input = {}) {
-    const session = await this.authenticate(token);
+    const { session, state } = await this.authenticateWithState(token);
     if (!this.revivePaymentVerifier?.publicStatus?.().configured) {
       throw new ApiError(503, 'revive_payment_verifier_missing', 'Paid revives are disabled until exact on-chain payment verification is configured.');
     }
     const runId = String(input.runId || '');
     const transactionHash = String(input.transactionHash || '').toLowerCase();
     const timestamp = this.now();
-    const state = await this.database.read();
     const run = state.runs[runId];
     if (!run || run.address !== session.address) throw new ApiError(404, 'run_not_found', 'The pending revive was not found.');
     const verified = await this.revivePaymentVerifier.verifyPayment({
