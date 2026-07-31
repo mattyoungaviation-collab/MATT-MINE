@@ -626,6 +626,19 @@ async function submitArenaRun(run) {
       () => apiClient.finishArenaRun(run.runId, run.runToken, checkpoint),
       { onRetry: showDatabaseReconnect }
     );
+    if (accepted.accepted === false && accepted.attemptRestored === true) {
+      if (activeArenaRun === run) activeArenaRun = null;
+      if (activeArenaTranscript === transcript) activeArenaTranscript = null;
+      clearPendingFinalization();
+      $('#economy-result').innerHTML = `
+        <strong>ARENA ATTEMPT RESTORED</strong>
+        <span>${escapeHtml(accepted.message)}</span>
+        <small>No score was recorded and no additional MATT payment is required. Return to MATT Arena and start the restored attempt.</small>
+      `;
+      toast('Arena attempt restored — no additional MATT required');
+      await refreshArena(true);
+      return;
+    }
     if (activeArenaRun === run) activeArenaRun = null;
     if (activeArenaTranscript === transcript) activeArenaTranscript = null;
     clearPendingFinalization();
@@ -885,6 +898,8 @@ async function startRunMode(mode) {
       if (mode === RUN_MODES.PAID && paymentStatus) {
         paymentStatus.confirmedCredits = Math.max(0, paymentStatus.confirmedCredits - 1);
       }
+      showScreen();
+      setGameplayUi(false);
       await showMineLoadingScreen({
         id: run.competitionSlotId || slotIdForMode(mode),
         name: run.competitionSnapshot?.name || mode,
@@ -1931,6 +1946,8 @@ async function startArenaRun() {
       ...arenaPlayer,
       unusedAttempts: Math.max(0, arenaPlayer.unusedAttempts - 1)
     });
+    showScreen();
+    setGameplayUi(false);
     await showMineLoadingScreen({
       id: 'arena',
       name: run.challenge?.tuning?._competitionSnapshot?.name || 'MATT Arena',

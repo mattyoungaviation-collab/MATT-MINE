@@ -405,14 +405,32 @@ export class DailyArenaService {
     );
     const storedEvents = await this.store.getEvents(run.runId);
     const challenge = buildArenaChallenge((await this.store.getDay(run.day)).deterministicSeed, run.tuning);
-    const replayed = replayArenaTranscript(
-      challenge,
-      storedEvents.map(publicTranscriptEvent),
-      {
-        requireTerminal: true,
-        profile: run.tuning?._playerProfile || playerProfile
-      }
-    );
+    let replayed;
+    try {
+      replayed = replayArenaTranscript(
+        challenge,
+        storedEvents.map(publicTranscriptEvent),
+        {
+          requireTerminal: true,
+          profile: run.tuning?._playerProfile || playerProfile
+        }
+      );
+    } catch (error) {
+      // The server already accepted every stored batch and signed the latest
+      // checkpoint. A failure while replaying that same accepted transcript is
+      // a reconciliation failure, not a reason to consume another paid entry.
+      const recovered = await this.store.recoverRejectedRun(run.runId, error, timestamp);
+      return {
+        accepted: false,
+        attemptRestored: recovered.attemptRestored === true,
+        code: 'arena_replay_attempt_restored',
+        message: 'The server could not finalize this replay. Your paid Arena attempt was restored; no additional MATT is required.',
+        replayError: {
+          code: String(error?.code || 'arena_replay_mismatch'),
+          message: String(error?.message || 'Authoritative replay mismatch')
+        }
+      };
+    }
     const result = {
       ...replayed,
       replayVersion: ARENA_TRANSCRIPT_VERSION,

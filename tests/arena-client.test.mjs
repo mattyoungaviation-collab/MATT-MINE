@@ -207,6 +207,12 @@ test('Arena transcript sends only changed raw controls and commands with ordered
   assert.equal(Object.hasOwn(calls[0].events[0], 'score'), false);
 });
 
+test('Arena honors the Admin permanent-upgrade switch instead of forcing upgrades off', () => {
+  const source = fs.readFileSync(new URL('../src/game/v3/arenaCompatibility.js', import.meta.url), 'utf8');
+  assert.match(source, /ignorePermanentUpgrades:\s*suppliedTuning\.ignorePermanentUpgrades === true/);
+  assert.doesNotMatch(source, /ignorePermanentUpgrades:\s*true/);
+});
+
 test('Arena transcript retries temporary server failures without losing or reordering events', async () => {
   let attempts = 0;
   const accepted = [];

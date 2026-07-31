@@ -162,7 +162,11 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     if (['free', 'paid'].includes(started.mode) && reviveInfrastructureReady) {
       const reviveSnapshot = await this.database.transact((state) => {
         const run = state.runs?.[started.runId];
-        const eligible = state.expansionConfig.settings.paidRevivesEnabled === true;
+        const mineAllowsRevive = !run?.competitionSnapshot ||
+          run.competitionSnapshot.loadout?.paidRevive === true;
+        const eligible =
+          state.expansionConfig.settings.paidRevivesEnabled === true &&
+          mineAllowsRevive;
         if (run) {
           run.paidReviveEligible = eligible;
           run.reviveInvulnerabilitySeconds =
