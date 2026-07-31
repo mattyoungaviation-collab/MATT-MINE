@@ -27,6 +27,7 @@ import { ApiError, assertApi } from './errors.js';
 import { validateAvatarDataUrl, validateUsername } from './identity.js';
 import { MATT_MINE_LAUNCH_PRICES } from './payment-verifier.js';
 import { isTransientPostgresError } from './postgres-resilience.js';
+import { applyMinePassGameplayBenefits } from './pass-benefits.js';
 import { defaultWalletState } from './state.js';
 import {
   createAdminSafeTransactionFile,
@@ -578,6 +579,14 @@ export class MattMineService {
       assertApi(operationState.expansionConfig.settings.endlessEnabled, 503, 'endless_mode_disabled', 'Endless mode is not open.');
     }
     let passActiveAtStart = false;
+    let paymentStatus = null;
+    if (this.mainnetTransactionsEnabled && normalizedMode !== SERVER_RUN_MODES.BETA) {
+      paymentStatus = await this.paymentVerifier.status(session.address).catch((error) => {
+        if (normalizedMode === SERVER_RUN_MODES.PAID) throw error;
+        return null;
+      });
+      passActiveAtStart = paymentStatus?.pass?.active === true;
+    }
     if (normalizedMode === SERVER_RUN_MODES.PAID) {
       assertApi(
         this.mainnetTransactionsEnabled,
@@ -585,13 +594,8 @@ export class MattMineService {
         'paid_runs_disabled',
         'Paid ranked runs remain disabled until live payment verification is enabled.'
       );
-      const paymentStatus = await this.paymentVerifier.status(session.address);
       assertApi(paymentStatus.pass.active, 403, 'active_pass_required', 'An active MATT Mine Pass is required.');
       assertApi(!paymentStatus.paidRuns.paused, 503, 'paid_runs_paused', 'Paid ranked runs are currently paused.');
-      passActiveAtStart = true;
-    } else if (normalizedMode === SERVER_RUN_MODES.FREE && this.mainnetTransactionsEnabled) {
-      const paymentStatus = await this.paymentVerifier.status(session.address).catch(() => null);
-      passActiveAtStart = paymentStatus?.pass?.active === true;
     }
     const timestamp = this.now();
     const runId = `run_${this.randomHex(12)}`;
@@ -729,6 +733,7 @@ export class MattMineService {
           baseTuning[`depth${depth}GuardianBosses`] = weeklyStage.bossCount;
         }
       }
+      applyMinePassGameplayBenefits(baseTuning, passActiveAtStart);
       let immutableEndlessSnapshot = null;
       if (normalizedMode === SERVER_RUN_MODES.ENDLESS) {
         state.endlessCompetition.seasons ||= {};
@@ -1829,9 +1834,13 @@ export class MattMineService {
 
   async startArenaRun(token, input = {}) {
     const { session, wallet } = await this.arenaPlayer(token, { operation: 'entries' });
+    const paymentStatus = this.mainnetTransactionsEnabled
+      ? await this.paymentVerifier.status(session.address).catch(() => null)
+      : null;
     return this.arenaService.startRun(session.address, {
       ...input,
-      playerProfile: structuredClone(wallet.profile)
+      playerProfile: structuredClone(wallet.profile),
+      passActiveAtStart: paymentStatus?.pass?.active === true
     });
   }
 
