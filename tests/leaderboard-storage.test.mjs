@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
 
 import { PostgresDatabase } from '../server/database.js';
 import { SERVER_STATE_VERSION } from '../server/constants.js';
@@ -9,6 +10,26 @@ const START = Date.UTC(2026, 6, 25, 12, 0, 0);
 const ADDRESS = '0x1111111111111111111111111111111111111111';
 const OTHER_ADDRESS = '0x2222222222222222222222222222222222222222';
 const SUSPENDED_ADDRESS = '0x3333333333333333333333333333333333333333';
+
+test('idle PostgreSQL connection errors are reported without crashing the server', async () => {
+  const pool = new EventEmitter();
+  const reported = [];
+  const database = new PostgresDatabase(null, {
+    pool,
+    onPoolError(error) {
+      reported.push(error.message);
+      throw new Error('simulated telemetry outage');
+    }
+  });
+
+  assert.doesNotThrow(() => {
+    pool.emit('error', new Error('Connection terminated unexpectedly'));
+  });
+  assert.deepEqual(reported, ['Connection terminated unexpectedly']);
+
+  await database.close();
+  assert.equal(pool.listenerCount('error'), 0);
+});
 
 test('PostgreSQL initialization migrates legacy finished runs into normalized run and score tables', async () => {
   const legacyRunId = `run_${'a'.repeat(24)}`;
