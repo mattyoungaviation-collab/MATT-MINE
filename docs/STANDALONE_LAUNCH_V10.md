@@ -73,7 +73,9 @@ Optional:
 | Variable | Default |
 |---|---|
 | `RONIN_RPC_URL` | `https://api.roninchain.com/rpc` |
-| `MATT_MINE_DATABASE_POOL_SIZE` | `10` |
+| `MATT_MINE_DATABASE_POOL_SIZE` | `5` in the Render Blueprint |
+| `MATT_MINE_DATABASE_STARTUP_RETRY_ATTEMPTS` | `90` |
+| `MATT_MINE_DATABASE_QUERY_RETRY_ATTEMPTS` | `5` for safe read operations |
 | `MATT_MINE_DATABASE_SSL` | `false` for Render internal connections |
 | `MATT_MINE_DATABASE_SSL_REJECT_UNAUTHORIZED` | `false` |
 
@@ -90,6 +92,15 @@ When `DATABASE_URL` is present, MATT Mine stores its normalized server state in 
 This protects confirmed transaction receipts and paid-run credit consumption across process restarts and multiple web instances. It is a launch architecture intended for a controlled early audience. A future scale phase should split wallets, runs, scores, and entitlements into dedicated relational tables.
 
 Enable automated PostgreSQL backups before public rewards begin.
+
+Temporary PostgreSQL restarts and failovers do not terminate the Node process. Every
+physical pool client has a permanent error guard, startup schema checks retry only
+recognized transient connection failures, and safe reads use bounded retries.
+Ambiguous payment and state-changing transactions are never automatically replayed.
+`/api/health` remains a web-service liveness response and reports
+`"degraded":true` plus `"database":{"ok":false}` while PostgreSQL reconnects.
+Normal API requests return `503 database_temporarily_unavailable` with a short
+`Retry-After` header during that window.
 
 ## Controlled live-payment check
 

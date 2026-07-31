@@ -4,6 +4,7 @@ import { extname, isAbsolute, relative, resolve } from 'node:path';
 import { MAX_REQUEST_BYTES } from './constants.js';
 import { ApiError, assertApi } from './errors.js';
 import { normalizeOrigin } from './auth-message.js';
+import { isTransientPostgresError } from './postgres-resilience.js';
 
 const MIME_TYPES = Object.freeze({
   '.html': 'text/html; charset=utf-8',
@@ -693,10 +694,24 @@ function sendError(response, error) {
     response.end();
     return;
   }
-  const status = error instanceof ApiError ? error.status : 500;
-  const code = error instanceof ApiError ? error.code : 'internal_error';
-  const message = error instanceof ApiError ? error.message : 'The MATT Mine server encountered an unexpected error.';
-  if (!(error instanceof ApiError)) console.error('[MATT Mine server]', error);
+  const databaseUnavailable = !(error instanceof ApiError) && isTransientPostgresError(error);
+  const status = error instanceof ApiError ? error.status : databaseUnavailable ? 503 : 500;
+  const code = error instanceof ApiError
+    ? error.code
+    : databaseUnavailable
+      ? 'database_temporarily_unavailable'
+      : 'internal_error';
+  const message = error instanceof ApiError
+    ? error.message
+    : databaseUnavailable
+      ? 'MATT Mine is reconnecting to its database. Please retry in a moment.'
+      : 'The MATT Mine server encountered an unexpected error.';
+  if (databaseUnavailable) {
+    response.setHeader('retry-after', '2');
+    console.warn('[MATT Mine server] PostgreSQL temporarily unavailable.', error?.code || error?.message || error);
+  } else if (!(error instanceof ApiError)) {
+    console.error('[MATT Mine server]', error);
+  }
   sendJson(response, status, {
     ok: false,
     error: { code, message, ...(error?.details ? { details: error.details } : {}) }

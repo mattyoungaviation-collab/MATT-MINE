@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { JsonFileDatabase, PostgresDatabase } from '../server/database.js';
@@ -31,6 +32,10 @@ import {
 } from '../server/external-verifiers.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
+const packageMetadata = JSON.parse(
+  await readFile(resolve(root, 'package.json'), 'utf8')
+);
+const appVersion = String(packageMetadata.version || 'unknown');
 const port = Number(process.env.PORT || 4173);
 const dataFile = resolve(root, process.env.MATT_MINE_DATA_FILE || 'data/matt-mine-store.json');
 const nuggetEconomyFile = resolve(
@@ -58,15 +63,32 @@ const database = databaseUrl
   ? await new PostgresDatabase(databaseUrl, {
       ssl: process.env.MATT_MINE_DATABASE_SSL === 'true',
       rejectUnauthorized: process.env.MATT_MINE_DATABASE_SSL_REJECT_UNAUTHORIZED === 'true',
-      maxConnections: Number(process.env.MATT_MINE_DATABASE_POOL_SIZE || 10)
+      maxConnections: Number(process.env.MATT_MINE_DATABASE_POOL_SIZE || 10),
+      startupRetryAttempts: Number(process.env.MATT_MINE_DATABASE_STARTUP_RETRY_ATTEMPTS || 90),
+      queryRetryAttempts: Number(process.env.MATT_MINE_DATABASE_QUERY_RETRY_ATTEMPTS || 5)
     }).init()
   : await new JsonFileDatabase(dataFile).init();
-const nuggetEconomyStore = database.kind === 'postgresql'
-  ? await new PostgresNuggetEconomyStore(database).init()
-  : await new JsonNuggetEconomyStore(nuggetEconomyFile).init();
-const rewardStore = database.kind === 'postgresql'
-  ? await new PostgresRewardStore(database).init()
-  : await new MemoryRewardStore().init();
+const initializeStore = (store, label) => database.kind === 'postgresql'
+  ? database.retryTransient(
+      () => store.init(),
+      {
+        maxAttempts: Number(process.env.MATT_MINE_DATABASE_STARTUP_RETRY_ATTEMPTS || 90),
+        label
+      }
+    )
+  : store.init();
+const nuggetEconomyStore = await initializeStore(
+  database.kind === 'postgresql'
+    ? new PostgresNuggetEconomyStore(database)
+    : new JsonNuggetEconomyStore(nuggetEconomyFile),
+  'nugget economy startup'
+);
+const rewardStore = await initializeStore(
+  database.kind === 'postgresql'
+    ? new PostgresRewardStore(database)
+    : new MemoryRewardStore(),
+  'reward storage startup'
+);
 const rewardManager = await new RewardManager({
   store: rewardStore,
   chain: new RoninRewardChain({ rpcUrl: process.env.RONIN_RPC_URL }),
@@ -81,8 +103,8 @@ const arenaLiveRequested = process.env.MATT_MINE_ARENA_LIVE === 'true';
 const arenaEnabled = Boolean(arenaContractAddress && arenaReceiptSecret);
 const arenaStore = arenaEnabled
   ? database.kind === 'postgresql'
-    ? await new PostgresArenaStore(database).init()
-    : await new MemoryArenaStore().init()
+    ? await initializeStore(new PostgresArenaStore(database), 'Daily Arena storage startup')
+    : await initializeStore(new MemoryArenaStore(), 'Daily Arena storage startup')
   : null;
 const arenaService = arenaEnabled
   ? await new DailyArenaService({
@@ -135,9 +157,12 @@ const arenaService = arenaEnabled
 const competitiveReplaySecret =
   process.env.MATT_MINE_COMPETITIVE_REPLAY_SECRET ||
   (process.env.NODE_ENV === 'production' ? '' : 'local-matt-mine-competitive-replay-secret');
-const competitiveReplayStore = database.kind === 'postgresql'
-  ? await new PostgresCompetitiveReplayStore(database).init()
-  : await new MemoryCompetitiveReplayStore().init();
+const competitiveReplayStore = await initializeStore(
+  database.kind === 'postgresql'
+    ? new PostgresCompetitiveReplayStore(database)
+    : new MemoryCompetitiveReplayStore(),
+  'competitive replay storage startup'
+);
 const competitiveReplayValidator = competitiveReplaySecret.length >= 32
   ? await new CompetitiveReplayService({
       store: competitiveReplayStore,
@@ -188,7 +213,7 @@ const service = new CompleteProductionMattMineService(database, {
 const server = createProductionMattMineHttpServer({ root, service });
 
 server.listen(port, '0.0.0.0', () => {
-  console.log(`MATT Mine v2.0 running at http://localhost:${port}`);
+  console.log(`MATT Mine v${appVersion} running at http://localhost:${port}`);
   console.log(`Ranked wallet network: ${service.config().chainName} (${service.config().chainId})`);
   console.log(`Mainnet transaction mode: ${mainnetTransactionsEnabled ? 'ENABLED (real RON)' : 'disabled'}`);
   console.log(`Nugget payments: ${service.nuggetPaymentsEnabled ? 'EXACT VERIFICATION ENABLED' : 'disabled by release blocker'}`);

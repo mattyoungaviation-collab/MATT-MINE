@@ -26,6 +26,7 @@ import { buildSignInMessage, normalizeOrigin } from './auth-message.js';
 import { ApiError, assertApi } from './errors.js';
 import { validateAvatarDataUrl, validateUsername } from './identity.js';
 import { MATT_MINE_LAUNCH_PRICES } from './payment-verifier.js';
+import { isTransientPostgresError } from './postgres-resilience.js';
 import { defaultWalletState } from './state.js';
 import {
   createAdminSafeTransactionFile,
@@ -104,18 +105,40 @@ export class MattMineService {
   }
 
   async health() {
-    const database = await this.database.healthCheck();
-    const state = await this.database.read();
-    this.cachedOperations = state.operations;
+    let database;
+    try {
+      database = await this.database.healthCheck();
+      if (!this.cachedOperations) {
+        const state = await this.database.read();
+        this.cachedOperations = state.operations;
+      }
+    } catch (error) {
+      database = {
+        ok: false,
+        kind: this.database.kind || 'unknown',
+        temporarilyUnavailable: isTransientPostgresError(error)
+      };
+    }
+    let arena;
+    try {
+      arena = this.arenaService
+        ? await this.arenaService.health()
+        : { enabled: false };
+    } catch (error) {
+      arena = {
+        enabled: Boolean(this.arenaService),
+        ok: false,
+        temporarilyUnavailable: isTransientPostgresError(error)
+      };
+    }
     return {
       database,
+      degraded: database.ok === false || arena.ok === false,
       chainId: this.chainId,
       paymentsEnabled: this.mainnetTransactionsEnabled,
       rewardsEnabled: Boolean(this.rewardManager),
       rewardPublishingEnabled: this.rewardManager?.publicationEnabled === true,
-      arena: this.arenaService
-        ? await this.arenaService.health()
-        : { enabled: false }
+      arena
     };
   }
 
