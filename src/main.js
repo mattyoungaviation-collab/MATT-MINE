@@ -905,6 +905,9 @@ async function startRunMode(mode) {
         allowPaidRevive: run.paidReviveEligible === true,
         reviveInvulnerabilitySeconds: run.reviveInvulnerabilitySeconds
       });
+      if (run.tuning?._minePassBenefits?.active === true) {
+        toast('Mine Pass active · 2× XP and nuggets');
+      }
       if (mode === RUN_MODES.BETA) {
         const entitlement = await apiClient.betaAccess();
         activeBetaTools = new BetaDeveloperTools(game, entitlement);
@@ -1944,6 +1947,9 @@ async function startArenaRun() {
       characterId: arenaCompetitionSnapshot?.loadout?.characterId || 'matt',
       character: run.challenge?.tuning?._competitionCharacter || {}
     });
+    if (run.challenge?.tuning?._minePassBenefits?.active === true) {
+      toast('Mine Pass active · 2× XP and nuggets');
+    }
   } catch (error) {
     activeArenaRun = null;
     activeArenaTranscript = null;

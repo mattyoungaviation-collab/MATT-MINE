@@ -7,6 +7,7 @@ import {
 import { encodeFunctionData, formatUnits, getAddress, parseUnits } from 'viem';
 import { ApiError, assertApi } from './errors.js';
 import { isTransientPostgresError } from './postgres-resilience.js';
+import { applyMinePassGameplayBenefits } from './pass-benefits.js';
 import {
   ARENA_MAX_BATCH_EVENTS,
   ARENA_TICK_MS,
@@ -242,6 +243,7 @@ export class DailyArenaService {
     assertApi(selected, 409, 'arena_attempt_required', 'Confirm an unused Daily Arena entry before starting.');
     const tuning = structuredClone(await this.getTuning(day));
     tuning._playerProfile = structuredClone(input.playerProfile || {});
+    applyMinePassGameplayBenefits(tuning, input.passActiveAtStart === true);
     const receipt = {
       version: ARENA_TRANSCRIPT_VERSION,
       runId,
