@@ -288,10 +288,10 @@ $('#tuning-form').addEventListener('submit', async (event) => {
     showAlert('No Game Balance values changed.');
     return;
   }
-  const timing = lobby === 'arena'
-    ? 'Daily Arena changes begin with the next UTC day. Today keeps the same rules for every player.'
-    : 'New runs in this lobby will use these values immediately.';
-  if (!await confirmAction(`Save ${words(lobby)} tuning?`, timing)) return;
+  if (!await confirmAction(
+    `Apply ${words(lobby)} tuning now?`,
+    'Every new run will use these values immediately. Runs already in progress keep the exact settings they started with.'
+  )) return;
   const result = await api(`/api/admin/game-tuning/${lobby}`, {
     method: 'PUT',
     body: { patch, reason: $('#tuning-reason').value }
@@ -301,9 +301,7 @@ $('#tuning-form').addEventListener('submit', async (event) => {
   $('#tuning-reason').value = '';
   if (result.linkedChanges?.length) await loadExpansion(true);
   renderTuning();
-  showAlert(result.effectiveDay
-    ? `${words(lobby)} tuning saved for ${result.effectiveDay} UTC.`
-    : `${words(lobby)} tuning saved.`);
+  showAlert(`${words(lobby)} tuning is live for new runs.`);
 });
 
 async function loadExpansion(force = false) {
@@ -518,7 +516,8 @@ function renderMineOperations(data) {
         </button>`).join('')}</div>
       <div class="mine-next-action"><strong>NEXT</strong><span>${escapeHtml(mineNextAction(mine, controls))}</span></div>
       <div class="action-row mine-links">
-        <button type="button" class="ghost" data-operations-tab="studio">Edit future map</button>
+        <button type="button" class="ghost" data-operations-tab="studio">Edit live configuration</button>
+        <button type="button" class="danger" data-terminate-mine-runs="${escapeHtml(mine.id)}" ${Number(mine.activeRuns || 0) > 0 ? '' : 'disabled'}>END ${Number(mine.activeRuns || 0).toLocaleString()} ACTIVE RUN${Number(mine.activeRuns || 0) === 1 ? '' : 'S'}</button>
         ${mine.id === 'arena'
           ? '<button type="button" class="ghost" data-operations-tab="arena">Schedule or settle Arena</button>'
           : ['daily', 'pass'].includes(mine.id)
@@ -538,6 +537,29 @@ $('#mine-operations-grid').addEventListener('click', async (event) => {
   }
   if (event.target.closest('[data-scroll-payouts]')) {
     $('.reward-desk-heading').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return;
+  }
+  const terminateButton = event.target.closest('[data-terminate-mine-runs]');
+  if (terminateButton) {
+    const mine = terminateButton.dataset.terminateMineRuns;
+    const reason = $('#mine-control-reason').value;
+    if (!reason.trim()) {
+      showAlert('Write a reason before ending active runs.', true);
+      $('#mine-control-reason').focus();
+      return;
+    }
+    if (!await confirmAction(
+      `End every active ${words(mine)} run now?`,
+      'This is immediate. Players in that mine will be removed from their current run. Consumed payments, entries, and credits are not refunded or rewritten.'
+    )) return;
+    const result = await api(`/api/admin/mine-operations/${encodeURIComponent(mine)}/terminate-runs`, {
+      method: 'POST',
+      body: { reason }
+    });
+    $('#mine-control-reason').value = '';
+    await refreshOverview();
+    await loadMineOperations();
+    showAlert(`${Number(result.affected || 0)} ${words(mine)} active run${Number(result.affected || 0) === 1 ? '' : 's'} ended.`);
     return;
   }
   const button = event.target.closest('[data-mine-control]');

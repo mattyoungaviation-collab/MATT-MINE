@@ -4,6 +4,17 @@
 
 MATT Mine is a standalone browser action roguelite and daily Web3 competition on Ronin. It has its own launch website, wallet identity, separate Free and Pass leaderboards, live Pass and paid-run payments, verified contracts, and a production persistence path independent from MATT Hub.
 
+## v3.3 Admin authority
+
+- Make the authenticated Admin Command Center the canonical source for mine operations, tuning, Competition Studio versions, loadouts, and mutable player state.
+- Apply saved tuning and newly published Competition Studio versions immediately to every new run, including MATT Arena.
+- Preserve the exact map, character, loadout, and tuning inside active runs so server replay remains deterministic.
+- Let Admin immediately end every active run in one mine, or end one player’s active runs while applying an audited state correction.
+- Restore any prior immutable competition version immediately without editing historical scores, confirmed payments, or published on-chain claims.
+- Render every public mine card from the same server-selected map, character, and starting weapon used by gameplay.
+
+See [`docs/ADMIN_AUTHORITY_V33.md`](docs/ADMIN_AUTHORITY_V33.md).
+
 ## v3.2 independent depth layouts
 
 - Give every playable mine five independently authored depth maps.
@@ -48,7 +59,7 @@ See [`docs/PRODUCTION_EXPANSION_V30.md`](docs/PRODUCTION_EXPANSION_V30.md).
 - Add a Nitrado-style Game Tuning panel for Practice, Free, Pass, and Daily Arena lobbies.
 - Fine-tune player movement and health, every weapon, enemy families, Guardian behavior, room dimensions, ore, XP, scoring, and knockout rules.
 - Snapshot settings into every run so changing future rules cannot alter an active or completed run.
-- Stage Daily Arena tuning for the next UTC day and preserve identical rules for everyone competing today.
+- Apply tuning immediately to every new run while preserving the exact pinned rules of runs already in progress.
 - Search permanent miner names or wallet addresses, inspect individual activity, and grant audited nuggets, Pass XP, chests, or cosmetics.
 - Let every miner create unique keyboard controls and save them to their server profile.
 

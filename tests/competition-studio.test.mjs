@@ -9,6 +9,7 @@ import {
   defaultCompetitionStudio,
   materializeCompetitionMap,
   normalizeCompetitionDraft,
+  normalizeCompetitionStudio,
   resolveCompetitionSnapshot,
   validateCompetitionMap
 } from '../src/game/competitionStudio.js';
@@ -56,6 +57,31 @@ test('state migration adds safe Competition Studio drafts without disturbing leg
   assert.equal(migrated.competitionStudio.slots.practice.draft.slotId, 'practice');
   assert.equal(migrated.competitionStudio.slots.practice.draft.depths.length, 5);
   assert.ok(migrated.wallets[address]);
+});
+
+test('the built-in safe version survives long publish histories and expired active pointers', () => {
+  const studio = defaultCompetitionStudio(NOW);
+  const slot = studio.slots.daily;
+  for (let index = 0; index < 100; index += 1) {
+    const id = `expired_daily_${index}`;
+    studio.snapshots[id] = {
+      ...structuredClone(slot.draft),
+      id,
+      status: 'archived',
+      effectiveAt: NOW - 10_000 + index,
+      expiresAt: NOW - 1,
+      publishedAt: NOW - 10_000 + index,
+      publishedBy: 'SERVER_ADMIN',
+      fingerprint: id
+    };
+    slot.scheduledSnapshotIds.push(id);
+    slot.activeSnapshotId = id;
+  }
+
+  const normalized = normalizeCompetitionStudio(studio, NOW);
+  assert.equal(normalized.slots.daily.scheduledSnapshotIds.length, 90);
+  assert.equal(normalized.slots.daily.scheduledSnapshotIds[0], 'bootstrap_daily_v1');
+  assert.equal(resolveCompetitionSnapshot(normalized, 'daily', NOW).id, 'bootstrap_daily_v1');
 });
 
 test('legacy single maps migrate to five independently editable depth maps', () => {
@@ -118,7 +144,7 @@ test('published competition snapshots are scheduled, immutable, and selected by 
   assert.equal(resolveCompetitionSnapshot(state.competitionStudio, 'daily', effectiveAt).id, published.snapshot.id);
   assert.equal(
     resolveCompetitionSnapshot(state.competitionStudio, 'daily', effectiveAt + 86_400_000).id,
-    'default-daily'
+    'bootstrap_daily_v1'
   );
 
   const changed = normalizeCompetitionDraft({
@@ -128,6 +154,59 @@ test('published competition snapshots are scheduled, immutable, and selected by 
   await service.saveCompetitionDraft('competition-admin', 'daily', changed, 'Start a later draft.');
   const after = await database.read();
   assert.equal(after.competitionStudio.snapshots[published.snapshot.id].name, 'Tomorrow’s Crystal Gauntlet');
+});
+
+test('draft edits stay private until Admin applies them and published versions can be restored immediately', async () => {
+  let randomCounter = 0;
+  const database = new MemoryDatabase();
+  const service = new MattMineService(database, {
+    now: () => NOW,
+    chainId: 2020,
+    adminKey: 'competition-admin',
+    randomHex(bytes) {
+      randomCounter += 1;
+      return randomCounter.toString(16).padStart(bytes * 2, '0');
+    }
+  });
+  const before = await service.publicMineSlot('daily');
+  const draft = structuredClone((await service.adminCompetitionStudio('competition-admin')).studio.slots.daily.draft);
+  draft.name = 'Admin Live Crystal Mine';
+  draft.loadout.characterId = 'orc';
+  draft.loadout.startingWeapon = 'blaster';
+  draft.depths[0].map.name = 'Admin Exact Depth One';
+  draft.map = structuredClone(draft.depths[0].map);
+  await service.saveCompetitionDraft(
+    'competition-admin',
+    'daily',
+    draft,
+    'Keep this edit private until it is approved.'
+  );
+
+  const afterDraft = await service.publicMineSlot('daily');
+  assert.equal(afterDraft.slot.snapshot.id, before.slot.snapshot.id);
+  assert.notEqual(afterDraft.slot.snapshot.name, draft.name);
+
+  const published = await service.publishCompetitionSnapshot('competition-admin', 'daily', {
+    reason: 'Apply the reviewed mine immediately.'
+  });
+  assert.equal(published.snapshot.effectiveAt, NOW);
+  assert.equal(published.snapshot.status, 'live');
+  const live = await service.publicMineSlot('daily');
+  assert.equal(live.slot.snapshot.id, published.snapshot.id);
+  assert.equal(live.slot.snapshot.name, 'Admin Live Crystal Mine');
+  assert.equal(live.slot.snapshot.loadout.characterId, 'orc');
+  assert.equal(live.slot.snapshot.loadout.startingWeapon, 'blaster');
+  assert.equal(live.slot.snapshot.depths[0].map.name, 'Admin Exact Depth One');
+
+  const restored = await service.activateCompetitionSnapshot(
+    'competition-admin',
+    'daily',
+    before.slot.snapshot.id,
+    'Restore the prior version now.'
+  );
+  assert.equal(restored.snapshot.restoredFrom, before.slot.snapshot.id);
+  assert.equal(restored.snapshot.effectiveAt, NOW);
+  assert.equal((await service.publicMineSlot('daily')).slot.snapshot.id, restored.snapshot.id);
 });
 
 test('public mine cards expose authoritative entry pauses without hiding leaderboards', async () => {
@@ -314,8 +393,11 @@ test('production surfaces include the six-card hub, exact-map loading screen, an
   assert.match(admin, /id="tab-studio"/);
   assert.match(admin, /id="studio-map-canvas"/);
   assert.match(admin, /id="studio-depth-tabs"/);
-  assert.match(admin, /PUBLISH VERSION/);
+  assert.match(admin, /APPLY LIVE VERSION/);
+  assert.match(admin, /id="studio-live-source"/);
   assert.match(hub, /competition-slot-grid/);
+  assert.match(hub, /slot-map-preview/);
+  assert.match(hub, /slot-character-preview/);
   assert.match(hub, /PvP Mine/);
   assert.match(hub, /OPEN MINE \+ BOARD/);
   assert.match(hub, /VIEW BOARD · ENTRY PAUSED/);

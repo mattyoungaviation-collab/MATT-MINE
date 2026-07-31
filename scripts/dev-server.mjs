@@ -112,13 +112,20 @@ const arenaService = arenaEnabled
       receiptSecret: arenaReceiptSecret,
       seedSecret: process.env.MATT_MINE_ARENA_SEED_SECRET || arenaReceiptSecret,
       safeAddress: process.env.MATT_MINE_ARENA_SAFE_ADDRESS || MATT_MINE_ADMIN_CONTRACTS.safe,
-      getTuning: async (day) => {
+      getTuning: async () => {
         const state = await database.read();
-        const tuning = structuredClone(state.arenaTuningSchedule?.[day] || state.gameTuning.arena);
-        tuning._competitionSnapshot = resolveCompetitionSnapshot(
+        const tuning = structuredClone(state.gameTuning.arena);
+        const competitionSnapshot = resolveCompetitionSnapshot(
           state.competitionStudio,
           'arena',
-          Date.parse(`${day}T12:00:00.000Z`)
+          Date.now()
+        );
+        const characterId = competitionSnapshot?.loadout?.characterId || 'matt';
+        tuning._competitionSnapshot = competitionSnapshot;
+        tuning._competitionCharacter = structuredClone(
+          state.expansionConfig?.characters?.[characterId] ||
+          state.expansionConfig?.characters?.matt ||
+          {}
         );
         return tuning;
       },

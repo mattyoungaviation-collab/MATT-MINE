@@ -27,10 +27,20 @@ export class AdminMattMineService extends MattMineService {
     const normalizedAddress = normalizeAddress(address);
     const state = await this.database.read();
     const wallet = state.wallets[normalizedAddress];
+    const arenaActiveRun = await Promise.resolve(this.arenaService?.adminActiveRuns?.(normalizedAddress))
+      .then((runs) => runs[0] || null)
+      .catch(() => null);
     return {
       ...detail,
       wallet: {
         ...detail.wallet,
+        activeRuns: detail.wallet.activeRuns + (arenaActiveRun ? 1 : 0),
+        arenaActiveRun: arenaActiveRun ? {
+          runId: arenaActiveRun.runId,
+          day: arenaActiveRun.day,
+          startedAt: arenaActiveRun.startedAt,
+          expiresAt: arenaActiveRun.expiresAt
+        } : null,
         keybindings: structuredClone(wallet?.keybindings || defaultKeybindings())
       },
       editor: playerEditorMetadata()
@@ -50,21 +60,40 @@ export class AdminMattMineService extends MattMineService {
     const normalizedReason = normalizeAdminReason(reason);
     assertApi(isRecord(input), 400, 'player_state_patch_invalid', 'Player state changes must be an object.');
     const timestamp = this.now();
+    const terminateActiveRuns = input.terminateActiveRuns === true;
+    const arenaActiveRuns = await Promise.resolve(this.arenaService?.adminActiveRuns?.(normalizedAddress)).catch(() => []) || [];
+    assertApi(
+      terminateActiveRuns || arenaActiveRuns.length === 0,
+      409,
+      'player_state_active_run',
+      'Choose “End active runs and apply now” before editing a player who is in MATT Arena.'
+    );
 
-    await this.database.transact((state) => {
+    const result = await this.database.transact(async (state, transaction) => {
       const wallet = state.wallets[normalizedAddress];
       assertApi(wallet, 404, 'wallet_missing', 'The player wallet was not found.');
-      const activeRun = Object.values(state.runs).some((run) =>
+      const activeRuns = Object.values(state.runs).filter((run) =>
         run.address === normalizedAddress &&
         run.status === 'active' &&
         run.expiresAt > timestamp
       );
       assertApi(
-        !activeRun,
+        terminateActiveRuns || activeRuns.length === 0,
         409,
         'player_state_active_run',
-        'Expire this player’s active run before editing progression.'
+        'Choose “End active runs and apply now” before editing this player.'
       );
+      const terminatedRunIds = [];
+      if (terminateActiveRuns) {
+        for (const run of activeRuns) {
+          run.status = 'expired';
+          run.expiresAt = Math.min(run.expiresAt, timestamp);
+          run.adminTerminatedAt = timestamp;
+          run.adminTerminationReason = normalizedReason;
+          await transaction?.upsertRun(run);
+          terminatedRunIds.push(run.id || run.runId);
+        }
+      }
 
       const changes = [];
       applyResets(wallet, input.reset, changes);
@@ -76,12 +105,28 @@ export class AdminMattMineService extends MattMineService {
 
       assertApi(changes.length > 0, 400, 'player_state_patch_empty', 'Change or reset at least one player field.');
       wallet.updatedAt = timestamp;
-      const details = `${normalizedReason}; ${normalizedAddress}: ${changes.join(', ')}`.slice(0, 500);
+      const terminationDetails = terminatedRunIds.length
+        ? `; ended ${terminatedRunIds.length} active run${terminatedRunIds.length === 1 ? '' : 's'}`
+        : '';
+      const details = `${normalizedReason}; ${normalizedAddress}: ${changes.join(', ')}${terminationDetails}`.slice(0, 500);
       addPlayerActivity(wallet, 'ADMIN_STATE_EDIT', details, timestamp);
       addAudit(state, 'SERVER_ADMIN', 'PLAYER_STATE_EDITED', details, timestamp);
+      return { terminatedRunIds };
     });
 
-    return this.adminWallet(adminKey, normalizedAddress);
+    let arenaTerminated = { affected: 0, runIds: [] };
+    if (terminateActiveRuns && arenaActiveRuns.length) {
+      arenaTerminated = await this.arenaService.adminExpireActiveRuns(normalizedAddress);
+    }
+    for (const runId of [...result.terminatedRunIds, ...arenaTerminated.runIds]) {
+      await this.competitiveReplayValidator?.finalize?.(runId, 'admin_terminated').catch(() => undefined);
+    }
+    const detail = await this.adminWallet(adminKey, normalizedAddress);
+    return {
+      ...detail,
+      terminatedActiveRuns: result.terminatedRunIds.length + arenaTerminated.affected,
+      terminatedRunIds: [...result.terminatedRunIds, ...arenaTerminated.runIds]
+    };
   }
 }
 

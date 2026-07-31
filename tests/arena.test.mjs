@@ -202,6 +202,29 @@ test('daily replay challenges are deterministic and bind the exact day seed', ()
   assert.equal(first.verificationMode, 'deterministic-input-replay');
 });
 
+test('Daily Arena replay uses the exact Competition Studio character snapshot', () => {
+  const replayed = replayArenaTranscript(buildArenaChallenge('c'.repeat(64), {
+    playerMaxHealth: 100,
+    _competitionSnapshot: {
+      loadout: { characterId: 'orc' }
+    },
+    _competitionCharacter: {
+      baseHealth: 165,
+      movementSpeed: .82,
+      dashCooldown: 1.25,
+      dashStrength: .9,
+      pickaxeDamage: .78,
+      miningSpeed: .9,
+      blasterDamage: .72,
+      blasterEnergy: 85,
+      armor: .14,
+      magnetRange: .9,
+      luck: .92
+    }
+  }), []);
+  assert.equal(replayed.maximumHealth, 165);
+});
+
 test('input-only replay deterministically derives a knockout without browser outcomes', () => {
   const challenge = buildArenaChallenge('a'.repeat(64));
   const events = [
@@ -265,6 +288,22 @@ test('Memory Arena storage confirms unlimited one-payment attempts idempotently'
   assert.equal(retry.alreadyConfirmed, true);
   assert.equal((await store.unusedEntries(PLAYER, DAY)).length, 30);
   assert.equal((await store.getDay(DAY)).entryPoolRaw, (30n * BigInt(FEE_RAW)).toString());
+});
+
+test('Arena Admin controls can list and expire active runs immediately', async () => {
+  const store = await new MemoryArenaStore().init();
+  await store.ensureDay(dayRecord());
+  await store.confirmEntry(entryRecord(1, HASH_A));
+  await store.consumeEntry(PLAYER, DAY, 'arena_entry_1', runRecord('arena_run_admin_stop', 1_000));
+
+  assert.deepEqual(
+    (await store.activeRuns(PLAYER)).map((run) => run.runId),
+    ['arena_run_admin_stop']
+  );
+  const expired = await store.expireActiveRuns(PLAYER, 2_000);
+  assert.deepEqual(expired.map((run) => run.runId), ['arena_run_admin_stop']);
+  assert.equal(expired[0].status, 'expired');
+  assert.equal((await store.activeRuns(PLAYER)).length, 0);
 });
 
 test('a confirmed payment cannot be replayed by another wallet', async () => {

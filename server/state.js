@@ -36,7 +36,6 @@ export function defaultServerState() {
     weeklyCompetition: { weeks: {} },
     endlessCompetition: { seasons: {} },
     competitionStudio: defaultCompetitionStudio(),
-    arenaTuningSchedule: {},
     operations: defaultOperations(),
     audit: []
   };
@@ -77,7 +76,6 @@ export function normalizeServerState(input = {}) {
     weeklyCompetition: normalizeCompetitionStore(source.weeklyCompetition, 'weeks'),
     endlessCompetition: normalizeCompetitionStore(source.endlessCompetition, 'seasons'),
     competitionStudio: normalizeCompetitionStudio(source.competitionStudio),
-    arenaTuningSchedule: normalizeArenaTuningSchedule(source.arenaTuningSchedule),
     operations: normalizeOperations(source.operations),
     audit: Array.isArray(source.audit)
       ? source.audit.filter(isRecord).slice(-2_000).map((entry) => ({ ...entry }))
@@ -237,16 +235,6 @@ function normalizeWallets(input) {
         updatedAt: safeTimestamp(wallet.updatedAt)
       }];
     }));
-}
-
-function normalizeArenaTuningSchedule(input) {
-  if (!isRecord(input)) return {};
-  const arenaDefault = defaultGameTuning().arena;
-  return Object.fromEntries(Object.entries(input)
-    .filter(([day, value]) => /^\d{4}-\d{2}-\d{2}$/.test(day) && isRecord(value))
-    .sort(([a], [b]) => a.localeCompare(b))
-    .slice(-45)
-    .map(([day, value]) => [day, normalizeGameTuning({ arena: { ...arenaDefault, ...value } }).arena]));
 }
 
 function safeKeybindings(input) {

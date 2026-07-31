@@ -1,5 +1,6 @@
 import { drawCompetitionMap } from './mineMapRenderer.js';
 import { COMPETITION_DEPTH_COUNT, competitionMapForDepth } from './competitionStudio.js';
+import { CHARACTER_DEFAULTS } from './expansionConfig.js';
 
 export async function mountMineHub(apiClient) {
   const layout = document.querySelector('.matchmaking-layout');
@@ -109,15 +110,63 @@ function renderCards(container, slots) {
       : paused
         ? `${escapeHtml(slot.snapshot?.name || slot.name)} paused. Open status and leaderboard`
         : `Open ${escapeHtml(slot.snapshot?.name || slot.name)}`;
+    const map = competitionMapForDepth(slot.snapshot, 1);
+    const theme = ['deep', 'crystal', 'magma', 'ruins'].includes(map.background) ? map.background : 'deep';
+    const character = slot.snapshot?.loadout?.characterId || 'matt';
+    const weapon = slot.snapshot?.loadout?.startingWeapon || 'pickaxe';
     return `
-    <button type="button" class="competition-slot-card slot-${slot.id} ${slot.comingSoon ? 'disabled' : ''} ${paused ? 'paused' : ''}" data-mine-slot="${slot.id}" ${slot.comingSoon ? 'disabled' : ''} aria-label="${accessibleLabel}">
+    <button type="button" class="competition-slot-card slot-${slot.id} slot-theme-${theme} ${slot.comingSoon ? 'disabled' : ''} ${paused ? 'paused' : ''}" data-mine-slot="${slot.id}" ${slot.comingSoon ? 'disabled' : ''} aria-label="${accessibleLabel}">
+      ${slot.comingSoon ? '' : '<canvas class="slot-map-preview" data-slot-map width="620" height="300" aria-hidden="true"></canvas>'}
+      ${slot.comingSoon ? '' : `<canvas class="slot-character-preview" data-slot-character="${escapeHtml(character)}" width="150" height="180" aria-hidden="true"></canvas>`}
       <span class="slot-number">0${slot.number}</span>
       <span class="slot-state">${stateLabel}</span>
       <strong>${escapeHtml(slot.snapshot?.name || slot.name)}</strong>
       <small>${escapeHtml(slot.snapshot?.subtitle || slot.subtitle || '')}</small>
+      ${slot.comingSoon ? '' : `<span class="slot-loadout">${escapeHtml(characterName(character))} · ${escapeHtml(title(weapon))}</span>`}
       <span class="slot-meta">${actionLabel}</span>
     </button>`;
   }).join('');
+  container.querySelectorAll('[data-mine-slot]').forEach((card) => {
+    const slot = slots.find((candidate) => candidate.id === card.dataset.mineSlot);
+    if (!slot?.snapshot || slot.comingSoon) return;
+    drawCompetitionMap(card.querySelector('[data-slot-map]'), competitionMapForDepth(slot.snapshot, 1));
+    drawCardCharacter(card.querySelector('[data-slot-character]'), slot.snapshot.loadout?.characterId || 'matt');
+  });
+}
+
+function drawCardCharacter(canvas, characterId) {
+  if (!canvas || typeof Image !== 'function') return;
+  const roster = {
+    matt: { src: '/assets/game/matt-dyno-spritesheet.png', x: 2, y: 0, width: 120, height: 241 },
+    ronke: { src: '/assets/game/ronke-character-spritesheet.webp', x: 0, y: 0, width: 280, height: 340 },
+    axie: { src: '/assets/game/axie-character-spritesheet.webp', x: 0, y: 0, width: 280, height: 340 },
+    orc: { src: '/assets/game/orc-character-spritesheet.webp', x: 0, y: 0, width: 280, height: 340 }
+  };
+  const frame = roster[characterId] || roster.matt;
+  const image = new Image();
+  image.decoding = 'async';
+  image.addEventListener('load', () => {
+    const context = canvas.getContext('2d');
+    if (!context) return;
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = 'high';
+    const scale = Math.min(canvas.width / frame.width, canvas.height / frame.height);
+    const width = frame.width * scale;
+    const height = frame.height * scale;
+    context.drawImage(
+      image,
+      frame.x,
+      frame.y,
+      Math.min(frame.width, image.naturalWidth - frame.x),
+      Math.min(frame.height, image.naturalHeight - frame.y),
+      (canvas.width - width) / 2,
+      canvas.height - height,
+      width,
+      height
+    );
+  }, { once: true });
+  image.src = frame.src;
 }
 
 function renderDetail(modal, slot, leaderboard) {
@@ -135,7 +184,7 @@ function renderDetail(modal, slot, leaderboard) {
   modal.querySelector('[data-board-title]').textContent = snapshot.rules?.leaderboardTitle || (slot.leaderboard ? 'LEADERBOARD' : 'PRACTICE BRIEFING');
   modal.querySelector('[data-board-period]').textContent = leaderboard?.week || leaderboard?.day || 'CURRENT COMPETITION';
   modal.querySelector('[data-mine-loadout]').innerHTML = `
-    <span><small>CHARACTER</small><b>${title(snapshot.loadout?.characterId || 'matt')}</b></span>
+    <span><small>CHARACTER</small><b>${characterName(snapshot.loadout?.characterId || 'matt')}</b></span>
     <span><small>START</small><b>${title(snapshot.loadout?.startingWeapon || 'pickaxe')}</b></span>
     <span><small>ATTEMPTS</small><b>${snapshot.rules?.attemptLimit ? snapshot.rules.attemptLimit : 'UNLIMITED'}</b></span>`;
   modal.querySelector('[data-mine-rules]').innerHTML = `
@@ -196,6 +245,10 @@ function shortAddress(address) {
 
 function title(value) {
   return String(value || '').replace(/[-_]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function characterName(value) {
+  return CHARACTER_DEFAULTS[value]?.name || title(value);
 }
 
 function format(value) {

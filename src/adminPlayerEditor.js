@@ -41,7 +41,7 @@ function renderPlayerEditor(address, data) {
       <div><p class="eyebrow">SERVER-OWNED PLAYER DATA</p><h3>Complete player editor</h3></div>
       <span class="badge">Audit logged</span>
     </div>
-    <div class="notice warning">Exact edits apply immediately. Expire active runs first. Confirmed payments, published rewards, on-chain balances, and finished leaderboard scores remain protected.</div>
+    <div class="notice warning">Exact edits apply immediately. Active runs can be ended automatically in this same audited action. Confirmed payments, published rewards, on-chain balances, and finished leaderboard scores remain protected.</div>
 
     <form class="player-editor-form">
       <article class="editor-section">
@@ -121,6 +121,10 @@ function renderPlayerEditor(address, data) {
       </article>
 
       <article class="editor-section">
+        <label class="toggle">End active runs and apply now
+          <input data-player-field="terminate-active-runs" type="checkbox" ${Number(wallet.activeRuns || 0) > 0 ? 'checked' : ''}>
+          <small>${Number(wallet.activeRuns || 0)} active run${Number(wallet.activeRuns || 0) === 1 ? '' : 's'} detected. Any consumed entry or credit remains consumed.</small>
+        </label>
         <label>Required reason<input data-player-field="reason" maxlength="240" placeholder="Why is this exact player data changing?" required></label>
         <div class="action-row"><button type="submit">Save exact player state</button></div>
         <p class="editor-status" aria-live="polite"></p>
@@ -189,6 +193,7 @@ function collectExactPatch(section) {
     .map((input) => [input.dataset.keybinding, input.value]));
 
   return {
+    terminateActiveRuns: section.querySelector('[data-player-field="terminate-active-runs"]').checked,
     identity: {
       name: section.querySelector('[data-player-field="identity-name"]').value,
       clearAvatar: section.querySelector('[data-player-field="clear-avatar"]').checked

@@ -170,6 +170,30 @@ test('player edits are blocked during an active run so a live run cannot change 
   );
 });
 
+test('Admin can explicitly end active runs and apply an authoritative player edit immediately', async () => {
+  const { service, database } = harness();
+  const session = await signIn(service);
+  const run = await service.startRun(session.token, SERVER_RUN_MODES.PRACTICE);
+
+  const result = await service.adminAwardPlayer('admin-secret', account.address, {
+    type: 'state_patch',
+    patch: {
+      terminateActiveRuns: true,
+      profile: { bankedNuggets: 321 },
+      reset: { upgrades: true }
+    },
+    reason: 'Immediate operator correction'
+  }, 'Immediate operator correction');
+
+  assert.equal(result.wallet.profile.bankedNuggets, 321);
+  assert.equal(result.terminatedActiveRuns, 1);
+  const state = await database.read();
+  assert.equal(state.runs[run.runId].status, 'expired');
+  assert.equal(state.runs[run.runId].adminTerminationReason, 'Immediate operator correction');
+  const audit = await service.adminAudit('admin-secret', { action: 'PLAYER_STATE_EDITED' });
+  assert.match(audit.entries[0].details, /ended 1 active run/);
+});
+
 test('the command center loads a complete editor with exact fields and destructive reset tools', async () => {
   const [html, script, tuning] = await Promise.all([
     readFile(`${ROOT}admin.html`, 'utf8'),
@@ -185,6 +209,7 @@ test('the command center loads a complete editor with exact fields and destructi
   assert.match(script, /Zero nuggets/);
   assert.match(script, /Clear Pass achievements/);
   assert.match(script, /Reset all off-chain progression/);
+  assert.match(script, /End active runs and apply now/);
   assert.match(tuning, /Focused Core damage per level/);
   assert.match(tuning, /GuardianBosses/);
 });

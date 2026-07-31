@@ -1,4 +1,4 @@
-# MATT Mine Competition Studio v3.2
+# MATT Mine Competition Studio v3.3
 
 Competition Studio is the server-authoritative map and loadout system for MATT Mine's five playable mine slots. Version 3.2 gives each slot five independent depth layouts.
 
@@ -30,9 +30,9 @@ The Admin Command Center includes a Competition Studio tab.
 7. Set the character, available weapons, starting weapon, health, ammunition, drones, safe-start duration, upgrades, and attempt limit.
 8. Validate all five depths.
 9. Save the editable draft.
-10. Choose a future start and end time and publish all five maps as one version.
+10. Leave the optional start blank to apply all five maps immediately, or deliberately choose a future start.
 
-Published versions are immutable. Updating the draft cannot change a scheduled or active competition.
+Published versions are immutable. Updating the draft cannot change a scheduled or active competition. Admin can use **Make Live Now** on any prior version; the server creates a new audited immutable version and applies it to new runs immediately.
 
 ## Authority and persistence
 
@@ -75,5 +75,6 @@ The authenticated Admin endpoints are:
 - `GET /api/admin/competition-studio`
 - `PUT /api/admin/competition-studio/:slot/draft`
 - `POST /api/admin/competition-studio/:slot/publish`
+- `POST /api/admin/competition-studio/:slot/versions/:snapshot/activate`
 
 Publishing requires an audit reason. Admin test runs are local-only, carry the authored map and loadout, use a shortened loading preview, and cannot submit scores or rewards.

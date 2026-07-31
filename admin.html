@@ -158,9 +158,10 @@
 
       <section id="tab-studio" class="tab">
         <div class="section-heading studio-heading">
-          <div><p class="eyebrow">COMPETITION STUDIO</p><h2>Build tomorrow's mines</h2><p>Design the route, place every encounter, lock the loadout, validate, and publish one immutable competition.</p></div>
+          <div><p class="eyebrow">LIVE COMPETITION CONTROL</p><h2>Build and control every mine</h2><p>Admin is the source of truth. Draft safely, test any depth, then apply the exact map, character, loadout, and rules to new runs immediately.</p></div>
           <div id="studio-save-state" class="studio-save-state">LOADING</div>
         </div>
+        <div id="studio-live-source" class="notice studio-live-source">Loading the live server version…</div>
         <div id="studio-slot-tabs" class="studio-slot-tabs" role="tablist" aria-label="Competition slots"></div>
         <div class="studio-workspace">
           <aside class="studio-toolbox panel">
@@ -216,12 +217,12 @@
         </div>
         <div class="studio-publish-bar panel">
           <label>Required reason<input id="studio-reason" maxlength="240" placeholder="Why is this map or competition changing?" required></label>
-          <label>Goes live<input id="studio-effective-at" type="datetime-local"></label>
+          <label>Optional scheduled start<input id="studio-effective-at" type="datetime-local"><small>Leave blank to apply now.</small></label>
           <label>Ends (optional)<input id="studio-expires-at" type="datetime-local"></label>
           <div>
             <button id="studio-test" type="button" class="ghost">TEST IN PRACTICE</button>
             <button id="studio-save" type="button">SAVE DRAFT</button>
-            <button id="studio-publish" type="button">PUBLISH VERSION</button>
+            <button id="studio-publish" type="button">APPLY LIVE VERSION</button>
           </div>
         </div>
       </section>
@@ -235,7 +236,7 @@
             <label>Filter this page<input id="tuning-search" type="search" placeholder="Blaster, armor, Depth 5…"></label>
           </div>
         </div>
-        <div class="notice">Saved changes apply to new runs only. Daily Arena changes stage for the next UTC day. Contract prices, prize custody, pool caps, and finished scores stay protected.</div>
+        <div class="notice">Saved changes apply immediately to new runs in this lobby, including MATT Arena. Runs already in progress keep their pinned rules. Contract custody, confirmed payments, and finished scores remain protected.</div>
         <p id="tuning-result-count" class="result-count"></p>
         <form id="tuning-form">
           <div id="tuning-fields" class="tuning-groups"></div>

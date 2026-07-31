@@ -38,7 +38,7 @@ export const GAME_TUNING_SCHEMA = Object.freeze([
   toggle('ignorePermanentUpgrades', 'Beta testing', 'Ignore permanent upgrades', false, 'New runs use a clean new-player profile without deleting the wallet’s saved upgrades.'),
   toggle('disableRunUpgrades', 'Beta testing', 'Disable all in-run upgrades', false, 'Level-ups continue, but no upgrade selection screen appears and no temporary talents are applied.'),
   toggle('disableBlasterUpgrades', 'Beta testing', 'Disable Prospector Cache Blaster upgrades', false, 'The cache still refills the Blaster, but it does not offer Battery, Charger, Core, or Volley talents.'),
-  toggle('usePerDepthRoomSpawns', 'Beta testing', 'Use editable per-depth room spawns', true, 'Uses the room-by-room spawn plan below. Daily Arena keeps its legacy deterministic spawn plan until this is deliberately enabled for a future UTC day.'),
+  toggle('usePerDepthRoomSpawns', 'Beta testing', 'Use editable per-depth room spawns', true, 'Uses the room-by-room spawn plan below. Saving applies this choice to the next new run; runs already in progress keep their pinned plan.'),
 
   number('playerMaxHealth', 'Player', 'Starting health', CONFIG.basePlayerHealth, 25, 1000),
   number('playerSpeed', 'Player', 'Movement speed', CONFIG.basePlayerSpeed, 80, 700),
