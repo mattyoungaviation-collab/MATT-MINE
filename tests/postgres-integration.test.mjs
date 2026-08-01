@@ -10,7 +10,34 @@ test('normalized migrations, dual-write backfill, validation, and lossless rollb
     const backfill = await database.backfillNormalized();
     assert.equal(backfill.ok, true);
     const migrations = await database.query('SELECT version FROM matt_mine_normalized.schema_migrations ORDER BY version');
-    assert.deepEqual(migrations.rows.map((row) => row.version), ['001', '002', '003']);
+    assert.deepEqual(migrations.rows.map((row) => row.version), ['001', '002', '003', '004']);
+    const snapshotConstraint = await database.query(`SELECT COUNT(*)::integer AS count
+      FROM pg_constraint
+      WHERE connamespace='matt_mine_normalized'::regnamespace
+        AND conname='competition_published_snapshots_slot_id_content_hash_key'`);
+    assert.equal(snapshotConstraint.rows[0].count, 0);
+
+    const beforeDuplicate = await database.read();
+    const originalSnapshot = Object.values(beforeDuplicate.competitionStudio.snapshots)
+      .find((snapshot) => snapshot.slotId === 'practice');
+    assert.ok(originalSnapshot);
+    await database.transact((state) => {
+      const duplicateId = 'integration-practice-republish';
+      state.competitionStudio.snapshots[duplicateId] = {
+        ...structuredClone(originalSnapshot),
+        id: duplicateId,
+        effectiveAt: originalSnapshot.effectiveAt + 86_400_000,
+        publishedAt: originalSnapshot.publishedAt + 86_400_000
+      };
+      state.competitionStudio.slots.practice.scheduledSnapshotIds.push(duplicateId);
+    });
+    await database.backfillNormalized();
+    const duplicateSnapshots = await database.query(`SELECT content_hash,COUNT(*)::integer AS count
+      FROM matt_mine_normalized.competition_published_snapshots
+      WHERE slot_id='practice'
+      GROUP BY content_hash HAVING COUNT(*) > 1`);
+    assert.equal(duplicateSnapshots.rows.length, 1);
+    assert.equal(duplicateSnapshots.rows[0].count, 2);
     await database.query(`UPDATE matt_mine_normalized.cutover_state SET read_source='legacy',dual_write_enabled=FALSE WHERE singleton=TRUE`);
     const legacy = await database.query('SELECT data FROM matt_mine_state WHERE id=1');
     assert.equal(legacy.rowCount, 1);
