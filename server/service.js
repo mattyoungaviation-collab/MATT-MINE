@@ -103,6 +103,9 @@ export class MattMineService {
       arena: this.arenaService
         ? this.arenaService.publicConfig()
         : { enabled: false },
+      eligibility: this.eligibilityPolicy
+        ? this.eligibilityPolicy.publicStatus()
+        : { configured: process.env.NODE_ENV !== 'production' },
       operations: awaitlessPublicOperations(this.cachedOperations),
       ...(this.rewardManager
         ? { rewards: this.rewardManager.publicConfig() }
@@ -1836,14 +1839,64 @@ export class MattMineService {
   }
 
   async quoteArenaEntry(token, input = {}) {
-    const { session } = await this.arenaPlayer(token, { operation: 'payments' });
-    this.assertPaidCompetitionEligible(session.address, 'arena');
-    return this.arenaService.quoteEntry(session.address, input);
+    const { session, wallet } = await this.arenaPlayer(token, { operation: 'payments' });
+    const submittedAttestation = input.eligibility && typeof input.eligibility === 'object'
+      ? input.eligibility
+      : null;
+    const storedAttestation = wallet.paidCompetitionEligibility?.arena || null;
+    const eligibility = this.assertPaidCompetitionEligible(
+      session.address,
+      'arena',
+      submittedAttestation || storedAttestation
+    );
+    if (submittedAttestation && eligibility.enforcement === 'public_attestation') {
+      await this.database.transact((state) => {
+        const currentWallet = requireWallet(state, session.address);
+        currentWallet.paidCompetitionEligibility ||= {};
+        currentWallet.paidCompetitionEligibility.arena = {
+          age18OrOlder: true,
+          locatedInJurisdiction: true,
+          notProhibited: true,
+          acceptedRules: true,
+          rulesVersion: eligibility.rulesVersion,
+          rulesHash: eligibility.rulesHash,
+          jurisdiction: eligibility.jurisdiction,
+          acceptedAt: eligibility.acceptedAt
+        };
+        currentWallet.updatedAt = this.now();
+        addAudit(
+          state,
+          session.address,
+          'ARENA_RULES_ACCEPTED',
+          `${eligibility.rulesVersion} · ${eligibility.rulesHash} · ${eligibility.jurisdiction}`,
+          eligibility.acceptedAt
+        );
+      });
+    }
+    const result = await this.arenaService.quoteEntry(session.address, input);
+    return {
+      ...result,
+      quote: {
+        ...result.quote,
+        ...(eligibility.receiptToken
+          ? { eligibilityReceipt: eligibility.receiptToken }
+          : {}),
+        eligibility: publicEligibilityRecord(eligibility)
+      }
+    };
   }
 
-  async confirmArenaEntry(token, enterTransactionHash) {
+  async confirmArenaEntry(token, input = {}) {
     const { session } = await this.arenaPlayer(token, { operation: 'payments' });
-    return this.arenaService.confirmEntry(session.address, enterTransactionHash);
+    const transactionHash = typeof input === 'string'
+      ? input
+      : input.enterTransactionHash || input.transactionHash;
+    const eligibility = this.verifyPaidCompetitionEligibility(
+      session.address,
+      'arena',
+      typeof input === 'string' ? '' : input.eligibilityReceipt
+    );
+    return this.arenaService.confirmEntry(session.address, transactionHash, eligibility);
   }
 
   async startArenaRun(token, input = {}) {
@@ -2122,8 +2175,8 @@ export class MattMineService {
     assertApi(typeof candidate === 'string' && safeTokenEqual(hashToken(candidate), hashToken(this.adminKey)), 401, 'admin_key_rejected', 'The server admin key is invalid.');
   }
 
-  assertPaidCompetitionEligible(address, mode) {
-    if (this.eligibilityPolicy) return this.eligibilityPolicy.assertEligible(address, { mode });
+  assertPaidCompetitionEligible(address, mode, attestation = undefined) {
+    if (this.eligibilityPolicy) return this.eligibilityPolicy.assertEligible(address, { mode, attestation });
     assertApi(
       process.env.NODE_ENV !== 'production',
       503,
@@ -2131,6 +2184,13 @@ export class MattMineService {
       'Paid competition eligibility is not configured. Practice remains available.'
     );
     return { eligible: true, developmentOnly: true };
+  }
+
+  verifyPaidCompetitionEligibility(address, mode, receiptToken = '') {
+    if (this.eligibilityPolicy?.verifyReceipt) {
+      return this.eligibilityPolicy.verifyReceipt(address, receiptToken, { mode });
+    }
+    return this.assertPaidCompetitionEligible(address, mode);
   }
 
   assertPaymentsEnabled() {
@@ -2321,6 +2381,7 @@ function publicWalletSnapshot(state, address, timestamp) {
     passProgress: publicPassProgress(wallet),
     passInventory: publicPassInventory(wallet),
     keybindings: structuredClone(wallet.keybindings),
+    paidCompetitionEligibility: publicPaidCompetitionEligibility(wallet),
     suspended: wallet.suspended,
     day,
     week,
@@ -2334,6 +2395,16 @@ function publicWalletSnapshot(state, address, timestamp) {
       paid: walletWeeklyScore(state, address, SERVER_RUN_MODES.PAID, week)
     }
   };
+}
+
+function publicPaidCompetitionEligibility(wallet = {}) {
+  return Object.fromEntries(Object.entries(wallet.paidCompetitionEligibility || {})
+    .map(([mode, acceptance]) => [mode, {
+      rulesVersion: acceptance.rulesVersion,
+      rulesHash: acceptance.rulesHash,
+      jurisdiction: acceptance.jurisdiction,
+      acceptedAt: acceptance.acceptedAt
+    }]));
 }
 
 function leaderboardForState(state, mode, week, viewerAddress) {
@@ -2775,6 +2846,18 @@ function findPracticeClaimByTransactionHash(practiceClaims, transactionHash) {
 function normalizeTransactionHash(value) {
   const normalized = String(value || '').toLowerCase();
   return /^0x[a-f0-9]{64}$/.test(normalized) ? normalized : '';
+}
+
+function publicEligibilityRecord(eligibility = {}) {
+  return {
+    enforcement: eligibility.enforcement || 'development',
+    rulesVersion: eligibility.rulesVersion || null,
+    rulesHash: eligibility.rulesHash || null,
+    rulesUrl: eligibility.rulesUrl || null,
+    jurisdiction: eligibility.jurisdiction || null,
+    acceptedAt: eligibility.acceptedAt || null,
+    expiresAt: eligibility.expiresAt || null
+  };
 }
 
 function safeInteger(value, fallback = 0, allowNegative = false) {

@@ -53,6 +53,7 @@ export function defaultWalletState(address, timestamp = Date.now()) {
     keybindings: defaultKeybindings(),
     expansion: defaultPlayerExpansion(),
     activity: [],
+    paidCompetitionEligibility: {},
     suspended: false,
     daily: {},
     createdAt: timestamp,
@@ -229,10 +230,42 @@ function normalizeWallets(input) {
         keybindings: safeKeybindings(wallet.keybindings),
         expansion: safePlayerExpansion(wallet.expansion),
         activity: normalizeActivity(wallet.activity),
+        paidCompetitionEligibility: normalizePaidCompetitionEligibility(wallet.paidCompetitionEligibility),
         suspended: wallet.suspended === true,
         daily: normalizeDaily(wallet.daily),
         createdAt: safeTimestamp(wallet.createdAt),
         updatedAt: safeTimestamp(wallet.updatedAt)
+      }];
+    }));
+}
+
+function normalizePaidCompetitionEligibility(input) {
+  if (!isRecord(input)) return {};
+  return Object.fromEntries(['arena', 'paid']
+    .filter((mode) => {
+      const value = input[mode];
+      return isRecord(value) &&
+        value.age18OrOlder === true &&
+        value.locatedInJurisdiction === true &&
+        value.notProhibited === true &&
+        value.acceptedRules === true &&
+        typeof value.rulesVersion === 'string' &&
+        /^[a-fA-F0-9]{64}$/.test(value.rulesHash || '') &&
+        /^[A-Z]{2}$/.test(value.jurisdiction || '') &&
+        Number.isSafeInteger(value.acceptedAt) &&
+        value.acceptedAt > 0;
+    })
+    .map((mode) => {
+      const value = input[mode];
+      return [mode, {
+        age18OrOlder: true,
+        locatedInJurisdiction: true,
+        notProhibited: true,
+        acceptedRules: true,
+        rulesVersion: value.rulesVersion.slice(0, 120),
+        rulesHash: value.rulesHash.toLowerCase(),
+        jurisdiction: value.jurisdiction,
+        acceptedAt: value.acceptedAt
       }];
     }));
 }

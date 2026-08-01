@@ -554,6 +554,114 @@ button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{ou
   line-height: 1.45;
 }
 
+.arena-entry-card p a {
+  color: #f7d35c;
+}
+
+.arena-eligibility-dialog {
+  width: min(620px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  overflow: auto;
+  padding: 0;
+  border: 1px solid rgba(247, 211, 92, 0.45);
+  border-radius: 18px;
+  background: #0b1019;
+  color: #f4f5f7;
+  box-shadow: 0 32px 100px rgba(0, 0, 0, 0.82);
+}
+
+.arena-eligibility-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.84);
+  backdrop-filter: blur(7px);
+}
+
+.arena-eligibility-dialog form {
+  display: grid;
+  gap: 14px;
+  padding: 24px;
+}
+
+.arena-eligibility-dialog h2,
+.arena-eligibility-dialog p {
+  margin: 0;
+}
+
+.arena-eligibility-copy {
+  color: #aab1bd;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.arena-official-rules {
+  padding: 12px 14px;
+  border: 1px solid rgba(247, 211, 92, 0.35);
+  border-radius: 10px;
+  color: #f7d35c;
+  background: rgba(247, 211, 92, 0.07);
+  font-size: 12px;
+  font-weight: 900;
+  text-align: center;
+  letter-spacing: 0.05em;
+}
+
+.arena-jurisdiction-field {
+  color: #d7dbe2;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.arena-eligibility-dialog select {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 9px;
+  background: #111826;
+  color: #fff;
+}
+
+.arena-attestations {
+  display: grid;
+  gap: 9px;
+}
+
+.arena-attestations label {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  gap: 10px;
+  align-items: start;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9px;
+  color: #c7ccd5;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.arena-attestations input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #f7d35c;
+}
+
+.arena-attestations code {
+  color: #f7d35c;
+  overflow-wrap: anywhere;
+}
+
+.arena-eligibility-actions {
+  display: grid;
+  grid-template-columns: 0.7fr 1.3fr;
+  gap: 10px;
+}
+
+.arena-eligibility-actions .primary-button,
+.arena-eligibility-actions .secondary-button {
+  min-height: 48px;
+  margin: 0;
+}
+
 .arena-clock-card > strong {
   display: block;
   margin: 7px 0 2px;

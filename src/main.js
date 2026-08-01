@@ -1870,6 +1870,67 @@ function updateArenaCountdown() {
   if (element) element.textContent = countdown.complete ? 'CLOSED' : countdown.label;
 }
 
+function arenaUsesPublicEligibility() {
+  const eligibility = serverConfig?.eligibility;
+  return eligibility?.enforcement === 'public_attestation' &&
+    eligibility.publicModes?.includes('arena');
+}
+
+function walletAcceptedCurrentArenaRules() {
+  const configured = serverConfig?.eligibility;
+  const accepted = serverPlayer?.paidCompetitionEligibility?.arena;
+  return Boolean(
+    configured?.rulesVersion &&
+    configured?.rulesHash &&
+    accepted?.rulesVersion === configured.rulesVersion &&
+    accepted?.rulesHash === configured.rulesHash
+  );
+}
+
+function requestArenaEligibilityAcknowledgement() {
+  const configured = serverConfig?.eligibility;
+  const dialog = $('#arena-eligibility-dialog');
+  const form = $('#arena-eligibility-form');
+  if (!dialog || !form || !configured?.rulesVersion || !configured?.rulesHash) {
+    throw new Error('The current Arena eligibility rules are unavailable.');
+  }
+  form.reset();
+  $('#arena-rules-version').textContent = `v${configured.rulesVersion}`;
+  $('#arena-rules-hash').textContent = configured.rulesHash;
+  for (const link of [$('#arena-rules-link'), $('#arena-eligibility-rules-link')]) {
+    if (link && configured.rulesUrl) link.href = configured.rulesUrl;
+  }
+  $('#arena-eligibility-rules-link').textContent = `OPEN OFFICIAL RULES v${configured.rulesVersion} (PDF)`;
+  if (dialog.open) dialog.close('cancel');
+  dialog.showModal();
+  return new Promise((resolve) => {
+    let acknowledgement = null;
+    const cancelButton = $('#arena-eligibility-cancel');
+    const onSubmit = (event) => {
+      event.preventDefault();
+      acknowledgement = {
+        age18OrOlder: $('#arena-age-attestation').checked,
+        locatedInJurisdiction: $('#arena-location-attestation').checked,
+        notProhibited: $('#arena-prohibited-attestation').checked,
+        acceptedRules: $('#arena-rules-attestation').checked,
+        jurisdiction: $('#arena-jurisdiction').value,
+        rulesVersion: configured.rulesVersion,
+        rulesHash: configured.rulesHash
+      };
+      dialog.close('accepted');
+    };
+    const onCancel = () => dialog.close('cancel');
+    const onClose = () => {
+      form.removeEventListener('submit', onSubmit);
+      cancelButton.removeEventListener('click', onCancel);
+      resolve(dialog.returnValue === 'accepted' ? acknowledgement : null);
+    };
+    form.addEventListener('submit', onSubmit);
+    cancelButton.addEventListener('click', onCancel);
+    dialog.addEventListener('close', onClose, { once: true });
+  });
+}
+
 async function purchaseArenaEntry() {
   if (arenaBusy) return;
   if (!serverPlayer) {
@@ -1888,7 +1949,20 @@ async function purchaseArenaEntry() {
   arenaBusy = true;
   renderArena();
   try {
-    const quote = await apiClient.arenaEntryQuote(arenaConfig.day);
+    const eligibilityAcknowledgement = arenaUsesPublicEligibility() && !walletAcceptedCurrentArenaRules()
+      ? await requestArenaEligibilityAcknowledgement()
+      : null;
+    if (arenaUsesPublicEligibility() && !walletAcceptedCurrentArenaRules() && !eligibilityAcknowledgement) return;
+    const quote = await apiClient.arenaEntryQuote(arenaConfig.day, eligibilityAcknowledgement);
+    if (quote.eligibility?.enforcement === 'public_attestation') {
+      serverPlayer.paidCompetitionEligibility ||= {};
+      serverPlayer.paidCompetitionEligibility.arena = {
+        rulesVersion: quote.eligibility.rulesVersion,
+        rulesHash: quote.eligibility.rulesHash,
+        jurisdiction: quote.eligibility.jurisdiction,
+        acceptedAt: quote.eligibility.acceptedAt
+      };
+    }
     const balanceLine = quote.balanceRaw
       ? `\n\nWallet balance: ${formatMattRaw(quote.balanceRaw)} MATT`
       : '';
@@ -1904,7 +1978,10 @@ async function purchaseArenaEntry() {
     const transactionHashes = await wallet.purchaseArenaEntry(transactions);
     const entryTransactionHash = transactionHashes.at(-1);
     toast('Arena entry mined · server confirming');
-    const confirmation = await apiClient.confirmArenaEntry(entryTransactionHash);
+    const confirmation = await apiClient.confirmArenaEntry(
+      entryTransactionHash,
+      quote.eligibilityReceipt || ''
+    );
     arenaPlayer = normalizeArenaPlayer({
       ...arenaPlayer,
       entries: arenaPlayer.entries + (confirmation.alreadyConfirmed ? 0 : 1),

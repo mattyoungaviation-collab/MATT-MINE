@@ -16,7 +16,8 @@ const MIME_TYPES = Object.freeze({
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.ico': 'image/x-icon',
-  '.mp3': 'audio/mpeg'
+  '.mp3': 'audio/mpeg',
+  '.pdf': 'application/pdf'
 });
 
 export function createMattMineHttpServer({ root, service, maxRequestBytes = MAX_REQUEST_BYTES }) {
@@ -220,10 +221,7 @@ async function handleApiRequest({
   }
   if (method === 'POST' && path === '/api/arena/entries/confirm') {
     const body = await readJson(request, maxRequestBytes);
-    const result = await service.confirmArenaEntry(
-      bearerToken(request),
-      body.enterTransactionHash || body.transactionHash
-    );
+    const result = await service.confirmArenaEntry(bearerToken(request), body);
     sendJson(response, 200, { ok: true, ...result });
     return;
   }
@@ -687,7 +685,7 @@ async function serveStatic(request, response, pathname, root) {
   const extension = extname(filePath);
   const cacheControl = requestedPath === 'index.html'
     ? 'no-cache'
-    : ['.png', '.svg', '.ico', '.mp3'].includes(extension)
+    : ['.png', '.svg', '.ico', '.mp3', '.pdf'].includes(extension)
       ? 'public, max-age=86400'
       : 'no-cache';
   response.writeHead(200, {
