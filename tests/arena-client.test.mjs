@@ -127,6 +127,8 @@ test('Arena client recognizes deterministic input replay readiness', () => {
 
 test('Render pins the exact verified Arena deployment and requests live replay mode', () => {
   const blueprint = fs.readFileSync(new URL('../render.yaml', import.meta.url), 'utf8');
+  assert.match(blueprint, /healthCheckPath:\s*\/api\/live/);
+  assert.doesNotMatch(blueprint, /healthCheckPath:\s*\/api\/ready/);
   assert.match(blueprint, /MATT_MINE_ARENA_CONTRACT_ADDRESS[\s\S]*0x506f969279F8264fd629BBB0Df861Ab91343b12C/);
   assert.match(blueprint, /MATT_MINE_ARENA_RUNTIME_CODE_HASH[\s\S]*0xbe675f45747d267318291cad7295374ad5c65fa06063fe3b8cc111b8fa27453a/);
   assert.match(blueprint, /MATT_MINE_ARENA_SAFE_ADDRESS[\s\S]*0xBacE355D23d378a6E1adD986E53a18Dd12E6EeAc/);
@@ -135,6 +137,16 @@ test('Render pins the exact verified Arena deployment and requests live replay m
   assert.match(blueprint, /MATT_MINE_ARENA_RECEIPT_SECRET\s*\n\s*generateValue: true/);
   assert.match(blueprint, /MATT_MINE_ARENA_SEED_SECRET\s*\n\s*generateValue: true/);
   assert.match(blueprint, /MATT_MINE_ARENA_LIVE\s*\n\s*value: "true"/);
+});
+
+test('production migration pauses full-state normalized writes on request transactions', () => {
+  const migration = fs.readFileSync(
+    new URL('../migrations/005_pause_normalized_dual_write.up.sql', import.meta.url),
+    'utf8'
+  );
+  assert.match(migration, /read_source\s*=\s*'legacy'/i);
+  assert.match(migration, /dual_write_enabled\s*=\s*FALSE/i);
+  assert.doesNotMatch(migration, /DROP\s+(?:TABLE|SCHEMA)/i);
 });
 
 test('Arena leaderboard derives an exact projected full-pool split when the server returns scores only', () => {
