@@ -139,20 +139,23 @@ export class MattMineApiClient {
     return response.arena || response.config;
   }
 
-  async arenaEntryQuote(day = '') {
+  async arenaEntryQuote(day = '', eligibility = null) {
     const response = await this.request('/api/arena/entries/quote', {
       method: 'POST',
       authenticated: true,
-      body: day ? { day } : {}
+      body: {
+        ...(day ? { day } : {}),
+        ...(eligibility ? { eligibility } : {})
+      }
     });
     return response.quote;
   }
 
-  async confirmArenaEntry(transactionHash) {
+  async confirmArenaEntry(transactionHash, eligibilityReceipt = '') {
     return this.request('/api/arena/entries/confirm', {
       method: 'POST',
       authenticated: true,
-      body: { transactionHash }
+      body: { transactionHash, eligibilityReceipt }
     });
   }
 

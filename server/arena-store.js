@@ -453,10 +453,14 @@ export class PostgresArenaStore {
       await client.query(
         `INSERT INTO matt_mine_arena.entries (
            entry_id,payment_key,transaction_hash,log_index,block_number,day_key,address,
-           amount_raw,confirmed_at_ms,consumed_at_ms,run_id
-         ) VALUES ($1,$2,$3,$4,$5::numeric,$6,$7,$8::numeric,$9,0,'')`,
+           amount_raw,confirmed_at_ms,consumed_at_ms,run_id,eligibility_mode,
+           eligibility_receipt_id,eligibility_rules_version,eligibility_rules_hash,
+           eligibility_rules_url,eligibility_jurisdiction,eligibility_accepted_at_ms
+         ) VALUES ($1,$2,$3,$4,$5::numeric,$6,$7,$8::numeric,$9,0,'',$10,$11,$12,$13,$14,$15,$16)`,
         [entry.entryId, entry.paymentKey, entry.transactionHash, entry.logIndex, entry.blockNumber,
-          entry.day, entry.address, entry.amountRaw, entry.confirmedAt]
+          entry.day, entry.address, entry.amountRaw, entry.confirmedAt, entry.eligibilityMode,
+          entry.eligibilityReceiptId, entry.eligibilityRulesVersion, entry.eligibilityRulesHash,
+          entry.eligibilityRulesUrl, entry.eligibilityJurisdiction, entry.eligibilityAcceptedAt]
       );
       await client.query('COMMIT');
       return { entry, alreadyConfirmed: false };
@@ -998,8 +1002,22 @@ export async function createArenaPostgresSchema(pool) {
       confirmed_at_ms BIGINT NOT NULL,
       consumed_at_ms BIGINT NOT NULL DEFAULT 0,
       run_id TEXT NOT NULL DEFAULT '',
+      eligibility_mode TEXT NOT NULL DEFAULT 'legacy',
+      eligibility_receipt_id TEXT NOT NULL DEFAULT '',
+      eligibility_rules_version TEXT NOT NULL DEFAULT '',
+      eligibility_rules_hash TEXT NOT NULL DEFAULT '',
+      eligibility_rules_url TEXT NOT NULL DEFAULT '',
+      eligibility_jurisdiction TEXT NOT NULL DEFAULT '',
+      eligibility_accepted_at_ms BIGINT NOT NULL DEFAULT 0,
       UNIQUE (transaction_hash, log_index)
     )`);
+  await pool.query(`ALTER TABLE matt_mine_arena.entries ADD COLUMN IF NOT EXISTS eligibility_mode TEXT NOT NULL DEFAULT 'legacy'`);
+  await pool.query(`ALTER TABLE matt_mine_arena.entries ADD COLUMN IF NOT EXISTS eligibility_receipt_id TEXT NOT NULL DEFAULT ''`);
+  await pool.query(`ALTER TABLE matt_mine_arena.entries ADD COLUMN IF NOT EXISTS eligibility_rules_version TEXT NOT NULL DEFAULT ''`);
+  await pool.query(`ALTER TABLE matt_mine_arena.entries ADD COLUMN IF NOT EXISTS eligibility_rules_hash TEXT NOT NULL DEFAULT ''`);
+  await pool.query(`ALTER TABLE matt_mine_arena.entries ADD COLUMN IF NOT EXISTS eligibility_rules_url TEXT NOT NULL DEFAULT ''`);
+  await pool.query(`ALTER TABLE matt_mine_arena.entries ADD COLUMN IF NOT EXISTS eligibility_jurisdiction TEXT NOT NULL DEFAULT ''`);
+  await pool.query(`ALTER TABLE matt_mine_arena.entries ADD COLUMN IF NOT EXISTS eligibility_accepted_at_ms BIGINT NOT NULL DEFAULT 0`);
   await pool.query(`
     CREATE INDEX IF NOT EXISTS entries_wallet_day_unused_idx
     ON matt_mine_arena.entries(address,day_key,confirmed_at_ms) WHERE run_id=''`);
@@ -1163,7 +1181,14 @@ function normalizeEntry(input) {
     amountRaw: rawAmount(input.amountRaw, false, 'arena_fee_invalid'),
     confirmedAt: safeInteger(input.confirmedAt),
     consumedAt: safeInteger(input.consumedAt),
-    runId: String(input.runId || '')
+    runId: String(input.runId || ''),
+    eligibilityMode: String(input.eligibilityMode || 'legacy').slice(0, 40),
+    eligibilityReceiptId: String(input.eligibilityReceiptId || '').slice(0, 120),
+    eligibilityRulesVersion: String(input.eligibilityRulesVersion || '').slice(0, 120),
+    eligibilityRulesHash: String(input.eligibilityRulesHash || '').toLowerCase().slice(0, 64),
+    eligibilityRulesUrl: String(input.eligibilityRulesUrl || '').slice(0, 500),
+    eligibilityJurisdiction: String(input.eligibilityJurisdiction || '').toUpperCase().slice(0, 8),
+    eligibilityAcceptedAt: safeInteger(input.eligibilityAcceptedAt)
   };
 }
 
@@ -1240,7 +1265,11 @@ function formatEntryRow(row) {
     entryId: row.entry_id, paymentKey: row.payment_key, transactionHash: row.transaction_hash,
     logIndex: Number(row.log_index), blockNumber: String(row.block_number), day: row.day_key,
     address: row.address, amountRaw: String(row.amount_raw), confirmedAt: Number(row.confirmed_at_ms),
-    consumedAt: Number(row.consumed_at_ms), runId: row.run_id
+    consumedAt: Number(row.consumed_at_ms), runId: row.run_id,
+    eligibilityMode: row.eligibility_mode, eligibilityReceiptId: row.eligibility_receipt_id,
+    eligibilityRulesVersion: row.eligibility_rules_version, eligibilityRulesHash: row.eligibility_rules_hash,
+    eligibilityRulesUrl: row.eligibility_rules_url, eligibilityJurisdiction: row.eligibility_jurisdiction,
+    eligibilityAcceptedAt: Number(row.eligibility_accepted_at_ms)
   });
 }
 

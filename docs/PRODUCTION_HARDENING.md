@@ -112,7 +112,7 @@ Remaining test gaps: unknown-COMMIT fault injection, begin/write/commit disconne
 
 ### 12. Eligibility
 
-Paid Pass/Arena competition is denied in production unless `MATT_MINE_ELIGIBILITY_COUNSEL_APPROVED=true`, a rules version is supplied, and the wallet is on the server allowlist. Practice remains available. This is an enforcement hook, not a legal conclusion. Jurisdiction, age, official rules, privacy and consumer requirements need counsel approval.
+Paid competition is denied in production unless counsel approval and an immutable rules version are configured. A mode listed in `MATT_MINE_PUBLIC_PAID_MODES` uses one-time per-wallet age, jurisdiction, Official Rules, sanctions, fraud, automation, cheating, and location acknowledgements. The server signs the acknowledgement before payment, requires that receipt at confirmation, and records the exact rules version and hash on every Arena entry. Modes not listed remain on the server wallet allowlist. Practice remains available.
 
 ## Environment variables
 
@@ -121,9 +121,13 @@ New variables:
 - `RONIN_RPC_URLS`: ordered comma-separated Ronin read endpoints.
 - `MATT_MINE_RPC_TIMEOUT_MS`: per-endpoint timeout; default 10000.
 - `MATT_MINE_ADMIN_WALLETS`: exact comma-separated Admin addresses.
-- `MATT_MINE_ELIGIBILITY_COUNSEL_APPROVED`: must remain false until counsel approval.
+- `MATT_MINE_ELIGIBILITY_COUNSEL_APPROVED`: true only for a counsel-approved release.
 - `MATT_MINE_ELIGIBILITY_RULES_VERSION`: immutable approved rules identifier.
-- `MATT_MINE_ELIGIBLE_PAID_WALLETS`: server-controlled eligible wallet allowlist.
+- `MATT_MINE_ELIGIBILITY_RULES_SHA256`: SHA-256 of the published approved rules.
+- `MATT_MINE_ELIGIBILITY_RULES_URL`: permanent same-origin URL for the approved rules.
+- `MATT_MINE_PUBLIC_PAID_MODES`: comma-separated modes (`arena` and/or `paid`) using public acknowledgement instead of an allowlist.
+- `MATT_MINE_ELIGIBILITY_RECEIPT_SECRET`: optional dedicated receipt secret; defaults to the Arena receipt secret.
+- `MATT_MINE_ELIGIBLE_PAID_WALLETS`: server-controlled allowlist for modes not public.
 - `MATT_MINE_BACKUP_AGE_RECIPIENT`: age public recipient for encrypted backups.
 - `MATT_MINE_BACKUP_DIRECTORY`: operator-selected off-platform staging path.
 - `RENDER_GIT_COMMIT` or `GIT_COMMIT`: health/replay build correlation.

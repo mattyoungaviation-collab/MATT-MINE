@@ -220,6 +220,10 @@ const service = new CompleteProductionMattMineService(database, {
   eligibilityPolicy: new PaidCompetitionEligibilityPolicy({
     counselApproved: process.env.MATT_MINE_ELIGIBILITY_COUNSEL_APPROVED === 'true',
     rulesVersion: process.env.MATT_MINE_ELIGIBILITY_RULES_VERSION || '',
+    rulesHash: process.env.MATT_MINE_ELIGIBILITY_RULES_SHA256 || '',
+    rulesUrl: process.env.MATT_MINE_ELIGIBILITY_RULES_URL || '',
+    publicModes: (process.env.MATT_MINE_PUBLIC_PAID_MODES || '').split(',').map((value) => value.trim()),
+    receiptSecret: process.env.MATT_MINE_ELIGIBILITY_RECEIPT_SECRET || arenaReceiptSecret,
     allowedWallets: (process.env.MATT_MINE_ELIGIBLE_PAID_WALLETS || '').split(',').map((value) => value.trim())
   }),
   mainnetTransactionsEnabled,

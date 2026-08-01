@@ -18,6 +18,7 @@ import {
   RoninPaymentVerifier
 } from '../server/payment-verifier.js';
 import { MattMineService, validateRunResult } from '../server/service.js';
+import { PaidCompetitionEligibilityPolicy } from '../server/eligibility.js';
 import { AUTH_CHALLENGE_TTL_MS, RONIN_CHAINS, SERVER_RUN_MODES } from '../server/constants.js';
 import { PASS_CHEST_ID } from '../src/game/passRewards.js';
 
@@ -96,6 +97,8 @@ function createHarness(options = {}) {
     adminKey: options.adminKey || 'test-admin-key',
     mainnetTransactionsEnabled: options.mainnetTransactionsEnabled === true,
     paymentVerifier: options.paymentVerifier,
+    arenaService: options.arenaService,
+    eligibilityPolicy: options.eligibilityPolicy,
     randomHex(bytes) {
       randomCounter += 1;
       return randomCounter.toString(16).padStart(bytes * 2, '0').slice(-bytes * 2);
@@ -111,6 +114,49 @@ function createHarness(options = {}) {
     }
   };
 }
+
+test('a public Arena rules acknowledgement is stored once per wallet and reused for the same immutable rules', async () => {
+  const rulesHash = '37140868cdedf74a006040cf7f494e29fcc8885bae5710b9b8e623f965af1979';
+  const arenaService = {
+    publicConfig: () => ({ enabled: true }),
+    quoteEntry: async () => ({ quote: { amountRaw: '25000000000000000000000' } })
+  };
+  const harness = createHarness({
+    arenaService,
+    eligibilityPolicy: new PaidCompetitionEligibilityPolicy({
+      counselApproved: true,
+      rulesVersion: '0.01',
+      rulesHash,
+      rulesUrl: '/legal/matt-mine-arena-rules-v0.01.pdf',
+      publicModes: ['arena'],
+      receiptSecret: 'stored-eligibility-test-secret-at-least-32-characters',
+      now: () => START,
+      randomHex: () => 'b'.repeat(32)
+    })
+  });
+  const { session } = await signIn(harness);
+  const acknowledgement = {
+    age18OrOlder: true,
+    locatedInJurisdiction: true,
+    notProhibited: true,
+    acceptedRules: true,
+    jurisdiction: 'WA',
+    rulesVersion: '0.01',
+    rulesHash
+  };
+  const first = await harness.service.quoteArenaEntry(session.token, { eligibility: acknowledgement });
+  assert.ok(first.quote.eligibilityReceipt);
+  const player = await harness.service.me(session.token);
+  assert.deepEqual(player.paidCompetitionEligibility.arena, {
+    rulesVersion: '0.01',
+    rulesHash,
+    jurisdiction: 'WA',
+    acceptedAt: START
+  });
+  const second = await harness.service.quoteArenaEntry(session.token, {});
+  assert.ok(second.quote.eligibilityReceipt);
+  assert.equal(second.quote.eligibility.acceptedAt, START);
+});
 
 async function signIn(harness, signer = account, options = {}) {
   const challenge = await harness.service.createChallenge({

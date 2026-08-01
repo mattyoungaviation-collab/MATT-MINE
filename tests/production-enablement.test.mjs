@@ -49,8 +49,53 @@ test('paid competition eligibility defaults closed while leaving an explicit app
   assert.deepEqual(allowed.assertEligible(ADDRESS, { mode: 'arena' }), {
     eligible: true,
     rulesVersion: 'rules-2026-07-31',
-    mode: 'arena'
+    mode: 'arena',
+    enforcement: 'server_wallet_allowlist'
   });
+});
+
+test('public Arena eligibility removes the wallet allowlist but requires and signs the approved one-time acknowledgement', () => {
+  let timestamp = Date.UTC(2026, 7, 1, 12, 0, 0);
+  const rulesHash = '37140868cdedf74a006040cf7f494e29fcc8885bae5710b9b8e623f965af1979';
+  const policy = new PaidCompetitionEligibilityPolicy({
+    counselApproved: true,
+    rulesVersion: '0.01',
+    rulesHash,
+    rulesUrl: '/legal/matt-mine-arena-rules-v0.01.pdf',
+    publicModes: ['arena'],
+    receiptSecret: 'x'.repeat(32),
+    now: () => timestamp,
+    randomHex: () => 'a'.repeat(32)
+  });
+  assert.throws(
+    () => policy.assertEligible(ADDRESS, { mode: 'arena' }),
+    (error) => error.code === 'paid_competition_attestation_required'
+  );
+  const acknowledgement = {
+    age18OrOlder: true,
+    locatedInJurisdiction: true,
+    notProhibited: true,
+    acceptedRules: true,
+    jurisdiction: 'WA',
+    rulesVersion: '0.01',
+    rulesHash
+  };
+  const issued = policy.assertEligible(ADDRESS, { mode: 'arena', attestation: acknowledgement });
+  assert.equal(issued.enforcement, 'public_attestation');
+  assert.equal(issued.jurisdiction, 'WA');
+  assert.ok(issued.receiptToken);
+  const verified = policy.verifyReceipt(ADDRESS, issued.receiptToken, { mode: 'arena' });
+  assert.equal(verified.receiptId, issued.receiptId);
+  assert.equal(verified.rulesHash, rulesHash);
+  timestamp += 31 * 60_000;
+  const reused = policy.assertEligible(ADDRESS, {
+    mode: 'arena',
+    attestation: { ...acknowledgement, acceptedAt: issued.acceptedAt }
+  });
+  assert.equal(reused.acceptedAt, issued.acceptedAt);
+  assert.ok(reused.expiresAt > timestamp);
+  assert.equal(policy.verifyReceipt(ADDRESS, reused.receiptToken, { mode: 'arena' }).acceptedAt, issued.acceptedAt);
+  assert.equal(policy.publicStatus().configured, true);
 });
 
 test('competitive replay checkpoints are signed, ordered, persisted, and bound to the run token', async () => {

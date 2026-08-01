@@ -170,7 +170,7 @@ export class DailyArenaService {
     };
   }
 
-  async confirmEntry(address, enterTransactionHash) {
+  async confirmEntry(address, enterTransactionHash, eligibility = {}) {
     this.assertLive();
     const timestamp = this.now();
     const verified = await this.chain.verifyEntryPurchase(
@@ -197,11 +197,26 @@ export class DailyArenaService {
       'arena_entry_after_cutoff',
       'This Arena entry was mined after the server-authoritative daily cutoff.'
     );
+    if (eligibility.enforcement === 'public_attestation') {
+      assertApi(
+        Number.isSafeInteger(eligibility.acceptedAt) && eligibility.acceptedAt <= verified.blockTimestampMs,
+        422,
+        'arena_rules_accepted_after_payment',
+        'The Official Rules must be accepted before the Arena entry transaction is mined.'
+      );
+    }
     const entryId = `arena_entry_${createHash('sha256').update(verified.paymentKey).digest('hex').slice(0, 24)}`;
     const stored = await this.store.confirmEntry({
       entryId,
       ...verified,
-      confirmedAt: timestamp
+      confirmedAt: timestamp,
+      eligibilityMode: eligibility.enforcement || 'legacy',
+      eligibilityReceiptId: eligibility.receiptId || '',
+      eligibilityRulesVersion: eligibility.rulesVersion || '',
+      eligibilityRulesHash: eligibility.rulesHash || '',
+      eligibilityRulesUrl: eligibility.rulesUrl || '',
+      eligibilityJurisdiction: eligibility.jurisdiction || '',
+      eligibilityAcceptedAt: eligibility.acceptedAt || 0
     });
     await this.#reconcileDay(day);
     const attempts = await this.store.unusedEntries(address, day);
