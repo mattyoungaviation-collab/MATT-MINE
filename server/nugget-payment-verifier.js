@@ -1,13 +1,11 @@
 import {
-  createPublicClient,
   decodeFunctionData,
   encodeFunctionData,
   getAddress,
-  http,
   parseEventLogs
 } from 'viem';
-import { ronin } from 'viem/chains';
 import { ApiError, assertApi } from './errors.js';
+import { createRoninReadClient } from './ronin-rpc.js';
 
 const TRANSACTION_HASH_PATTERN = /^0x[a-fA-F0-9]{64}$/;
 
@@ -37,10 +35,12 @@ export class DirectRoninNuggetPaymentVerifier {
   constructor(options = {}) {
     this.confirmations = safePositiveInteger(options.confirmations, 3);
     this.receiptTimeoutMs = safePositiveInteger(options.receiptTimeoutMs, 120_000);
-    this.client = options.client || createPublicClient({
-      chain: ronin,
-      transport: http(options.rpcUrl || 'https://api.roninchain.com/rpc')
+    const rpc = options.client ? null : createRoninReadClient({
+      urls: options.rpcUrls || options.rpcUrl,
+      timeoutMs: options.rpcTimeoutMs
     });
+    this.client = options.client || rpc.client;
+    this.rpcPool = options.rpcPool || rpc?.pool || null;
   }
 
   transactionForQuote(quote) {
@@ -98,9 +98,11 @@ export class DirectRoninNuggetPaymentVerifier {
       assertApi(sameAddress(receipt.to, expectedRecipient), 422, 'wrong_payment_recipient', 'The confirmed RON payment recipient does not match the quote.');
       assertApi(transaction.value === expectedAmount, 422, 'payment_amount_mismatch', 'The RON payment amount must exactly match the quote.');
       assertApi(!transaction.input || transaction.input === '0x', 422, 'invalid_payment_call', 'The RON payment must be a direct transfer.');
+      const transactionBlockAt = await blockTimestampMs(this.client, receipt.blockNumber);
       return {
         transactionHash: hash,
         blockNumber: String(receipt.blockNumber),
+        transactionBlockAt,
         asset: 'RON',
         amountAtomic: String(transaction.value),
         recipient: expectedRecipient.toLowerCase()
@@ -134,10 +136,12 @@ export class DirectRoninNuggetPaymentVerifier {
       entry.args.value === expectedAmount
     );
     assertApi(transfer, 422, 'payment_event_missing', 'The confirmed transaction did not transfer the quoted MATT amount to the approved recipient.');
+    const transactionBlockAt = await blockTimestampMs(this.client, receipt.blockNumber);
 
     return {
       transactionHash: hash,
       blockNumber: String(receipt.blockNumber),
+      transactionBlockAt,
       logIndex: transfer.logIndex,
       asset: 'MATT',
       amountAtomic: String(transfer.args.value),
@@ -145,6 +149,14 @@ export class DirectRoninNuggetPaymentVerifier {
       tokenAddress: mattToken.toLowerCase()
     };
   }
+}
+
+async function blockTimestampMs(client, blockNumber) {
+  if (typeof client.getBlock !== 'function') return 0;
+  const block = await client.getBlock({ blockNumber });
+  const timestamp = Number(block?.timestamp) * 1000;
+  assertApi(Number.isSafeInteger(timestamp) && timestamp > 0, 503, 'transaction_block_unavailable', 'The confirmed transaction block timestamp is unavailable.');
+  return timestamp;
 }
 
 function toQuantityHex(value) {

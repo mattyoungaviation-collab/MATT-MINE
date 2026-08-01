@@ -1,13 +1,11 @@
 import {
-  createPublicClient,
   decodeFunctionData,
   encodeFunctionData,
   getAddress,
-  http,
   parseEventLogs
 } from 'viem';
-import { ronin } from 'viem/chains';
 import { ApiError, assertApi } from './errors.js';
+import { createRoninReadClient } from './ronin-rpc.js';
 
 export const RONIN_PAYMENT_CONTRACTS = Object.freeze({
   pass: '0x56a6d4Cf4Fbd1C7aA1572028556657CbC0fB5855',
@@ -143,10 +141,12 @@ export class RoninPaymentVerifier {
     this.receiptTimeoutMs = safePositiveInteger(options.receiptTimeoutMs, 120_000);
     this.slippageBps = safeBps(options.slippageBps, 500);
     this.quoteLifetimeSeconds = safePositiveInteger(options.quoteLifetimeSeconds, 300);
-    this.client = options.client || createPublicClient({
-      chain: ronin,
-      transport: http(options.rpcUrl || 'https://api.roninchain.com/rpc')
+    const rpc = options.client ? null : createRoninReadClient({
+      urls: options.rpcUrls || options.rpcUrl,
+      timeoutMs: options.rpcTimeoutMs
     });
+    this.client = options.client || rpc.client;
+    this.rpcPool = options.rpcPool || rpc?.pool || null;
   }
 
   publicConfig() {

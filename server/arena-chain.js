@@ -1,15 +1,13 @@
 import {
-  createPublicClient,
   decodeFunctionData,
   encodeFunctionData,
   getAddress,
-  http,
   keccak256,
   parseEventLogs
 } from 'viem';
-import { ronin } from 'viem/chains';
 import { assertApi } from './errors.js';
 import { utcDayId } from './arena-settlement.js';
+import { createRoninReadClient } from './ronin-rpc.js';
 
 const TRANSACTION_HASH_PATTERN = /^0x[a-fA-F0-9]{64}$/;
 const BYTES32_PATTERN = /^0x[a-fA-F0-9]{64}$/;
@@ -55,6 +53,11 @@ export const ARENA_ERC20_ABI = [
     ],
     outputs: [{ type: 'bool' }]
   }
+];
+
+const SAFE_ABI = [
+  { type: 'function', name: 'getOwners', stateMutability: 'view', inputs: [], outputs: [{ type: 'address[]' }] },
+  { type: 'function', name: 'getThreshold', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] }
 ];
 
 export const DAILY_ARENA_ABI = [
@@ -262,10 +265,9 @@ export class RoninArenaChain {
     this.requireEntriesPaused = options.requireEntriesPaused === true;
     this.confirmations = positiveInteger(options.confirmations, 3);
     this.receiptTimeoutMs = positiveInteger(options.receiptTimeoutMs, 120_000);
-    this.client = options.client || createPublicClient({
-      chain: ronin,
-      transport: http(options.rpcUrl || 'https://api.roninchain.com/rpc')
-    });
+    const rpc = options.client ? null : createRoninReadClient({ urls: options.rpcUrls || options.rpcUrl, timeoutMs: options.rpcTimeoutMs });
+    this.client = options.client || rpc.client;
+    this.rpcPool = options.rpcPool || rpc?.pool || null;
   }
 
   async validateDeployment() {
@@ -364,6 +366,22 @@ export class RoninArenaChain {
       'arena_deployer_role_present',
       'The temporary Arena deployer still holds a production role.'
     );
+    const [safeOwners, safeThreshold] = await Promise.all([
+      this.client.readContract({ address: this.safeAddress, abi: SAFE_ABI, functionName: 'getOwners' }),
+      this.client.readContract({ address: this.safeAddress, abi: SAFE_ABI, functionName: 'getThreshold' })
+    ]);
+    assertApi(
+      Array.isArray(safeOwners) && safeOwners.length === 3 && new Set(safeOwners.map((owner) => getAddress(owner))).size === 3,
+      503,
+      'treasury_safe_owners_mismatch',
+      'The live Treasury Safe must have exactly three unique owners.'
+    );
+    assertApi(
+      safeThreshold === 2n,
+      503,
+      'treasury_safe_threshold_mismatch',
+      'The live Treasury Safe threshold must be exactly 2-of-3.'
+    );
     assertApi(
       !this.requireEntriesPaused || entriesPaused === true,
       503,
@@ -377,6 +395,8 @@ export class RoninArenaChain {
       runtimeCodeHash,
       mattToken: getAddress(mattToken),
       treasurySafe: this.safeAddress,
+      safeOwners: safeOwners.map((owner) => getAddress(owner)),
+      safeThreshold: Number(safeThreshold),
       emergencyPauser: this.emergencyPauserAddress,
       temporaryDeployer: this.temporaryDeployerAddress,
       entriesPaused: Boolean(entriesPaused),

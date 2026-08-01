@@ -416,15 +416,22 @@ export class DailyArenaService {
         }
       );
     } catch (error) {
-      // The server already accepted every stored batch and signed the latest
-      // checkpoint. A failure while replaying that same accepted transcript is
-      // a reconciliation failure, not a reason to consume another paid entry.
-      const recovered = await this.store.recoverRejectedRun(run.runId, error, timestamp);
+      // Invalid gameplay never returns a paid entry. Only explicitly classified
+      // server infrastructure failures may pause finalization, and those resume
+      // the original run rather than creating another economic attempt.
+      if (!ARENA_RESUMABLE_SERVER_FAILURES.has(String(error?.code || ''))) throw error;
       return {
         accepted: false,
-        attemptRestored: recovered.attemptRestored === true,
-        code: 'arena_replay_attempt_restored',
-        message: 'The server could not finalize this replay. Your paid Arena attempt was restored; no additional MATT is required.',
+        resumable: true,
+        runId: run.runId,
+        checkpoint: {
+          throughSeq: run.throughSeq,
+          throughTick: run.throughTick,
+          transcriptHash: run.transcriptHash,
+          signature: run.checkpointSignature
+        },
+        code: 'arena_replay_resume_required',
+        message: 'Finalization is temporarily unavailable. Resume this same paid Arena run; the entry remains consumed and traceable.',
         replayError: {
           code: String(error?.code || 'arena_replay_mismatch'),
           message: String(error?.message || 'Authoritative replay mismatch')
@@ -1008,6 +1015,12 @@ export class DailyArenaService {
     return safeEqual(expected.signature, checkpoint.signature);
   }
 }
+
+const ARENA_RESUMABLE_SERVER_FAILURES = new Set([
+  'arena_replay_worker_unavailable',
+  'arena_replay_timeout',
+  'arena_engine_version_unavailable'
+]);
 
 function normalizeCheckpoint(input) {
   assertApi(input && typeof input === 'object' && !Array.isArray(input), 400, 'arena_checkpoint_invalid', 'A server-issued Daily Arena checkpoint is required.');

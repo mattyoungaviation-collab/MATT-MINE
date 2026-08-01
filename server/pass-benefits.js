@@ -8,7 +8,9 @@ export function applyMinePassGameplayBenefits(tuning, active) {
     nuggetMultiplier: enabled ? MINE_PASS_GAMEPLAY_MULTIPLIER : 1
   };
   if (!enabled) return tuning;
-  tuning.xpMultiplier = Number(tuning.xpMultiplier || 0) * MINE_PASS_GAMEPLAY_MULTIPLIER;
-  tuning.nuggetMultiplier = Number(tuning.nuggetMultiplier || 0) * MINE_PASS_GAMEPLAY_MULTIPLIER;
+  const xpBase = Number(tuning.xpMultiplier ?? 1);
+  const nuggetBase = Number(tuning.nuggetMultiplier ?? 1);
+  tuning.xpMultiplier = (Number.isFinite(xpBase) && xpBase > 0 ? xpBase : 1) * MINE_PASS_GAMEPLAY_MULTIPLIER;
+  tuning.nuggetMultiplier = (Number.isFinite(nuggetBase) && nuggetBase > 0 ? nuggetBase : 1) * MINE_PASS_GAMEPLAY_MULTIPLIER;
   return tuning;
 }

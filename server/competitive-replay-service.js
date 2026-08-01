@@ -19,6 +19,7 @@ export class CompetitiveReplayService {
     this.store = options.store;
     this.secret = String(options.secret || '');
     this.now = options.now || Date.now;
+    this.resolveRun = options.resolveRun || null;
     assertApi(this.store, 500, 'competitive_store_missing', 'A competitive replay store is required.');
     assertApi(this.secret.length >= 32, 500, 'competitive_secret_missing', 'A 32-character competitive replay secret is required.');
   }
@@ -54,7 +55,15 @@ export class CompetitiveReplayService {
       throughSeq: 0,
       throughTick: 0,
       transcriptHash,
-      checkpointSignature: ''
+      checkpointSignature: '',
+      runSnapshot: structuredClone(run),
+      authoritativeState: {},
+      buildCommit: run.buildCommit || process.env.RENDER_GIT_COMMIT || 'unknown',
+      engineVersion: run.engineVersion || 'game-v4',
+      replaySchemaVersion: 'matt-competitive-input-v1',
+      mapSnapshotId: run.competitionSnapshot?.id || run.tuning?._competitionSnapshot?.id || '',
+      mapHash: hashObject(run.competitionSnapshot || run.tuning?._competitionSnapshot || {}),
+      tuningHash: hashObject(run.tuning || {})
     };
     record.checkpointSignature = this.#sign(record);
     await this.store.createRun(record);
@@ -62,7 +71,8 @@ export class CompetitiveReplayService {
   }
 
   async append(address, payload = {}) {
-    const run = await this.#authenticatedRun(address, payload.runId, payload.runToken);
+    let run = await this.#authenticatedRun(address, payload.runId, payload.runToken);
+    run = await this.#ensureRunSnapshot(run);
     assertApi(run.status === 'active', 409, 'competitive_transcript_closed', 'The competitive transcript is closed.');
     assertApi(run.expiresAt > this.now(), 410, 'run_expired', 'The run expired before this input batch arrived.');
     const checkpoint = normalizeCheckpoint(payload.previousCheckpoint);
@@ -93,11 +103,20 @@ export class CompetitiveReplayService {
       'competitive_event_clock_ahead',
       'The competitive transcript is ahead of server time.'
     );
+    const allEvents = [...await this.store.getEvents(run.runId), ...events].map(publicEvent);
+    const snapshot = run.runSnapshot;
+    assertApi(snapshot?.id === run.runId, 500, 'competitive_run_snapshot_missing', 'The immutable competitive run snapshot is unavailable.');
+    const authoritativeState = replayArenaTranscript(
+      buildCompetitiveChallenge(snapshot),
+      allEvents,
+      replayOptions(snapshot, false)
+    );
     const next = {
       ...run,
       throughSeq: run.throughSeq + events.length,
       throughTick,
-      transcriptHash
+      transcriptHash,
+      authoritativeState
     };
     next.checkpointSignature = this.#sign(next);
     await this.store.appendEvents(run.runId, run.throughSeq, events, next);
@@ -105,30 +124,14 @@ export class CompetitiveReplayService {
   }
 
   async validate({ run, submission = {} }) {
-    const transcript = await this.store.getRun(run.id);
+    let transcript = await this.store.getRun(run.id);
     assertApi(transcript, 404, 'competitive_transcript_missing', 'The competitive transcript was not found.');
     assertApi(transcript.address === run.address && transcript.mode === run.mode, 403, 'competitive_transcript_mismatch', 'The competitive transcript does not match this run.');
+    if (!transcript.runSnapshot?.id) transcript = await this.#hydrateRunSnapshot(transcript, run);
     const checkpoint = normalizeCheckpoint(submission.checkpoint || submission);
     assertApi(this.#validCheckpoint(transcript, checkpoint), 401, 'competitive_checkpoint_invalid', 'Finish with the latest server-signed competitive checkpoint.');
-    const events = await this.store.getEvents(run.id);
-    const replayed = replayArenaTranscript(
-      buildCompetitiveChallenge(run),
-      events.map(publicEvent),
-      {
-        requireTerminal: true,
-        mode: run.mode,
-        day: run.day,
-        week: run.week,
-        maxDepth: competitiveMaximumDepth(run),
-        characterId: run.characterId,
-        character: run.character,
-        profile: run.playerProfile,
-        weeklyStage: run.weeklyStage,
-        endlessSnapshot: run.endlessSnapshot,
-        allowPaidRevive: run.paidReviveEligible === true,
-        reviveInvulnerabilitySeconds: run.reviveInvulnerabilitySeconds
-      }
-    );
+    const replayed = transcript.authoritativeState || {};
+    assertApi(replayed.terminal === true, 422, 'arena_run_not_terminal', 'A verified finish marker is required.');
     return {
       result: {
         extracted: replayed.extracted,
@@ -153,32 +156,16 @@ export class CompetitiveReplayService {
   }
 
   async validateDeath({ address, runId, run: stateRun, submission = {} }) {
-    const transcript = await this.store.getRun(runId);
+    let transcript = await this.store.getRun(runId);
     assertApi(transcript && transcript.address === address, 404, 'competitive_transcript_missing', 'The active run transcript was not found.');
     const checkpoint = normalizeCheckpoint(submission.checkpoint || submission);
     assertApi(this.#validCheckpoint(transcript, checkpoint), 401, 'competitive_checkpoint_invalid', 'Use the latest server-signed checkpoint for revive eligibility.');
-    const events = await this.store.getEvents(runId);
     assertApi(stateRun, 422, 'revive_run_snapshot_missing', 'The server run snapshot is required for death replay.');
-    const replayed = replayArenaTranscript(
-      buildCompetitiveChallenge(stateRun),
-      events.map(publicEvent),
-      {
-        requireTerminal: false,
-        mode: stateRun.mode,
-        day: stateRun.day,
-        week: stateRun.week,
-        maxDepth: competitiveMaximumDepth(stateRun),
-        characterId: stateRun.characterId,
-        character: stateRun.character,
-        profile: stateRun.playerProfile,
-        weeklyStage: stateRun.weeklyStage,
-        endlessSnapshot: stateRun.endlessSnapshot,
-        allowPaidRevive: stateRun.paidReviveEligible === true,
-        reviveInvulnerabilitySeconds: stateRun.reviveInvulnerabilitySeconds
-      }
-    );
+    if (!transcript.runSnapshot?.id) transcript = await this.#hydrateRunSnapshot(transcript, stateRun);
+    const replayed = transcript.authoritativeState || {};
     assertApi(replayed.awaitingRevive, 409, 'revive_death_not_verified', 'The replay did not reach a paid-revive knockout.');
     return {
+      checkpoint: this.#checkpoint(transcript),
       playerState: {
         health: 0,
         maximumHealth: replayed.maximumHealth,
@@ -193,6 +180,26 @@ export class CompetitiveReplayService {
     assertApi(run && run.address === address, 404, 'competitive_transcript_missing', 'The competitive transcript was not found.');
     assertApi(safeEqual(run.tokenHash, hashToken(runToken)), 401, 'run_token_rejected', 'The run token is invalid.');
     return run;
+  }
+
+  async #ensureRunSnapshot(run) {
+    if (run.runSnapshot?.id) return run;
+    assertApi(this.resolveRun, 503, 'competitive_run_snapshot_resolver_missing', 'The active-run compatibility resolver is unavailable.');
+    const snapshot = await this.resolveRun(run.runId);
+    assertApi(snapshot?.id === run.runId, 503, 'competitive_run_snapshot_missing', 'The immutable active-run snapshot is unavailable.');
+    return this.#hydrateRunSnapshot(run, snapshot);
+  }
+
+  async #hydrateRunSnapshot(run, snapshot) {
+    const competition = snapshot.competitionSnapshot || snapshot.tuning?._competitionSnapshot || {};
+    return this.store.hydrateRunSnapshot(run.runId, structuredClone(snapshot), {
+      buildCommit: snapshot.buildCommit || 'legacy-active-run',
+      engineVersion: snapshot.engineVersion || 'game-v4',
+      replaySchemaVersion: 'matt-competitive-input-v1',
+      mapSnapshotId: competition.id || '',
+      mapHash: hashObject(competition),
+      tuningHash: hashObject(snapshot.tuning || {})
+    });
   }
 
   #checkpoint(run) {
@@ -247,4 +254,25 @@ function safeEqual(left, right) {
 
 export function sameCompetitiveEvent(left, right) {
   return canonicalJson(publicEvent(left)) === canonicalJson(publicEvent(right));
+}
+
+function replayOptions(run, requireTerminal) {
+  return {
+    requireTerminal,
+    mode: run.mode,
+    day: run.day,
+    week: run.week,
+    maxDepth: competitiveMaximumDepth(run),
+    characterId: run.characterId,
+    character: run.character,
+    profile: run.playerProfile,
+    weeklyStage: run.weeklyStage,
+    endlessSnapshot: run.endlessSnapshot,
+    allowPaidRevive: run.paidReviveEligible === true,
+    reviveInvulnerabilitySeconds: run.reviveInvulnerabilitySeconds
+  };
+}
+
+function hashObject(value) {
+  return createHash('sha256').update(canonicalJson(value || {})).digest('hex');
 }

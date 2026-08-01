@@ -66,7 +66,8 @@ export class DirectRoninRevivePaymentVerifier {
       transactionHash: verified.transactionHash,
       amountWei: verified.amountAtomic,
       recipient: verified.recipient,
-      blockNumber: verified.blockNumber
+      blockNumber: verified.blockNumber,
+      transactionBlockAt: verified.transactionBlockAt
     };
   }
 }

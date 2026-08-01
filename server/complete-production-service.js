@@ -112,10 +112,12 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     const reviveStatus = this.revivePaymentVerifier?.publicStatus?.() || { configured: false, enabled: false };
     const advertisementStatus = this.advertisementVerifier?.publicStatus?.() || { configured: false, enabled: false };
     const arena = this.arenaService?.publicConfig?.() || { configured: false, enabled: false };
+    const liveSafe = this.arenaService?.deployment || null;
     const treasurySafe = {
-      address: overview.immutable?.contracts?.safe || '',
-      owners: 3,
-      threshold: 1
+      address: liveSafe?.treasurySafe || overview.immutable?.contracts?.safe || '',
+      owners: Array.isArray(liveSafe?.safeOwners) ? liveSafe.safeOwners.length : 0,
+      threshold: Number(liveSafe?.safeThreshold || 0),
+      verified: Array.isArray(liveSafe?.safeOwners) && liveSafe.safeOwners.length === 3 && Number(liveSafe.safeThreshold) === 2
     };
     return {
       ...overview,
@@ -394,7 +396,7 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
         treasurySafe: {
           address: '0xbace355d23d378a6e1add986e53a18dd12e6eeac',
           owners: 3,
-          threshold: 1,
+          threshold: 2,
           noTimelock: true,
           operatorApproved: true
         }
@@ -665,6 +667,11 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
       run.playerState = structuredClone(verifiedDeath.playerState);
       try {
         const pending = createPendingRevive(run, config, timestamp);
+        pending.authoritativeCheckpoint = {
+          replay: structuredClone(verifiedDeath.checkpoint || {}),
+          playerState: structuredClone(verifiedDeath.playerState)
+        };
+        run.pendingRevive = structuredClone(pending);
         return {
           ...pending,
           transaction: this.revivePaymentVerifier.transactionForPayment(pending.priceRonWei)
@@ -685,6 +692,13 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     const timestamp = this.now();
     const run = state.runs[runId];
     if (!run || run.address !== session.address) throw new ApiError(404, 'run_not_found', 'The pending revive was not found.');
+    const existing = state.revivePayments?.[transactionHash];
+    if (existing) {
+      if (existing.address !== session.address || existing.runId !== runId) {
+        throw new ApiError(409, 'revive_transaction_duplicate', 'That payment transaction has already been used for another run.');
+      }
+      return structuredClone(existing.completedResponse);
+    }
     const verified = await this.revivePaymentVerifier.verifyPayment({
       transactionHash,
       address: session.address,
@@ -693,8 +707,12 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     });
     return this.database.transact((next) => {
       const activeRun = next.runs[runId];
-      if (next.revivePayments[transactionHash]) {
-        throw new ApiError(409, 'revive_transaction_duplicate', 'That payment transaction has already been used.');
+      const reconciled = next.revivePayments[transactionHash];
+      if (reconciled) {
+        if (reconciled.address !== session.address || reconciled.runId !== runId) {
+          throw new ApiError(409, 'revive_transaction_duplicate', 'That payment transaction has already been used for another run.');
+        }
+        return structuredClone(reconciled.completedResponse);
       }
       let revived;
       try {
@@ -702,18 +720,70 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
       } catch (error) {
         throw bonusError(error);
       }
+      const completedResponse = { ...revived, alreadyConfirmed: false };
       next.revivePayments[transactionHash] = {
         transactionHash,
         address: session.address,
         runId,
+        quoteId: activeRun.pendingRevive?.id || '',
         amountWei: verified.amountWei,
-        confirmedAt: timestamp
+        transactionBlockAt: verified.transactionBlockAt,
+        authoritativeCheckpoint: structuredClone(revived.authoritativeCheckpoint || activeRun.playerState || {}),
+        completedResponse: structuredClone(completedResponse),
+        confirmedAt: timestamp,
+        resumedAt: 0
       };
       next.wallets[session.address].expansion.revivePayments[transactionHash] = { runId, timestamp };
       appendActivity(next.wallets[session.address], 'PAID_REVIVE_CONFIRMED', `${runId}; ${transactionHash}`, timestamp);
       appendAudit(next, 'PAID_REVIVE_CONFIRMED', `${session.address}; ${runId}; ${transactionHash}`, timestamp);
-      return revived;
+      return completedResponse;
     });
+  }
+
+  async resumePaidRevive(token, runIdInput) {
+    const session = await this.authenticate(token);
+    const runId = String(runIdInput || '');
+    const timestamp = this.now();
+    return this.database.transact((state) => {
+      const run = state.runs?.[runId];
+      if (!run || run.address !== session.address) throw new ApiError(404, 'run_not_found', 'The paid revive run was not found.');
+      const payment = Object.values(state.revivePayments || {}).find((entry) =>
+        entry.address === session.address && entry.runId === runId
+      );
+      if (!payment) throw new ApiError(404, 'revive_payment_missing', 'No confirmed paid revive exists for this run.');
+      payment.resumedAt ||= timestamp;
+      run.lastResumedAt = timestamp;
+      return {
+        runId,
+        status: run.status,
+        playerState: structuredClone(run.playerState || payment.authoritativeCheckpoint?.playerState || {}),
+        checkpoint: structuredClone(payment.authoritativeCheckpoint?.replay || {}),
+        reviveCount: Array.isArray(run.revives) ? run.revives.length : 0,
+        paidAt: payment.transactionBlockAt,
+        resumedAt: payment.resumedAt
+      };
+    });
+  }
+
+  async adminPaymentReconciliation(adminKey) {
+    this.assertAdminKey(adminKey);
+    const state = await this.database.read();
+    const revives = Object.values(state.revivePayments || {});
+    let paymentOperations = [];
+    if (this.database.kind === 'postgresql') {
+      const result = await this.database.query(`SELECT * FROM matt_mine_normalized.payment_operations
+        WHERE state <> 'completed' ORDER BY updated_at_ms ASC LIMIT 500`);
+      paymentOperations = result.rows;
+    }
+    return {
+      paidButNotResumedRevives: revives.filter((entry) => !entry.resumedAt).map((entry) => ({
+        transactionHash: entry.transactionHash,
+        address: entry.address,
+        runId: entry.runId,
+        confirmedAt: entry.confirmedAt
+      })),
+      paymentOperations
+    };
   }
 
   async cancelPaidRevive(token, runIdInput) {

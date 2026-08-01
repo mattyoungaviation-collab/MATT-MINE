@@ -182,19 +182,10 @@ export class MemoryArenaStore {
     return this.#mutate(() => {
       const run = this.runs.get(runId);
       assertApi(run, 404, 'arena_run_missing', 'The Daily Arena run was not found.');
-      if (run.status === 'rejected' && run.result?.attemptRestored === true) {
-        return { run: clone(run), attemptRestored: true, alreadyRecovered: true };
-      }
       assertApi(run.status === 'active', 409, 'arena_run_not_active', 'The Daily Arena run is no longer active.');
-      run.status = 'rejected';
-      run.finishedAt = timestamp;
-      run.result = replayRecoveryResult(error);
-      const entry = this.entries.get(run.entryId);
-      if (entry?.runId === runId) {
-        entry.runId = '';
-        entry.consumedAt = 0;
-      }
-      return { run: clone(run), attemptRestored: true, alreadyRecovered: false };
+      assertResumableArenaFailure(error);
+      run.result = replayRecoveryResult(error, timestamp);
+      return { run: clone(run), resumable: true, attemptRestored: false, alreadyRecovered: false };
     });
   }
 
@@ -667,28 +658,20 @@ export class PostgresArenaStore {
       );
       assertApi(selected.rows[0], 404, 'arena_run_missing', 'The Daily Arena run was not found.');
       const run = formatRunRow(selected.rows[0]);
-      if (run.status === 'rejected' && run.result?.attemptRestored === true) {
-        await client.query('COMMIT');
-        return { run, attemptRestored: true, alreadyRecovered: true };
-      }
       assertApi(run.status === 'active', 409, 'arena_run_not_active', 'The Daily Arena run is no longer active.');
-      const result = replayRecoveryResult(error);
+      assertResumableArenaFailure(error);
+      const result = replayRecoveryResult(error, timestamp);
       await client.query(
         `UPDATE matt_mine_arena.runs
-         SET status='rejected',finished_at_ms=$2,result=$3::jsonb
+         SET result=$3::jsonb
          WHERE run_id=$1`,
         [runId, timestamp, JSON.stringify(result)]
       );
-      await client.query(
-        `UPDATE matt_mine_arena.entries
-         SET run_id='',consumed_at_ms=0
-         WHERE entry_id=$1 AND run_id=$2`,
-        [run.entryId, runId]
-      );
       await client.query('COMMIT');
       return {
-        run: { ...run, status: 'rejected', finishedAt: timestamp, result },
-        attemptRestored: true,
+        run: { ...run, result },
+        resumable: true,
+        attemptRestored: false,
         alreadyRecovered: false
       };
     } catch (recoveryError) {
@@ -1044,11 +1027,9 @@ export async function createArenaPostgresSchema(pool) {
       result JSONB
     )`);
   await pool.query(`ALTER TABLE matt_mine_arena.runs ADD COLUMN IF NOT EXISTS tuning JSONB NOT NULL DEFAULT '{}'::jsonb`);
-  // A rejected server replay may safely return the paid entry to its wallet.
-  // Keep the rejected run for audit history while allowing the same entry to
-  // back a replacement attempt that can produce at most one accepted score.
-  await pool.query(`ALTER TABLE matt_mine_arena.runs DROP CONSTRAINT IF EXISTS runs_entry_id_key`);
   await pool.query(`CREATE INDEX IF NOT EXISTS runs_entry_id_idx ON matt_mine_arena.runs(entry_id)`);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS runs_one_finished_entry_idx
+    ON matt_mine_arena.runs(entry_id) WHERE status='finished'`);
   await pool.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS runs_one_active_wallet_idx
     ON matt_mine_arena.runs(address) WHERE status='active'`);
@@ -1277,13 +1258,30 @@ function formatRunRow(row) {
   });
 }
 
-function replayRecoveryResult(error) {
+function replayRecoveryResult(error, timestamp = Date.now()) {
   return {
     accepted: false,
-    attemptRestored: true,
+    resumable: true,
+    attemptRestored: false,
+    recoveryPolicy: 'resume_original_only',
     rejectionCode: String(error?.code || 'arena_replay_mismatch'),
-    rejectionMessage: String(error?.message || 'The authoritative replay could not finalize this run.')
+    rejectionMessage: String(error?.message || 'The authoritative replay could not finalize this run.'),
+    recordedAt: timestamp
   };
+}
+
+function assertResumableArenaFailure(error) {
+  const allowed = new Set([
+    'arena_replay_worker_unavailable',
+    'arena_replay_timeout',
+    'arena_engine_version_unavailable'
+  ]);
+  assertApi(
+    allowed.has(String(error?.code || '')),
+    422,
+    'arena_recovery_not_authorized',
+    'Invalid gameplay or malformed input cannot restore a paid Arena entry.'
+  );
 }
 
 function formatStoredArenaEvent(row) {
