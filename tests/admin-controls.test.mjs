@@ -35,6 +35,7 @@ function serviceHarness(options = {}) {
     now: () => timestamp,
     publicOrigin: ORIGIN,
     adminKey: 'admin-secret',
+    adminWallets: options.adminWallets || [],
     chainId: RONIN_CHAINS.MAINNET,
     mainnetTransactionsEnabled: options.payments === true,
     paymentVerifier: options.payments ? fakePayments() : null,
@@ -531,6 +532,122 @@ test('admin HTTP routes reject missing credentials and apply audited controls', 
   const payload = await overview.json();
   assert.equal(payload.operations.freeRankedPaused, true);
   assert.equal(payload.immutable.hardMaxBoardMatt, 5_000_000);
+});
+
+test('wallet-authenticated Admin controls update mine gates, tuning, and exact published maps', async (context) => {
+  const harness = serviceHarness({ adminWallets: [account.address] });
+  const server = createMattMineHttpServer({ root: ROOT, service: harness.service });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  context.after(() => new Promise((resolve) => server.close(resolve)));
+  const address = server.address();
+  const base = `http://127.0.0.1:${address.port}`;
+  const playerSession = await signIn(harness.service);
+
+  const created = await fetch(`${base}/api/admin/auth/session`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${playerSession.token}`,
+      origin: ORIGIN
+    }
+  });
+  assert.equal(created.status, 201);
+  const adminSession = await created.json();
+  assert.equal(adminSession.admin.expiresAt - START, 8 * 60 * 60 * 1000);
+  const cookie = created.headers.get('set-cookie')?.split(';')[0];
+  assert.match(cookie || '', /^__Host-matt_admin=[a-f0-9]{64}$/);
+  const mutationHeaders = {
+    cookie,
+    origin: ORIGIN,
+    'content-type': 'application/json',
+    'x-matt-csrf': adminSession.csrfToken
+  };
+
+  const paused = await fetch(`${base}/api/admin/mine-operations/practice`, {
+    method: 'PUT',
+    headers: mutationHeaders,
+    body: JSON.stringify({
+      patch: { entriesPaused: true },
+      reason: 'Verify wallet Admin Practice pause control'
+    })
+  });
+  assert.equal(paused.status, 200, JSON.stringify(await paused.clone().json()));
+  assert.equal((await paused.json()).controls.entriesPaused, true);
+  await assert.rejects(
+    () => harness.service.startRun(playerSession.token, SERVER_RUN_MODES.PRACTICE),
+    (error) => error.code === 'practice_entries_paused'
+  );
+
+  const resumed = await fetch(`${base}/api/admin/mine-operations/practice`, {
+    method: 'PUT',
+    headers: mutationHeaders,
+    body: JSON.stringify({
+      patch: { entriesPaused: false },
+      reason: 'Verify wallet Admin Practice resume control'
+    })
+  });
+  assert.equal(resumed.status, 200, JSON.stringify(await resumed.clone().json()));
+
+  const tuned = await fetch(`${base}/api/admin/game-tuning/practice`, {
+    method: 'PUT',
+    headers: mutationHeaders,
+    body: JSON.stringify({
+      patch: { permanentHealthPerRank: 20 },
+      reason: 'Verify permanent upgrade scaling control'
+    })
+  });
+  assert.equal(tuned.status, 200, JSON.stringify(await tuned.clone().json()));
+  assert.equal((await tuned.json()).preset.permanentHealthPerRank, 20);
+
+  const studioResponse = await fetch(`${base}/api/admin/competition-studio`, {
+    headers: { cookie }
+  });
+  assert.equal(studioResponse.status, 200);
+  const studio = await studioResponse.json();
+  const draft = structuredClone(studio.studio.slots.practice.draft);
+  draft.name = 'Wallet Admin Exact Practice Mine';
+  draft.depths[0].map.name = 'Wallet Admin Depth One';
+  draft.depths[0].map.rooms[0].width = 1.5;
+  draft.map = structuredClone(draft.depths[0].map);
+
+  const saved = await fetch(`${base}/api/admin/competition-studio/practice/draft`, {
+    method: 'PUT',
+    headers: mutationHeaders,
+    body: JSON.stringify({
+      draft,
+      reason: 'Verify wallet Admin exact map draft control'
+    })
+  });
+  assert.equal(saved.status, 200, JSON.stringify(await saved.clone().json()));
+
+  const challengeResponse = await fetch(`${base}/api/admin/auth/step-up/challenge`, {
+    method: 'POST',
+    headers: mutationHeaders,
+    body: JSON.stringify({})
+  });
+  assert.equal(challengeResponse.status, 201, JSON.stringify(await challengeResponse.clone().json()));
+  const challenge = (await challengeResponse.json()).challenge;
+  const signature = await account.signMessage({ message: challenge.message });
+  const verified = await fetch(`${base}/api/admin/auth/step-up/verify`, {
+    method: 'POST',
+    headers: mutationHeaders,
+    body: JSON.stringify({ nonce: challenge.nonce, signature })
+  });
+  assert.equal(verified.status, 200, JSON.stringify(await verified.clone().json()));
+
+  const publishedResponse = await fetch(`${base}/api/admin/competition-studio/practice/publish`, {
+    method: 'POST',
+    headers: mutationHeaders,
+    body: JSON.stringify({ reason: 'Publish verified wallet Admin exact map now' })
+  });
+  assert.equal(publishedResponse.status, 201, JSON.stringify(await publishedResponse.clone().json()));
+  const published = await publishedResponse.json();
+  assert.equal(published.snapshot.depths[0].map.rooms[0].width, 1.5);
+
+  const run = await harness.service.startRun(playerSession.token, SERVER_RUN_MODES.PRACTICE);
+  assert.equal(run.tuning.permanentHealthPerRank, 20);
+  assert.equal(run.competitionSnapshot.id, published.snapshot.id);
+  assert.equal(run.competitionSnapshot.depths[0].map.rooms[0].width, 1.5);
+  assert.equal(run.competitionSnapshot.depths[0].map.name, 'Wallet Admin Depth One');
 });
 
 function fakePayments() {

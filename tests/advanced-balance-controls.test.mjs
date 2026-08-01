@@ -54,6 +54,8 @@ test('command-center tuning exposes the requested Blaster, armor, beta, and per-
     'depth2GuardianBosses',
     'depth5GuardianBosses'
   ]) assert.equal(ids.has(id), true, `${id} should be available in admin tuning`);
+  assert.equal(ids.has('bossReinforcementCount'), false, 'obsolete no-op boss control must not be shown');
+  assert.equal(ids.has('bossReinforcementInterval'), false, 'obsolete no-op boss control must not be shown');
 
   const presets = defaultGameTuning();
   assert.equal(presets.free.blasterDamageMultiplier, .60);
@@ -150,6 +152,52 @@ test('beta toggles provide a true new-player baseline without deleting saved pro
   assert.equal(game.state, 'playing');
 });
 
+test('Arena applies every permanent stat scale when enabled and a clean profile when disabled', () => {
+  const profile = defaultProfile();
+  Object.assign(profile.meta, {
+    health: 2,
+    damage: 2,
+    speed: 2,
+    luck: 2,
+    magnet: 2,
+    armor: 2,
+    dash: 2,
+    blaster: 2
+  });
+  const tuning = emptySpawnPlan(normalizeGameTuning().arena);
+  Object.assign(tuning, {
+    permanentHealthPerRank: 20,
+    permanentDamagePerRank: .1,
+    permanentSpeedPerRank: .05,
+    permanentLuckPerRank: .04,
+    permanentMagnetPerRank: 10,
+    permanentArmorPerRank: .02,
+    permanentDashPerRank: .1,
+    permanentBlasterDamagePerRank: .1,
+    ignorePermanentUpgrades: false
+  });
+
+  const enabled = gameFor(tuning, profile, 'arena');
+  closeTo(enabled.player.maxHealth, tuning.playerMaxHealth + 40);
+  closeTo(enabled.player.damage, tuning.playerBaseDamage * 1.2);
+  closeTo(enabled.player.speed, tuning.playerSpeed * 1.1);
+  closeTo(enabled.player.magnetRange, tuning.playerMagnetRange + 20);
+  closeTo(enabled.player.armor, .04);
+  closeTo(enabled.player.dashCooldownMax, tuning.dashCooldown / 1.2);
+  closeTo(enabled.player.blasterDamageScale, tuning.blasterDamageMultiplier * 1.2);
+  closeTo(enabled.effectivePermanentMeta.luck, 8);
+
+  const disabled = gameFor({ ...tuning, ignorePermanentUpgrades: true }, profile, 'arena');
+  closeTo(disabled.player.maxHealth, tuning.playerMaxHealth);
+  closeTo(disabled.player.damage, tuning.playerBaseDamage);
+  closeTo(disabled.player.speed, tuning.playerSpeed);
+  closeTo(disabled.player.magnetRange, tuning.playerMagnetRange);
+  closeTo(disabled.player.armor, 0);
+  closeTo(disabled.player.dashCooldownMax, tuning.dashCooldown);
+  closeTo(disabled.player.blasterDamageScale, tuning.blasterDamageMultiplier);
+  closeTo(disabled.effectivePermanentMeta.luck, 0);
+});
+
 test('armor uses the tunable permanent rank, per-level value, and total cap', () => {
   const profile = defaultProfile();
   profile.meta.armor = 15;
@@ -217,7 +265,7 @@ test('Daily Arena applies permanent upgrades when its authoritative tuning enabl
   profile.meta.blaster = 20;
   const arena = defaultGameTuning().arena;
   const game = gameFor(arena, profile, 'arena');
-  assert.equal(game.player.damage, arena.playerBaseDamage);
+  assert.equal(game.player.damage, arena.playerBaseDamage * (1 + profile.meta.damage * arena.permanentDamagePerRank));
   assert.equal(game.player.armor, 0.15);
   assert.equal(game.player.blasterDamageScale, .56 * 1.6);
   assert.equal(game.runContext.tuning.usePerDepthRoomSpawns, false);

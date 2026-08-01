@@ -58,7 +58,7 @@ import {
 
 const FREE_PASS_XP = 25;
 const PAID_PASS_XP = 100;
-const ADMIN_SESSION_TTL_MS = 15 * 60 * 1000;
+const ADMIN_SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 const ADMIN_STEP_UP_TTL_MS = 5 * 60 * 1000;
 
 export class MattMineService {
@@ -2106,7 +2106,6 @@ export class MattMineService {
         'admin_csrf_rejected',
         'The Admin CSRF token is missing or invalid.'
       );
-      assertApi(paymentStatus, 503, 'payment_status_unavailable', 'Live Pass and paid-run contract status is unavailable.');
     }
     if (options.stepUp) {
       assertApi(session.stepUpUntil > this.now(), 403, 'admin_step_up_required', 'Sign this sensitive Admin action with the authorized wallet.');
