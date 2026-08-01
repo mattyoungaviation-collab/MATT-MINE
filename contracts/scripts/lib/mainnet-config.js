@@ -105,11 +105,11 @@ function adminSafeConfig(value) {
   if (new Set(owners.map((owner) => owner.toLowerCase())).size !== owners.length) {
     throw new Error("adminSafe.owners must be unique");
   }
-  if (object.threshold !== 1) {
-    throw new Error("adminSafe.threshold must be 1");
+  if (object.threshold !== 2) {
+    throw new Error("adminSafe.threshold must be 2");
   }
   return {
-    threshold: 1,
+    threshold: 2,
     owners
   };
 }
@@ -141,10 +141,10 @@ export function configHash(config) {
 
 export function acceptedDeploymentConfigHashes(config) {
   const hashes = new Set([configHash(config)]);
-  if (config?.adminSafe?.threshold === 1) {
+  if (config?.adminSafe?.threshold === 2) {
     hashes.add(configHash({
       ...config,
-      adminSafe: { ...config.adminSafe, threshold: 2 }
+      adminSafe: { ...config.adminSafe, threshold: 1 }
     }));
   }
   return hashes;

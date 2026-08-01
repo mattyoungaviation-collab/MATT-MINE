@@ -13,6 +13,8 @@
     "test": "npm run test:game && npm run test:contracts",
     "test:game": "node --test \"tests/*.test.mjs\"",
     "test:contracts": "npm --workspace contracts test",
+    "test:postgres": "node --test tests/postgres-integration.test.mjs",
+    "test:browser": "playwright test",
     "contracts:compile": "npm --workspace contracts run compile",
     "contracts:validate:ronin": "npm --workspace contracts run validate:ronin",
     "contracts:check-deployment:ronin": "npm --workspace contracts run check-deployment:ronin",
@@ -22,13 +24,34 @@
     "contracts:check-arena-deployer:ronin": "npm --workspace contracts run check-arena-deployer:ronin",
     "contracts:deploy-arena:ronin": "npm --workspace contracts run deploy-arena:ronin",
     "contracts:check-arena-deployment:ronin": "npm --workspace contracts run check-arena-deployment:ronin",
-    "contracts:verify-arena:ronin": "npm --workspace contracts run verify-arena:ronin"
+    "contracts:verify-arena:ronin": "npm --workspace contracts run verify-arena:ronin",
+    "db:migrate": "node scripts/database-admin.mjs migrate",
+    "db:migrate:dry-run": "node scripts/database-admin.mjs migrate --dry-run",
+    "db:backfill": "node scripts/database-admin.mjs backfill",
+    "db:validate": "node scripts/database-admin.mjs validate",
+    "db:reconcile": "node scripts/database-admin.mjs reconcile",
+    "db:rollback:dry-run": "node scripts/database-admin.mjs rollback --dry-run",
+    "db:rollback": "node scripts/database-admin.mjs rollback --apply",
+    "db:backup": "node scripts/database-backup.mjs",
+    "lint:security": "node scripts/check-managed-dom.mjs",
+    "lint": "npm run lint:security",
+    "format:check": "node scripts/check-format.mjs",
+    "check": "node scripts/check-js.mjs"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.16"
   },
   "dependencies": {
     "pg": "8.16.3",
     "viem": "2.55.8"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1",
+    "tmp": "0.2.7",
+    "undici": "6.28.0"
+  },
+  "overrides": {
+    "tmp": "0.2.7",
+    "undici": "6.28.0"
   }
 }

@@ -47,7 +47,7 @@ No token means no reward. Client callbacks alone never award nuggets.
 
 The Treasury Safe has three independent owners and an operator-approved threshold of 1. Preflight scripts now verify the live Safe against that exact policy. This is intentionally fast but provides less compromise resistance than 2-of-3. The server never stores a Safe owner key and never signs or broadcasts Treasury transactions.
 
-The immutable deployment manifests retain the configuration hash created when the Safe was 2-of-3. Read-only checks accept that exact historical hash, then independently require the current live 1-of-3 Safe owner/threshold state. Other manifest or configuration mismatches still fail.
+The immutable deployment manifests retain the historical configuration hash created when the Safe was 1-of-3. Read-only checks accept only that exact historical hash, then independently require the current live 2-of-3 Safe owner/threshold state. Other manifest or configuration mismatches still fail.
 
 ## Render
 

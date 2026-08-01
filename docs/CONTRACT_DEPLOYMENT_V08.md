@@ -7,7 +7,7 @@ Version 0.8 prepares production contracts and a guarded Ronin Mainnet deployment
 ## Required approvals
 
 - Independent smart-contract review completed with no unresolved critical or high-severity findings.
-- Three-owner contract-admin Safe deployed, tested, and backed up; current operator-approved threshold is 1-of-3.
+- Three-owner contract-admin Safe deployed, tested, and backed up; required threshold is exactly 2-of-3.
 - Treasury destinations confirmed by at least two owners.
 - Price and configuration roles assigned to the bounded operational wallet.
 - Pauser assigned to a separate emergency wallet.
@@ -28,7 +28,7 @@ Version 0.8 prepares production contracts and a guarded Ronin Mainnet deployment
 - Dependency audit reviewed and production-relevant findings resolved or documented.
 - Compiler fixed to Solidity 0.8.28, optimizer enabled, IR pipeline enabled, London EVM target.
 - MATT, WRON, Katana router, Katana factory, and MATT/WRON pair validated on Ronin Mainnet.
-- Admin Safe code, exact three-owner set, and configured 1-of-3 threshold validated on Ronin Mainnet.
+- Admin Safe code, exact three-owner set, and configured 2-of-3 threshold validated on Ronin Mainnet.
 - Encrypted deployment key resolves to the approved public address, is not a configured role or treasury, and holds at least a 3x gas buffer.
 
 ## Recommended minimum role map
