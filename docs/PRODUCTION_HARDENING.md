@@ -27,7 +27,7 @@ Commands:
 - `npm run db:rollback:dry-run`
 - `npm run db:rollback -- --apply`
 
-The rollback is deliberately lossless: it selects the legacy read source and disables dual write; it never drops normalized or financial tables. Activity and audit tables are indexed for cursor/time pagination. Archival must copy old rows to encrypted immutable storage and set `archived_at`; financial rows must never be truncated.
+The rollback is deliberately lossless: it selects the legacy read source and disables dual write; runtime startup and transactions honor that switch without replaying the normalized backfill. It never drops normalized or financial tables. Activity and audit tables are indexed for cursor/time pagination. Archival must copy old rows to encrypted immutable storage and set `archived_at`; financial rows must never be truncated.
 
 Remaining risk: the application read path is intentionally still legacy-first for this PR. Row-scoped normalized command handlers must replace the compatibility projection before cutover to `read_source=normalized`. Until then, the global row remains a contention point even though normalized copies and database uniqueness protections exist.
 

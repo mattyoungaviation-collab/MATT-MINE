@@ -39,6 +39,24 @@ test('normalized migrations, dual-write backfill, validation, and lossless rollb
     assert.equal(duplicateSnapshots.rows.length, 1);
     assert.equal(duplicateSnapshots.rows[0].count, 2);
     await database.query(`UPDATE matt_mine_normalized.cutover_state SET read_source='legacy',dual_write_enabled=FALSE WHERE singleton=TRUE`);
+    const disabledNonce = 'integration-dual-write-disabled';
+    await database.transact((state) => {
+      state.challenges[disabledNonce] = {
+        nonce: disabledNonce,
+        address: '0x0000000000000000000000000000000000000001',
+        chainId: 2020,
+        origin: 'https://example.test',
+        message: 'Disabled dual-write regression challenge',
+        purpose: 'player_login',
+        createdAt: Date.now(),
+        expiresAt: Date.now() + 60_000
+      };
+    });
+    const disabledChallenge = await database.query(
+      'SELECT COUNT(*)::integer AS count FROM matt_mine_normalized.authentication_challenges WHERE nonce=$1',
+      [disabledNonce]
+    );
+    assert.equal(disabledChallenge.rows[0].count, 0);
     const legacy = await database.query('SELECT data FROM matt_mine_state WHERE id=1');
     assert.equal(legacy.rowCount, 1);
     const financial = await database.query('SELECT COUNT(*)::integer AS count FROM matt_mine_normalized.nugget_ledger');
@@ -65,6 +83,24 @@ test('normalized migrations, dual-write backfill, validation, and lossless rollb
     const completedRetry = await database.beginPaymentOperation(payment);
     assert.deepEqual(completedRetry.completed_response, { ok: true, receipt: 'original' });
     await database.query(`UPDATE matt_mine_normalized.cutover_state SET dual_write_enabled=TRUE WHERE singleton=TRUE`);
+    const enabledNonce = 'integration-dual-write-enabled';
+    await database.transact((state) => {
+      state.challenges[enabledNonce] = {
+        nonce: enabledNonce,
+        address: '0x0000000000000000000000000000000000000001',
+        chainId: 2020,
+        origin: 'https://example.test',
+        message: 'Enabled dual-write regression challenge',
+        purpose: 'player_login',
+        createdAt: Date.now(),
+        expiresAt: Date.now() + 60_000
+      };
+    });
+    const enabledChallenge = await database.query(
+      'SELECT COUNT(*)::integer AS count FROM matt_mine_normalized.authentication_challenges WHERE nonce=$1',
+      [enabledNonce]
+    );
+    assert.equal(enabledChallenge.rows[0].count, 1);
   } finally {
     await database.close();
   }

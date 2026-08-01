@@ -196,9 +196,15 @@ export class PostgresDatabase {
           [JSON.stringify(state)]
         );
       }
-      // Staged migration: the legacy row remains authoritative while every
-      // normalized projection is written in the same transaction.
-      if (this.normalizedMigrationsEnabled) await backfillNormalizedState(client, state, { timestamp });
+      // Staged migration: the legacy row remains authoritative. The durable
+      // cutover switch controls whether normalized projections are also
+      // written in this transaction.
+      if (
+        this.normalizedMigrationsEnabled &&
+        await normalizedDualWriteEnabled(client)
+      ) {
+        await backfillNormalizedState(client, state, { timestamp });
+      }
       await client.query('COMMIT');
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);
@@ -263,7 +269,12 @@ export class PostgresDatabase {
          WHERE id = 1`,
         [JSON.stringify(normalized)]
       );
-      if (this.normalizedMigrationsEnabled) await backfillNormalizedState(client, normalized, { timestamp: this.now() });
+      if (
+        this.normalizedMigrationsEnabled &&
+        await normalizedDualWriteEnabled(client)
+      ) {
+        await backfillNormalizedState(client, normalized, { timestamp: this.now() });
+      }
       await client.query('COMMIT');
       return structuredClone(result);
     } catch (error) {
@@ -732,6 +743,15 @@ async function createPostgresSchema(pool) {
         ON DELETE RESTRICT
     )
   `);
+}
+
+async function normalizedDualWriteEnabled(client) {
+  const result = await client.query(
+    `SELECT dual_write_enabled
+     FROM matt_mine_normalized.cutover_state
+     WHERE singleton=TRUE`
+  );
+  return result.rows[0]?.dual_write_enabled === true;
 }
 
 async function updateWeeklyScore(client, week, mode, address) {
