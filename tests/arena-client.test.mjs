@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 
 import {
@@ -127,6 +128,9 @@ test('Arena client recognizes deterministic input replay readiness', () => {
 
 test('Render pins the exact verified Arena deployment and requests live replay mode', () => {
   const blueprint = fs.readFileSync(new URL('../render.yaml', import.meta.url), 'utf8');
+  const rulesUrl = new URL('../legal/matt-mine-arena-rules-v0.01.txt', import.meta.url);
+  const rules = fs.readFileSync(rulesUrl);
+  const rulesHash = createHash('sha256').update(rules).digest('hex');
   assert.match(blueprint, /healthCheckPath:\s*\/api\/live/);
   assert.doesNotMatch(blueprint, /healthCheckPath:\s*\/api\/ready/);
   assert.match(blueprint, /databases:\s*\n\s*-\s*name:\s*matt-mine-db[\s\S]*?plan:\s*basic-1gb/);
@@ -139,6 +143,14 @@ test('Render pins the exact verified Arena deployment and requests live replay m
   assert.match(blueprint, /MATT_MINE_ARENA_RECEIPT_SECRET\s*\n\s*generateValue: true/);
   assert.match(blueprint, /MATT_MINE_ARENA_SEED_SECRET\s*\n\s*generateValue: true/);
   assert.match(blueprint, /MATT_MINE_ARENA_LIVE\s*\n\s*value: "true"/);
+  assert.match(blueprint, new RegExp(`MATT_MINE_ELIGIBILITY_RULES_SHA256[\\s\\S]*${rulesHash}`));
+  assert.match(blueprint, /MATT_MINE_ELIGIBILITY_RULES_URL[\s\S]*matt-mine-arena-rules-v0\.01\.txt/);
+  assert.doesNotMatch(blueprint, /matt-mine-arena-rules-v0\.01\.pdf/);
+  assert.equal(
+    fs.existsSync(new URL('../legal/matt-mine-arena-rules-v0.01.pdf', import.meta.url)),
+    false
+  );
+  assert.doesNotMatch(rules.toString('utf8'), /signature|bar number|attorney|legal counsel|license number/i);
 });
 
 test('production migration pauses full-state normalized writes on request transactions', () => {

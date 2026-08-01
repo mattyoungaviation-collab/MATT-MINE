@@ -80,9 +80,9 @@ services:
       - key: MATT_MINE_ELIGIBILITY_RULES_VERSION
         value: "0.01"
       - key: MATT_MINE_ELIGIBILITY_RULES_SHA256
-        value: "37140868cdedf74a006040cf7f494e29fcc8885bae5710b9b8e623f965af1979"
+        value: "084962441aa1291864fde13c28aaa63eebbc0b15be92cb5e3e0e4feaea6deb2e"
       - key: MATT_MINE_ELIGIBILITY_RULES_URL
-        value: "/legal/matt-mine-arena-rules-v0.01.pdf"
+        value: "/legal/matt-mine-arena-rules-v0.01.txt"
       - key: MATT_MINE_PUBLIC_PAID_MODES
         value: "arena"
       - key: MATT_MINE_ELIGIBLE_PAID_WALLETS

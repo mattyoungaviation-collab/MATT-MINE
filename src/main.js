@@ -1900,7 +1900,7 @@ function requestArenaEligibilityAcknowledgement() {
   for (const link of [$('#arena-rules-link'), $('#arena-eligibility-rules-link')]) {
     if (link && configured.rulesUrl) link.href = configured.rulesUrl;
   }
-  $('#arena-eligibility-rules-link').textContent = `OPEN OFFICIAL RULES v${configured.rulesVersion} (PDF)`;
+  $('#arena-eligibility-rules-link').textContent = `OPEN ARENA RULES v${configured.rulesVersion} (PLAIN TEXT)`;
   if (dialog.open) dialog.close('cancel');
   dialog.showModal();
   return new Promise((resolve) => {

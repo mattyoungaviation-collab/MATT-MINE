@@ -116,7 +116,7 @@ function createHarness(options = {}) {
 }
 
 test('a public Arena rules acknowledgement is stored once per wallet and reused for the same immutable rules', async () => {
-  const rulesHash = '37140868cdedf74a006040cf7f494e29fcc8885bae5710b9b8e623f965af1979';
+  const rulesHash = '084962441aa1291864fde13c28aaa63eebbc0b15be92cb5e3e0e4feaea6deb2e';
   const arenaService = {
     publicConfig: () => ({ enabled: true }),
     quoteEntry: async () => ({ quote: { amountRaw: '25000000000000000000000' } })
@@ -127,7 +127,7 @@ test('a public Arena rules acknowledgement is stored once per wallet and reused 
       counselApproved: true,
       rulesVersion: '0.01',
       rulesHash,
-      rulesUrl: '/legal/matt-mine-arena-rules-v0.01.pdf',
+      rulesUrl: '/legal/matt-mine-arena-rules-v0.01.txt',
       publicModes: ['arena'],
       receiptSecret: 'stored-eligibility-test-secret-at-least-32-characters',
       now: () => START,
@@ -1100,6 +1100,23 @@ test('the HTTP server exposes same-origin APIs, security headers, and authentica
   assert.equal(heroResponse.status, 200);
   assert.equal(heroResponse.headers.get('content-type'), 'image/png');
   assert.equal(heroResponse.headers.get('cache-control'), 'public, max-age=86400');
+
+  const rulesResponse = await fetch(`${baseUrl}/legal/matt-mine-arena-rules-v0.01.txt`);
+  assert.equal(rulesResponse.status, 200);
+  assert.equal(rulesResponse.headers.get('content-type'), 'text/plain; charset=utf-8');
+  assert.equal(rulesResponse.headers.get('cache-control'), 'no-cache');
+  const rulesText = await rulesResponse.text();
+  assert.match(rulesText, /MATT MINE DAILY ARENA RULES/);
+  assert.doesNotMatch(rulesText, /signature|bar number|attorney|legal counsel|license number/i);
+
+  const retiredRulesResponse = await fetch(
+    `${baseUrl}/legal/matt-mine-arena-rules-v0.01.pdf`,
+    { redirect: 'manual' }
+  );
+  assert.equal(retiredRulesResponse.status, 302);
+  assert.equal(retiredRulesResponse.headers.get('location'), '/legal/matt-mine-arena-rules-v0.01.txt');
+  assert.equal(retiredRulesResponse.headers.get('cache-control'), 'no-store');
+  assert.equal(await retiredRulesResponse.text(), '');
 
   const configResponse = await fetch(`${baseUrl}/api/config`);
   assert.equal(configResponse.status, 200);
