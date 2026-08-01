@@ -15,7 +15,7 @@ Status: implementation candidate, not yet production-ready. No contract was depl
 
 ### 1. Persistence
 
-The legacy PostgreSQL implementation locks and rewrites `matt_mine_state.id=1`. Migrations `001` through `003` add normalized wallets, identities, avatars, sessions, challenges, runs, checkpoints, entitlements, purchases, revives, balances, append-only ledger, claims, used hashes, payment/Admin operations, mine operations, tuning versions, Competition Studio drafts/snapshots, activity, audit, and Arena recovery records. `PostgresDatabase` applies checksummed migrations and dual-writes normalized projections in the same transaction while retaining the legacy row as the read authority.
+The legacy PostgreSQL implementation locks and rewrites `matt_mine_state.id=1`. Migrations `001` through `004` add normalized wallets, identities, avatars, sessions, challenges, runs, checkpoints, entitlements, purchases, revives, balances, append-only ledger, claims, used hashes, payment/Admin operations, mine operations, tuning versions, Competition Studio drafts/snapshots, activity, audit, and Arena recovery records. Migration `004` preserves distinct published snapshot IDs when later publishing windows reuse identical content. `PostgresDatabase` applies checksummed migrations and dual-writes normalized projections in the same transaction while retaining the legacy row as the read authority.
 
 Commands:
 
