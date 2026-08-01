@@ -25,6 +25,10 @@ export const balanceControlMethods = {
       ? zeroMeta(originalMeta)
       : effectiveMeta(originalMeta, tuning);
 
+    // Keep the server-pinned effective ranks for every depth. The profile is
+    // restored after startup so gameplay must not fall back to the unscaled
+    // browser profile when a later authored depth is generated.
+    this.effectivePermanentMeta = meta;
     this.profile = { ...originalProfile, meta };
     try {
       stateMethods.startRun.call(this);

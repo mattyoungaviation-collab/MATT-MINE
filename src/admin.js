@@ -745,7 +745,7 @@ $('#refresh-overview').addEventListener('click', async () => {
 function startOverviewMonitor() {
   if (state.overviewTimer) clearInterval(state.overviewTimer);
   state.overviewTimer = setInterval(() => {
-    if (state.key && state.activeTab === 'overview' && document.visibilityState === 'visible') {
+    if (state.csrfToken && state.adminAddress && state.activeTab === 'overview' && document.visibilityState === 'visible') {
       refreshOverview().catch(() => undefined);
     }
   }, 30_000);
@@ -1212,6 +1212,14 @@ async function api(path, options = {}) {
   if (!response.ok) {
     const error = new Error(payload.error?.message || `Request failed (${response.status})`);
     error.code = payload.error?.code || '';
+    if (response.status === 401) {
+      if (state.overviewTimer) clearInterval(state.overviewTimer);
+      state.overviewTimer = null;
+      state.csrfToken = '';
+      state.adminAddress = '';
+      $('#connection-label').textContent = 'Admin session expired — sign in again';
+    }
+    showAlert(error.message, true);
     throw error;
   }
   return payload;

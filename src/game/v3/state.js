@@ -13,7 +13,7 @@ export const stateMethods = {
     this.runtimeError = null;
     this.entityId = 1;
     const isArena = this.runContext?.mode === 'arena';
-    const meta = isArena ? {} : this.profile.meta;
+    const meta = this.effectivePermanentMeta || this.profile.meta;
     const tuning = this.runContext?.tuning || {};
     const character = this.runContext?.character || {};
     const characterHealthScale = Number(character.baseHealth || 100) / 100;
@@ -157,7 +157,7 @@ export const stateMethods = {
     this.run.safeStartUntil = this.run.elapsed +
       (arenaMode ? CONFIG.arenaSafeStartSeconds : (tuning.safeStartSeconds ?? CONFIG.safeStartSeconds));
 
-    const luck = this.runContext?.mode === 'arena' ? 0 : this.profile.meta.luck || 0;
+    const luck = this.effectivePermanentMeta?.luck || 0;
     if (authoredMap) {
       this.populateCompetitionMap(this.layout.objects, luck);
       this.updateObjective();

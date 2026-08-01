@@ -129,8 +129,6 @@ export const GAME_TUNING_SCHEMA = Object.freeze([
   number('bossRoomHeight', 'Boss', 'Room height', 520, 320, 1200, 10),
   number('bossProjectileSpeed', 'Boss', 'Projectile speed', 280, 50, 1200, 10),
   number('bossVolleySpread', 'Boss', 'Volley spread', .38, .05, 1.5, .01),
-  number('bossReinforcementCount', 'Boss', 'Reinforcements per call', 3, 0, 20),
-  number('bossReinforcementInterval', 'Boss', 'Reinforcement interval', 7, 1, 60, .5),
   ...bossTuningSchema(number, toggle),
 
   number('roomWidth', 'Mine layout', 'Standard room width', CONFIG.roomWidth, 260, 900, 10),
