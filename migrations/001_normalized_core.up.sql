@@ -183,6 +183,9 @@ CREATE TABLE IF NOT EXISTS matt_mine_normalized.payment_operations (
   error_code TEXT,
   created_at_ms BIGINT NOT NULL,
   updated_at_ms BIGINT NOT NULL,
+  chain_verified_at_ms BIGINT,
+  ledger_credited_at_ms BIGINT,
+  completed_at_ms BIGINT,
   UNIQUE(transaction_hash),
   UNIQUE(purpose,quote_id)
 );
