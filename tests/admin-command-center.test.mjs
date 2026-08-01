@@ -134,7 +134,7 @@ test('readiness monitor separates required blockers from optional feature blocke
     nuggetPayments: { configured: true, enabled: true },
     revive: { configured: false, enabled: false, eligibilityReady: false },
     advertisements: { configured: false, enabled: false },
-    treasurySafe: { address: '0xbace355d23d378a6e1add986e53a18dd12e6eeac', owners: 3, threshold: 1 },
+    treasurySafe: { address: '0xbace355d23d378a6e1add986e53a18dd12e6eeac', owners: 3, threshold: 2 },
     controlLinks: { consistent: true, synchronizedCount: 8, conflictCount: 0 }
   });
   assert.equal(ready.status, 'ready');

@@ -85,6 +85,8 @@ test('Arena startup accepts only the pinned bytecode, token, Safe roles, pauser,
       if (functionName === 'seedTreasury') return SAFE;
       if (functionName === 'entriesPaused') return true;
       if (functionName === 'settlementPaused') return false;
+      if (functionName === 'getOwners') return [SAFE, address(77), address(78)];
+      if (functionName === 'getThreshold') return 2n;
       if (roleValues[functionName]) return roleValues[functionName];
       if (functionName === 'hasRole') {
         return expectedRoleAccounts.get(args[0])?.toLowerCase() === args[1].toLowerCase();
@@ -980,7 +982,7 @@ test('leaderboard counts every eligible wallet while returning top ten and per-w
   assert.equal(board.rows[0].entries, 2);
 });
 
-test('server replay rejection restores the paid Arena entry without recording a score', async () => {
+test('only allowlisted server failures resume the original paid Arena run without restoring its entry', async () => {
   const store = await new MemoryArenaStore().init();
   await store.ensureDay(dayRecord());
   await store.confirmEntry(entryRecord(1, HASH_A));
@@ -988,19 +990,22 @@ test('server replay rejection restores the paid Arena entry without recording a 
 
   const recovered = await store.recoverRejectedRun(
     'arena_run_recovery',
-    Object.assign(new Error('Replay mismatch'), { code: 'arena_upgrade_not_offered' }),
+    Object.assign(new Error('Worker unavailable'), { code: 'arena_replay_worker_unavailable' }),
     2_000
   );
 
-  assert.equal(recovered.attemptRestored, true);
-  assert.equal(recovered.run.status, 'rejected');
-  assert.equal(recovered.run.result.rejectionCode, 'arena_upgrade_not_offered');
-  assert.equal((await store.unusedEntries(PLAYER, DAY)).length, 1);
+  assert.equal(recovered.attemptRestored, false);
+  assert.equal(recovered.resumable, true);
+  assert.equal(recovered.run.status, 'active');
+  assert.equal(recovered.run.result.rejectionCode, 'arena_replay_worker_unavailable');
+  assert.equal((await store.unusedEntries(PLAYER, DAY)).length, 0);
   const board = await store.leaderboard(DAY, [], Date.parse(`${DAY}T12:00:00Z`));
   assert.equal(board.rows.length, 0);
 
-  await store.consumeEntry(PLAYER, DAY, 'arena_entry_1', runRecord('arena_run_replacement', 3_000));
-  assert.equal((await store.getRun('arena_run_replacement')).status, 'active');
+  await assert.rejects(
+    store.recoverRejectedRun('arena_run_recovery', Object.assign(new Error('Bad command'), { code: 'arena_upgrade_not_offered' }), 3_000),
+    (error) => error.code === 'arena_recovery_not_authorized'
+  );
 });
 
 test('independent pause controls require the emergency pauser directly and Arena admin actions enter the main audit log', async () => {

@@ -1,4 +1,5 @@
 import { getAddress } from 'viem';
+import { createHash } from 'node:crypto';
 import { AdminMattMineService } from './admin-service.js';
 import { ApiError, assertApi } from './errors.js';
 import {
@@ -125,14 +126,20 @@ export class ProductionMattMineService extends AdminMattMineService {
       timestamp
     });
     if (reservation.alreadyConfirmed) return reservation.result;
+    const paymentOperation = await this.beginDurablePaymentOperation({
+      quoteId, transactionHash, address: session.address, purpose: 'purchase', timestamp
+    });
+    if (paymentOperation?.state === 'completed') return structuredClone(paymentOperation.completed_response);
 
     let verified;
     try {
       verified = await this.nuggetPaymentVerifier.verifyExactTransfer(transactionHash, session.address, reservation.quote);
     } catch (error) {
       await this.releaseFailedVerification(quoteId, transactionHash, error);
+      await this.recordPaymentFailure(paymentOperation, error, timestamp);
       throw error;
     }
+    await this.advanceDurablePaymentOperation(paymentOperation, 'chain_verified', timestamp);
 
     const ledgerResult = await this.database.transact((state) => {
       const wallet = state.wallets[session.address];
@@ -153,8 +160,9 @@ export class ProductionMattMineService extends AdminMattMineService {
         ledgerEntry: structuredClone(update.entry)
       };
     });
+    await this.advanceDurablePaymentOperation(paymentOperation, 'ledger_credited', timestamp);
 
-    return this.nuggetEconomyStore.transact((state) => {
+    const completed = await this.nuggetEconomyStore.transact((state) => {
       const quote = state.quotes[quoteId];
       assertApi(quote && quote.address === session.address, 409, 'quote_state_missing', 'The verified quote is no longer available.');
       const existing = state.purchases[quoteId];
@@ -196,6 +204,8 @@ export class ProductionMattMineService extends AdminMattMineService {
         alreadyConfirmed: false
       };
     });
+    await this.advanceDurablePaymentOperation(paymentOperation, 'completed', timestamp, completed);
+    return completed;
   }
 
   async quotePracticeClaim(token, input = {}) {
@@ -262,14 +272,20 @@ export class ProductionMattMineService extends AdminMattMineService {
       timestamp
     });
     if (reservation.alreadyConfirmed) return reservation.result;
+    const paymentOperation = await this.beginDurablePaymentOperation({
+      quoteId, transactionHash, address: session.address, purpose: 'practice', timestamp
+    });
+    if (paymentOperation?.state === 'completed') return structuredClone(paymentOperation.completed_response);
 
     let verified;
     try {
       verified = await this.nuggetPaymentVerifier.verifyExactTransfer(transactionHash, session.address, reservation.quote);
     } catch (error) {
       await this.releaseFailedVerification(quoteId, transactionHash, error);
+      await this.recordPaymentFailure(paymentOperation, error, timestamp);
       throw error;
     }
+    await this.advanceDurablePaymentOperation(paymentOperation, 'chain_verified', timestamp);
 
     const result = await this.database.transact((state) => {
       const wallet = state.wallets[session.address];
@@ -307,6 +323,7 @@ export class ProductionMattMineService extends AdminMattMineService {
         alreadyConfirmed: false
       };
     });
+    await this.advanceDurablePaymentOperation(paymentOperation, 'ledger_credited', timestamp);
 
     await this.nuggetEconomyStore.transact((state) => {
       const quote = state.quotes[quoteId];
@@ -323,6 +340,7 @@ export class ProductionMattMineService extends AdminMattMineService {
       };
       addEconomyAudit(state, session.address, 'PRACTICE_CLAIM_CREDITED', `${runId}; ${reservation.quote.nuggets} nuggets; ${transactionHash}; block ${verified.blockNumber}`, timestamp);
     });
+    await this.advanceDurablePaymentOperation(paymentOperation, 'completed', timestamp, result);
     return result;
   }
 
@@ -442,7 +460,7 @@ export class ProductionMattMineService extends AdminMattMineService {
     await this.nuggetEconomyStore.transact((state) => {
       const quote = state.quotes[quoteId];
       if (!quote || quote.status === 'confirmed') return;
-      if (error?.code === 'transaction_confirming') {
+      if (isInfrastructureFailure(error)) {
         quote.status = 'verifying';
         quote.failureCode = error.code;
         return;
@@ -455,6 +473,35 @@ export class ProductionMattMineService extends AdminMattMineService {
       }
       addEconomyAudit(state, quote.address, 'PAYMENT_VERIFICATION_REJECTED', `${quoteId}; ${quote.failureCode}`, this.now());
     });
+  }
+
+  async beginDurablePaymentOperation({ quoteId, transactionHash, address, purpose, timestamp }) {
+    if (typeof this.database.beginPaymentOperation !== 'function') return null;
+    const idempotencyKey = `${purpose}:${quoteId}`;
+    const requestHash = createHash('sha256')
+      .update(JSON.stringify({ address, purpose, quoteId, transactionHash }))
+      .digest('hex');
+    const operation = await this.database.beginPaymentOperation({
+      idempotencyKey, requestHash, address, purpose, quoteId, transactionHash, timestamp
+    });
+    assertApi(operation, 503, 'payment_reconciliation_unavailable', 'The durable payment operation could not be loaded. Retry without sending another transaction.');
+    assertApi(operation.idempotency_key === idempotencyKey && operation.request_hash === requestHash,
+      409, 'payment_idempotency_conflict', 'That payment key or transaction hash belongs to a different request.');
+    return operation;
+  }
+
+  async advanceDurablePaymentOperation(operation, state, timestamp, response) {
+    if (!operation || typeof this.database.advancePaymentOperation !== 'function') return null;
+    return this.database.advancePaymentOperation(operation.idempotency_key, state, { timestamp, response });
+  }
+
+  async recordPaymentFailure(operation, error, timestamp) {
+    if (!operation || typeof this.database.advancePaymentOperation !== 'function') return;
+    const state = isInfrastructureFailure(error) ? 'needs_reconciliation' : 'invalid';
+    await this.database.advancePaymentOperation(operation.idempotency_key, state, {
+      timestamp,
+      errorCode: String(error?.code || 'verification_failed').slice(0, 100)
+    }).catch(() => undefined);
   }
 
   assertNuggetEconomyConfigured() {
@@ -586,4 +633,14 @@ function normalizeAdminReason(value) {
   const reason = value.trim();
   assertApi(reason.length >= 5 && reason.length <= 240, 400, 'admin_reason_invalid', 'Admin reason must be 5 to 240 characters.');
   return reason;
+}
+
+function isInfrastructureFailure(error) {
+  if (error?.infrastructureUnavailable === true) return true;
+  const code = String(error?.code || '').toLowerCase();
+  return code === 'transaction_confirming' ||
+    code.includes('unavailable') ||
+    code.includes('timeout') ||
+    code.startsWith('08') ||
+    ['57p01', '57p02', '57p03', '53300', '53400'].includes(code);
 }

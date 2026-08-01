@@ -452,7 +452,7 @@ test('private command center is a separate noindex page with no embedded secrets
   assert.match(html, /noindex,nofollow/);
   assert.match(html, /MATT Mine Command Center/);
   assert.doesNotMatch(html + script, /MATT_MINE_ADMIN_KEY|admin-secret/);
-  assert.match(script, /sessionStorage/);
+  assert.doesNotMatch(script, /mattMineAdminKey|x-matt-admin-key/);
   assert.match(script, /Download Safe JSON/);
   assert.match(script, /new Blob/);
   assert.match(script, /link\.download/);

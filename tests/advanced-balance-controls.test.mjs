@@ -210,7 +210,7 @@ test('room spawn plans are exact and a depth can require multiple Guardians befo
   assert.equal(game.enemies.filter((enemy) => enemy.roomId === game.layout.startRoom.id).length, 3);
 });
 
-test('Daily Arena remains upgrade-free and on its legacy deterministic balance until Admin explicitly enables the new plan', () => {
+test('Daily Arena applies permanent upgrades when its authoritative tuning enables them', () => {
   const profile = defaultProfile();
   profile.meta.damage = 25;
   profile.meta.armor = 15;
@@ -218,7 +218,7 @@ test('Daily Arena remains upgrade-free and on its legacy deterministic balance u
   const arena = defaultGameTuning().arena;
   const game = gameFor(arena, profile, 'arena');
   assert.equal(game.player.damage, arena.playerBaseDamage);
-  assert.equal(game.player.armor, 0);
-  assert.equal(game.player.blasterDamageScale, .56);
+  assert.equal(game.player.armor, 0.15);
+  assert.equal(game.player.blasterDamageScale, .56 * 1.6);
   assert.equal(game.runContext.tuning.usePerDepthRoomSpawns, false);
 });

@@ -4,6 +4,7 @@ import { ApiError, assertApi } from './errors.js';
 import { normalizeOrigin } from './auth-message.js';
 import { createMattMineHttpServer } from './http.js';
 import { isTransientPostgresError } from './postgres-resilience.js';
+import { observeHttpRequest } from './observability.js';
 
 const ECONOMY_PATHS = new Set([
   '/api/nuggets/status',
@@ -17,6 +18,7 @@ const ECONOMY_PATHS = new Set([
   '/api/characters/purchase',
   '/api/revives/request',
   '/api/revives/confirm',
+  '/api/revives/resume',
   '/api/revives/cancel',
   '/api/advertisements/confirm',
   '/api/advertisements/skip',
@@ -25,6 +27,7 @@ const ECONOMY_PATHS = new Set([
   '/api/admin/beta-testers',
   '/api/admin/characters',
   '/api/admin/weekly-competition/preview',
+  '/api/admin/reconciliation',
   '/api/competitions/weekly/leaderboard',
   '/api/competitions/endless/leaderboard',
   '/api/runs/competitive/events'
@@ -42,6 +45,7 @@ export function createProductionMattMineHttpServer({ root, service, maxRequestBy
       return;
     }
 
+    observeHttpRequest(request, response);
     applySecurityHeaders(response);
     try {
       enforceSameOrigin(request, service.publicOrigin);
@@ -49,6 +53,17 @@ export function createProductionMattMineHttpServer({ root, service, maxRequestBy
       limiter.consume(`${clientKey}:${requestUrl.pathname}`, 30, 60_000);
       const method = request.method || 'GET';
       const path = requestUrl.pathname;
+      if (path.startsWith('/api/admin/')) {
+        const mutation = !['GET', 'HEAD'].includes(method);
+        const emergencyKey = request.headers['x-matt-admin-key'];
+        if (emergencyKey) service.assertAdminKey(emergencyKey);
+        else await service.authenticateAdminSession(adminCookie(request), {
+            mutation,
+            csrfToken: request.headers['x-matt-csrf'],
+            stepUp: mutation && /\/characters$/.test(path)
+          });
+        request.headers['x-matt-admin-key'] = service.adminKey;
+      }
 
       if (method === 'GET' && path === '/api/expansion/status') {
         sendJson(response, 200, { ok: true, expansion: await service.expansionStatus(bearerToken(request)) });
@@ -85,6 +100,11 @@ export function createProductionMattMineHttpServer({ root, service, maxRequestBy
       if (method === 'POST' && path === '/api/revives/confirm') {
         const body = await readJson(request, maxRequestBytes);
         sendJson(response, 200, { ok: true, revive: await service.confirmPaidRevive(bearerToken(request), body) });
+        return;
+      }
+      if (method === 'POST' && path === '/api/revives/resume') {
+        const body = await readJson(request, maxRequestBytes);
+        sendJson(response, 200, { ok: true, revive: await service.resumePaidRevive(bearerToken(request), body.runId) });
         return;
       }
       if (method === 'POST' && path === '/api/revives/cancel') {
@@ -130,6 +150,10 @@ export function createProductionMattMineHttpServer({ root, service, maxRequestBy
       }
       if (method === 'GET' && path === '/api/admin/weekly-competition/preview') {
         sendJson(response, 200, { ok: true, preview: await service.weeklyCompetitionPreview(request.headers['x-matt-admin-key'], requestUrl.searchParams.get('week')) });
+        return;
+      }
+      if (method === 'GET' && path === '/api/admin/reconciliation') {
+        sendJson(response, 200, { ok: true, reconciliation: await service.adminPaymentReconciliation(request.headers['x-matt-admin-key']) });
         return;
       }
       const competitionMatch = path.match(/^\/api\/competitions\/(weekly|endless)\/leaderboard$/);
@@ -212,6 +236,13 @@ function bearerToken(request) {
   const authorization = request.headers.authorization;
   assertApi(typeof authorization === 'string' && authorization.startsWith('Bearer '), 401, 'authorization_required', 'A wallet session is required.');
   return authorization.slice('Bearer '.length);
+}
+
+function adminCookie(request) {
+  const cookies = String(request.headers.cookie || '').split(';').map((value) => value.trim());
+  const value = cookies.find((entry) => entry.startsWith('__Host-matt_admin='))?.slice('__Host-matt_admin='.length) || '';
+  assertApi(/^[a-f0-9]{64}$/.test(value), 401, 'admin_session_missing', 'Sign in with an authorized Admin wallet.');
+  return value;
 }
 
 async function readJson(request, maxBytes) {

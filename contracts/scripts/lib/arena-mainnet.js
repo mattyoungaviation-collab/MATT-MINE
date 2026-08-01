@@ -85,8 +85,8 @@ export function loadArenaMainnetConfig() {
   );
   const owners = sortedAddresses(mainnet.adminSafe.owners);
 
-  if (mainnet.adminSafe.threshold !== 1 || owners.length !== 3) {
-    throw new Error("The Treasury Safe must remain the explicitly approved 1-of-3 Safe.");
+  if (mainnet.adminSafe.threshold !== 2 || owners.length !== 3) {
+    throw new Error("The Treasury Safe must remain exactly 2-of-3.");
   }
   if (new Set(owners.map((owner) => owner.toLowerCase())).size !== 3) {
     throw new Error("The Treasury Safe owners must be unique.");
@@ -122,7 +122,7 @@ export function loadArenaMainnetConfig() {
       emergencyPauser
     },
     adminSafe: {
-      threshold: 1,
+      threshold: 2,
       owners
     }
   };
@@ -134,10 +134,10 @@ export function arenaConfigHash(config) {
 
 export function acceptedArenaDeploymentConfigHashes(config) {
   const hashes = new Set([arenaConfigHash(config)]);
-  if (config?.adminSafe?.threshold === 1) {
+  if (config?.adminSafe?.threshold === 2) {
     hashes.add(arenaConfigHash({
       ...config,
-      adminSafe: { ...config.adminSafe, threshold: 2 }
+      adminSafe: { ...config.adminSafe, threshold: 1 }
     }));
   }
   return hashes;

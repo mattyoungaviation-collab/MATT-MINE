@@ -11,9 +11,47 @@ import { CompetitiveReplayService } from '../server/competitive-replay-service.j
 import { buildArenaChallenge, replayArenaTranscript } from '../server/arena-engine.js';
 import { MattMineGame } from '../src/game/GameV4.js';
 import { defaultProfile } from '../src/game/storage.js';
+import { PaidCompetitionEligibilityPolicy } from '../server/eligibility.js';
+import { RoninRpcPool } from '../server/ronin-rpc.js';
 
 const ADDRESS = '0x1111111111111111111111111111111111111111';
 const SAFE = '0xBacE355D23d378a6E1adD986E53a18Dd12E6EeAc';
+
+test('Ronin safe reads fail over while unsafe methods are never retried or broadcast', async () => {
+  const calls = [];
+  const pool = new RoninRpcPool({
+    urls: ['https://first.invalid/rpc', 'https://second.invalid/rpc'],
+    breakAfter: 1,
+    fetch: async (url) => {
+      calls.push(url);
+      if (url.includes('first')) throw new Error('endpoint unavailable');
+      return { ok: true, json: async () => ({ jsonrpc: '2.0', id: 1, result: '0x7e4' }) };
+    }
+  });
+  assert.equal(await pool.request({ method: 'eth_chainId' }), '0x7e4');
+  assert.deepEqual(calls, ['https://first.invalid/rpc', 'https://second.invalid/rpc']);
+  assert.equal(pool.health().endpoints[0].failures, 1);
+  await assert.rejects(
+    pool.request({ method: 'eth_sendRawTransaction', params: ['0xdead'] }),
+    (error) => error.code === 'rpc_unsafe_method_refused'
+  );
+  assert.equal(calls.length, 2);
+});
+
+test('paid competition eligibility defaults closed while leaving an explicit approved boundary', () => {
+  const denied = new PaidCompetitionEligibilityPolicy();
+  assert.throws(() => denied.assertEligible(ADDRESS), (error) => error.code === 'paid_competition_eligibility_unconfigured');
+  const allowed = new PaidCompetitionEligibilityPolicy({
+    counselApproved: true,
+    rulesVersion: 'rules-2026-07-31',
+    allowedWallets: [ADDRESS]
+  });
+  assert.deepEqual(allowed.assertEligible(ADDRESS, { mode: 'arena' }), {
+    eligible: true,
+    rulesVersion: 'rules-2026-07-31',
+    mode: 'arena'
+  });
+});
 
 test('competitive replay checkpoints are signed, ordered, persisted, and bound to the run token', async () => {
   let now = 1_000_000;

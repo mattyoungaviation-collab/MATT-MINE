@@ -32,6 +32,14 @@ export class MemoryCompetitiveReplayStore {
     return clone(this.events.get(runId) || []);
   }
 
+  async hydrateRunSnapshot(runId, snapshot, metadata = {}) {
+    return this.#mutate(() => {
+      const run = this.runs.get(runId);
+      if (run && !run.runSnapshot?.id) Object.assign(run, clone({ runSnapshot: snapshot, ...metadata }));
+      return clone(run || null);
+    });
+  }
+
   async appendEvents(runId, expectedSequence, events, patch) {
     return this.#mutate(() => {
       const run = this.runs.get(runId);
@@ -82,7 +90,15 @@ export class PostgresCompetitiveReplayStore {
         through_seq INTEGER NOT NULL DEFAULT 0,
         through_tick INTEGER NOT NULL DEFAULT 0,
         transcript_hash TEXT NOT NULL,
-        checkpoint_signature TEXT NOT NULL
+        checkpoint_signature TEXT NOT NULL,
+        run_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
+        authoritative_state JSONB NOT NULL DEFAULT '{}'::jsonb,
+        build_commit TEXT NOT NULL DEFAULT 'unknown',
+        engine_version TEXT NOT NULL DEFAULT 'game-v4',
+        replay_schema_version TEXT NOT NULL DEFAULT 'matt-competitive-input-v1',
+        map_snapshot_id TEXT,
+        map_hash TEXT,
+        tuning_hash TEXT
       );
       CREATE INDEX IF NOT EXISTS competitive_runs_address_status
         ON matt_mine_competitive.runs(address,status);
@@ -95,6 +111,16 @@ export class PostgresCompetitiveReplayStore {
         received_at_ms BIGINT NOT NULL,
         PRIMARY KEY(run_id,seq)
       );
+    `);
+    await this.pool.query(`
+      ALTER TABLE matt_mine_competitive.runs ADD COLUMN IF NOT EXISTS run_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb;
+      ALTER TABLE matt_mine_competitive.runs ADD COLUMN IF NOT EXISTS authoritative_state JSONB NOT NULL DEFAULT '{}'::jsonb;
+      ALTER TABLE matt_mine_competitive.runs ADD COLUMN IF NOT EXISTS build_commit TEXT NOT NULL DEFAULT 'unknown';
+      ALTER TABLE matt_mine_competitive.runs ADD COLUMN IF NOT EXISTS engine_version TEXT NOT NULL DEFAULT 'game-v4';
+      ALTER TABLE matt_mine_competitive.runs ADD COLUMN IF NOT EXISTS replay_schema_version TEXT NOT NULL DEFAULT 'matt-competitive-input-v1';
+      ALTER TABLE matt_mine_competitive.runs ADD COLUMN IF NOT EXISTS map_snapshot_id TEXT;
+      ALTER TABLE matt_mine_competitive.runs ADD COLUMN IF NOT EXISTS map_hash TEXT;
+      ALTER TABLE matt_mine_competitive.runs ADD COLUMN IF NOT EXISTS tuning_hash TEXT;
     `);
     return this;
   }
@@ -109,12 +135,17 @@ export class PostgresCompetitiveReplayStore {
     await this.pool.query(
       `INSERT INTO matt_mine_competitive.runs (
          run_id,address,mode,token_hash,status,started_at_ms,expires_at_ms,
-         through_seq,through_tick,transcript_hash,checkpoint_signature
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+         through_seq,through_tick,transcript_hash,checkpoint_signature,run_snapshot,
+         authoritative_state,build_commit,engine_version,replay_schema_version,
+         map_snapshot_id,map_hash,tuning_hash
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb,$14,$15,$16,$17,$18,$19)
        ON CONFLICT(run_id) DO NOTHING`,
       [run.runId, run.address, run.mode, run.tokenHash, run.status, run.startedAt,
         run.expiresAt, run.throughSeq, run.throughTick, run.transcriptHash,
-        run.checkpointSignature]
+        run.checkpointSignature, JSON.stringify(run.runSnapshot || {}),
+        JSON.stringify(run.authoritativeState || {}), run.buildCommit, run.engineVersion,
+        run.replaySchemaVersion, run.mapSnapshotId || null, run.mapHash || null,
+        run.tuningHash || null]
     );
     return this.getRun(run.runId);
   }
@@ -135,6 +166,19 @@ export class PostgresCompetitiveReplayStore {
     return result.rows.map((row) => (
       typeof row.event_json === 'string' ? JSON.parse(row.event_json) : row.event_json
     ));
+  }
+
+  async hydrateRunSnapshot(runId, snapshot, metadata = {}) {
+    await this.pool.query(
+      `UPDATE matt_mine_competitive.runs SET run_snapshot=$2::jsonb,
+       build_commit=$3,engine_version=$4,replay_schema_version=$5,
+       map_snapshot_id=$6,map_hash=$7,tuning_hash=$8
+       WHERE run_id=$1 AND (run_snapshot='{}'::jsonb OR NOT (run_snapshot ? 'id'))`,
+      [runId, JSON.stringify(snapshot), metadata.buildCommit || 'legacy-active-run',
+        metadata.engineVersion || 'game-v4', metadata.replaySchemaVersion || 'matt-competitive-input-v1',
+        metadata.mapSnapshotId || null, metadata.mapHash || null, metadata.tuningHash || null]
+    );
+    return this.getRun(runId);
   }
 
   async appendEvents(runId, expectedSequence, events, patch) {
@@ -159,9 +203,11 @@ export class PostgresCompetitiveReplayStore {
       }
       await client.query(
         `UPDATE matt_mine_competitive.runs SET
-           through_seq=$2,through_tick=$3,transcript_hash=$4,checkpoint_signature=$5
+           through_seq=$2,through_tick=$3,transcript_hash=$4,checkpoint_signature=$5,
+           authoritative_state=$6::jsonb
          WHERE run_id=$1`,
-        [runId, patch.throughSeq, patch.throughTick, patch.transcriptHash, patch.checkpointSignature]
+        [runId, patch.throughSeq, patch.throughTick, patch.transcriptHash, patch.checkpointSignature,
+          JSON.stringify(patch.authoritativeState || {})]
       );
       await client.query('COMMIT');
       return { ...run, ...clone(patch) };
@@ -196,7 +242,20 @@ function formatRun(row) {
     throughTick: Number(row.through_tick),
     transcriptHash: row.transcript_hash,
     checkpointSignature: row.checkpoint_signature
+    ,runSnapshot: json(row.run_snapshot)
+    ,authoritativeState: json(row.authoritative_state)
+    ,buildCommit: row.build_commit || 'unknown'
+    ,engineVersion: row.engine_version || 'game-v4'
+    ,replaySchemaVersion: row.replay_schema_version || 'matt-competitive-input-v1'
+    ,mapSnapshotId: row.map_snapshot_id || ''
+    ,mapHash: row.map_hash || ''
+    ,tuningHash: row.tuning_hash || ''
   };
+}
+
+function json(value) {
+  if (typeof value !== 'string') return value || {};
+  try { return JSON.parse(value); } catch { return {}; }
 }
 
 function clone(value) {

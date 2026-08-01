@@ -7,6 +7,11 @@ import {
   guardPostgresPool,
   retryTransientPostgres
 } from './postgres-resilience.js';
+import {
+  backfillNormalizedState,
+  runNormalizedMigrations,
+  validateNormalizedState
+} from './normalized-persistence.js';
 
 const { Pool } = pg;
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -109,6 +114,7 @@ export class PostgresDatabase {
       ...(options.ssl ? { ssl: { rejectUnauthorized: options.rejectUnauthorized === true } } : {})
     });
     this.ownsPool = !options.pool;
+    this.normalizedMigrationsEnabled = options.normalizedMigrationsEnabled ?? this.ownsPool;
     this.now = options.now || Date.now;
     this.initialized = false;
     this.initPromise = null;
@@ -149,6 +155,7 @@ export class PostgresDatabase {
 
   async #initialize() {
     await createPostgresSchema(this.pool);
+    if (this.normalizedMigrationsEnabled) await runNormalizedMigrations(this.pool);
     const client = await this.pool.connect();
     const timestamp = this.now();
     const currentWeek = utcWeekKey(timestamp);
@@ -189,6 +196,9 @@ export class PostgresDatabase {
           [JSON.stringify(state)]
         );
       }
+      // Staged migration: the legacy row remains authoritative while every
+      // normalized projection is written in the same transaction.
+      if (this.normalizedMigrationsEnabled) await backfillNormalizedState(client, state, { timestamp });
       await client.query('COMMIT');
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);
@@ -253,6 +263,7 @@ export class PostgresDatabase {
          WHERE id = 1`,
         [JSON.stringify(normalized)]
       );
+      if (this.normalizedMigrationsEnabled) await backfillNormalizedState(client, normalized, { timestamp: this.now() });
       await client.query('COMMIT');
       return structuredClone(result);
     } catch (error) {
@@ -279,6 +290,83 @@ export class PostgresDatabase {
   async close() {
     if (this.ownsPool) await this.pool.end();
     this.poolGuard.close();
+  }
+
+  async backfillNormalized() {
+    await this.init();
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const selected = await client.query('SELECT data FROM matt_mine_state WHERE id=1 FOR SHARE');
+      const state = normalizeServerState(parseJsonValue(selected.rows[0]?.data));
+      await backfillNormalizedState(client, state, { timestamp: this.now() });
+      await client.query('COMMIT');
+      return validateNormalizedState(this.pool, state);
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async validateNormalized() {
+    await this.init();
+    const state = await this.read();
+    return validateNormalizedState(this.pool, state);
+  }
+
+  async beginPaymentOperation(operation) {
+    await this.init();
+    try {
+      await this.query(
+        `INSERT INTO matt_mine_normalized.payment_operations
+          (idempotency_key, request_hash, address, purpose, quote_id, transaction_hash,
+           state, created_at_ms, updated_at_ms)
+         VALUES ($1,$2,$3,$4,$5,$6,'reserved',$7,$7)
+         ON CONFLICT (idempotency_key) DO NOTHING`,
+        [operation.idempotencyKey, operation.requestHash, operation.address,
+          operation.purpose, operation.quoteId || null, operation.transactionHash || null,
+          operation.timestamp]
+      );
+    } catch (error) {
+      // A transaction hash or purpose/quote uniqueness conflict is reconciled
+      // by reading the durable owner below; it must never trigger a transfer.
+      if (error?.code !== '23505') throw error;
+    }
+    const result = await this.query(
+      `SELECT * FROM matt_mine_normalized.payment_operations
+       WHERE idempotency_key=$1 OR transaction_hash=$2
+       ORDER BY (idempotency_key=$1) DESC LIMIT 1`,
+      [operation.idempotencyKey, operation.transactionHash || null]
+    );
+    return result.rows[0] || null;
+  }
+
+  async advancePaymentOperation(idempotencyKey, state, options = {}) {
+    const timestampColumn = {
+      chain_verified: 'chain_verified_at_ms',
+      ledger_credited: 'ledger_credited_at_ms',
+      completed: 'completed_at_ms'
+    }[state];
+    const timestampAssignment = timestampColumn ? `, ${timestampColumn}=$3` : '';
+    const result = await this.query(
+      `UPDATE matt_mine_normalized.payment_operations
+       SET state=$2, updated_at_ms=$3${timestampAssignment},
+           completed_response=COALESCE($4::jsonb, completed_response),
+           error_code=COALESCE($5, error_code)
+       WHERE idempotency_key=$1 AND state <> 'completed'
+       RETURNING *`,
+      [idempotencyKey, state, options.timestamp || this.now(),
+        options.response === undefined ? null : JSON.stringify(options.response),
+        options.errorCode || null]
+    );
+    if (result.rows[0]) return result.rows[0];
+    const existing = await this.query(
+      'SELECT * FROM matt_mine_normalized.payment_operations WHERE idempotency_key=$1',
+      [idempotencyKey]
+    );
+    return existing.rows[0] || null;
   }
 
   async leaderboard(mode, week, viewerAddress, options = {}) {

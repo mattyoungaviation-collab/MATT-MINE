@@ -21,7 +21,7 @@ function validConfig() {
       treasuryManager: "0x0000000000000000000000000000000000000016"
     },
     adminSafe: {
-      threshold: 1,
+      threshold: 2,
       owners: [
         "0x0000000000000000000000000000000000000031",
         "0x0000000000000000000000000000000000000032",
@@ -126,12 +126,12 @@ describe("Ronin Mainnet configuration guards", function () {
     );
   });
 
-  it("requires exactly three unique Safe owners and the approved 1-of-3 threshold", function () {
+  it("requires exactly three unique Safe owners and the exact 2-of-3 threshold", function () {
     const badThreshold = validConfig();
-    badThreshold.adminSafe.threshold = 2;
+    badThreshold.adminSafe.threshold = 1;
     assert.throws(
       () => normalizeMainnetConfig(badThreshold),
-      /threshold must be 1/
+      /threshold must be 2/
     );
 
     const duplicateOwner = validConfig();
@@ -146,7 +146,7 @@ describe("Ronin Mainnet configuration guards", function () {
     const current = normalizeMainnetConfig(validConfig());
     const originalDeploymentHash = configHash({
       ...current,
-      adminSafe: { ...current.adminSafe, threshold: 2 }
+      adminSafe: { ...current.adminSafe, threshold: 1 }
     });
     assert.equal(acceptedDeploymentConfigHashes(current).has(originalDeploymentHash), true);
   });

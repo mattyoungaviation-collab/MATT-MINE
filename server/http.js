@@ -5,6 +5,7 @@ import { MAX_REQUEST_BYTES } from './constants.js';
 import { ApiError, assertApi } from './errors.js';
 import { normalizeOrigin } from './auth-message.js';
 import { isTransientPostgresError } from './postgres-resilience.js';
+import { observeHttpRequest } from './observability.js';
 
 const MIME_TYPES = Object.freeze({
   '.html': 'text/html; charset=utf-8',
@@ -23,6 +24,7 @@ export function createMattMineHttpServer({ root, service, maxRequestBytes = MAX_
   const rateLimiter = createRateLimiter();
 
   return http.createServer(async (request, response) => {
+    observeHttpRequest(request, response);
     applySecurityHeaders(response);
     try {
       const requestUrl = new URL(request.url || '/', requestOrigin(request, service.publicOrigin));
@@ -58,14 +60,73 @@ async function handleApiRequest({
   if (requestUrl.pathname === '/api/profile/identity' || requestUrl.pathname === '/api/profile/avatar') {
     rateLimiter.consume(`${clientKey}:profile-media`, 12, 10 * 60_000);
   }
-  enforceSameOrigin(request, service.publicOrigin);
-
   const method = request.method || 'GET';
   const path = requestUrl.pathname;
+  enforceSameOrigin(request, service.publicOrigin, method);
+  if (method === 'GET' && path === '/api/live') {
+    sendJson(response, 200, { ok: true, service: 'matt-mine', version: service.appVersion, commit: service.buildCommit });
+    return;
+  }
+  if (method === 'GET' && path === '/api/ready') {
+    const health = await service.health();
+    sendJson(response, health.degraded ? 503 : 200, { ok: !health.degraded, service: 'matt-mine', ...health });
+    return;
+  }
   if (method === 'GET' && path === '/api/health') {
     const health = await service.health();
-    sendJson(response, 200, { ok: true, service: 'matt-mine', version: 17, ...health });
+    sendJson(response, 200, { ok: true, service: 'matt-mine', ...health, version: 17 });
     return;
+  }
+  if (method === 'POST' && path === '/api/admin/auth/session') {
+    const session = await service.createAdminSession(bearerToken(request));
+    setAdminCookie(response, session.token, session.expiresAt);
+    sendJson(response, 201, { ok: true, admin: { address: session.address, expiresAt: session.expiresAt }, csrfToken: session.csrfToken });
+    return;
+  }
+  if (method === 'POST' && path === '/api/admin/auth/logout') {
+    const token = adminCookie(request);
+    await service.authenticateAdminSession(token, { mutation: true, csrfToken: request.headers['x-matt-csrf'] });
+    await service.revokeAdminSession(token);
+    clearAdminCookie(response);
+    sendJson(response, 200, { ok: true, signedOut: true });
+    return;
+  }
+  if (method === 'GET' && path === '/api/admin/auth/status') {
+    const admin = await service.authenticateAdminSession(adminCookie(request));
+    sendJson(response, 200, { ok: true, admin });
+    return;
+  }
+  if (method === 'POST' && path === '/api/admin/auth/step-up/challenge') {
+    const token = adminCookie(request);
+    await service.authenticateAdminSession(token, { mutation: true, csrfToken: request.headers['x-matt-csrf'] });
+    sendJson(response, 201, { ok: true, challenge: await service.createAdminStepUp(token) });
+    return;
+  }
+  if (method === 'POST' && path === '/api/admin/auth/step-up/verify') {
+    const token = adminCookie(request);
+    await service.authenticateAdminSession(token, { mutation: true, csrfToken: request.headers['x-matt-csrf'] });
+    const body = await readJson(request, maxRequestBytes);
+    sendJson(response, 200, { ok: true, admin: await service.verifyAdminStepUp(token, body.nonce, body.signature) });
+    return;
+  }
+  if (path.startsWith('/api/admin/')) {
+    const mutation = !['GET', 'HEAD'].includes(method);
+    const emergencyKey = request.headers['x-matt-admin-key'];
+    const independentRewardApproval = /\/api\/admin\/rewards\/drafts\/[^/]+\/approve$/.test(path) && request.headers['x-matt-reward-approver-key'];
+    if (independentRewardApproval) {
+      // The reward manager independently validates its server-side approver secret.
+    } else if (emergencyKey) service.assertAdminKey(emergencyKey);
+    else await service.authenticateAdminSession(adminCookie(request), {
+        mutation,
+        csrfToken: request.headers['x-matt-csrf'],
+        stepUp: mutation && requiresAdminStepUp(path)
+      });
+    // Existing service methods retain a server-only emergency credential. It
+    // is injected after wallet-cookie authorization and never reaches JS.
+    request.headers['x-matt-admin-key'] = service.adminKey;
+    if (path.includes('/rewards/') && path.endsWith('/approve')) {
+      request.headers['x-matt-reward-approver-key'] = service.rewardManager?.approverKey || '';
+    }
   }
   if (method === 'GET' && path === '/api/config') {
     sendJson(response, 200, { ok: true, config: service.config() });
@@ -648,11 +709,38 @@ function requestOrigin(request, configuredOrigin) {
   return normalizeOrigin(`${protocol}://${host}`);
 }
 
-function enforceSameOrigin(request, configuredOrigin) {
+function enforceSameOrigin(request, configuredOrigin, method = 'GET') {
   const originHeader = request.headers.origin;
-  if (!originHeader) return;
+  const mutation = !['GET', 'HEAD', 'OPTIONS'].includes(method);
+  if (!originHeader) {
+    const serverCredential = request.headers['x-matt-admin-key'] || request.headers['x-matt-reward-approver-key'];
+    assertApi(!mutation || !configuredOrigin || Boolean(serverCredential), 403, 'origin_required', 'Browser mutations require an exact Origin header.');
+    return;
+  }
   const expected = requestOrigin(request, configuredOrigin);
   assertApi(normalizeOrigin(originHeader) === expected, 403, 'cross_origin_rejected', 'Cross-origin API requests are not allowed.');
+  const fetchSite = String(request.headers['sec-fetch-site'] || '').toLowerCase();
+  assertApi(!mutation || !fetchSite || fetchSite === 'same-origin', 403, 'cross_site_mutation_rejected', 'Cross-site browser mutations are not allowed.');
+}
+
+function adminCookie(request) {
+  const cookies = String(request.headers.cookie || '').split(';').map((value) => value.trim());
+  const value = cookies.find((entry) => entry.startsWith('__Host-matt_admin='))?.slice('__Host-matt_admin='.length) || '';
+  assertApi(/^[a-f0-9]{64}$/.test(value), 401, 'admin_session_missing', 'Sign in with an authorized Admin wallet.');
+  return value;
+}
+
+function setAdminCookie(response, token, expiresAt) {
+  const maxAge = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
+  response.setHeader('set-cookie', `__Host-matt_admin=${token}; Path=/; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Strict`);
+}
+
+function clearAdminCookie(response) {
+  response.setHeader('set-cookie', '__Host-matt_admin=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict');
+}
+
+function requiresAdminStepUp(path) {
+  return /\/suspension$|\/awards$|\/contracts\/prepare$|\/rewards\/drafts\/[^/]+\/approve$|\/competition-studio\/[^/]+\/(publish|versions\/[^/]+\/activate)$/.test(path);
 }
 
 function bearerToken(request) {
@@ -706,6 +794,7 @@ function sendError(response, error) {
     : databaseUnavailable
       ? 'MATT Mine is reconnecting to its database. Please retry in a moment.'
       : 'The MATT Mine server encountered an unexpected error.';
+  if (status === 429) response.setHeader('retry-after', String(error?.retryAfter || 60));
   if (databaseUnavailable) {
     response.setHeader('retry-after', '2');
     console.warn('[MATT Mine server] PostgreSQL temporarily unavailable.', error?.code || error?.message || error);
@@ -742,7 +831,11 @@ function createRateLimiter() {
         buckets.set(key, { count: 1, resetsAt: timestamp + windowMs });
         return;
       }
-      assertApi(current.count < limit, 429, 'rate_limited', 'Too many requests. Try again shortly.');
+      if (current.count >= limit) {
+        const error = new ApiError(429, 'rate_limited', 'Too many requests. Try again shortly.');
+        error.retryAfter = Math.max(1, Math.ceil((current.resetsAt - timestamp) / 1000));
+        throw error;
+      }
       current.count += 1;
       if (buckets.size > 5_000) {
         for (const [bucketKey, bucket] of buckets) {

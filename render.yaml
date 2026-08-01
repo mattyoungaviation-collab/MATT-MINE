@@ -6,7 +6,7 @@ services:
     region: oregon
     buildCommand: npm ci
     startCommand: npm start
-    healthCheckPath: /api/health
+    healthCheckPath: /api/ready
     autoDeployTrigger: checksPass
     maxShutdownDelaySeconds: 60
     envVars:
@@ -19,6 +19,12 @@ services:
           name: matt-mine-db
           property: connectionString
       - key: MATT_MINE_PUBLIC_ORIGIN
+        sync: false
+      - key: RONIN_RPC_URLS
+        sync: false
+      - key: MATT_MINE_RPC_TIMEOUT_MS
+        value: "10000"
+      - key: MATT_MINE_ADMIN_WALLETS
         sync: false
       - key: MATT_MINE_ADMIN_KEY
         generateValue: true
@@ -66,6 +72,12 @@ services:
         value: "90"
       - key: MATT_MINE_DATABASE_QUERY_RETRY_ATTEMPTS
         value: "5"
+      - key: MATT_MINE_ELIGIBILITY_COUNSEL_APPROVED
+        value: "false"
+      - key: MATT_MINE_ELIGIBILITY_RULES_VERSION
+        sync: false
+      - key: MATT_MINE_ELIGIBLE_PAID_WALLETS
+        sync: false
 
 databases:
   - name: matt-mine-db

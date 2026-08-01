@@ -658,12 +658,12 @@ function dateValue(value, fallback) {
 }
 
 async function adminApi(path, options = {}) {
-  const key = sessionStorage.getItem('mattMineAdminKey') || $('#admin-key')?.value || '';
+  if (window.mattMineAdminSession?.fetch) return window.mattMineAdminSession.fetch(path, options);
   const response = await fetch(path, {
     method: options.method || 'GET',
+    credentials: 'same-origin',
     headers: {
       accept: 'application/json',
-      'x-matt-admin-key': key,
       ...(options.body ? { 'content-type': 'application/json' } : {})
     },
     body: options.body ? JSON.stringify(options.body) : undefined

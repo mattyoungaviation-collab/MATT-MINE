@@ -5,13 +5,15 @@ on:
   push:
     branches:
       - main
-      - agent/v0.3-combat-depth
 
 permissions:
   contents: read
 
 jobs:
   test:
+    strategy:
+      matrix:
+        node: [22.16.0, 24]
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -19,17 +21,53 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Use Node.js 24
+      - name: Use Node.js ${{ matrix.node }}
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: ${{ matrix.node }}
           cache: npm
 
       - name: Install locked dependencies
         run: npm ci
 
+      - name: Validate migration and lossless rollback plans
+        run: npm run db:migrate:dry-run && npm run db:rollback:dry-run
+
       - name: Run game and contract tests
         run: npm test
 
+      - name: Lint, formatting, and checkJs
+        run: npm run lint && npm run format:check && npm run check
+
       - name: Compile production contracts
         run: npm run contracts:compile
+
+      - name: Dependency audit
+        run: npm audit --audit-level=high
+
+  postgres-and-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: matt_mine
+          POSTGRES_PASSWORD: test-only
+          POSTGRES_DB: matt_mine_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U matt_mine"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://matt_mine:test-only@127.0.0.1:5432/matt_mine_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - run: npm ci
+      - run: npm run test:postgres
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser
