@@ -88,6 +88,8 @@ Remaining risk: reward-chain RPC still needs migration to the shared pool; Arena
 
 Render must use `/api/live` as `healthCheckPath`. Monitoring must alert on `/api/ready` separately; a recoverable PostgreSQL interruption must not cause Render to restart an otherwise healthy web process.
 
+The Blueprint pins PostgreSQL to `basic-1gb`. The prior 256 MB / 0.1 CPU instance repeatedly terminated during legacy JSONB request transactions; dashboard-only upgrades are not durable because the next Blueprint sync can restore the file-declared plan.
+
 HTTP requests emit structured JSON containing a generated or validated request ID, method, path, status, duration, and a one-way truncated client identifier. Request bodies and security credentials are never logged. Never log private keys, full bearer/cookie values, Admin secrets, CSRF tokens, or signatures. Correlate incidents by request ID and the durable run, quote, or transaction records. Required alert thresholds: readiness failure for two minutes; DB pool over 80% for five minutes; p95 query over 500 ms; p95 replay over two seconds; any unknown COMMIT; any paid-but-not-credited item older than five minutes; any paid revive not resumed after 30 minutes; any Arena conservation violation; contract balance below the configured settlement obligation.
 
 Remaining risk: a production metrics exporter, domain-level correlation fields, and alert integration are not implemented in this PR. The requested DB/replay/payment/claim/contract metric instruments remain required before production-ready status.

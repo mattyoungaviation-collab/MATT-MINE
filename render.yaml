@@ -90,7 +90,10 @@ services:
 
 databases:
   - name: matt-mine-db
-    plan: basic-256mb
+    # Wallet login and gameplay transactions rewrite the legacy JSONB state
+    # while row-scoped persistence is completed. 256 MB repeatedly OOM-killed
+    # PostgreSQL in production; keep the approved 1 GB capacity pinned here.
+    plan: basic-1gb
     region: oregon
     databaseName: matt_mine
     user: matt_mine
