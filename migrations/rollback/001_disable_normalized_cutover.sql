@@ -3,4 +3,3 @@
 UPDATE matt_mine_normalized.cutover_state
 SET read_source = 'legacy', dual_write_enabled = FALSE, updated_at = NOW()
 WHERE singleton = TRUE;
-

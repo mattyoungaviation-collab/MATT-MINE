@@ -249,4 +249,3 @@ CREATE TABLE IF NOT EXISTS matt_mine_normalized.audit_entries (
 );
 CREATE INDEX IF NOT EXISTS audit_created ON matt_mine_normalized.audit_entries(created_at_ms DESC);
 CREATE INDEX IF NOT EXISTS audit_actor_created ON matt_mine_normalized.audit_entries(actor_address,created_at_ms DESC);
-
