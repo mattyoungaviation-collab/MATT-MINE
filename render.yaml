@@ -6,7 +6,10 @@ services:
     region: oregon
     buildCommand: npm ci
     startCommand: npm start
-    healthCheckPath: /api/ready
+    # Process liveness must not restart the web instance during a recoverable
+    # PostgreSQL interruption. /api/ready remains the dependency-readiness
+    # endpoint for monitoring and incident response.
+    healthCheckPath: /api/live
     autoDeployTrigger: checksPass
     maxShutdownDelaySeconds: 60
     envVars:

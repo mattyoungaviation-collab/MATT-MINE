@@ -1,6 +1,6 @@
 # MATT Mine production hardening
 
-Status: implementation candidate, not yet production-ready. No contract was deployed, no transaction was broadcast, no production database was accessed, and no Render setting was changed by this work.
+Status: implementation candidate, not yet production-ready. No contract was deployed and no transaction was broadcast. The Render Blueprint uses process liveness for its health check; dependency readiness remains separately observable.
 
 ## Protected production facts
 
@@ -15,7 +15,7 @@ Status: implementation candidate, not yet production-ready. No contract was depl
 
 ### 1. Persistence
 
-The legacy PostgreSQL implementation locks and rewrites `matt_mine_state.id=1`. Migrations `001` through `004` add normalized wallets, identities, avatars, sessions, challenges, runs, checkpoints, entitlements, purchases, revives, balances, append-only ledger, claims, used hashes, payment/Admin operations, mine operations, tuning versions, Competition Studio drafts/snapshots, activity, audit, and Arena recovery records. Migration `004` preserves distinct published snapshot IDs when later publishing windows reuse identical content. `PostgresDatabase` applies checksummed migrations and dual-writes normalized projections in the same transaction while retaining the legacy row as the read authority.
+The legacy PostgreSQL implementation locks and rewrites `matt_mine_state.id=1`. Migrations `001` through `004` add normalized wallets, identities, avatars, sessions, challenges, runs, checkpoints, entitlements, purchases, revives, balances, append-only ledger, claims, used hashes, payment/Admin operations, mine operations, tuning versions, Competition Studio drafts/snapshots, activity, audit, and Arena recovery records. Migration `004` preserves distinct published snapshot IDs when later publishing windows reuse identical content. Migration `005` keeps legacy reads authoritative and pauses the compatibility dual-write projection because rewriting the full normalized state inside every request transaction destabilized the production database. Normalized and financial tables remain intact, and `db:backfill` remains available as an explicit operator command.
 
 Commands:
 
@@ -27,9 +27,9 @@ Commands:
 - `npm run db:rollback:dry-run`
 - `npm run db:rollback -- --apply`
 
-The rollback is deliberately lossless: it selects the legacy read source and disables dual write; runtime startup and transactions honor that switch without replaying the normalized backfill. It never drops normalized or financial tables. Activity and audit tables are indexed for cursor/time pagination. Archival must copy old rows to encrypted immutable storage and set `archived_at`; financial rows must never be truncated.
+The rollback and migration `005` are deliberately lossless: they select the legacy read source and disable dual write; runtime startup and transactions honor that switch without replaying the normalized backfill. They never drop normalized or financial tables. Activity and audit tables are indexed for cursor/time pagination. Archival must copy old rows to encrypted immutable storage and set `archived_at`; financial rows must never be truncated.
 
-Remaining risk: the application read path is intentionally still legacy-first for this PR. Row-scoped normalized command handlers must replace the compatibility projection before cutover to `read_source=normalized`. Until then, the global row remains a contention point even though normalized copies and database uniqueness protections exist.
+Remaining risk: the application read path is intentionally still legacy-first. Row-scoped normalized command handlers must replace the compatibility projection and pass production-representative load tests before dual write or `read_source=normalized` is enabled. Until then, the global row remains a contention point even though normalized copies and database uniqueness protections exist.
 
 ### 2. Payments and idempotency
 
@@ -86,6 +86,8 @@ Remaining risk: reward-chain RPC still needs migration to the shared pool; Arena
 - `/api/health`: compatibility endpoint.
 - `npm run db:backup`: streams `pg_dump --format=custom` directly through `age`; unencrypted output is refused.
 
+Render must use `/api/live` as `healthCheckPath`. Monitoring must alert on `/api/ready` separately; a recoverable PostgreSQL interruption must not cause Render to restart an otherwise healthy web process.
+
 HTTP requests emit structured JSON containing a generated or validated request ID, method, path, status, duration, and a one-way truncated client identifier. Request bodies and security credentials are never logged. Never log private keys, full bearer/cookie values, Admin secrets, CSRF tokens, or signatures. Correlate incidents by request ID and the durable run, quote, or transaction records. Required alert thresholds: readiness failure for two minutes; DB pool over 80% for five minutes; p95 query over 500 ms; p95 replay over two seconds; any unknown COMMIT; any paid-but-not-credited item older than five minutes; any paid revive not resumed after 30 minutes; any Arena conservation violation; contract balance below the configured settlement obligation.
 
 Remaining risk: a production metrics exporter, domain-level correlation fields, and alert integration are not implemented in this PR. The requested DB/replay/payment/claim/contract metric instruments remain required before production-ready status.
@@ -140,10 +142,11 @@ Existing secrets remain server-side. Never put them in `VITE_*`, HTML, JS, query
 2. Deploy migrations only with paid features paused. Run `db:migrate`.
 3. Run repeatable `db:backfill` until counts stabilize.
 4. Run `db:validate`; investigate every discrepancy. Do not cut over with any financial mismatch.
-5. Deploy compatibility application with legacy reads and dual writes.
-6. Observe at least one full competition/payment reconciliation window.
-7. Separately approve normalized read cutover in a later change.
-8. Separately reactivate financial features after readiness, counsel and Safe checks.
+5. Deploy the compatibility application with legacy reads and dual write disabled.
+6. Implement row-scoped normalized command handlers and pass production-representative load tests before considering dual write.
+7. Observe at least one full competition/payment reconciliation window.
+8. Separately approve normalized read cutover in a later change.
+9. Separately reactivate financial features after readiness, counsel and Safe checks.
 
 ## Rollback order
 
