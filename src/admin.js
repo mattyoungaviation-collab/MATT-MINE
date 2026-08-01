@@ -1247,11 +1247,13 @@ async function connectAdminWallet() {
   });
   const verified = await verifyResponse.json();
   if (!verifyResponse.ok) throw new Error(verified.error?.message || 'Admin wallet signature was rejected.');
+  const playerToken = verified.session?.token;
+  if (!playerToken) throw new Error('Admin wallet verification did not return a player session.');
   const sessionResponse = await fetch('/api/admin/auth/session', {
-    method: 'POST', credentials: 'same-origin', headers: { authorization: `Bearer ${verified.token}` }
+    method: 'POST', credentials: 'same-origin', headers: { authorization: `Bearer ${playerToken}` }
   });
   const session = await sessionResponse.json();
-  await fetch('/api/auth/logout', { method: 'POST', headers: { authorization: `Bearer ${verified.token}` } }).catch(() => undefined);
+  await fetch('/api/auth/logout', { method: 'POST', headers: { authorization: `Bearer ${playerToken}` } }).catch(() => undefined);
   if (!sessionResponse.ok) throw new Error(session.error?.message || 'This wallet is not authorized for Admin.');
   state.csrfToken = session.csrfToken;
   state.adminAddress = session.admin.address;
