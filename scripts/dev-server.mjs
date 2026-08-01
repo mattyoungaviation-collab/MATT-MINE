@@ -30,6 +30,7 @@ import {
   DirectRoninRevivePaymentVerifier,
   HmacAdvertisementVerifier
 } from '../server/external-verifiers.js';
+import { PaidCompetitionEligibilityPolicy } from '../server/eligibility.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const packageMetadata = JSON.parse(
@@ -43,19 +44,23 @@ const nuggetEconomyFile = resolve(
   process.env.MATT_MINE_NUGGET_ECONOMY_FILE || 'data/matt-mine-nugget-economy.json'
 );
 const databaseUrl = process.env.DATABASE_URL?.trim();
+const roninRpcUrls = (process.env.RONIN_RPC_URLS || process.env.RONIN_RPC_URL || '')
+  .split(',').map((value) => value.trim()).filter(Boolean);
 const mainnetTransactionsEnabled =
   process.env.MATT_MINE_MAINNET_TRANSACTIONS_ENABLED === 'true';
 const nuggetPaymentsRequested =
   process.env.MATT_MINE_NUGGET_PAYMENTS_ENABLED === 'true';
 const paymentVerifier = mainnetTransactionsEnabled
   ? new RoninPaymentVerifier({
-      rpcUrl: process.env.RONIN_RPC_URL,
+      rpcUrls: roninRpcUrls,
+      rpcTimeoutMs: Number(process.env.MATT_MINE_RPC_TIMEOUT_MS || 10_000),
       confirmations: Number(process.env.MATT_MINE_PAYMENT_CONFIRMATIONS || 3)
     })
   : null;
 const nuggetPaymentVerifier = mainnetTransactionsEnabled && nuggetPaymentsRequested
   ? new DirectRoninNuggetPaymentVerifier({
-      rpcUrl: process.env.RONIN_RPC_URL,
+      rpcUrls: roninRpcUrls,
+      rpcTimeoutMs: Number(process.env.MATT_MINE_RPC_TIMEOUT_MS || 10_000),
       confirmations: Number(process.env.MATT_MINE_PAYMENT_CONFIRMATIONS || 3)
     })
   : null;
@@ -128,7 +133,8 @@ const arenaService = arenaEnabled
           process.env.MATT_MINE_ARENA_DEPLOYER_ADDRESS ||
           RONIN_ARENA_DEPLOYMENT.temporaryDeployer,
         requireEntriesPaused: !arenaLiveRequested,
-        rpcUrl: process.env.RONIN_RPC_URL,
+        rpcUrls: roninRpcUrls,
+        rpcTimeoutMs: Number(process.env.MATT_MINE_RPC_TIMEOUT_MS || 10_000),
         confirmations: Number(process.env.MATT_MINE_PAYMENT_CONFIRMATIONS || 3)
       }),
       receiptSecret: arenaReceiptSecret,
@@ -178,14 +184,16 @@ const competitiveReplayStore = await initializeStore(
 const competitiveReplayValidator = competitiveReplaySecret.length >= 32
   ? await new CompetitiveReplayService({
       store: competitiveReplayStore,
-      secret: competitiveReplaySecret
+      secret: competitiveReplaySecret,
+      resolveRun: async (runId) => (await database.read()).runs?.[runId] || null
     }).init()
   : null;
 const revivePaymentsRequested =
   process.env.MATT_MINE_REVIVE_PAYMENTS_ENABLED === 'true';
 const revivePaymentVerifier = mainnetTransactionsEnabled && revivePaymentsRequested
   ? new DirectRoninRevivePaymentVerifier({
-      rpcUrl: process.env.RONIN_RPC_URL,
+      rpcUrls: roninRpcUrls,
+      rpcTimeoutMs: Number(process.env.MATT_MINE_RPC_TIMEOUT_MS || 10_000),
       confirmations: Number(process.env.MATT_MINE_PAYMENT_CONFIRMATIONS || 3),
       recipient:
         process.env.MATT_MINE_REVIVE_RECIPIENT_ADDRESS ||
@@ -204,8 +212,16 @@ const advertisementVerifier =
       })
     : null;
 const service = new CompleteProductionMattMineService(database, {
+  appVersion,
+  buildCommit: process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || 'unknown',
   publicOrigin: process.env.MATT_MINE_PUBLIC_ORIGIN || null,
   adminKey: process.env.MATT_MINE_ADMIN_KEY || '',
+  adminWallets: (process.env.MATT_MINE_ADMIN_WALLETS || '').split(',').map((value) => value.trim()),
+  eligibilityPolicy: new PaidCompetitionEligibilityPolicy({
+    counselApproved: process.env.MATT_MINE_ELIGIBILITY_COUNSEL_APPROVED === 'true',
+    rulesVersion: process.env.MATT_MINE_ELIGIBILITY_RULES_VERSION || '',
+    allowedWallets: (process.env.MATT_MINE_ELIGIBLE_PAID_WALLETS || '').split(',').map((value) => value.trim())
+  }),
   mainnetTransactionsEnabled,
   paymentVerifier,
   rewardManager,
@@ -246,12 +262,19 @@ let closing = false;
 function closeServer() {
   if (closing) return;
   closing = true;
+  if (process.env.NODE_ENV === 'test') {
+    server.closeAllConnections?.();
+    process.exit(0);
+  }
   server.close(async () => {
     await nuggetEconomyStore.close();
     await competitiveReplayStore.close();
     await database.close();
     process.exit(0);
   });
+  server.closeIdleConnections?.();
+  const forceCloseTimer = setTimeout(() => server.closeAllConnections?.(), 250);
+  forceCloseTimer.unref();
 }
 
 process.once('SIGINT', closeServer);

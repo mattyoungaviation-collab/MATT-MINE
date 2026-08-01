@@ -58,6 +58,8 @@ import {
 
 const FREE_PASS_XP = 25;
 const PAID_PASS_XP = 100;
+const ADMIN_SESSION_TTL_MS = 15 * 60 * 1000;
+const ADMIN_STEP_UP_TTL_MS = 5 * 60 * 1000;
 
 export class MattMineService {
   constructor(database, options = {}) {
@@ -73,6 +75,12 @@ export class MattMineService {
     const configuredChainId = Number(options.chainId ?? RONIN_CHAINS.MAINNET);
     this.publicOrigin = options.publicOrigin ? normalizeOrigin(options.publicOrigin) : null;
     this.adminKey = options.adminKey || '';
+    this.adminWalletAllowlist = new Set((Array.isArray(options.adminWallets) ? options.adminWallets : [])
+      .map((address) => String(address).toLowerCase())
+      .filter((address) => /^0x[a-f0-9]{40}$/.test(address)));
+    this.appVersion = String(options.appVersion || 'unknown');
+    this.buildCommit = String(options.buildCommit || process.env.RENDER_GIT_COMMIT || 'unknown').slice(0, 80);
+    this.eligibilityPolicy = options.eligibilityPolicy || null;
     assertApi(
       configuredChainId === RONIN_CHAINS.MAINNET,
       500,
@@ -133,6 +141,8 @@ export class MattMineService {
       };
     }
     return {
+      version: this.appVersion,
+      commit: this.buildCommit,
       database,
       degraded: database.ok === false || arena.ok === false,
       chainId: this.chainId,
@@ -562,6 +572,7 @@ export class MattMineService {
       assertApi(!operationState.operations.freeRankedPaused, 503, 'free_ranked_paused', 'Free ranked runs are temporarily paused.');
     }
     if (normalizedMode === SERVER_RUN_MODES.PAID) {
+      this.assertPaidCompetitionEligible(session.address, 'paid');
       assertApi(!operationState.operations.passRankedPaused, 503, 'pass_ranked_paused', 'Pass ranked runs are temporarily paused.');
     }
     const operationMine = mineForRunMode(normalizedMode);
@@ -581,10 +592,12 @@ export class MattMineService {
     let passActiveAtStart = false;
     let paymentStatus = null;
     if (this.mainnetTransactionsEnabled && normalizedMode !== SERVER_RUN_MODES.BETA) {
-      paymentStatus = await this.paymentVerifier.status(session.address).catch((error) => {
-        if (normalizedMode === SERVER_RUN_MODES.PAID) throw error;
-        return null;
-      });
+      paymentStatus = typeof this.paymentVerifier?.status === 'function'
+        ? await this.paymentVerifier.status(session.address).catch((error) => {
+            if (normalizedMode === SERVER_RUN_MODES.PAID) throw error;
+            return null;
+          })
+        : null;
       passActiveAtStart = paymentStatus?.pass?.active === true;
     }
     if (normalizedMode === SERVER_RUN_MODES.PAID) {
@@ -1824,6 +1837,7 @@ export class MattMineService {
 
   async quoteArenaEntry(token, input = {}) {
     const { session } = await this.arenaPlayer(token, { operation: 'payments' });
+    this.assertPaidCompetitionEligible(session.address, 'arena');
     return this.arenaService.quoteEntry(session.address, input);
   }
 
@@ -1992,14 +2006,131 @@ export class MattMineService {
     const state = await this.database.read();
     const session = state.sessions[tokenHash];
     assertApi(session, 401, 'session_missing', 'Sign in with Ronin Wallet to continue.');
+    assertApi(session.type !== 'admin', 401, 'player_session_required', 'A player wallet session is required.');
     assertApi(session.expiresAt > this.now(), 401, 'session_expired', 'The wallet session expired. Sign in again.');
     requireWallet(state, session.address);
     return { session, state };
   }
 
+  async createAdminSession(playerToken) {
+    const player = await this.authenticate(playerToken);
+    assertApi(this.adminWalletAllowlist.size > 0, 503, 'admin_wallets_missing', 'The exact Admin wallet allowlist is not configured.');
+    assertApi(this.adminWalletAllowlist.has(player.address), 403, 'admin_wallet_not_allowed', 'This wallet is not authorized for the Admin Command Center.');
+    const timestamp = this.now();
+    const token = this.randomHex(32);
+    const csrfToken = this.randomHex(32);
+    const tokenHash = hashToken(token);
+    const expiresAt = timestamp + ADMIN_SESSION_TTL_MS;
+    await this.database.transact((state) => {
+      pruneSecurityRecords(state, timestamp);
+      state.sessions[tokenHash] = {
+        tokenHash,
+        address: player.address,
+        type: 'admin',
+        csrfHash: hashToken(csrfToken),
+        createdAt: timestamp,
+        expiresAt,
+        revokedAt: 0,
+        stepUpUntil: 0,
+        lastSeenAt: timestamp
+      };
+      addAudit(state, player.address, 'ADMIN_SESSION_CREATED', `expires ${new Date(expiresAt).toISOString()}`, timestamp);
+    });
+    return { token, csrfToken, address: player.address, expiresAt };
+  }
+
+  async authenticateAdminSession(token, options = {}) {
+    const tokenHash = hashToken(assertToken(token));
+    const state = await this.database.read();
+    const session = state.sessions[tokenHash];
+    assertApi(session?.type === 'admin' && !session.revokedAt, 401, 'admin_session_missing', 'Sign in with an authorized Admin wallet.');
+    assertApi(session.expiresAt > this.now(), 401, 'admin_session_expired', 'The Admin session expired. Sign again.');
+    assertApi(this.adminWalletAllowlist.has(session.address), 403, 'admin_wallet_revoked', 'This Admin wallet is no longer authorized.');
+    if (options.mutation) {
+      assertApi(
+        typeof options.csrfToken === 'string' && safeTokenEqual(hashToken(options.csrfToken), session.csrfHash),
+        403,
+        'admin_csrf_rejected',
+        'The Admin CSRF token is missing or invalid.'
+      );
+      assertApi(paymentStatus, 503, 'payment_status_unavailable', 'Live Pass and paid-run contract status is unavailable.');
+    }
+    if (options.stepUp) {
+      assertApi(session.stepUpUntil > this.now(), 403, 'admin_step_up_required', 'Sign this sensitive Admin action with the authorized wallet.');
+    }
+    return { address: session.address, expiresAt: session.expiresAt, stepUpUntil: session.stepUpUntil || 0 };
+  }
+
+  async revokeAdminSession(token) {
+    const tokenHash = hashToken(assertToken(token));
+    const timestamp = this.now();
+    await this.database.transact((state) => {
+      const session = state.sessions[tokenHash];
+      if (session?.type === 'admin') {
+        session.revokedAt = timestamp;
+        session.expiresAt = Math.min(session.expiresAt, timestamp);
+        addAudit(state, session.address, 'ADMIN_SESSION_REVOKED', 'Admin logout', timestamp);
+      }
+    });
+    return { signedOut: true };
+  }
+
+  async createAdminStepUp(token) {
+    const admin = await this.authenticateAdminSession(token);
+    const timestamp = this.now();
+    const nonce = this.randomHex(12);
+    const message = `MATT Mine Admin step-up\n\nWallet: ${admin.address}\nChain ID: ${this.chainId}\nNonce: ${nonce}\nExpires: ${new Date(timestamp + AUTH_CHALLENGE_TTL_MS).toISOString()}\n\nThis signature authorizes sensitive server-side Admin actions. It does not broadcast a transaction.`;
+    await this.database.transact((state) => {
+      state.challenges[nonce] = {
+        nonce,
+        address: admin.address,
+        chainId: this.chainId,
+        origin: this.publicOrigin || '',
+        purpose: 'admin_step_up',
+        message,
+        createdAt: timestamp,
+        expiresAt: timestamp + AUTH_CHALLENGE_TTL_MS
+      };
+    });
+    return { nonce, message, expiresAt: timestamp + AUTH_CHALLENGE_TTL_MS };
+  }
+
+  async verifyAdminStepUp(token, nonce, signature) {
+    const admin = await this.authenticateAdminSession(token);
+    const timestamp = this.now();
+    const state = await this.database.read();
+    const challenge = state.challenges?.[String(nonce || '')];
+    assertApi(challenge?.purpose === 'admin_step_up' && challenge.address === admin.address, 401, 'admin_step_up_challenge_missing', 'Request a new Admin step-up signature.');
+    assertApi(challenge.expiresAt > timestamp, 401, 'admin_step_up_challenge_expired', 'The Admin step-up signature request expired.');
+    const valid = await this.verifySignature({ address: admin.address, message: challenge.message, signature });
+    assertApi(valid, 401, 'admin_step_up_signature_rejected', 'The Admin wallet signature was rejected.');
+    const tokenHash = hashToken(token);
+    return this.database.transact((next) => {
+      const current = next.challenges?.[nonce];
+      assertApi(current?.purpose === 'admin_step_up', 401, 'admin_step_up_challenge_used', 'The Admin step-up signature was already used.');
+      delete next.challenges[nonce];
+      const session = next.sessions[tokenHash];
+      assertApi(session?.type === 'admin', 401, 'admin_session_missing', 'The Admin session is missing.');
+      session.stepUpUntil = timestamp + ADMIN_STEP_UP_TTL_MS;
+      addAudit(next, admin.address, 'ADMIN_STEP_UP_VERIFIED', `expires ${new Date(session.stepUpUntil).toISOString()}`, timestamp);
+      return { address: admin.address, stepUpUntil: session.stepUpUntil };
+    });
+  }
+
   assertAdminKey(candidate) {
     assertApi(this.adminKey, 503, 'admin_api_disabled', 'Server admin access is not configured.');
     assertApi(typeof candidate === 'string' && safeTokenEqual(hashToken(candidate), hashToken(this.adminKey)), 401, 'admin_key_rejected', 'The server admin key is invalid.');
+  }
+
+  assertPaidCompetitionEligible(address, mode) {
+    if (this.eligibilityPolicy) return this.eligibilityPolicy.assertEligible(address, { mode });
+    assertApi(
+      process.env.NODE_ENV !== 'production',
+      503,
+      'paid_competition_eligibility_unconfigured',
+      'Paid competition eligibility is not configured. Practice remains available.'
+    );
+    return { eligible: true, developmentOnly: true };
   }
 
   assertPaymentsEnabled() {

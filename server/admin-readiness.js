@@ -117,10 +117,10 @@ export function buildAdminReadiness(input = {}) {
     monitor(
       'treasury-safe',
       'Treasury Safe',
-      input.treasurySafe?.address ? 'ready' : 'blocked',
-      input.treasurySafe?.address
+      (input.treasurySafe?.verified === true || (input.treasurySafe?.address && input.treasurySafe?.owners === 3 && input.treasurySafe?.threshold === 2)) ? 'ready' : 'blocked',
+      (input.treasurySafe?.verified === true || (input.treasurySafe?.address && input.treasurySafe?.owners === 3 && input.treasurySafe?.threshold === 2))
         ? `${input.treasurySafe.threshold}-of-${input.treasurySafe.owners} signer policy · ${shortAddress(input.treasurySafe.address)}`
-        : 'Treasury Safe is not configured',
+        : 'Live getOwners/getThreshold verification is unavailable or not exactly 2-of-3',
       true,
       'Chain'
     )

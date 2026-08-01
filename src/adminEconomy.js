@@ -173,13 +173,12 @@ function updateDerivedConversion() {
 }
 
 async function adminApi(path, options = {}) {
-  const key = sessionStorage.getItem('mattMineAdminKey') || '';
-  if (!key) throw new Error('Unlock the Admin Command Center first.');
+  if (window.mattMineAdminSession?.fetch) return window.mattMineAdminSession.fetch(path, options);
   const response = await fetch(path, {
     method: options.method || 'GET',
+    credentials: 'same-origin',
     headers: {
-      'content-type': 'application/json',
-      'x-matt-admin-key': key
+      'content-type': 'application/json'
     },
     ...(options.body ? { body: JSON.stringify(options.body) } : {})
   });

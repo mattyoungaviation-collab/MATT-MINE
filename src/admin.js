@@ -9,7 +9,9 @@ import {
 } from './adminControlRegistry.js';
 
 const state = {
-  key: '',
+  csrfToken: '',
+  adminAddress: '',
+  provider: null,
   overview: null,
   actions: [],
   tuning: null,
@@ -26,10 +28,9 @@ const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => 
 
 $('#unlock-form').addEventListener('submit', async (event) => {
   event.preventDefault();
-  state.key = $('#admin-key').value;
   try {
+    await connectAdminWallet();
     await refreshOverview();
-    sessionStorage.setItem('mattMineAdminKey', state.key);
     $('#unlock-panel').hidden = true;
     $('#dashboard').hidden = false;
     $('.connection').classList.add('live');
@@ -41,10 +42,10 @@ $('#unlock-form').addEventListener('submit', async (event) => {
   }
 });
 
-$('#lock-button').addEventListener('click', () => {
+$('#lock-button').addEventListener('click', async () => {
   if (state.overviewTimer) clearInterval(state.overviewTimer);
-  sessionStorage.removeItem('mattMineAdminKey');
-  state.key = '';
+  await api('/api/admin/auth/logout', { method: 'POST', body: {} }).catch(() => undefined);
+  state.csrfToken = '';
   location.reload();
 });
 
@@ -1201,14 +1202,71 @@ function objectDiff(original = {}, next = {}) {
 }
 
 async function api(path, options = {}) {
-  const response = await fetch(path, {
+  let response = await adminFetch(path, options);
+  let payload = await response.json().catch(() => ({}));
+  if (response.status === 403 && payload.error?.code === 'admin_step_up_required') {
+    await performAdminStepUp();
+    response = await adminFetch(path, options);
+    payload = await response.json().catch(() => ({}));
+  }
+  if (!response.ok) {
+    const error = new Error(payload.error?.message || `Request failed (${response.status})`);
+    error.code = payload.error?.code || '';
+    throw error;
+  }
+  return payload;
+}
+
+async function adminFetch(path, options = {}) {
+  return fetch(path, {
     method: options.method || 'GET',
-    headers: { 'x-matt-admin-key': state.key, ...(options.body ? { 'content-type': 'application/json' } : {}), ...(options.headers || {}) },
+    credentials: 'same-origin',
+    headers: { ...(state.csrfToken ? { 'x-matt-csrf': state.csrfToken } : {}), ...(options.body ? { 'content-type': 'application/json' } : {}), ...(options.headers || {}) },
     body: options.body ? JSON.stringify(options.body) : undefined
   });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error?.message || `Request failed (${response.status})`);
-  return payload;
+}
+
+async function connectAdminWallet() {
+  const provider = window.ronin?.provider;
+  if (!provider?.request) throw new Error('Ronin Wallet was not detected.');
+  const accounts = await provider.request({ method: 'eth_requestAccounts' });
+  const address = accounts?.[0];
+  if (!/^0x[a-fA-F0-9]{40}$/.test(address || '')) throw new Error('Ronin Wallet did not return a valid account.');
+  const currentChain = Number.parseInt(await provider.request({ method: 'eth_chainId' }), 16);
+  if (currentChain !== 2020) await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x7e4' }] });
+  const challengeResponse = await fetch('/api/auth/challenge', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ address, chainId: 2020, origin: location.origin })
+  });
+  const challengePayload = await challengeResponse.json();
+  if (!challengeResponse.ok) throw new Error(challengePayload.error?.message || 'Admin sign-in challenge failed.');
+  const signature = await provider.request({ method: 'personal_sign', params: [challengePayload.challenge.message, address] });
+  const verifyResponse = await fetch('/api/auth/verify', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ address, nonce: challengePayload.challenge.nonce, signature })
+  });
+  const verified = await verifyResponse.json();
+  if (!verifyResponse.ok) throw new Error(verified.error?.message || 'Admin wallet signature was rejected.');
+  const sessionResponse = await fetch('/api/admin/auth/session', {
+    method: 'POST', credentials: 'same-origin', headers: { authorization: `Bearer ${verified.token}` }
+  });
+  const session = await sessionResponse.json();
+  await fetch('/api/auth/logout', { method: 'POST', headers: { authorization: `Bearer ${verified.token}` } }).catch(() => undefined);
+  if (!sessionResponse.ok) throw new Error(session.error?.message || 'This wallet is not authorized for Admin.');
+  state.csrfToken = session.csrfToken;
+  state.adminAddress = session.admin.address;
+  state.provider = provider;
+  window.mattMineAdminSession = { fetch: api, address: state.adminAddress };
+}
+
+async function performAdminStepUp() {
+  if (!state.provider || !state.adminAddress) throw new Error('Reconnect the authorized Admin wallet.');
+  const created = await adminFetch('/api/admin/auth/step-up/challenge', { method: 'POST', body: {} });
+  const challengePayload = await created.json();
+  if (!created.ok) throw new Error(challengePayload.error?.message || 'Could not create Admin step-up challenge.');
+  const signature = await state.provider.request({ method: 'personal_sign', params: [challengePayload.challenge.message, state.adminAddress] });
+  const verified = await adminFetch('/api/admin/auth/step-up/verify', { method: 'POST', body: { nonce: challengePayload.challenge.nonce, signature } });
+  if (!verified.ok) throw new Error('Admin step-up signature failed.');
 }
 
 function confirmAction(title, copy) {
@@ -1265,11 +1323,4 @@ function mattDisplay(value) {
     const number = Number(value);
     return Number.isFinite(number) ? number.toLocaleString() : '0';
   }
-}
-
-const savedKey = sessionStorage.getItem('mattMineAdminKey');
-if (savedKey) {
-  state.key = savedKey;
-  $('#admin-key').value = savedKey;
-  $('#unlock-form').requestSubmit();
 }
