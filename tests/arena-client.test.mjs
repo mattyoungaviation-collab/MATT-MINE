@@ -129,6 +129,8 @@ test('Render pins the exact verified Arena deployment and requests live replay m
   const blueprint = fs.readFileSync(new URL('../render.yaml', import.meta.url), 'utf8');
   assert.match(blueprint, /healthCheckPath:\s*\/api\/live/);
   assert.doesNotMatch(blueprint, /healthCheckPath:\s*\/api\/ready/);
+  assert.match(blueprint, /databases:\s*\n\s*-\s*name:\s*matt-mine-db[\s\S]*?plan:\s*basic-1gb/);
+  assert.doesNotMatch(blueprint, /plan:\s*basic-256mb/);
   assert.match(blueprint, /MATT_MINE_ARENA_CONTRACT_ADDRESS[\s\S]*0x506f969279F8264fd629BBB0Df861Ab91343b12C/);
   assert.match(blueprint, /MATT_MINE_ARENA_RUNTIME_CODE_HASH[\s\S]*0xbe675f45747d267318291cad7295374ad5c65fa06063fe3b8cc111b8fa27453a/);
   assert.match(blueprint, /MATT_MINE_ARENA_SAFE_ADDRESS[\s\S]*0xBacE355D23d378a6E1adD986E53a18Dd12E6EeAc/);
