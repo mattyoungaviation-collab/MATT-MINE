@@ -1,0 +1,52 @@
+MATT MINE DAILY ARENA RULES
+Version 0.01
+Effective August 1, 2026
+
+1. ELIGIBILITY
+
+- You must be at least 18 years old.
+- You must be physically located in one of the 50 United States or the District of Columbia.
+- Participation is unavailable where prohibited or restricted by applicable law.
+- You may not participate if sanctions, a court order, blocked activity, fraud restrictions, or another legal prohibition applies to you or your wallet.
+
+2. WALLET AND FAIR PLAY
+
+- Use a Ronin Mainnet wallet that you own or control.
+- Do not use fraud, bots, automation, cheating, exploits, tampering, multiple-wallet evasion, or false location information.
+- Runs must pass server-authoritative deterministic verification. Invalid or unverifiable runs may be rejected or disqualified.
+
+3. ENTRY
+
+- The current MATT entry fee is shown before payment.
+- Ronin Wallet may request a MATT token approval followed by the Arena entry transaction.
+- An entry is valid only after the exact onchain payment is confirmed and verified.
+- Entries close at 23:35 UTC. Official runs close at 00:00 UTC.
+- You may buy unlimited entries while entries are open. Each confirmed entry provides one official attempt.
+
+4. SCORING
+
+- Every player receives the same deterministic daily challenge.
+- Only your best verified score for the day appears on the leaderboard.
+- Each wallet receives at most one leaderboard position.
+- Ties are resolved in this order: higher score, greater depth, faster Guardian time, less damage taken, lower elapsed time, then entry transaction hash.
+
+5. PRIZE POOL AND PAYOUTS
+
+- The prize pool is the player entry pool plus any Treasury seed.
+- 100% of the prize pool is distributed. No MATT is burned and no house fee is taken.
+- For ten winners, payouts are 30%, 18%, 12%, 8%, 7%, 6%, 5.5%, 5%, 4.5%, and 4%.
+- If fewer than ten wallets qualify, those published weights are normalized across the qualifying winners.
+- Final payouts require server verification and Treasury Safe settlement.
+
+6. CANCELLATIONS, REFUNDS, AND TECHNICAL FAILURES
+
+- If a competition day is canceled, confirmed entries for that day are refundable through the Arena contract.
+- Blockchain transactions and gas fees are subject to Ronin network conditions.
+- A disconnect does not create an extra entry or guarantee a refund. The server may resume a valid recoverable run when supported.
+- Cheating, tampering, invalid gameplay, or failed verification does not qualify for a refund or prize.
+
+7. RECORDS AND ACCEPTANCE
+
+- Purchases, entries, gameplay results, prizes, refunds, disputes, and disqualifications may be recorded for operation, security, and compliance.
+- Before purchasing, you must acknowledge this exact rules version.
+- Your wallet acknowledgement is requested once per rules version and published rules hash. You will be asked again only if the version or published rules hash changes.

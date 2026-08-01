@@ -56,12 +56,12 @@ test('paid competition eligibility defaults closed while leaving an explicit app
 
 test('public Arena eligibility removes the wallet allowlist but requires and signs the approved one-time acknowledgement', () => {
   let timestamp = Date.UTC(2026, 7, 1, 12, 0, 0);
-  const rulesHash = '37140868cdedf74a006040cf7f494e29fcc8885bae5710b9b8e623f965af1979';
+  const rulesHash = '084962441aa1291864fde13c28aaa63eebbc0b15be92cb5e3e0e4feaea6deb2e';
   const policy = new PaidCompetitionEligibilityPolicy({
     counselApproved: true,
     rulesVersion: '0.01',
     rulesHash,
-    rulesUrl: '/legal/matt-mine-arena-rules-v0.01.pdf',
+    rulesUrl: '/legal/matt-mine-arena-rules-v0.01.txt',
     publicModes: ['arena'],
     receiptSecret: 'x'.repeat(32),
     now: () => timestamp,

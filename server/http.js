@@ -17,8 +17,12 @@ const MIME_TYPES = Object.freeze({
   '.png': 'image/png',
   '.ico': 'image/x-icon',
   '.mp3': 'audio/mpeg',
-  '.pdf': 'application/pdf'
+  '.pdf': 'application/pdf',
+  '.txt': 'text/plain; charset=utf-8'
 });
+
+const RETIRED_ARENA_RULES_PATH = 'legal/matt-mine-arena-rules-v0.01.pdf';
+const PUBLIC_ARENA_RULES_PATH = '/legal/matt-mine-arena-rules-v0.01.txt';
 
 export function createMattMineHttpServer({ root, service, maxRequestBytes = MAX_REQUEST_BYTES }) {
   const staticRoot = resolve(root);
@@ -670,6 +674,14 @@ async function serveStatic(request, response, pathname, root) {
   const decoded = decodeURIComponent(pathname);
   assertApi(!decoded.includes('\0'), 400, 'invalid_path', 'The requested path is invalid.');
   const requestedPath = decoded === '/' ? 'index.html' : decoded.replace(/^[/\\]+/, '');
+  if (requestedPath === RETIRED_ARENA_RULES_PATH) {
+    response.writeHead(302, {
+      location: PUBLIC_ARENA_RULES_PATH,
+      'cache-control': 'no-store'
+    });
+    response.end();
+    return;
+  }
   let filePath = resolve(root, requestedPath);
   const rootRelativePath = relative(root, filePath);
   assertApi(
