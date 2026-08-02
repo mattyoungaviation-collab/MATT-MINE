@@ -158,6 +158,80 @@ test('a public Arena rules acknowledgement is stored once per wallet and reused 
   assert.equal(second.quote.eligibility.acceptedAt, START);
 });
 
+test('a verified Arena run awards an active pass exactly once and honors the Arena multiplier', async () => {
+  const runId = `arena_run_${'a'.repeat(24)}`;
+  let finishCalls = 0;
+  const arenaService = {
+    publicConfig: () => ({ enabled: true }),
+    finishRun: async () => ({
+      accepted: true,
+      alreadyFinished: finishCalls++ > 0,
+      result: { score: 12_345 },
+      leaderboard: { rows: [], playerScore: 12_345, playerRank: 1 },
+      progression: {
+        runId,
+        passActiveAtStart: true,
+        passXpMultiplier: 1.5
+      }
+    })
+  };
+  const harness = createHarness({ arenaService });
+  const { session } = await signIn(harness);
+  const payload = { runId, runToken: 'signed-arena-run-token', checkpoint: {} };
+
+  const first = await harness.service.finishArenaRun(session.token, payload);
+  assert.equal(first.passXpAwarded, 150);
+  assert.equal(first.passXpAlreadyAwarded, false);
+  assert.equal(first.passProgress.xp, 150);
+
+  const retry = await harness.service.finishArenaRun(session.token, payload);
+  assert.equal(retry.passXpAwarded, 150);
+  assert.equal(retry.passXpAlreadyAwarded, true);
+  assert.equal(retry.passProgress.xp, 150);
+
+  const state = await harness.database.read();
+  assert.deepEqual(state.arenaPassXpAwards[runId], {
+    address: account.address.toLowerCase(),
+    xp: 150,
+    awardedAt: START
+  });
+  assert.equal(
+    state.wallets[account.address.toLowerCase()].activity
+      .filter((entry) => entry.action === 'ARENA_PASS_XP_AWARDED').length,
+    1
+  );
+});
+
+test('Arena completion does not award Pass XP when the pass was inactive at run start', async () => {
+  const runId = `arena_run_${'b'.repeat(24)}`;
+  const arenaService = {
+    publicConfig: () => ({ enabled: true }),
+    finishRun: async () => ({
+      accepted: true,
+      result: { score: 2_500 },
+      leaderboard: { rows: [], playerScore: 2_500, playerRank: 1 },
+      progression: {
+        runId,
+        passActiveAtStart: false,
+        passXpMultiplier: 10
+      }
+    })
+  };
+  const harness = createHarness({ arenaService });
+  const { session } = await signIn(harness);
+
+  const completed = await harness.service.finishArenaRun(session.token, {
+    runId,
+    runToken: 'signed-arena-run-token',
+    checkpoint: {}
+  });
+
+  assert.equal(completed.passXpAwarded, 0);
+  assert.equal(completed.passProgress.xp, 0);
+  const state = await harness.database.read();
+  assert.equal(state.arenaPassXpAwards[runId].xp, 0);
+});
+
 async function signIn(harness, signer = account, options = {}) {
   const challenge = await harness.service.createChallenge({
     address: signer.address,

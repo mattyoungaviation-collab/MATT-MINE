@@ -893,7 +893,7 @@ test('paid entry, one-time run token, raw controls, server replay, and leaderboa
     now: () => timestamp
   }).init();
 
-  const started = await arena.startRun(PLAYER);
+  const started = await arena.startRun(PLAYER, { passActiveAtStart: true });
   await assert.rejects(
     () => arena.appendEvents(PLAYER, {
       runId: started.run.runId,
@@ -926,6 +926,11 @@ test('paid entry, one-time run token, raw controls, server replay, and leaderboa
   assert.equal(finished.result.extracted, false);
   assert.equal(finished.result.elapsedMs, 7_360);
   assert.equal(finished.result.replayVersion, ARENA_TRANSCRIPT_VERSION);
+  assert.deepEqual(finished.progression, {
+    runId: started.run.runId,
+    passActiveAtStart: true,
+    passXpMultiplier: 1
+  });
   assert.equal((await store.getRun(started.run.runId)).status, 'finished');
 
   const retry = await arena.finishRun(PLAYER, {
@@ -934,6 +939,7 @@ test('paid entry, one-time run token, raw controls, server replay, and leaderboa
     checkpoint: appended.checkpoint
   });
   assert.equal(retry.alreadyFinished, true);
+  assert.deepEqual(retry.progression, finished.progression);
 
   store.leaderboard = async () => {
     throw Object.assign(new Error('the database system is in recovery mode'), {

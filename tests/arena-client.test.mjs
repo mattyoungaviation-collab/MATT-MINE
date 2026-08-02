@@ -450,6 +450,21 @@ test('Arena UI closes cleanly for review while already-purchased attempts surviv
   assert.match(startRunSource, /serverPlayer\.suspended/);
 });
 
+test('verified Arena results apply and display server-awarded Pass XP', () => {
+  const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const source = fs.readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
+  const submitSource = source.slice(
+    source.indexOf('async function submitArenaRun(run)'),
+    source.indexOf('function isRetryableAppendError')
+  );
+
+  assert.match(submitSource, /serverPlayer\.passProgress = accepted\.passProgress/);
+  assert.match(submitSource, /applyPassInventory\(accepted\.passInventory\)/);
+  assert.match(submitSource, /\+\$\{accepted\.passXpAwarded\} Pass XP/);
+  assert.match(submitSource, /accepted\.passRewardsUnlocked/);
+  assert.match(html, /100 for each completed Pass or verified MATT Arena run/);
+});
+
 test('production lobby exposes wallet-saved custom gameplay controls', () => {
   const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   assert.match(html, /id="controls-button"[^>]*>CONTROLS</);

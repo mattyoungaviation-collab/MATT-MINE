@@ -420,7 +420,13 @@ export class DailyArenaService {
     let run = await this.#authenticatedRun(address, payload.runId, payload.runToken);
     if (run.status === 'finished') {
       const leaderboard = await this.#leaderboardAfterFinalization(run);
-      return { accepted: true, alreadyFinished: true, result: run.result, leaderboard };
+      return {
+        accepted: true,
+        alreadyFinished: true,
+        result: run.result,
+        leaderboard,
+        progression: arenaProgressionSnapshot(run)
+      };
     }
     const timestamp = this.now();
     await this.#assertRunOpen(run, timestamp);
@@ -478,7 +484,8 @@ export class DailyArenaService {
       accepted: true,
       alreadyFinished: finished.alreadyFinished,
       result: run.result,
-      leaderboard
+      leaderboard,
+      progression: arenaProgressionSnapshot(run)
     };
   }
 
@@ -1192,6 +1199,17 @@ function publicUnscheduledDay(day, timestamp, config, deterministicSeed, control
     totalPoolMatt: '0',
     transcriptVersion: ARENA_TRANSCRIPT_VERSION,
     winnerWeightsPercent: config.scoring.winnerWeightsPercent
+  };
+}
+
+function arenaProgressionSnapshot(run) {
+  const configuredMultiplier = Number(run.tuning?.passXpMultiplier);
+  return {
+    runId: run.runId,
+    passActiveAtStart: run.tuning?._minePassBenefits?.active === true,
+    passXpMultiplier: Number.isFinite(configuredMultiplier)
+      ? Math.max(0, Math.min(10, configuredMultiplier))
+      : 1
   };
 }
 
