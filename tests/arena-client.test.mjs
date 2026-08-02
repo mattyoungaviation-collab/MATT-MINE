@@ -130,7 +130,7 @@ test('Arena client recognizes deterministic input replay readiness', () => {
 test('Render pins the exact verified Arena deployment and requests live replay mode', () => {
   const blueprint = fs.readFileSync(new URL('../render.yaml', import.meta.url), 'utf8');
   const rulesUrl = new URL('../legal/matt-mine-arena-rules-v0.01.txt', import.meta.url);
-  const rules = fs.readFileSync(rulesUrl);
+  const rules = fs.readFileSync(rulesUrl, 'utf8').replace(/\r\n?/g, '\n');
   const rulesHash = createHash('sha256').update(rules).digest('hex');
   assert.match(blueprint, /healthCheckPath:\s*\/api\/live/);
   assert.doesNotMatch(blueprint, /healthCheckPath:\s*\/api\/ready/);
@@ -151,7 +151,7 @@ test('Render pins the exact verified Arena deployment and requests live replay m
     fs.existsSync(new URL('../legal/matt-mine-arena-rules-v0.01.pdf', import.meta.url)),
     false
   );
-  assert.doesNotMatch(rules.toString('utf8'), /signature|bar number|attorney|legal counsel|license number/i);
+  assert.doesNotMatch(rules, /signature|bar number|attorney|legal counsel|license number/i);
 });
 
 test('production migration pauses full-state normalized writes on request transactions', () => {

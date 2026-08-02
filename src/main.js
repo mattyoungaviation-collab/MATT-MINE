@@ -241,7 +241,28 @@ function applyPassInventory(passInventory) {
   game?.setCosmetics(passInventory.equipped || {});
 }
 
+function disconnectedWalletCopy() {
+  const chainName = String(serverConfig?.chainName || 'RONIN MAINNET').toUpperCase();
+  if (globalThis.ronin?.provider?.request) {
+    return {
+      launchLabel: 'CONNECT RONIN',
+      menuLabel: 'CONNECT RONIN',
+      networkLabel: `${chainName} · SIGN TO PLAY RANKED`,
+      freeRunLabel: 'SIGN IN WITH RONIN',
+      title: 'Sign a one-time message with Ronin Wallet. No transaction is sent.'
+    };
+  }
+  return {
+    launchLabel: 'WALLETCONNECT',
+    menuLabel: 'CONNECT WALLET',
+    networkLabel: `WALLETCONNECT · ${chainName}`,
+    freeRunLabel: 'CONNECT WALLET',
+    title: 'Connect Ronin Wallet through WalletConnect. No transaction is sent.'
+  };
+}
+
 function updateMenu() {
+  const walletCopy = disconnectedWalletCopy();
   const state = economy.state;
   const daily = dailyRecord(state);
   const livePayments = serverConfig?.realPaymentsEnabled === true;
@@ -281,17 +302,18 @@ function updateMenu() {
   $('#menu-score').textContent = formatNumber(profile.bestScore);
   $('#wallet-label').textContent = connected
     ? serverPlayer.identity?.name || abbreviateAddress(serverPlayer.address)
-    : walletBusy ? 'CONNECTING…' : 'CONNECT RONIN';
+    : walletBusy ? 'CONNECTING…' : walletCopy.menuLabel;
   $('#wallet-network').textContent = connected
     ? `${serverConfig?.chainName || 'RONIN'} · SERVER VERIFIED`
-    : `${serverConfig?.chainName || 'RONIN MAINNET'} · SIGN TO PLAY RANKED`;
+    : walletCopy.networkLabel;
+  $('#wallet-button').title = walletCopy.title;
   $('#wallet-button').classList.toggle('connected', connected);
   $('#wallet-button').disabled = walletBusy;
   $('#free-run-status').textContent = connected
     ? serverPlayer.suspended ? 'SUSPENDED' : freeAccess.allowed ? 'AVAILABLE' : 'USED TODAY'
     : 'WALLET REQUIRED';
   $('#free-run-status').classList.toggle('unavailable', !freeAccess.allowed);
-  $('#free-run-cta').textContent = !connected ? 'SIGN IN WITH RONIN' : freeAccess.allowed ? 'PLAY FREE' : 'COME BACK TOMORROW';
+  $('#free-run-cta').textContent = !connected ? walletCopy.freeRunLabel : freeAccess.allowed ? 'PLAY FREE' : 'COME BACK TOMORROW';
   $('#free-run-button').disabled = connected && !freeAccess.allowed;
   $('#pass-status').textContent = passActive ? 'PASS ACTIVE' : 'FREE TIER';
   const remainingPassDays = livePayments && paymentStatus
@@ -340,6 +362,7 @@ function updateMenu() {
 }
 
 function updateLaunch({ connected, freeAccess, passPrice, paidRunPrice, livePayments, passActive }) {
+  const walletCopy = disconnectedWalletCopy();
   const walletLabel = $('#launch-wallet-label');
   const walletButton = $('#launch-wallet-button');
   const freeStatus = $('#launch-free-status');
@@ -360,10 +383,11 @@ function updateLaunch({ connected, freeAccess, passPrice, paidRunPrice, livePaym
   }
   if (walletLabel) walletLabel.textContent = connected
     ? serverPlayer.identity?.name || abbreviateAddress(serverPlayer.address)
-    : walletBusy ? 'CONNECTING…' : 'CONNECT RONIN';
+    : walletBusy ? 'CONNECTING…' : walletCopy.launchLabel;
   if (walletButton) {
     walletButton.disabled = walletBusy;
     walletButton.classList.toggle('connected', connected);
+    walletButton.title = walletCopy.title;
   }
   if (freeStatus) {
     freeStatus.textContent = !connected
