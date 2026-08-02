@@ -12,7 +12,7 @@ test.describe('Ronin mobile play', () => {
   test('keeps the launch actions clear and protects portrait run starts', async ({ page }) => {
     await page.goto('/');
 
-    const wallet = page.locator('#launch-wallet-button');
+    const wallet = page.locator('#launch-walletconnect-button');
     await expect(wallet).toBeVisible();
     const walletBox = await wallet.boundingBox();
     expect(walletBox?.height).toBeGreaterThanOrEqual(44);

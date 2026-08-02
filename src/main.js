@@ -365,6 +365,7 @@ function updateLaunch({ connected, freeAccess, passPrice, paidRunPrice, livePaym
   const walletCopy = disconnectedWalletCopy();
   const walletLabel = $('#launch-wallet-label');
   const walletButton = $('#launch-wallet-button');
+  const walletConnectButton = $('#launch-walletconnect-button');
   const freeStatus = $('#launch-free-status');
   const serverStatus = $('#launch-live-status');
   const date = $('#launch-date');
@@ -385,9 +386,15 @@ function updateLaunch({ connected, freeAccess, passPrice, paidRunPrice, livePaym
     ? serverPlayer.identity?.name || abbreviateAddress(serverPlayer.address)
     : walletBusy ? 'CONNECTING…' : walletCopy.launchLabel;
   if (walletButton) {
+    walletButton.hidden = !connected && !globalThis.ronin?.provider?.request;
     walletButton.disabled = walletBusy;
     walletButton.classList.toggle('connected', connected);
     walletButton.title = walletCopy.title;
+  }
+  if (walletConnectButton) {
+    walletConnectButton.hidden = connected;
+    walletConnectButton.disabled = walletBusy;
+    walletConnectButton.title = 'Connect through WalletConnect, including the Ronin mobile app.';
   }
   if (freeStatus) {
     freeStatus.textContent = !connected
@@ -528,12 +535,12 @@ async function updateMinerAvatar() {
   }
 }
 
-async function connectWallet() {
+async function connectWallet(options = {}) {
   if (walletBusy) return false;
   walletBusy = true;
   updateMenu();
   try {
-    serverPlayer = await wallet.connect();
+    serverPlayer = await wallet.connect(options);
     profile = serverPlayer.profile;
     saveProfile(profile);
     game.setProfile(profile);
@@ -1417,6 +1424,11 @@ $('#launch-wallet-button').addEventListener('click', () => {
   } else {
     void connectWallet();
   }
+});
+
+$('#launch-walletconnect-button').addEventListener('click', () => {
+  if (serverPlayer) return;
+  void connectWallet({ forceWalletConnect: true });
 });
 
 $('#home-button').addEventListener('click', () => openLaunch(true));

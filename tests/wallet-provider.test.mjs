@@ -64,6 +64,28 @@ test('the browser wallet resolver initializes one Ronin Mainnet WalletConnect se
   resetWalletConnectProviderForTesting(windowObject);
 });
 
+test('the browser wallet resolver can explicitly choose WalletConnect beside injected Ronin', async () => {
+  const injected = { request: async () => [] };
+  const walletConnect = {
+    session: { topic: 'already-connected' },
+    request: async () => []
+  };
+  const windowObject = {
+    ronin: { provider: injected },
+    location: { origin: 'https://matt-mine.onrender.com' }
+  };
+  const resolved = await resolveRoninProvider({
+    windowObject,
+    config: { walletConnect: { enabled: true, projectId: PROJECT_ID } },
+    forceWalletConnect: true,
+    createWalletConnectProvider: async () => walletConnect
+  });
+
+  assert.equal(resolved.provider, walletConnect);
+  assert.equal(resolved.kind, 'walletconnect');
+  resetWalletConnectProviderForTesting(windowObject);
+});
+
 test('the browser wallet resolver explains when the public project ID is not configured', async () => {
   const windowObject = {};
   await assert.rejects(

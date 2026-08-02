@@ -164,6 +164,21 @@
   opacity: 0.65;
 }
 
+.launch-wallet-button[hidden] {
+  display: none;
+}
+
+.launch-walletconnect-button {
+  border-color: rgba(75, 156, 255, 0.5);
+  background: rgba(38, 112, 232, 0.16);
+  color: #eef6ff;
+}
+
+.launch-walletconnect-button .status-dot {
+  background: #4b9cff;
+  box-shadow: 0 0 12px rgba(75, 156, 255, 0.8);
+}
+
 .launch-enter-button {
   padding: 0 18px;
   border: 1px solid rgba(255, 231, 132, 0.35);
