@@ -2,9 +2,28 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 
 export default async function globalSetup() {
-  const server = spawn(process.execPath, ['scripts/dev-server.mjs'], {
+  const build = spawn(process.execPath, [
+    'node_modules/vite/bin/vite.js',
+    'build',
+    '--config',
+    'vite.walletconnect.config.js'
+  ], {
     cwd: process.cwd(),
     env: { ...process.env, NODE_ENV: 'test' },
+    stdio: 'inherit',
+    windowsHide: true
+  });
+  const [buildExitCode] = await once(build, 'exit');
+  if (buildExitCode !== 0) throw new Error(`WalletConnect browser bundle failed with code ${buildExitCode}.`);
+
+  const server = spawn(process.execPath, ['scripts/dev-server.mjs'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      NODE_ENV: 'test',
+      VITE_WALLETCONNECT_PROJECT_ID:
+        process.env.VITE_WALLETCONNECT_PROJECT_ID || '11111111111111111111111111111111'
+    },
     stdio: 'ignore',
     windowsHide: true
   });

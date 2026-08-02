@@ -1,3 +1,5 @@
+import { resolveRoninProvider } from './game/walletProvider.js';
+
 const SESSION_STORAGE_KEY = 'matt-mine-server-session-v1';
 const RONIN_CHAIN_ID = 2020;
 
@@ -82,8 +84,7 @@ async function handlePracticeClaim(event) {
 
 async function sendTransaction(transaction, asset, expectedAddress) {
   validateTransaction(transaction, asset);
-  const provider = globalThis.window?.ronin?.provider;
-  if (!provider?.request) throw new Error('Ronin Wallet was not detected.');
+  const { provider } = await resolveRoninProvider({ windowObject: globalThis.window });
   const accounts = await provider.request({ method: 'eth_requestAccounts' });
   const address = Array.isArray(accounts) ? accounts[0] : '';
   if (!/^0x[a-fA-F0-9]{40}$/.test(address || '')) throw new Error('Ronin Wallet did not return a valid account.');

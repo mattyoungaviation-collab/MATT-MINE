@@ -217,6 +217,7 @@ const service = new CompleteProductionMattMineService(database, {
   appVersion,
   buildCommit: process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || 'unknown',
   publicOrigin: process.env.MATT_MINE_PUBLIC_ORIGIN || null,
+  walletConnectProjectId: process.env.VITE_WALLETCONNECT_PROJECT_ID || '',
   adminKey: process.env.MATT_MINE_ADMIN_KEY || '',
   adminWallets: (process.env.MATT_MINE_ADMIN_WALLETS || '').split(',').map((value) => value.trim()),
   eligibilityPolicy: new PaidCompetitionEligibilityPolicy({
