@@ -62,12 +62,54 @@ test('ordinary browsers can sign in through the WalletConnect fallback', async (
   const walletConnect = await page.evaluate(() => ({
     opened: window.__mattMineWalletConnectOpened,
     projectId: window.__mattMineWalletConnectOptions?.projectId,
-    chains: window.__mattMineWalletConnectOptions?.chains
+    optionalChains: window.__mattMineWalletConnectOptions?.optionalChains
   }));
   expect(walletConnect).toEqual({
     opened: true,
     projectId: '11111111111111111111111111111111',
-    chains: [2020]
+    optionalChains: [2020]
+  });
+});
+
+test('iPhone Safari gets a user-tapped Ronin Wallet handoff instead of a stalled QR modal', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'userAgent', {
+      configurable: true,
+      value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1'
+    });
+  });
+  await page.route('**/generated/walletconnect/walletconnect.js*', (route) => route.fulfill({
+    status: 200,
+    contentType: 'text/javascript',
+    body: `
+      export async function createWalletConnectProvider(options) {
+        window.__mattMineWalletConnectOptions = options;
+        let displayUri;
+        return {
+          session: null,
+          on(event, handler) { if (event === 'display_uri') displayUri = handler; },
+          removeListener() {},
+          request: async () => [],
+          connect() {
+            displayUri('wc:mobile-test@2?relay-protocol=irn&symKey=abc123');
+            return new Promise(() => {});
+          }
+        };
+      }
+    `
+  }));
+
+  await page.goto('/');
+  await page.locator('#launch-walletconnect-button').click();
+
+  const dialog = page.locator('#walletconnect-mobile-dialog');
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText('Connect on this phone');
+  const openRonin = page.locator('#walletconnect-open-ronin');
+  await expect(openRonin).toHaveAttribute('href', /^roninwallet:\/\/wc\?uri=wc%3Amobile-test/);
+  expect(await page.evaluate(() => window.__mattMineWalletConnectOptions)).toMatchObject({
+    optionalChains: [2020],
+    showQrModal: false
   });
 });
 

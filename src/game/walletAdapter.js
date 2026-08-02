@@ -38,7 +38,9 @@ export class RoninWalletAdapter {
       windowObject: this.window,
       config,
       connect: true,
-      forceWalletConnect: options.forceWalletConnect === true
+      forceWalletConnect: options.forceWalletConnect === true,
+      showQrModal: options.showQrModal !== false,
+      onDisplayUri: options.onDisplayUri
     });
     const provider = resolved.provider;
     this.provider = provider;
