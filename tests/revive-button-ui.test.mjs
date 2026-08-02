@@ -36,7 +36,22 @@ test('each new revive offer resets the persisted button and captures its verifie
   const end = source.indexOf('\n  onPaidReviveApplied()', start);
   const hook = source.slice(start, end);
 
-  assert.match(hook, /paidReviveContext = activeServerRun && activeArenaTranscript/);
+  assert.match(hook, /paidReviveContext = createPaidReviveContext\(\)/);
   assert.match(hook, /reviveButton\.disabled = !paidReviveContext/);
   assert.match(hook, /reviveButton\.textContent = paidReviveContext \? 'REVIVE WITH RON' : 'REVIVE UNAVAILABLE'/);
+});
+
+test('Arena paid revives use the Arena run id and server-provided revive settings', async () => {
+  const source = await readFile(`${root}src/main.js`, 'utf8');
+  const contextStart = source.indexOf('function createPaidReviveContext()');
+  const contextEnd = source.indexOf('\nasync function releaseActiveArenaRun()', contextStart);
+  const context = source.slice(contextStart, contextEnd);
+  const arenaStart = source.indexOf('async function startArenaRun()');
+  const arenaEnd = source.indexOf('\nfunction createPaidReviveContext()', arenaStart);
+  const startHandler = source.slice(arenaStart, arenaEnd);
+
+  assert.match(context, /const run = activeArenaRun \|\| activeServerRun/);
+  assert.match(context, /runId: run\.runId/);
+  assert.match(startHandler, /allowPaidRevive: run\.paidReviveEligible === true/);
+  assert.match(startHandler, /reviveInvulnerabilitySeconds: run\.reviveInvulnerabilitySeconds/);
 });

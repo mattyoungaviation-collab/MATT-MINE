@@ -161,6 +161,7 @@ export function replayArenaTranscript(challenge, inputEvents, options = {}) {
     weapon: ''
   });
   let lastTick = -1;
+  let reviveCommands = 0;
 
   for (let index = 0; index < inputEvents.length; index += 1) {
     const event = normalizeArenaEvent(inputEvents[index], index + 1);
@@ -177,9 +178,12 @@ export function replayArenaTranscript(challenge, inputEvents, options = {}) {
     if (event.type === 'input') {
       control = decodeArenaControlState(event);
     } else if (event.type === 'command') {
+      if (event.command === 'revive') reviveCommands += 1;
       applyCommand(game, event, {
         mode: replayMode,
         allowPaidRevive: options.allowPaidRevive === true,
+        confirmedPaidRevives: Math.max(0, Math.floor(Number(options.confirmedPaidRevives || 0))),
+        reviveCommandIndex: reviveCommands,
         maxTicks: challenge.maxTicks,
         maxDepth: Number.isSafeInteger(options.maxDepth)
           ? options.maxDepth
@@ -316,7 +320,14 @@ function applyCommand(game, event, options = {}) {
   }
   if (event.command === 'revive') {
     assertApi(
-      options.allowPaidRevive === true && game.applyPaidRevive({ record: false }),
+      options.allowPaidRevive === true &&
+        options.confirmedPaidRevives >= options.reviveCommandIndex,
+      422,
+      'revive_payment_not_confirmed',
+      'The replayed paid revive does not have a verified payment.'
+    );
+    assertApi(
+      game.applyPaidRevive({ record: false }),
       422,
       'revive_command_rejected',
       'The replayed paid revive was rejected.'

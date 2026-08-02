@@ -287,6 +287,32 @@ test('input-only replay deterministically derives a knockout without browser out
   assert.equal(first.damageTaken, 112);
 });
 
+test('Arena replay accepts a paid revive command only after a verified payment', () => {
+  const challenge = buildArenaChallenge('a'.repeat(64));
+  const events = [
+    inputEvent(1, 0),
+    { seq: 2, tick: 7_240, type: 'command', command: 'death' },
+    { seq: 3, tick: 7_240, type: 'command', command: 'revive' }
+  ];
+
+  assert.throws(
+    () => replayArenaTranscript(challenge, events, {
+      allowPaidRevive: true,
+      confirmedPaidRevives: 0
+    }),
+    (error) => error.code === 'revive_payment_not_confirmed'
+  );
+
+  const revived = replayArenaTranscript(challenge, events, {
+    allowPaidRevive: true,
+    confirmedPaidRevives: 1,
+    reviveInvulnerabilitySeconds: 3
+  });
+  assert.equal(revived.terminal, false);
+  assert.equal(revived.awaitingRevive, false);
+  assert.equal(revived.maximumHealth, 100);
+});
+
 test('input replay rejects milestones, unaligned clocks, premature finishes, and post-finish input', () => {
   const challenge = buildArenaChallenge('d'.repeat(64));
   assert.throws(
@@ -876,6 +902,68 @@ test('a signed-in wallet can release a stranded Daily Arena run without its lost
     () => arena.abandonActiveRun(PLAYER),
     (error) => error.code === 'arena_active_run_missing'
   );
+});
+
+test('Daily Arena preserves a knockout and resumes only after paid-revive confirmation', async () => {
+  const store = await new MemoryArenaStore().init();
+  await store.ensureDay(dayRecord({ chainStatus: 1, configurationState: 'confirmed' }));
+  await store.confirmEntry(entryRecord(1, HASH_A));
+  let timestamp = Date.parse(`${DAY}T12:00:00Z`);
+  let reviveState = { revives: [] };
+  const arena = await new DailyArenaService({
+    store,
+    chain: fakeArenaAdapter(() => scheduledChainDay()),
+    receiptSecret: 'r'.repeat(64),
+    seedSecret: 's'.repeat(64),
+    safeAddress: SAFE,
+    liveEnabled: true,
+    now: () => timestamp,
+    getPaidReviveState: async () => reviveState,
+    getTuning: async () => ({})
+  }).init();
+
+  const started = await arena.startRun(PLAYER, {
+    paidRevivesEnabled: true,
+    reviveLimitPerRun: 1,
+    reviveInvulnerabilitySeconds: 3
+  });
+  assert.equal(started.run.mode, 'arena');
+  assert.equal(started.run.paidReviveEligible, true);
+  assert.equal(started.run.reviveInvulnerabilitySeconds, 3);
+
+  timestamp += 7_360;
+  const knockedOut = await arena.appendEvents(PLAYER, {
+    runId: started.run.runId,
+    runToken: started.run.runToken,
+    previousCheckpoint: started.run.checkpoint,
+    events: [
+      inputEvent(1, 0),
+      { seq: 2, tick: 7_360, type: 'command', command: 'death' }
+    ]
+  });
+  const verified = await arena.validatePaidReviveDeath(
+    PLAYER,
+    started.run.runId,
+    { checkpoint: knockedOut.checkpoint }
+  );
+  assert.equal(verified.reviveRun.paidReviveEligible, true);
+  assert.equal(verified.playerState.health, 0);
+
+  const reviveEvent = {
+    runId: started.run.runId,
+    runToken: started.run.runToken,
+    previousCheckpoint: knockedOut.checkpoint,
+    events: [{ seq: 3, tick: 7_360, type: 'command', command: 'revive' }]
+  };
+  await assert.rejects(
+    () => arena.appendEvents(PLAYER, reviveEvent),
+    (error) => error.code === 'revive_payment_not_confirmed'
+  );
+
+  reviveState = { revives: [{ transactionHash: HASH_B }] };
+  const resumed = await arena.appendEvents(PLAYER, reviveEvent);
+  assert.equal(resumed.acceptedEvents, 1);
+  assert.equal(resumed.checkpoint.throughSeq, 3);
 });
 
 test('paid entry, one-time run token, raw controls, server replay, and leaderboard finish end to end', async () => {

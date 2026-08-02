@@ -989,16 +989,7 @@ async function purchasePaidRevive() {
     toast('This revive offer is no longer active.');
     return;
   }
-  const context = paidReviveContext || (
-    activeServerRun && activeArenaTranscript
-      ? {
-          runId: activeServerRun.runId,
-          transcript: activeArenaTranscript,
-          pending: null,
-          transactionHash: ''
-        }
-      : null
-  );
+  const context = paidReviveContext || createPaidReviveContext();
   if (!context?.runId || !context?.transcript) {
     button.disabled = true;
     button.textContent = 'REVIVE UNAVAILABLE';
@@ -1223,20 +1214,14 @@ const game = new MattMineGame(canvas, profile, {
   onPaidReviveOffered(data) {
     paidRevivePending = true;
     paidReviveBusy = false;
-    paidReviveContext = activeServerRun && activeArenaTranscript
-      ? {
-          runId: activeServerRun.runId,
-          transcript: activeArenaTranscript,
-          pending: null,
-          transactionHash: ''
-        }
-      : null;
-    resultScreenMode = activeServerRun?.mode || RUN_MODES.PRACTICE;
+    paidReviveContext = createPaidReviveContext();
+    const reviveRun = activeArenaRun || activeServerRun;
+    resultScreenMode = reviveRun?.mode || RUN_MODES.PRACTICE;
     $('#end-kicker').textContent = 'MINER DOWN';
     $('#end-title').textContent = 'Revive This Run?';
     $('#run-mode-result').textContent = modeLabel(
-      activeServerRun?.mode || RUN_MODES.PRACTICE,
-      activeServerRun?.rewardWeight || 0
+      reviveRun?.mode || RUN_MODES.PRACTICE,
+      reviveRun?.rewardWeight || 0
     );
     $('#end-stats').innerHTML = `
       <div><span>Current Loot</span><strong>${formatNumber(data.projected)}</strong></div>
@@ -2083,7 +2068,9 @@ async function startArenaRun() {
       tuning: run.challenge?.tuning || {},
       competitionSnapshot: arenaCompetitionSnapshot,
       characterId: arenaCompetitionSnapshot?.loadout?.characterId || 'matt',
-      character: run.challenge?.tuning?._competitionCharacter || {}
+      character: run.challenge?.tuning?._competitionCharacter || {},
+      allowPaidRevive: run.paidReviveEligible === true,
+      reviveInvulnerabilitySeconds: run.reviveInvulnerabilitySeconds
     });
     if (run.challenge?.tuning?._minePassBenefits?.active === true) {
       toast('Mine Pass active · 2× XP and nuggets');
@@ -2096,6 +2083,18 @@ async function startArenaRun() {
   } finally {
     arenaBusy = false;
   }
+}
+
+function createPaidReviveContext() {
+  const run = activeArenaRun || activeServerRun;
+  return run && activeArenaTranscript
+    ? {
+        runId: run.runId,
+        transcript: activeArenaTranscript,
+        pending: null,
+        transactionHash: ''
+      }
+    : null;
 }
 
 async function releaseActiveArenaRun() {

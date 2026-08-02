@@ -66,6 +66,7 @@ export class DailyArenaService {
     this.liveRequested = options.liveEnabled === true;
     this.liveEnabled = this.liveRequested && ARENA_REPLAY_READY;
     this.getTuning = options.getTuning || (async () => ({}));
+    this.getPaidReviveState = options.getPaidReviveState || (async () => null);
     this.deployment = null;
   }
 
@@ -266,6 +267,7 @@ export class DailyArenaService {
     const tuning = structuredClone(await this.getTuning(day));
     tuning._playerProfile = structuredClone(input.playerProfile || {});
     applyMinePassGameplayBenefits(tuning, input.passActiveAtStart === true);
+    applyArenaPaidReviveConfig(tuning, input);
     const receipt = {
       version: ARENA_TRANSCRIPT_VERSION,
       runId,
@@ -309,12 +311,16 @@ export class DailyArenaService {
       run: {
         runId,
         runToken,
+        mode: 'arena',
         day,
         dailySeed: contest.deterministicSeed,
         entryId: consumed.entry.entryId,
         entryTransactionHash: consumed.entry.transactionHash,
         issuedAt: startedAt,
         expiresAt,
+        paidReviveEligible: receipt.tuning?._paidRevive?.eligible === true,
+        reviveInvulnerabilitySeconds:
+          receipt.tuning?._paidRevive?.invulnerabilitySeconds || 0,
         receipt: { ...receipt, signature: receiptSignature },
         checkpoint,
         challenge: buildArenaChallenge(contest.deterministicSeed, receipt.tuning)
@@ -383,10 +389,11 @@ export class DailyArenaService {
       'The Daily Arena transcript is ahead of server time.'
     );
     const existingEvents = await this.store.getEvents(run.runId);
+    const replayEvents = [...existingEvents, ...receivedEvents].map(publicTranscriptEvent);
     replayArenaTranscript(
       buildArenaChallenge((await this.store.getDay(run.day)).deterministicSeed, run.tuning),
-      [...existingEvents, ...receivedEvents].map(publicTranscriptEvent),
-      { profile: run.tuning?._playerProfile || playerProfile }
+      replayEvents,
+      await this.#replayOptions(run, playerProfile, false, replayEvents)
     );
     const nextCheckpoint = this.#checkpoint({
       runId: run.runId,
@@ -438,16 +445,14 @@ export class DailyArenaService {
       'Finish with the latest server-signed Daily Arena checkpoint.'
     );
     const storedEvents = await this.store.getEvents(run.runId);
+    const replayEvents = storedEvents.map(publicTranscriptEvent);
     const challenge = buildArenaChallenge((await this.store.getDay(run.day)).deterministicSeed, run.tuning);
     let replayed;
     try {
       replayed = replayArenaTranscript(
         challenge,
-        storedEvents.map(publicTranscriptEvent),
-        {
-          requireTerminal: true,
-          profile: run.tuning?._playerProfile || playerProfile
-        }
+        replayEvents,
+        await this.#replayOptions(run, playerProfile, true, replayEvents)
       );
     } catch (error) {
       // Invalid gameplay never returns a paid entry. Only explicitly classified
@@ -525,6 +530,74 @@ export class DailyArenaService {
       runId: abandoned.runId,
       status: abandoned.status
     };
+  }
+
+  async validatePaidReviveDeath(address, runId, submission = {}, playerProfile = {}) {
+    this.assertLive();
+    assertApi(/^arena_run_[a-f0-9]{24}$/.test(runId || ''), 400, 'arena_run_id_invalid', 'The Daily Arena run identifier is invalid.');
+    const run = await this.store.getRun(runId);
+    assertApi(run, 404, 'arena_run_missing', 'The Daily Arena run was not found.');
+    assertApi(run.address === address, 403, 'arena_run_owner_mismatch', 'This Daily Arena run belongs to another wallet.');
+    await this.#assertRunOpen(run, this.now());
+    assertApi(
+      run.tuning?._paidRevive?.eligible === true,
+      409,
+      'arena_paid_revive_disabled',
+      'Paid revives were not enabled when this Daily Arena run started.'
+    );
+    const checkpoint = normalizeCheckpoint(submission.checkpoint || submission);
+    assertApi(
+      checkpointMatches(run, checkpoint) && this.#validCheckpointSignature(run, checkpoint),
+      401,
+      'arena_checkpoint_signature_invalid',
+      'Use the latest server-signed Daily Arena checkpoint for revive eligibility.'
+    );
+    const storedEvents = await this.store.getEvents(run.runId);
+    const replayEvents = storedEvents.map(publicTranscriptEvent);
+    const challenge = buildArenaChallenge(
+      (await this.store.getDay(run.day)).deterministicSeed,
+      run.tuning
+    );
+    const replayed = replayArenaTranscript(
+      challenge,
+      replayEvents,
+      await this.#replayOptions(run, playerProfile, false, replayEvents)
+    );
+    assertApi(
+      replayed.awaitingRevive === true,
+      409,
+      'revive_death_not_verified',
+      'The Daily Arena replay did not reach a paid-revive knockout.'
+    );
+    return {
+      checkpoint: this.#publicCheckpoint(run),
+      playerState: {
+        health: 0,
+        maximumHealth: replayed.maximumHealth,
+        depth: replayed.depth,
+        elapsed: replayed.elapsed
+      },
+      reviveRun: {
+        id: run.runId,
+        address: run.address,
+        status: 'active',
+        startedAt: run.startedAt,
+        expiresAt: run.expiresAt,
+        finishedAt: 0,
+        paidReviveEligible: true,
+        reviveInvulnerabilitySeconds:
+          run.tuning?._paidRevive?.invulnerabilitySeconds || 0,
+        revives: []
+      }
+    };
+  }
+
+  async assertPaidReviveRunOpen(address, runId) {
+    const run = await this.store.getRun(String(runId || ''));
+    assertApi(run, 404, 'arena_run_missing', 'The Daily Arena run was not found.');
+    assertApi(run.address === address, 403, 'arena_run_owner_mismatch', 'This Daily Arena run belongs to another wallet.');
+    await this.#assertRunOpen(run, this.now());
+    return { runId: run.runId, expiresAt: run.expiresAt };
   }
 
   async abandonActiveRun(address) {
@@ -1003,6 +1076,26 @@ export class DailyArenaService {
     }
   }
 
+  async #replayOptions(run, playerProfile, requireTerminal = false, replayEvents = []) {
+    const eligible = run.tuning?._paidRevive?.eligible === true;
+    const includesRevive = replayEvents.some((event) =>
+      event.type === 'command' && event.command === 'revive'
+    );
+    const reviveState = eligible && includesRevive
+      ? await this.getPaidReviveState(run.runId)
+      : null;
+    return {
+      requireTerminal,
+      profile: run.tuning?._playerProfile || playerProfile,
+      allowPaidRevive: eligible,
+      confirmedPaidRevives: Array.isArray(reviveState?.revives)
+        ? reviveState.revives.length
+        : 0,
+      reviveInvulnerabilitySeconds:
+        run.tuning?._paidRevive?.invulnerabilitySeconds || 0
+    };
+  }
+
   #dailySeed(day) {
     return createHmac('sha256', this.seedSecret)
       .update(`matt-mine-daily-arena-seed-v1|${day}`)
@@ -1210,6 +1303,22 @@ function arenaProgressionSnapshot(run) {
     passXpMultiplier: Number.isFinite(configuredMultiplier)
       ? Math.max(0, Math.min(10, configuredMultiplier))
       : 1
+  };
+}
+
+function applyArenaPaidReviveConfig(tuning, input) {
+  const competition = tuning?._competitionSnapshot;
+  const mineAllowsRevive = !competition || competition.loadout?.paidRevive === true;
+  const limit = Number.isSafeInteger(input.reviveLimitPerRun)
+    ? Math.max(0, Math.min(3, input.reviveLimitPerRun))
+    : 0;
+  const invulnerabilitySeconds = Number(input.reviveInvulnerabilitySeconds);
+  tuning._paidRevive = {
+    eligible: input.paidRevivesEnabled === true && mineAllowsRevive && limit > 0,
+    limitPerRun: limit,
+    invulnerabilitySeconds: Number.isFinite(invulnerabilitySeconds)
+      ? Math.max(0, Math.min(15, invulnerabilitySeconds))
+      : 0
   };
 }
 

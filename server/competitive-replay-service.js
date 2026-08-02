@@ -106,10 +106,16 @@ export class CompetitiveReplayService {
     const allEvents = [...await this.store.getEvents(run.runId), ...events].map(publicEvent);
     const snapshot = run.runSnapshot;
     assertApi(snapshot?.id === run.runId, 500, 'competitive_run_snapshot_missing', 'The immutable competitive run snapshot is unavailable.');
+    const includesRevive = allEvents.some((event) =>
+      event.type === 'command' && event.command === 'revive'
+    );
+    const currentStateRun = this.resolveRun && includesRevive
+      ? await this.resolveRun(run.runId)
+      : snapshot;
     const authoritativeState = replayArenaTranscript(
       buildCompetitiveChallenge(snapshot),
       allEvents,
-      replayOptions(snapshot, false)
+      replayOptions(snapshot, false, currentStateRun)
     );
     const next = {
       ...run,
@@ -256,7 +262,7 @@ export function sameCompetitiveEvent(left, right) {
   return canonicalJson(publicEvent(left)) === canonicalJson(publicEvent(right));
 }
 
-function replayOptions(run, requireTerminal) {
+function replayOptions(run, requireTerminal, currentStateRun = run) {
   return {
     requireTerminal,
     mode: run.mode,
@@ -269,6 +275,9 @@ function replayOptions(run, requireTerminal) {
     weeklyStage: run.weeklyStage,
     endlessSnapshot: run.endlessSnapshot,
     allowPaidRevive: run.paidReviveEligible === true,
+    confirmedPaidRevives: Array.isArray(currentStateRun?.revives)
+      ? currentStateRun.revives.length
+      : 0,
     reviveInvulnerabilitySeconds: run.reviveInvulnerabilitySeconds
   };
 }
