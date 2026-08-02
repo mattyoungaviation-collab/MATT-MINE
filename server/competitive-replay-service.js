@@ -2,6 +2,8 @@ import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import {
   ARENA_MAX_BATCH_EVENTS,
   ARENA_MAX_EVENTS,
+  arenaBatchRequiresReplay,
+  assertArenaTickOrder,
   buildCompetitiveChallenge,
   canonicalJson,
   competitiveMaximumDepth,
@@ -97,26 +99,34 @@ export class CompetitiveReplayService {
       'The competitive transcript exceeded the event limit.'
     );
     const throughTick = events.at(-1).tick;
+    assertArenaTickOrder(events, run.throughTick);
     assertApi(
       throughTick <= timestamp - run.startedAt + CLOCK_TOLERANCE_MS,
       422,
       'competitive_event_clock_ahead',
       'The competitive transcript is ahead of server time.'
     );
-    const allEvents = [...await this.store.getEvents(run.runId), ...events].map(publicEvent);
     const snapshot = run.runSnapshot;
     assertApi(snapshot?.id === run.runId, 500, 'competitive_run_snapshot_missing', 'The immutable competitive run snapshot is unavailable.');
-    const includesRevive = allEvents.some((event) =>
-      event.type === 'command' && event.command === 'revive'
-    );
-    const currentStateRun = this.resolveRun && includesRevive
-      ? await this.resolveRun(run.runId)
-      : snapshot;
-    const authoritativeState = replayArenaTranscript(
-      buildCompetitiveChallenge(snapshot),
-      allEvents,
-      replayOptions(snapshot, false, currentStateRun)
-    );
+    let authoritativeState = run.authoritativeState || {};
+    // Raw controls are normalized, ordered, clock bounded, and hash chained.
+    // Defer the expensive full-history gameplay replay until a command or
+    // finish barrier; replaying every control-only batch is quadratic in round
+    // length and can drive a small production instance out of memory.
+    if (arenaBatchRequiresReplay(events)) {
+      const allEvents = [...await this.store.getEvents(run.runId), ...events].map(publicEvent);
+      const includesRevive = allEvents.some((event) =>
+        event.type === 'command' && event.command === 'revive'
+      );
+      const currentStateRun = this.resolveRun && includesRevive
+        ? await this.resolveRun(run.runId)
+        : snapshot;
+      authoritativeState = replayArenaTranscript(
+        buildCompetitiveChallenge(snapshot),
+        allEvents,
+        replayOptions(snapshot, false, currentStateRun)
+      );
+    }
     const next = {
       ...run,
       throughSeq: run.throughSeq + events.length,

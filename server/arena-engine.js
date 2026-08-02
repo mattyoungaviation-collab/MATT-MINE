@@ -289,6 +289,18 @@ export function hashArenaEvent(previousHash, event) {
     .digest('hex');
 }
 
+export function assertArenaTickOrder(events, previousTick = 0) {
+  let lastTick = previousTick;
+  for (const event of events) {
+    assertApi(event.tick >= lastTick, 422, 'arena_tick_regressed', 'Arena input ticks must be monotonic.');
+    lastTick = event.tick;
+  }
+}
+
+export function arenaBatchRequiresReplay(events) {
+  return events.some((event) => event.type !== 'input');
+}
+
 export function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
   if (value && typeof value === 'object') {
