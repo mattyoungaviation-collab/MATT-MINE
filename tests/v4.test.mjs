@@ -85,3 +85,36 @@ test('ranked simulation clocks discard time while a choice screen is open', asyn
   assert.ok(Math.abs(game.run.elapsed - elapsedBeforeChoice - 0.02) < 0.000_001);
   assert.equal(game.arenaAccumulator, 0);
 });
+
+test('Arena reaches its authoritative clock limit, extracts, and emits a terminal transcript', async () => {
+  const { MattMineGame } = await import('../src/game/GameV4.js');
+  const { canvas, profile } = browserStubs();
+  const events = [];
+  const hudUpdates = [];
+  let result;
+  const game = new MattMineGame(canvas, profile, {
+    onArenaInput(event) { events.push(event); },
+    onHud(stats) { hudUpdates.push(stats); },
+    onRunEnd(value) { result = value; }
+  });
+
+  game.startRun({
+    mode: 'arena',
+    seed: 'ARENA-TIME-LIMIT',
+    roundDurationMs: 40
+  });
+  game.run.rawNuggets = 123;
+  game.update(0.04);
+
+  assert.equal(game.state, 'ended');
+  assert.equal(result.extracted, true);
+  assert.equal(result.timeLimitReached, true);
+  assert.equal(result.elapsed, 0.04);
+  assert.equal(result.banked, result.projected);
+  assert.deepEqual(events.slice(-2), [
+    { type: 'command', tick: 40, command: 'time_limit' },
+    { type: 'finish', tick: 40 }
+  ]);
+  assert.equal(hudUpdates.at(-1).roundDurationMs, 40);
+  assert.equal(hudUpdates.at(-1).roundRemainingMs, 0);
+});

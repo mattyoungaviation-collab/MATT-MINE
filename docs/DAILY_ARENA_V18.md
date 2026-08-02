@@ -14,7 +14,7 @@ MATT Daily Arena is a separate, player-funded daily competition. It does not mod
 - Nothing is burned and the Arena takes no house fee.
 - Only one result per wallet can rank: its best accepted daily score.
 - The complete pool is paid to up to ten eligible wallets.
-- Onchain entry closes 25 minutes before 00:00 UTC, reserving 20 minutes for a full run and five minutes for confirmation.
+- Onchain entry closes 25 minutes before 00:00 UTC. A started run has a 20-minute play clock plus five minutes to submit and finalize its score.
 
 Payout weights are:
 

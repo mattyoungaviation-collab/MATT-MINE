@@ -18,7 +18,15 @@ export const ARENA_MAX_TICKS = 20 * 60_000;
 export const ARENA_MAX_EVENTS = Math.ceil(ARENA_MAX_TICKS / ARENA_TICK_MS) + 1_024;
 export const ARENA_MAX_BATCH_EVENTS = 256;
 export const ARENA_EVENT_TYPES = Object.freeze(['input', 'command', 'finish']);
-export const ARENA_COMMANDS = Object.freeze(['upgrade', 'descend', 'extract', 'death', 'revive', 'decline']);
+export const ARENA_COMMANDS = Object.freeze([
+  'upgrade',
+  'descend',
+  'extract',
+  'death',
+  'revive',
+  'decline',
+  'time_limit'
+]);
 export const COMPETITIVE_REPLAY_MODES = Object.freeze(['free', 'paid', 'weekly', 'endless']);
 
 const NOOP_AUDIO = Object.freeze({
@@ -139,6 +147,7 @@ export function replayArenaTranscript(challenge, inputEvents, options = {}) {
       {},
     weeklyStage: options.weeklyStage || null,
     endlessSnapshot: options.endlessSnapshot || null,
+    roundDurationMs: replayMode === 'arena' ? challenge.maxTicks : 0,
     allowPaidRevive: options.allowPaidRevive === true,
     reviveInvulnerabilitySeconds: options.reviveInvulnerabilitySeconds
   });
@@ -171,6 +180,7 @@ export function replayArenaTranscript(challenge, inputEvents, options = {}) {
       applyCommand(game, event, {
         mode: replayMode,
         allowPaidRevive: options.allowPaidRevive === true,
+        maxTicks: challenge.maxTicks,
         maxDepth: Number.isSafeInteger(options.maxDepth)
           ? options.maxDepth
           : challenge.maxDepth
@@ -211,6 +221,7 @@ export function replayArenaTranscript(challenge, inputEvents, options = {}) {
     bossTelemetry: finalResult?.bossTelemetry || null,
     maximumHealth: Math.max(1, Number(game.player?.maxHealth || 100)),
     eventCount: inputEvents.length,
+    timeLimitReached: finalResult?.timeLimitReached === true,
     awaitingRevive: game.state === 'awaitingrevive'
   };
 }
@@ -318,6 +329,26 @@ function applyCommand(game, event, options = {}) {
       422,
       'revive_decline_rejected',
       'The replayed revive decline was rejected.'
+    );
+    return;
+  }
+  if (event.command === 'time_limit') {
+    assertApi(
+      options.mode === 'arena' &&
+        Number.isSafeInteger(options.maxTicks) &&
+        event.tick === options.maxTicks,
+      422,
+      'arena_time_limit_invalid',
+      'The Arena time limit can only close a run at the authoritative final tick.'
+    );
+    assertApi(
+      game.endArenaTimeLimit({
+        record: false,
+        roundDurationMs: options.maxTicks
+      }),
+      422,
+      'arena_time_limit_rejected',
+      'The replayed Arena run could not be extracted at the time limit.'
     );
     return;
   }

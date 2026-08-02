@@ -48,6 +48,9 @@ export function normalizeArenaConfig(value = {}) {
     settlementPaused: Boolean(value.settlementPaused),
     verificationMode: String(value.verificationMode || ''),
     liveBlocker: String(value.liveBlocker || ''),
+    roundDurationSeconds: safeInteger(value.roundDurationSeconds),
+    runTtlSeconds: safeInteger(value.runTtlSeconds),
+    finalizationGraceSeconds: safeInteger(value.finalizationGraceSeconds),
     snapshotAt,
     entryCutoffAt,
     feeRaw,
@@ -135,6 +138,17 @@ export function arenaTimeRemaining(snapshotAt, now = Date.now()) {
     complete: remainingMs === 0,
     label: [hours, minutes, seconds].map((part) => String(part).padStart(2, '0')).join(':')
   };
+}
+
+export function formatArenaRoundTime(remainingMs) {
+  const milliseconds = Number(remainingMs);
+  const totalSeconds = Math.max(
+    0,
+    Math.ceil((Number.isFinite(milliseconds) ? milliseconds : 0) / 1_000)
+  );
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
 export function projectedArenaPayouts(poolRaw, playerCount) {
