@@ -122,10 +122,10 @@ test('mobile canvas buffer follows visible size and caps pixel density', () => {
     devicePixelRatio: 3,
     touchInput: true
   }), {
-    pixelWidth: 1_041,
-    pixelHeight: 585,
-    scaleX: 1_041 / 1_280,
-    scaleY: 585 / 720
+    pixelWidth: 868,
+    pixelHeight: 488,
+    scaleX: 868 / 1_280,
+    scaleY: 488 / 720
   });
   assert.deepEqual(canvasRenderSize({
     cssWidth: 1_280,
@@ -135,10 +135,10 @@ test('mobile canvas buffer follows visible size and caps pixel density', () => {
     devicePixelRatio: 2,
     touchInput: false
   }), {
-    pixelWidth: 2_560,
-    pixelHeight: 1_440,
-    scaleX: 2,
-    scaleY: 2
+    pixelWidth: 1_920,
+    pixelHeight: 1_080,
+    scaleX: 1.5,
+    scaleY: 1.5
   });
 });
 

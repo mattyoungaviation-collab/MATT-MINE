@@ -71,7 +71,12 @@ export function canvasRenderSize({
   const safeLogicalHeight = Math.max(1, positive(logicalHeight) || 1);
   const renderedWidth = positive(cssWidth) || safeLogicalWidth;
   const renderedHeight = positive(cssHeight) || safeLogicalHeight;
-  const ratioCap = touchInput ? 1.5 : 2;
+  // The game renders a full-screen canvas every animation frame. Retina-scale
+  // 2D buffers multiply the cost of gradients, shadows, sprites, and clears
+  // without improving gameplay. Keep desktop at full-HD class sharpness and
+  // use a slightly leaner buffer on touch devices where mobile GPUs are the
+  // common frame-time bottleneck.
+  const ratioCap = touchInput ? 1.25 : 1.5;
   const pixelRatio = Math.min(Math.max(1, positive(devicePixelRatio) || 1), ratioCap);
   const pixelWidth = Math.max(
     1,
