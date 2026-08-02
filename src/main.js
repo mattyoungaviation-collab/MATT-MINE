@@ -539,6 +539,13 @@ async function connectWallet(options = {}) {
   if (walletBusy) return false;
   walletBusy = true;
   updateMenu();
+  const walletConnectWatchdog = options.forceWalletConnect === true
+    ? setTimeout(() => {
+        if (!document.querySelector('w3m-modal.open')) {
+          toast('Wallet chooser did not open. In Safari, turn off content blockers for this site, reload, and try again.');
+        }
+      }, 8_000)
+    : null;
   try {
     serverPlayer = await wallet.connect(options);
     profile = serverPlayer.profile;
@@ -558,6 +565,7 @@ async function connectWallet(options = {}) {
     toast(error?.message || 'Ronin Wallet sign-in failed.');
     return false;
   } finally {
+    if (walletConnectWatchdog) clearTimeout(walletConnectWatchdog);
     walletBusy = false;
     updateMenu();
   }
@@ -1428,6 +1436,7 @@ $('#launch-wallet-button').addEventListener('click', () => {
 
 $('#launch-walletconnect-button').addEventListener('click', () => {
   if (serverPlayer) return;
+  toast('Opening WalletConnect chooserâ€¦');
   void connectWallet({ forceWalletConnect: true });
 });
 

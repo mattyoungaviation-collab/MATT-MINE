@@ -1,6 +1,7 @@
 const RONIN_MAINNET_CHAIN_ID = 2020;
+const WALLETCONNECT_BUNDLE_VERSION = '2.23.10-safari14';
 const WALLETCONNECT_BUNDLE_URL = new URL(
-  '../../generated/walletconnect/walletconnect.js',
+  `../../generated/walletconnect/walletconnect.js?v=${WALLETCONNECT_BUNDLE_VERSION}`,
   import.meta.url
 ).href;
 
@@ -97,6 +98,9 @@ function walletConnectMetadata(windowObject) {
 
 function walletInitializationError(error) {
   const message = cleanErrorMessage(error);
+  if (/indexeddb|localstorage|securityerror|operation is insecure|invalidstateerror/i.test(message)) {
+    return 'Safari blocked WalletConnect storage. Turn off Private Browsing or content blockers for this site, reload, and try again.';
+  }
   if (/failed to fetch dynamically imported module|walletconnect client bundle|404/i.test(message)) {
     return 'WalletConnect is temporarily unavailable. Refresh MATT Mine and try again.';
   }
