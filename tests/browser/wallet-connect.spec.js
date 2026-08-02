@@ -54,7 +54,9 @@ test('ordinary browsers can sign in through the WalletConnect fallback', async (
   await page.goto('/');
   await expect(page.locator('#launch-wallet-label')).toHaveText('WALLETCONNECT');
   await expect(page.locator('#wallet-label')).toHaveText('CONNECT WALLET');
-  await page.locator('#launch-wallet-button').click();
+  await expect(page.locator('#launch-wallet-button')).toBeHidden();
+  await expect(page.locator('#launch-walletconnect-button')).toBeVisible();
+  await page.locator('#launch-walletconnect-button').click();
 
   await expect(page.locator('#launch-wallet-label')).toHaveText('WalletConnect Miner');
   const walletConnect = await page.evaluate(() => ({
@@ -67,6 +69,17 @@ test('ordinary browsers can sign in through the WalletConnect fallback', async (
     projectId: '11111111111111111111111111111111',
     chains: [2020]
   });
+});
+
+test('injected Ronin browsers still show the explicit WalletConnect choice', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.ronin = { provider: { request: async () => [] } };
+  });
+  await page.goto('/');
+
+  await expect(page.locator('#launch-wallet-label')).toHaveText('CONNECT RONIN');
+  await expect(page.locator('#launch-wallet-button')).toBeVisible();
+  await expect(page.locator('#launch-walletconnect-button')).toBeVisible();
 });
 
 test('the generated WalletConnect browser bundle is served by the app', async ({ request }) => {

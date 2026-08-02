@@ -9,7 +9,7 @@ const walletConnectStates = new WeakMap();
 export async function resolveRoninProvider(options = {}) {
   const windowObject = options.windowObject || globalThis.window;
   const injected = windowObject?.ronin?.provider;
-  if (injected?.request) {
+  if (options.forceWalletConnect !== true && injected?.request) {
     return { provider: injected, kind: 'injected' };
   }
 

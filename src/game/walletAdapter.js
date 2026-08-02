@@ -32,12 +32,13 @@ export class RoninWalletAdapter {
     }
   }
 
-  async connect() {
+  async connect(options = {}) {
     const config = await this.api.config();
     const resolved = await this.resolveProvider({
       windowObject: this.window,
       config,
-      connect: true
+      connect: true,
+      forceWalletConnect: options.forceWalletConnect === true
     });
     const provider = resolved.provider;
     this.provider = provider;
