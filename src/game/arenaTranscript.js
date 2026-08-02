@@ -1,4 +1,5 @@
 const ALLOWED_EVENT_TYPES = new Set(['input', 'command', 'finish']);
+const MAX_BATCH_EVENTS = 256;
 const DEFAULT_RETRY_DELAYS_MS = Object.freeze([150, 400, 900]);
 const DEFAULT_FINALIZATION_RETRY_DELAYS_MS = Object.freeze([
   250,
@@ -18,7 +19,10 @@ export class ArenaTranscript {
     this.checkpoint = run.checkpoint || null;
     this.nextSequence = Math.max(1, Number(this.checkpoint?.throughSeq || 0) + 1);
     this.pending = [];
-    this.flushSize = Math.max(1, Number(options.flushSize || 64));
+    this.flushSize = Math.max(1, Math.min(
+      MAX_BATCH_EVENTS,
+      Math.floor(Number(options.flushSize || MAX_BATCH_EVENTS))
+    ));
     this.appendEvents = options.appendEvents || ((...args) => this.api.appendArenaEvents(...args));
     this.retryDelays = Array.isArray(options.retryDelays)
       ? options.retryDelays.map((delay) => Math.max(0, Number(delay) || 0))
