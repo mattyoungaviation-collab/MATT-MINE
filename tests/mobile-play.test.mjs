@@ -4,6 +4,8 @@ import assert from 'node:assert/strict';
 import { InputController } from '../src/game/input.js';
 import {
   canvasRenderSize,
+  enterMobileGameplayFullscreen,
+  exitMobileGameplayFullscreen,
   mobileLandscapeRequired,
   touchInputDetected,
   viewportDimensions
@@ -138,6 +140,41 @@ test('mobile canvas buffer follows visible size and caps pixel density', () => {
     scaleX: 2,
     scaleY: 2
   });
+});
+
+test('mobile gameplay requests native fullscreen and keeps an iOS viewport fallback', async () => {
+  const classes = new Set();
+  const calls = [];
+  const element = {
+    requestFullscreen(options) {
+      calls.push(options);
+      runtime.document.fullscreenElement = element;
+      return Promise.resolve();
+    }
+  };
+  const runtime = {
+    document: {
+      documentElement: {
+        classList: {
+          add: (name) => classes.add(name),
+          remove: (name) => classes.delete(name)
+        }
+      },
+      fullscreenElement: null,
+      exitFullscreen() {
+        this.fullscreenElement = null;
+        return Promise.resolve();
+      }
+    },
+    screen: { orientation: { lock: async () => undefined } },
+    scrollTo(x, y) { calls.push([x, y]); }
+  };
+
+  assert.equal(await enterMobileGameplayFullscreen(element, runtime), true);
+  assert.equal(classes.has('mobile-gameplay-fullscreen'), true);
+  assert.deepEqual(calls, [[0, 1], { navigationUI: 'hide' }]);
+  assert.equal(await exitMobileGameplayFullscreen(runtime), true);
+  assert.equal(classes.has('mobile-gameplay-fullscreen'), false);
 });
 
 test('pointer controls move, attack, dash, and select only unlocked weapons', () => {

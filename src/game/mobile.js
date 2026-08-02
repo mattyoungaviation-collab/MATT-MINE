@@ -22,6 +22,43 @@ export function mobileLandscapeRequired(
   return touchInput && width > 0 && height > 0 && width < height && width <= MOBILE_PORTRAIT_MAX_WIDTH;
 }
 
+export function enterMobileGameplayFullscreen(element, runtime = globalThis) {
+  const documentObject = runtime.document;
+  documentObject?.documentElement?.classList?.add('mobile-gameplay-fullscreen');
+  runtime.scrollTo?.(0, 1);
+
+  const requestFullscreen = element?.requestFullscreen || element?.webkitRequestFullscreen;
+  if (typeof requestFullscreen !== 'function') return Promise.resolve(false);
+
+  try {
+    const requested = requestFullscreen.call(element, { navigationUI: 'hide' });
+    const orientationLock = () => runtime.screen?.orientation?.lock?.('landscape')?.catch?.(() => undefined);
+    return Promise.resolve(requested)
+      .then(() => {
+        orientationLock();
+        return true;
+      })
+      .catch(() => false);
+  } catch {
+    return Promise.resolve(false);
+  }
+}
+
+export function exitMobileGameplayFullscreen(runtime = globalThis) {
+  runtime.document?.documentElement?.classList?.remove('mobile-gameplay-fullscreen');
+  const documentObject = runtime.document;
+  if (!documentObject?.fullscreenElement && !documentObject?.webkitFullscreenElement) {
+    return Promise.resolve(false);
+  }
+  const exitFullscreen = documentObject.exitFullscreen || documentObject.webkitExitFullscreen;
+  if (typeof exitFullscreen !== 'function') return Promise.resolve(false);
+  try {
+    return Promise.resolve(exitFullscreen.call(documentObject)).then(() => true).catch(() => false);
+  } catch {
+    return Promise.resolve(false);
+  }
+}
+
 export function canvasRenderSize({
   cssWidth,
   cssHeight,
