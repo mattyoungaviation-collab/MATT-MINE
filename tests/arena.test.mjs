@@ -904,6 +904,58 @@ test('a signed-in wallet can release a stranded Daily Arena run without its lost
   );
 });
 
+test('Daily Arena defers full replay for input-only batches and replays command barriers', async () => {
+  const store = await new MemoryArenaStore().init();
+  await store.ensureDay(dayRecord({ chainStatus: 1, configurationState: 'confirmed' }));
+  await store.confirmEntry(entryRecord(1, HASH_A));
+  const timestamp = Date.parse(`${DAY}T12:00:00Z`);
+  const arena = await new DailyArenaService({
+    store,
+    chain: fakeArenaAdapter(() => scheduledChainDay()),
+    receiptSecret: 'r'.repeat(64),
+    seedSecret: 's'.repeat(64),
+    safeAddress: SAFE,
+    liveEnabled: true,
+    now: () => timestamp
+  }).init();
+  const started = await arena.startRun(PLAYER);
+  const readEvents = store.getEvents.bind(store);
+  let replayReads = 0;
+  store.getEvents = async (...args) => {
+    replayReads += 1;
+    return readEvents(...args);
+  };
+
+  const checkpoint = await arena.appendEvents(PLAYER, {
+    runId: started.run.runId,
+    runToken: started.run.runToken,
+    previousCheckpoint: started.run.checkpoint,
+    events: [inputEvent(1, 20)]
+  });
+  assert.equal(replayReads, 0);
+  await assert.rejects(
+    arena.appendEvents(PLAYER, {
+      runId: started.run.runId,
+      runToken: started.run.runToken,
+      previousCheckpoint: checkpoint.checkpoint,
+      events: [inputEvent(2, 0)]
+    }),
+    (error) => error.code === 'arena_tick_regressed'
+  );
+  assert.equal(replayReads, 0);
+  await assert.rejects(
+    arena.appendEvents(PLAYER, {
+      runId: started.run.runId,
+      runToken: started.run.runToken,
+      previousCheckpoint: checkpoint.checkpoint,
+      events: [{ seq: 2, tick: 20, type: 'command', command: 'extract' }]
+    }),
+    (error) => error.code === 'arena_guardian_required'
+  );
+  assert.equal(replayReads, 1);
+  assert.equal((await store.getRun(started.run.runId)).throughSeq, 1);
+});
+
 test('Daily Arena preserves a knockout and resumes only after paid-revive confirmation', async () => {
   const store = await new MemoryArenaStore().init();
   await store.ensureDay(dayRecord({ chainStatus: 1, configurationState: 'confirmed' }));

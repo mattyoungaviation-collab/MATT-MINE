@@ -193,14 +193,23 @@ export class PostgresCompetitiveReplayStore {
       const run = formatRun(selected.rows[0]);
       assertApi(run.status === 'active', 409, 'competitive_transcript_closed', 'The competitive transcript is closed.');
       assertApi(run.throughSeq === expectedSequence, 409, 'competitive_checkpoint_stale', 'The competitive checkpoint is stale.');
-      for (const event of events) {
-        await client.query(
-          `INSERT INTO matt_mine_competitive.events
-           (run_id,seq,tick,event_json,event_hash,received_at_ms)
-           VALUES ($1,$2,$3,$4::jsonb,$5,$6)`,
-          [runId, event.seq, event.tick, JSON.stringify(event), event.eventHash, event.receivedAt]
-        );
-      }
+      const eventBatch = events.map((event) => ({
+        seq: event.seq,
+        tick: event.tick,
+        event_json: event,
+        event_hash: event.eventHash,
+        received_at_ms: event.receivedAt
+      }));
+      await client.query(
+        `INSERT INTO matt_mine_competitive.events
+         (run_id,seq,tick,event_json,event_hash,received_at_ms)
+         SELECT $1,b.seq,b.tick,b.event_json,b.event_hash,b.received_at_ms
+         FROM jsonb_to_recordset($2::jsonb) AS b(
+           seq integer,tick integer,event_json jsonb,event_hash text,received_at_ms bigint
+         )
+         ORDER BY b.seq`,
+        [runId, JSON.stringify(eventBatch)]
+      );
       await client.query(
         `UPDATE matt_mine_competitive.runs SET
            through_seq=$2,through_tick=$3,transcript_hash=$4,checkpoint_signature=$5,

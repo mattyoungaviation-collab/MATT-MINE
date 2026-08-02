@@ -14,6 +14,8 @@ import {
   ARENA_MAX_TICKS,
   ARENA_TICK_MS,
   ARENA_TRANSCRIPT_VERSION,
+  arenaBatchRequiresReplay,
+  assertArenaTickOrder,
   buildArenaChallenge,
   canonicalJson,
   hashArenaEvent,
@@ -381,6 +383,7 @@ export class DailyArenaService {
       };
     });
     const throughTick = receivedEvents.at(-1).tick;
+    assertArenaTickOrder(receivedEvents, run.throughTick);
     const elapsedWallMs = timestamp - run.startedAt;
     assertApi(
       throughTick <= elapsedWallMs + EVENT_CLOCK_TOLERANCE_MS,
@@ -388,13 +391,20 @@ export class DailyArenaService {
       'arena_event_clock_ahead',
       'The Daily Arena transcript is ahead of server time.'
     );
-    const existingEvents = await this.store.getEvents(run.runId);
-    const replayEvents = [...existingEvents, ...receivedEvents].map(publicTranscriptEvent);
-    replayArenaTranscript(
-      buildArenaChallenge((await this.store.getDay(run.day)).deterministicSeed, run.tuning),
-      replayEvents,
-      await this.#replayOptions(run, playerProfile, false, replayEvents)
-    );
+    // Input-only batches are already normalized, ordered, wall-clock bounded,
+    // and hash chained. Replaying the complete growing transcript for every
+    // control batch makes a round quadratic and eventually exhausts the Node
+    // heap. Commands and finish markers remain authoritative replay barriers,
+    // and finalization still replays the complete transcript.
+    if (arenaBatchRequiresReplay(receivedEvents)) {
+      const existingEvents = await this.store.getEvents(run.runId);
+      const replayEvents = [...existingEvents, ...receivedEvents].map(publicTranscriptEvent);
+      replayArenaTranscript(
+        buildArenaChallenge((await this.store.getDay(run.day)).deterministicSeed, run.tuning),
+        replayEvents,
+        await this.#replayOptions(run, playerProfile, false, replayEvents)
+      );
+    }
     const nextCheckpoint = this.#checkpoint({
       runId: run.runId,
       address,

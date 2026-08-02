@@ -116,6 +116,12 @@ test('competitive replay checkpoints are signed, ordered, persisted, and bound t
   };
   const checkpoint = await replay.register(run, 'a'.repeat(48));
   assert.equal(checkpoint.throughSeq, 0);
+  const readEvents = store.getEvents.bind(store);
+  let replayReads = 0;
+  store.getEvents = async (...args) => {
+    replayReads += 1;
+    return readEvents(...args);
+  };
   now += 1_000;
   const next = await replay.append(ADDRESS, {
     runId: run.id,
@@ -135,6 +141,7 @@ test('competitive replay checkpoints are signed, ordered, persisted, and bound t
   });
   assert.equal(next.throughSeq, 1);
   assert.equal((await store.getEvents(run.id)).length, 1);
+  assert.equal(replayReads, 1);
   await assert.rejects(
     replay.append(ADDRESS, {
       runId: run.id,
@@ -144,6 +151,16 @@ test('competitive replay checkpoints are signed, ordered, persisted, and bound t
     }),
     (error) => error.code === 'run_token_rejected'
   );
+  await assert.rejects(
+    replay.append(ADDRESS, {
+      runId: run.id,
+      runToken: 'a'.repeat(48),
+      previousCheckpoint: next,
+      events: [{ seq: 2, tick: 20, type: 'command', command: 'extract' }]
+    }),
+    (error) => error.code === 'arena_guardian_required'
+  );
+  assert.equal(replayReads, 2);
 });
 
 test('signed advertisement completions bind provider, wallet, run, expiry, and percent', async () => {
