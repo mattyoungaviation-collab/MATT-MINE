@@ -97,7 +97,7 @@ export class MattMineGame extends V3MattMineGame {
 
   update(dt) {
     if (!DETERMINISTIC_SERVER_MODES.has(this.runContext?.mode)) return super.update(dt);
-    if (this.state !== 'playing') {
+    if (this.state !== 'playing' || this.pendingUpgradeIds?.length) {
       // Ranked replays advance only while the mine is actively playing.
       // Banking browser-frame time behind an upgrade, depth choice, pause, or
       // revive screen causes a large catch-up burst and desynchronizes the

@@ -1522,6 +1522,9 @@ test('the Ronin adapter reports a revive payment hash immediately after wallet b
 
 test('the Ronin adapter sends Arena approval and entry transactions to the wallet in order', async () => {
   const calls = [];
+  const walletRequests = [];
+  const walletSettled = [];
+  let nonceRequest = 0;
   const transactionHashes = [
     `0x${'7'.repeat(64)}`,
     `0x${'8'.repeat(64)}`
@@ -1531,6 +1534,7 @@ test('the Ronin adapter sends Arena approval and entry transactions to the walle
       calls.push(payload);
       if (payload.method === 'eth_requestAccounts') return [account.address];
       if (payload.method === 'eth_chainId') return `0x${RONIN_CHAINS.MAINNET.toString(16)}`;
+      if (payload.method === 'eth_getTransactionCount') return `0x${(17 + nonceRequest++).toString(16)}`;
       if (payload.method === 'eth_sendTransaction') return transactionHashes.shift();
       if (payload.method === 'eth_getTransactionReceipt') return { status: '0x1' };
       throw new Error(`Unexpected method ${payload.method}`);
@@ -1542,19 +1546,25 @@ test('the Ronin adapter sends Arena approval and entry transactions to the walle
   });
   adapter.player = { address: account.address.toLowerCase() };
   adapter.provider = provider;
+  adapter.providerKind = 'walletconnect';
 
   const hashes = await adapter.purchaseArenaEntry([
     {
+      kind: 'approve',
       to: RONIN_PAYMENT_CONTRACTS.matt,
       value: '0x0',
       data: '0x095ea7b3'
     },
     {
+      kind: 'enter',
       to: '0x506f969279F8264fd629BBB0Df861Ab91343b12C',
       value: '0x0',
       data: '0x2ff2e9dc'
     }
-  ]);
+  ], {
+    onWalletRequest(request) { walletRequests.push(request); },
+    onWalletRequestSettled(request) { walletSettled.push(request); }
+  });
 
   assert.deepEqual(hashes, [
     `0x${'7'.repeat(64)}`,
@@ -1564,6 +1574,14 @@ test('the Ronin adapter sends Arena approval and entry transactions to the walle
   assert.equal(sent.length, 2);
   assert.equal(sent.every((entry) => entry.params[0].from === account.address.toLowerCase()), true);
   assert.equal(sent.every((entry) => entry.params[0].value === '0x0'), true);
+  assert.deepEqual(sent.map((entry) => entry.params[0].nonce), ['0x11', '0x12']);
+  assert.deepEqual(walletRequests.map(({ transaction, nonce, index, count }) => ({
+    kind: transaction.kind, nonce, index, count
+  })), [
+    { kind: 'approve', nonce: '0x11', index: 0, count: 2 },
+    { kind: 'enter', nonce: '0x12', index: 1, count: 2 }
+  ]);
+  assert.deepEqual(walletSettled.map(({ transaction }) => transaction.kind), ['approve', 'enter']);
 });
 
 test('the Ronin adapter identifies native RON gas failures separately from MATT balance failures', async () => {

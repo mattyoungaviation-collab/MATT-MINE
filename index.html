@@ -3,6 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="theme-color" content="#0b0d12" />
     <meta name="description" content="MATT Mine is a free-to-play action roguelite on Ronin. Dig, fight, extract, and compete in daily skill-based mines." />
     <meta property="og:type" content="website" />
@@ -826,6 +829,7 @@
           <p class="eyebrow">RONIN MOBILE PLAY</p>
           <h2 id="mobile-orientation-title">Rotate to start your run</h2>
           <p id="mobile-orientation-copy">Turn your phone sideways. Your run has not started and no entry has been used.</p>
+          <button id="mobile-orientation-start" class="primary-button" type="button" hidden>START FULLSCREEN</button>
           <button id="mobile-orientation-cancel" class="secondary-button" type="button">NOT NOW</button>
         </div>
       </section>
@@ -888,6 +892,16 @@
           <p class="walletconnect-ios-note">On newer iPhones, Ronin may not return you to Safari automatically.</p>
           <a id="walletconnect-open-ronin" class="primary-button walletconnect-open-ronin" href="roninwallet://" role="button">OPEN RONIN WALLET</a>
           <button id="walletconnect-mobile-cancel" class="secondary-button" type="button">NOT NOW</button>
+        </div>
+      </dialog>
+
+      <dialog id="wallet-transaction-dialog" class="walletconnect-mobile-dialog" aria-labelledby="wallet-transaction-title">
+        <div class="walletconnect-mobile-card">
+          <p class="eyebrow">ARENA WALLET REQUEST</p>
+          <h2 id="wallet-transaction-title">Open Ronin Wallet</h2>
+          <p id="wallet-transaction-copy">Approve the pending Arena transaction, then return to this browser.</p>
+          <p class="walletconnect-ios-note">Keep this page open. The Arena entry is credited only after the actual payment transaction is confirmed.</p>
+          <a class="primary-button walletconnect-open-ronin" href="roninwallet://" role="button">OPEN RONIN WALLET</a>
         </div>
       </dialog>
 

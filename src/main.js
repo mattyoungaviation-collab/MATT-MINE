@@ -57,7 +57,12 @@ import { showMineLoadingScreen } from './game/mineLoadingScreen.js';
 import { loadProfile, saveProfile } from './game/storage.js';
 import { loadGameplayPreferences, saveGameplayPreferences } from './game/preferences.js';
 import { RoninWalletAdapter } from './game/walletAdapter.js';
-import { mobileLandscapeRequired, touchInputDetected } from './game/mobile.js';
+import {
+  enterMobileGameplayFullscreen,
+  exitMobileGameplayFullscreen,
+  mobileLandscapeRequired,
+  touchInputDetected
+} from './game/mobile.js';
 import {
   needsMobileWalletConnectHandoff,
   rememberRoninWalletChoice,
@@ -73,10 +78,14 @@ const mobileControls = $('#mobile-controls');
 const mobileOrientationGate = $('#mobile-orientation-gate');
 const mobileOrientationTitle = $('#mobile-orientation-title');
 const mobileOrientationCopy = $('#mobile-orientation-copy');
+const mobileOrientationStart = $('#mobile-orientation-start');
 const mobileOrientationCancel = $('#mobile-orientation-cancel');
 const mobileWalletConnectDialog = $('#walletconnect-mobile-dialog');
 const mobileWalletConnectOpenRonin = $('#walletconnect-open-ronin');
 const mobileWalletConnectCancel = $('#walletconnect-mobile-cancel');
+const mobileTransactionDialog = $('#wallet-transaction-dialog');
+const mobileTransactionTitle = $('#wallet-transaction-title');
+const mobileTransactionCopy = $('#wallet-transaction-copy');
 const isLocalPreview = ['localhost', '127.0.0.1', '[::1]'].includes(globalThis.location?.hostname);
 const economy = new LocalEconomyStore();
 const PRACTICE_CLAIM_PLACEHOLDER_PRICE = 5000;
@@ -193,10 +202,11 @@ function syncMobileOrientationGate() {
   const portrait = needsMobileLandscape();
   const gameplayActive = app.classList.contains('gameplay-active');
   if (pendingLandscapeAction && !portrait) {
-    const action = pendingLandscapeAction;
-    pendingLandscapeAction = null;
-    mobileOrientationGate.hidden = true;
-    requestAnimationFrame(() => void action());
+    mobileOrientationTitle.textContent = 'Ready for fullscreen';
+    mobileOrientationCopy.textContent = 'Tap below to open the mine at the largest size this browser supports.';
+    mobileOrientationStart.hidden = false;
+    mobileOrientationCancel.hidden = false;
+    mobileOrientationGate.hidden = false;
     return;
   }
   if (!portrait || (!pendingLandscapeAction && !gameplayActive)) {
@@ -210,6 +220,7 @@ function syncMobileOrientationGate() {
   mobileOrientationCopy.textContent = waitingToStart
     ? 'Turn your phone sideways. Your run has not started and no entry has been used.'
     : 'Turn your phone sideways again. Timed Arena play continues while the phone is vertical.';
+  mobileOrientationStart.hidden = true;
   mobileOrientationCancel.hidden = !waitingToStart;
   mobileOrientationGate.hidden = false;
 }
@@ -223,6 +234,37 @@ function setGameplayUi(active) {
   if (!active) {
     if ($('#beta-tools')) $('#beta-tools').hidden = true;
     if ($('#controller-pause-overlay')) $('#controller-pause-overlay').hidden = true;
+  }
+}
+
+function requestGameplayFullscreen() {
+  if (!touchInputActive) return;
+  void enterMobileGameplayFullscreen(app, window);
+}
+
+function leaveGameplayFullscreen() {
+  void exitMobileGameplayFullscreen(window);
+}
+
+function showMobileWalletTransactionRequest({ transaction, nonce, index, count }) {
+  if (wallet.providerKind !== 'walletconnect' || !needsMobileWalletConnectHandoff(window)) return;
+  const approval = transaction.kind === 'approve';
+  mobileTransactionTitle.textContent = approval ? 'Approve MATT in Ronin' : 'Send Arena payment in Ronin';
+  mobileTransactionCopy.textContent = approval
+    ? `Step ${index + 1} of ${count}: approve the exact Arena allowance. Payment nonce ${nonce}.`
+    : `Step ${index + 1} of ${count}: submit the actual Arena entry transaction. Payment nonce ${nonce}.`;
+  if (typeof mobileTransactionDialog.showModal === 'function') {
+    if (!mobileTransactionDialog.open) mobileTransactionDialog.showModal();
+  } else {
+    mobileTransactionDialog.setAttribute('open', '');
+  }
+}
+
+function closeMobileWalletTransactionRequest() {
+  if (typeof mobileTransactionDialog.close === 'function' && mobileTransactionDialog.open) {
+    mobileTransactionDialog.close();
+  } else {
+    mobileTransactionDialog.removeAttribute('open');
   }
 }
 
@@ -240,6 +282,12 @@ globalThis.screen?.orientation?.addEventListener?.('change', syncMobileOrientati
 mobileOrientationCancel.addEventListener('click', () => {
   pendingLandscapeAction = null;
   mobileOrientationGate.hidden = true;
+});
+mobileOrientationStart.addEventListener('click', () => {
+  const action = pendingLandscapeAction;
+  pendingLandscapeAction = null;
+  mobileOrientationGate.hidden = true;
+  if (action) void action();
 });
 
 function applyPassInventory(passInventory) {
@@ -1040,6 +1088,7 @@ async function startRunMode(mode) {
       openMinerProfile(true);
       return;
     }
+    requestGameplayFullscreen();
     try {
       const run = await apiClient.startRun(mode);
       activeServerRun = run;
@@ -1088,6 +1137,7 @@ async function startRunMode(mode) {
       }
       updateMenu();
     } catch (error) {
+      leaveGameplayFullscreen();
       toast(error.message);
       await refreshServerPlayer();
     }
@@ -1101,6 +1151,7 @@ async function startRunMode(mode) {
     updateMenu();
     return;
   }
+  requestGameplayFullscreen();
   const tuning = await apiClient.gameTuning(mode).catch(() => ({}));
   const mine = await apiClient.mineSlot(slotIdForMode(mode)).catch(() => null);
   await showMineLoadingScreen(mine?.slot || {
@@ -1275,6 +1326,7 @@ const game = new MattMineGame(canvas, profile, {
     ui.objectiveText.textContent = text;
   },
   onLevelUp(options) {
+    game.input?.reset?.();
     const container = $('#level-options');
     container.innerHTML = '';
     for (const option of options) {
@@ -1307,6 +1359,7 @@ const game = new MattMineGame(canvas, profile, {
     setGameplayUi(true);
   },
   onRunEnd(result) {
+    leaveGameplayFullscreen();
     paidRevivePending = false;
     paidReviveBusy = false;
     paidReviveContext = null;
@@ -1393,6 +1446,7 @@ const game = new MattMineGame(canvas, profile, {
     game.setProfile(profile);
   },
   onMenu() {
+    leaveGameplayFullscreen();
     resultScreenMode = null;
     paidRevivePending = false;
     paidReviveBusy = false;
@@ -1406,6 +1460,7 @@ const game = new MattMineGame(canvas, profile, {
     abandonIssuedRun(context);
   },
   onFatalError(error) {
+    leaveGameplayFullscreen();
     showScreen('menu');
     setGameplayUi(false);
     updateMenu();
@@ -2162,7 +2217,10 @@ async function purchaseArenaEntry() {
     );
     if (!approved) return;
     const transactions = quote.transactions || quote.transaction;
-    const transactionHashes = await wallet.purchaseArenaEntry(transactions);
+    const transactionHashes = await wallet.purchaseArenaEntry(transactions, {
+      onWalletRequest: showMobileWalletTransactionRequest,
+      onWalletRequestSettled: closeMobileWalletTransactionRequest
+    });
     const entryTransactionHash = transactionHashes.at(-1);
     toast('Arena entry mined · server confirming');
     const confirmation = await apiClient.confirmArenaEntry(
@@ -2201,6 +2259,7 @@ async function startArenaRun() {
   ) {
     return;
   }
+  requestGameplayFullscreen();
   arenaBusy = true;
   renderArena();
   try {
@@ -2236,6 +2295,7 @@ async function startArenaRun() {
       toast('Mine Pass active · 2× XP and nuggets');
     }
   } catch (error) {
+    leaveGameplayFullscreen();
     activeArenaRun = null;
     activeArenaTranscript = null;
     toast(error.message || 'Arena run could not start.');

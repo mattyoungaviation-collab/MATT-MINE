@@ -337,6 +337,22 @@ test('every mode starts with the Pickaxe while Practice keeps the Blaster availa
   assert.equal(arena.layout.guardianRoom.height, CONFIG.roomHeight);
 });
 
+test('Arena simulation and round time remain frozen while an upgrade choice is pending', async () => {
+  const { MattMineGame } = await import('../src/game/GameV4.js');
+  const game = new MattMineGame({}, defaultProfile(), { headless: true });
+  game.startRun({ mode: 'arena', seed: 'ARENA-UPGRADE-PAUSE', roundDurationMs: 60_000 });
+  const elapsed = game.run.elapsed;
+  const position = { x: game.player.x, y: game.player.y };
+  game.state = 'playing';
+  game.pendingUpgradeIds = ['power', 'speed', 'health'];
+
+  game.update(0.25);
+
+  assert.equal(game.run.elapsed, elapsed);
+  assert.deepEqual({ x: game.player.x, y: game.player.y }, position);
+  assert.equal(game.arenaAccumulator, 0);
+});
+
 test('Safe Start keeps nearby enemies away and passive until the miner moves out or the grace period ends', async () => {
   const { MattMineGame } = await import('../src/game/GameV4.js');
   const stubs = installBrowserStubs();

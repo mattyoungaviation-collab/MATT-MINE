@@ -94,8 +94,8 @@ export class RoninWalletAdapter {
     return this.sendPreparedTransaction(transaction);
   }
 
-  async purchaseArenaEntry(transactions) {
-    return this.sendPreparedTransactions(transactions, { allowZeroValue: true });
+  async purchaseArenaEntry(transactions, options = {}) {
+    return this.sendPreparedTransactions(transactions, { ...options, allowZeroValue: true });
   }
 
   async claimArenaRefund(transaction) {
@@ -118,8 +118,12 @@ export class RoninWalletAdapter {
       throw new Error('The server did not provide a valid Arena transaction sequence.');
     }
     const hashes = [];
-    for (const transaction of prepared) {
-      hashes.push(await this.sendPreparedTransaction(transaction, options));
+    for (let index = 0; index < prepared.length; index += 1) {
+      hashes.push(await this.sendPreparedTransaction(prepared[index], {
+        ...options,
+        transactionIndex: index,
+        transactionCount: prepared.length
+      }));
     }
     return hashes;
   }
@@ -140,19 +144,43 @@ export class RoninWalletAdapter {
     }
     const chainId = parseChainId(await this.provider.request({ method: 'eth_chainId' }));
     if (chainId !== 2020) throw new Error('Switch Ronin Wallet to Ronin Mainnet.');
+    const requestTransaction = {
+      from: this.player.address,
+      to: transaction.to,
+      value: transaction.value,
+      data: transaction.data
+    };
+    if (this.providerKind === 'walletconnect') {
+      const pendingNonce = await this.provider.request({
+        method: 'eth_getTransactionCount',
+        params: [this.player.address, 'pending']
+      });
+      if (!/^0x[a-fA-F0-9]+$/.test(pendingNonce || '')) {
+        throw new Error('Ronin WalletConnect did not return a valid payment nonce. Reconnect the wallet and try again.');
+      }
+      requestTransaction.nonce = pendingNonce;
+    }
     let transactionHash;
     try {
-      transactionHash = await this.provider.request({
+      const pendingRequest = this.provider.request({
         method: 'eth_sendTransaction',
-        params: [{
-          from: this.player.address,
-          to: transaction.to,
-          value: transaction.value,
-          data: transaction.data
-        }]
+        params: [requestTransaction]
       });
+      options.onWalletRequest?.({
+        transaction,
+        nonce: requestTransaction.nonce || '',
+        index: options.transactionIndex || 0,
+        count: options.transactionCount || 1
+      });
+      transactionHash = await pendingRequest;
     } catch (error) {
       throw new Error(walletTransactionError(error, transaction));
+    } finally {
+      options.onWalletRequestSettled?.({
+        transaction,
+        index: options.transactionIndex || 0,
+        count: options.transactionCount || 1
+      });
     }
     if (!/^0x[a-fA-F0-9]{64}$/.test(transactionHash || '')) {
       throw new Error('Ronin Wallet did not return a valid transaction hash.');

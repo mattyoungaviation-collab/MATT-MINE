@@ -92,4 +92,28 @@ test.describe('Ronin mobile play', () => {
     expect(canvas.pixelWidth).toBeLessThan(2_560);
     expect(canvas.pixelHeight).toBeLessThan(1_440);
   });
+
+  test('uses a fresh tap to start mobile play in fullscreen after rotation', async ({ page }) => {
+    await page.addInitScript(() => {
+      Element.prototype.requestFullscreen = function requestFullscreen(options) {
+        window.__mattMineFullscreenRequest = { id: this.id, options };
+        return Promise.resolve();
+      };
+    });
+    await page.goto('/');
+    await page.locator('[data-launch-action="practice"].launch-secondary-cta').click();
+    await expect(page.locator('#mobile-orientation-gate')).toBeVisible();
+
+    await page.setViewportSize({ width: 844, height: 390 });
+    await expect(page.locator('#mobile-orientation-title')).toHaveText('Ready for fullscreen');
+    await expect(page.locator('#mobile-orientation-start')).toBeVisible();
+    await page.locator('#mobile-orientation-start').click();
+
+    await expect(page.locator('html')).toHaveClass(/mobile-gameplay-fullscreen/);
+    await expect(page.locator('#hud')).toHaveClass(/active/, { timeout: 15_000 });
+    expect(await page.evaluate(() => window.__mattMineFullscreenRequest)).toMatchObject({
+      id: 'app',
+      options: { navigationUI: 'hide' }
+    });
+  });
 });
