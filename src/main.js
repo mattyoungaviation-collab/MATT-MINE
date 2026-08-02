@@ -57,12 +57,18 @@ import { showMineLoadingScreen } from './game/mineLoadingScreen.js';
 import { loadProfile, saveProfile } from './game/storage.js';
 import { loadGameplayPreferences, saveGameplayPreferences } from './game/preferences.js';
 import { RoninWalletAdapter } from './game/walletAdapter.js';
+import { mobileLandscapeRequired, touchInputDetected } from './game/mobile.js';
 
 const $ = (selector) => document.querySelector(selector);
+const app = $('#app');
 const canvas = $('#game');
 const screens = [...document.querySelectorAll('.screen')];
 const hud = $('#hud');
 const mobileControls = $('#mobile-controls');
+const mobileOrientationGate = $('#mobile-orientation-gate');
+const mobileOrientationTitle = $('#mobile-orientation-title');
+const mobileOrientationCopy = $('#mobile-orientation-copy');
+const mobileOrientationCancel = $('#mobile-orientation-cancel');
 const isLocalPreview = ['localhost', '127.0.0.1', '[::1]'].includes(globalThis.location?.hostname);
 const economy = new LocalEconomyStore();
 const PRACTICE_CLAIM_PLACEHOLDER_PRICE = 5000;
@@ -110,6 +116,8 @@ let paidReviveContext = null;
 let pendingAvatarDataUrl = '';
 let abandonConfirmUntil = 0;
 let abandonResetTimer = null;
+let touchInputActive = touchInputDetected(globalThis);
+let pendingLandscapeAction = null;
 let dailyMinePreviewCleanup = null;
 const wallet = new RoninWalletAdapter({
   api: apiClient,
@@ -152,14 +160,79 @@ function showScreen(id = null) {
   document.body.classList.toggle('launch-active', id === 'launch');
 }
 
+function applyTouchInputMode(active = touchInputActive) {
+  touchInputActive = Boolean(active);
+  document.documentElement.classList.toggle('touch-input', touchInputActive);
+  app.classList.toggle('touch-input', touchInputActive);
+  mobileControls.setAttribute(
+    'aria-hidden',
+    String(!(touchInputActive && hud.classList.contains('active')))
+  );
+}
+
+function needsMobileLandscape() {
+  return mobileLandscapeRequired(globalThis, touchInputActive);
+}
+
+function queueUntilMobileLandscape(action) {
+  if (!needsMobileLandscape()) return false;
+  pendingLandscapeAction = action;
+  syncMobileOrientationGate();
+  return true;
+}
+
+function syncMobileOrientationGate() {
+  const portrait = needsMobileLandscape();
+  const gameplayActive = app.classList.contains('gameplay-active');
+  if (pendingLandscapeAction && !portrait) {
+    const action = pendingLandscapeAction;
+    pendingLandscapeAction = null;
+    mobileOrientationGate.hidden = true;
+    requestAnimationFrame(() => void action());
+    return;
+  }
+  if (!portrait || (!pendingLandscapeAction && !gameplayActive)) {
+    mobileOrientationGate.hidden = true;
+    return;
+  }
+  const waitingToStart = Boolean(pendingLandscapeAction);
+  mobileOrientationTitle.textContent = waitingToStart
+    ? 'Rotate to start your run'
+    : 'Rotate back to keep playing';
+  mobileOrientationCopy.textContent = waitingToStart
+    ? 'Turn your phone sideways. Your run has not started and no entry has been used.'
+    : 'Turn your phone sideways again. Timed Arena play continues while the phone is vertical.';
+  mobileOrientationCancel.hidden = !waitingToStart;
+  mobileOrientationGate.hidden = false;
+}
+
 function setGameplayUi(active) {
   hud.classList.toggle('active', active);
   mobileControls.classList.toggle('active', active);
+  app.classList.toggle('gameplay-active', active);
+  mobileControls.setAttribute('aria-hidden', String(!(active && touchInputActive)));
+  syncMobileOrientationGate();
   if (!active) {
     if ($('#beta-tools')) $('#beta-tools').hidden = true;
     if ($('#controller-pause-overlay')) $('#controller-pause-overlay').hidden = true;
   }
 }
+
+applyTouchInputMode();
+globalThis.matchMedia?.('(pointer: coarse)')?.addEventListener?.('change', () => {
+  applyTouchInputMode(touchInputDetected(globalThis));
+  syncMobileOrientationGate();
+});
+window.addEventListener('pointerdown', (event) => {
+  if (event.pointerType === 'touch' && !touchInputActive) applyTouchInputMode(true);
+}, { passive: true });
+window.addEventListener('resize', syncMobileOrientationGate);
+window.visualViewport?.addEventListener?.('resize', syncMobileOrientationGate);
+globalThis.screen?.orientation?.addEventListener?.('change', syncMobileOrientationGate);
+mobileOrientationCancel.addEventListener('click', () => {
+  pendingLandscapeAction = null;
+  mobileOrientationGate.hidden = true;
+});
 
 function applyPassInventory(passInventory) {
   if (!passInventory) return;
@@ -885,6 +958,7 @@ async function declinePracticeRewards() {
 }
 
 async function startRunMode(mode) {
+  if (queueUntilMobileLandscape(() => startRunMode(mode))) return;
   const useServer =
     mode === RUN_MODES.FREE ||
     (mode === RUN_MODES.PAID && serverConfig?.paidRunsEnabled === true) ||
@@ -2026,6 +2100,7 @@ async function purchaseArenaEntry() {
 }
 
 async function startArenaRun() {
+  if (queueUntilMobileLandscape(startArenaRun)) return;
   if (arenaPlayer.activeRunId && !activeArenaRun) {
     await releaseActiveArenaRun();
     return;

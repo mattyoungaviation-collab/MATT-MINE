@@ -1,6 +1,7 @@
 import { BLASTER_RUN_UPGRADES, CONFIG, ORE_TYPES, RUN_UPGRADES } from './config.js';
 import { InputController } from './input.js';
 import { createMineLayout, pointInLayout, randomPointInRoom, roomAt, segmentInLayout } from './layout.js';
+import { canvasRenderSize, touchInputDetected } from './mobile.js';
 import {
   angleTo,
   clamp,
@@ -39,21 +40,38 @@ export class MattMineGame {
       this.viewportHeight = CONFIG.height;
     } else {
       this.resize();
-      window.addEventListener('resize', () => this.resize());
+      this.resizeFrame = null;
+      this.requestResize = () => {
+        if (this.resizeFrame !== null) return;
+        this.resizeFrame = requestAnimationFrame(() => {
+          this.resizeFrame = null;
+          this.resize();
+        });
+      };
+      window.addEventListener('resize', this.requestResize);
+      window.visualViewport?.addEventListener?.('resize', this.requestResize);
       this.frameHandle = requestAnimationFrame((time) => this.loop(time));
     }
   }
 
   resize() {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const logicalWidth = CONFIG.width;
     const logicalHeight = CONFIG.height;
-    this.canvas.width = Math.round(logicalWidth * dpr);
-    this.canvas.height = Math.round(logicalHeight * dpr);
+    const rect = this.canvas.getBoundingClientRect?.() || {};
+    const renderSize = canvasRenderSize({
+      cssWidth: rect.width,
+      cssHeight: rect.height,
+      logicalWidth,
+      logicalHeight,
+      devicePixelRatio: window.devicePixelRatio || 1,
+      touchInput: touchInputDetected(window)
+    });
+    if (this.canvas.width !== renderSize.pixelWidth) this.canvas.width = renderSize.pixelWidth;
+    if (this.canvas.height !== renderSize.pixelHeight) this.canvas.height = renderSize.pixelHeight;
     this.canvas.dataset.logicalWidth = logicalWidth;
     this.canvas.dataset.logicalHeight = logicalHeight;
     this.canvas.style.aspectRatio = `${logicalWidth} / ${logicalHeight}`;
-    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.ctx.setTransform(renderSize.scaleX, 0, 0, renderSize.scaleY, 0, 0);
     this.viewportWidth = logicalWidth;
     this.viewportHeight = logicalHeight;
   }

@@ -47,12 +47,13 @@
 
 .mobile-weapon-buttons {
   position: absolute;
-  right: max(25px, env(safe-area-inset-right));
-  bottom: max(142px, calc(env(safe-area-inset-bottom) + 142px));
-  display: flex;
-  gap: 7px;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(118px, calc(env(safe-area-inset-bottom) + 118px));
+  display: none;
+  gap: 6px;
   pointer-events: auto;
 }
+.touch-input .mobile-weapon-buttons { display: flex; }
 .weapon-button {
   width: 46px;
   height: 46px;
@@ -63,16 +64,15 @@
   font-size: 20px;
   pointer-events: auto;
   touch-action: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
 }
 .weapon-button.active { border-color: var(--yellow); box-shadow: 0 0 18px rgba(245,209,66,0.28); }
 .weapon-button.locked { opacity: 0.35; filter: grayscale(1); }
-
-@media (hover: hover) and (pointer: fine) {
-  .mobile-weapon-buttons { display: none; }
-}
+.weapon-button:active:not(.locked) { filter: brightness(1.15); transform: scale(0.93); }
 
 @media (max-width: 760px), (max-height: 620px) {
   .weapon-rack { display: none; }
-  .mobile-weapon-buttons { right: max(22px, env(safe-area-inset-right)); bottom: max(144px, calc(env(safe-area-inset-bottom) + 144px)); }
-  .weapon-button { width: 42px; height: 42px; border-radius: 11px; font-size: 18px; }
+  .weapon-button { width: 46px; height: 46px; border-radius: 11px; font-size: 18px; }
 }

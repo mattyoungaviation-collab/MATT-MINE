@@ -26,9 +26,12 @@
   height: 100%;
   overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior-y: contain;
   scroll-behavior: smooth;
   scrollbar-color: rgba(244, 197, 66, 0.55) #080a0f;
   scrollbar-width: thin;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
 }
 
 .launch-nav {
@@ -1193,14 +1196,17 @@
 
   .launch-brand { font-size: 15px; }
   .launch-brand small { display: none; }
-  .launch-wallet-button { padding: 0 10px; }
+  .launch-wallet-button {
+    min-height: 44px;
+    padding: 0 10px;
+  }
   .launch-wallet-button .status-dot { display: none; }
   .launch-enter-button { display: none; }
 
   .launch-hero {
-    min-height: 760px;
-    align-items: flex-start;
-    padding: 114px 20px 32px;
+    min-height: 0;
+    display: block;
+    padding: 108px 20px 32px;
   }
 
   .launch-hero-art {
@@ -1243,11 +1249,10 @@
   }
 
   .launch-daily-card {
-    position: absolute;
-    left: 20px;
-    right: 20px;
-    bottom: 28px;
-    width: auto;
+    position: relative;
+    inset: auto;
+    width: 100%;
+    margin-top: 24px;
   }
 
   .launch-scroll-cue { display: none; }

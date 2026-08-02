@@ -13,6 +13,8 @@ export class InputController {
     this.mobileDashQueued = false;
     this.mobileWeaponQueued = null;
     this.joystickPointerId = null;
+    this.mobileAttackPointerId = null;
+    this.mobileKnob = null;
     this.keybindings = defaultKeybindings();
     this.controllerProfile = defaultControllerProfile();
     this.gamepad = {
@@ -112,9 +114,7 @@ export class InputController {
       this.keys.clear();
       this.pressed.clear();
       this.pointer.down = false;
-      this.mobileAttack = false;
-      this.mobileDashQueued = false;
-      this.mobileWeaponQueued = null;
+      this.resetMobileInput();
     });
   }
 
@@ -143,15 +143,15 @@ export class InputController {
     const attack = document.querySelector('#attack-button');
     const dash = document.querySelector('#dash-button');
     if (!joystick || !knob || !attack) return;
+    this.mobileKnob = knob;
 
     const updateJoystick = (event) => {
-      const touch = [...event.changedTouches].find((item) => item.identifier === this.joystickPointerId);
-      if (!touch) return;
+      if (event.pointerId !== this.joystickPointerId) return;
       const rect = joystick.getBoundingClientRect();
       const centerX = rect.left + rect.width / 2;
       const centerY = rect.top + rect.height / 2;
-      const dx = touch.clientX - centerX;
-      const dy = touch.clientY - centerY;
+      const dx = event.clientX - centerX;
+      const dy = event.clientY - centerY;
       const length = Math.hypot(dx, dy) || 1;
       const max = rect.width * 0.32;
       const scale = Math.min(1, max / length);
@@ -162,45 +162,64 @@ export class InputController {
       this.mobileMove.y = clamp(dy / max, -1, 1);
     };
 
-    joystick.addEventListener('touchstart', (event) => {
-      this.joystickPointerId = event.changedTouches[0].identifier;
+    joystick.addEventListener('pointerdown', (event) => {
+      if (this.joystickPointerId !== null) return;
+      this.joystickPointerId = event.pointerId;
+      joystick.setPointerCapture?.(event.pointerId);
       updateJoystick(event);
       event.preventDefault();
-    }, { passive: false });
-    joystick.addEventListener('touchmove', (event) => {
+    });
+    joystick.addEventListener('pointermove', (event) => {
       updateJoystick(event);
       event.preventDefault();
-    }, { passive: false });
+    });
     const endJoystick = (event) => {
-      if (![...event.changedTouches].some((item) => item.identifier === this.joystickPointerId)) return;
+      if (event.pointerId !== this.joystickPointerId) return;
+      if (event.type !== 'lostpointercapture') {
+        joystick.releasePointerCapture?.(event.pointerId);
+      }
       this.joystickPointerId = null;
       this.mobileMove.x = 0;
       this.mobileMove.y = 0;
       knob.style.transform = 'translate(0, 0)';
     };
-    joystick.addEventListener('touchend', endJoystick);
-    joystick.addEventListener('touchcancel', endJoystick);
+    joystick.addEventListener('pointerup', endJoystick);
+    joystick.addEventListener('pointercancel', endJoystick);
+    joystick.addEventListener('lostpointercapture', endJoystick);
 
-    const setAttack = (value) => (event) => {
-      this.mobileAttack = value;
+    attack.addEventListener('pointerdown', (event) => {
+      if (this.mobileAttackPointerId !== null) return;
+      this.mobileAttackPointerId = event.pointerId;
+      attack.setPointerCapture?.(event.pointerId);
+      this.mobileAttack = true;
+      event.preventDefault();
+    });
+    const endAttack = (event) => {
+      if (event.pointerId !== this.mobileAttackPointerId) return;
+      if (event.type !== 'lostpointercapture') {
+        attack.releasePointerCapture?.(event.pointerId);
+      }
+      this.mobileAttackPointerId = null;
+      this.mobileAttack = false;
       event.preventDefault();
     };
-    attack.addEventListener('touchstart', setAttack(true), { passive: false });
-    attack.addEventListener('touchend', setAttack(false), { passive: false });
-    attack.addEventListener('touchcancel', setAttack(false), { passive: false });
+    attack.addEventListener('pointerup', endAttack);
+    attack.addEventListener('pointercancel', endAttack);
+    attack.addEventListener('lostpointercapture', endAttack);
 
     for (const button of document.querySelectorAll('.weapon-button')) {
-      button.addEventListener('touchstart', (event) => {
+      button.addEventListener('pointerdown', (event) => {
+        if (button.classList.contains('locked')) return;
         this.mobileWeaponQueued = button.dataset.weapon || null;
         event.preventDefault();
-      }, { passive: false });
+      });
     }
 
     if (dash) {
-      dash.addEventListener('touchstart', (event) => {
+      dash.addEventListener('pointerdown', (event) => {
         this.mobileDashQueued = true;
         event.preventDefault();
-      }, { passive: false });
+      });
     }
   }
 
@@ -228,14 +247,20 @@ export class InputController {
     this.keys.clear();
     this.pressed.clear();
     this.pointer.down = false;
+    this.resetMobileInput();
+    this.gamepad.previous = [];
+    this.gamepad.current = [];
+  }
+
+  resetMobileInput() {
     this.mobileMove.x = 0;
     this.mobileMove.y = 0;
     this.mobileAttack = false;
     this.mobileDashQueued = false;
     this.mobileWeaponQueued = null;
     this.joystickPointerId = null;
-    this.gamepad.previous = [];
-    this.gamepad.current = [];
+    this.mobileAttackPointerId = null;
+    if (this.mobileKnob?.style) this.mobileKnob.style.transform = 'translate(0, 0)';
   }
 
   consumeWeaponSelection() {
