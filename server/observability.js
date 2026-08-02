@@ -19,7 +19,7 @@ export function observeHttpRequest(request, response) {
       path: url.pathname,
       status: response.statusCode,
       durationMs: Math.round((performance.now() - startedAt) * 100) / 100,
-      client: safeIdentifier(request.socket.remoteAddress || 'unknown')
+      client: safeIdentifier(request.socket?.remoteAddress || 'unknown')
     };
     // Never log request bodies, cookies, Authorization, signatures, or keys.
     console.log(JSON.stringify(event));
