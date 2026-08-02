@@ -225,6 +225,30 @@ test('Arena transcript capacity covers every fixed input step of the full 20-min
   }, fullRunInputSteps + 1));
 });
 
+test('Arena replay accepts only an authoritative final-tick auto-extraction', () => {
+  const challenge = {
+    ...buildArenaChallenge('b'.repeat(64)),
+    maxTicks: 40
+  };
+  const replayed = replayArenaTranscript(challenge, [
+    { seq: 1, tick: 40, type: 'command', command: 'time_limit' },
+    { seq: 2, tick: 40, type: 'finish' }
+  ], { requireTerminal: true });
+
+  assert.equal(replayed.terminal, true);
+  assert.equal(replayed.extracted, true);
+  assert.equal(replayed.timeLimitReached, true);
+  assert.equal(replayed.elapsedMs, 40);
+
+  assert.throws(
+    () => replayArenaTranscript(challenge, [
+      { seq: 1, tick: 20, type: 'command', command: 'time_limit' },
+      { seq: 2, tick: 20, type: 'finish' }
+    ], { requireTerminal: true }),
+    (error) => error.code === 'arena_time_limit_invalid'
+  );
+});
+
 test('Daily Arena replay uses the exact Competition Studio character snapshot', () => {
   const replayed = replayArenaTranscript(buildArenaChallenge('c'.repeat(64), {
     playerMaxHealth: 100,
@@ -674,6 +698,10 @@ test('reviewed input replay enables paid Arena only when live mode is explicitly
   assert.equal(arena.publicConfig().replayReady, true);
   assert.equal(arena.publicConfig().verificationMode, 'deterministic-input-replay');
   assert.equal(arena.publicConfig().maxTranscriptEvents, ARENA_MAX_EVENTS);
+  assert.equal(arena.publicConfig().roundDurationSeconds, 20 * 60);
+  assert.equal(arena.publicConfig().finalizationGraceSeconds, 5 * 60);
+  assert.equal(arena.publicConfig().runTtlSeconds, 25 * 60);
+  assert.equal(arena.publicConfig().entryCutoffSeconds, 25 * 60);
   const quote = await arena.quoteEntry(PLAYER, {});
   assert.equal(quote.quote.transactions.length, 1);
 });
@@ -924,7 +952,7 @@ test('paid entry, one-time run token, raw controls, server replay, and leaderboa
   assert.equal(recoveryRetry.leaderboard.playerScore, finished.result.score);
 });
 
-test('entry cutoff reserves run TTL plus confirmation buffer and confirmation stays bound to its event day across midnight', async () => {
+test('entry cutoff reserves the complete timed run and confirmation stays bound to its event day across midnight', async () => {
   const cutoffStore = await new MemoryArenaStore().init();
   await cutoffStore.ensureDay(dayRecord({ chainStatus: 1, configurationState: 'confirmed' }));
   let quoteCalled = false;

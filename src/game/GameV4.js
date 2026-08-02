@@ -38,6 +38,9 @@ export class MattMineGame extends V3MattMineGame {
       endlessSnapshot: context.endlessSnapshot && typeof context.endlessSnapshot === 'object' ? { ...context.endlessSnapshot } : null,
       competitionSnapshot,
       startingDepth,
+      roundDurationMs: context.mode === 'arena'
+        ? normalizeRoundDuration(context.roundDurationMs)
+        : 0,
       allowPaidRevive: context.allowPaidRevive === true,
       reviveInvulnerabilitySeconds: Math.max(0, Number(context.reviveInvulnerabilitySeconds || 3)),
       tuning: context.tuning && typeof context.tuning === 'object' ? { ...context.tuning } : {}
@@ -133,6 +136,15 @@ export class MattMineGame extends V3MattMineGame {
     } finally {
       this.input = originalInput;
     }
+    if (
+      record &&
+      this.runContext?.mode === 'arena' &&
+      this.runContext.roundDurationMs > 0 &&
+      Math.round((this.run?.elapsed || 0) * 1_000) >= this.runContext.roundDurationMs &&
+      !['ended', 'menu'].includes(this.state)
+    ) {
+      this.endArenaTimeLimit();
+    }
     return true;
   }
 
@@ -167,10 +179,16 @@ export class MattMineGame extends V3MattMineGame {
 
   updateHud() {
     const original = this.hooks.onHud;
+    const roundDurationMs = this.runContext?.mode === 'arena'
+      ? this.runContext.roundDurationMs || 0
+      : 0;
+    const roundElapsedMs = Math.round((this.run?.elapsed || 0) * 1_000);
     this.hooks.onHud = (stats) => original?.({
       ...stats,
       runMode: this.runContext?.mode || 'practice',
-      rewardWeight: this.runContext?.rewardWeight || 0
+      rewardWeight: this.runContext?.rewardWeight || 0,
+      roundDurationMs,
+      roundRemainingMs: Math.max(0, roundDurationMs - roundElapsedMs)
     });
     try {
       return super.updateHud();
@@ -242,6 +260,26 @@ export class MattMineGame extends V3MattMineGame {
     });
   }
 
+  endArenaTimeLimit(options = {}) {
+    const roundDurationMs = normalizeRoundDuration(
+      options.roundDurationMs ?? this.runContext?.roundDurationMs
+    );
+    const elapsedMs = Math.round((this.run?.elapsed || 0) * 1_000);
+    if (
+      this.runContext?.mode !== 'arena' ||
+      !this.run ||
+      !roundDurationMs ||
+      elapsedMs !== roundDurationMs ||
+      ['ended', 'menu'].includes(this.state)
+    ) {
+      return false;
+    }
+    if (options.record !== false) this.recordArenaCommand('time_limit');
+    this.run.timeLimitReached = true;
+    this.endRun(true);
+    return this.state === 'ended';
+  }
+
   applyPaidRevive(options = {}) {
     if (this.state !== 'awaitingrevive' || !this.player || this.paidReviveUsed) return false;
     if (options.record !== false) this.recordArenaCommand('revive');
@@ -309,7 +347,8 @@ export class MattMineGame extends V3MattMineGame {
       seed: this.runContext?.seed || '',
       day: this.runContext?.day || '',
       week: this.runContext?.week || '',
-      rewardWeight: this.runContext?.rewardWeight || 0
+      rewardWeight: this.runContext?.rewardWeight || 0,
+      timeLimitReached: this.run?.timeLimitReached === true
     });
     try {
       return super.endRun(extracted);
@@ -317,4 +356,13 @@ export class MattMineGame extends V3MattMineGame {
       this.hooks.onRunEnd = original;
     }
   }
+}
+
+function normalizeRoundDuration(value) {
+  const duration = Number(value);
+  return Number.isSafeInteger(duration) &&
+    duration > 0 &&
+    duration % ARENA_FIXED_STEP_MS === 0
+    ? duration
+    : 0;
 }

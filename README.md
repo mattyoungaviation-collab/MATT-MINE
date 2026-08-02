@@ -138,7 +138,7 @@ See [`docs/ARENA_PRODUCTION_WIRING_V19.md`](docs/ARENA_PRODUCTION_WIRING_V19.md)
 - Allow unlimited entries with no ceiling on the player-funded pool.
 - Route 100% of every accepted entry into the immutable daily prize pool: no burn, house fee, or Treasury cut.
 - Let the Treasury seed each UTC day with up to 10,000,000 MATT.
-- Require each day to be scheduled before it begins and close onchain entry 25 minutes before 00:00 UTC so every accepted payment has time for confirmation and a full run.
+- Require each day to be scheduled before it begins and close onchain entry 25 minutes before 00:00 UTC so a started run has 20 minutes of play plus five minutes to submit and finalize its score.
 - Count only each wallet's best valid daily score and pay at most one top-ten position per wallet.
 - Allocate the complete pool using 30% / 18% / 12% / 8% / 7% / 6% / 5.5% / 5% / 4.5% / 4%, normalized when fewer than ten wallets qualify.
 - Implement schedule, seed, settlement, and cancellation Safe Transaction Builder JSON generators behind the replay-readiness gate.

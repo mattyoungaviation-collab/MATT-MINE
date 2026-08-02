@@ -7,6 +7,7 @@ import {
   ARENA_PAYOUT_BPS,
   MATT_SCALE,
   arenaTimeRemaining,
+  formatArenaRoundTime,
   formatMattRaw,
   normalizeArenaConfig,
   normalizeArenaLeaderboard,
@@ -233,6 +234,14 @@ test('Arena transcript sends only changed raw controls and commands with ordered
   assert.equal(Object.hasOwn(calls[0].events[0], 'score'), false);
 });
 
+test('Arena round countdown rounds up partial seconds and stops at zero', () => {
+  assert.equal(formatArenaRoundTime(20 * 60_000), '20:00');
+  assert.equal(formatArenaRoundTime(60_001), '01:01');
+  assert.equal(formatArenaRoundTime(1), '00:01');
+  assert.equal(formatArenaRoundTime(0), '00:00');
+  assert.equal(formatArenaRoundTime(-5_000), '00:00');
+});
+
 test('Arena transcript batches long runs at the server maximum instead of replaying every 64 changes', async () => {
   const batches = [];
   const transcript = new ArenaTranscript({}, {
@@ -382,6 +391,8 @@ test('Arena screen promises the locked economic rules without test-token copy', 
   assert.match(html, /Every accepted entry · No ceiling/);
   assert.match(html, /100% distributed · 0 burned · 0 house fee/);
   assert.match(html, /MATT entry closes 23:35 UTC/);
+  assert.match(html, /id="arena-round-timer"/);
+  assert.match(html, /AUTO-EXTRACT AT ZERO/);
   assert.doesNotMatch(html, /TEST MATT/i);
 });
 

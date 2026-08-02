@@ -40,6 +40,7 @@ import {
 } from './game/passRewards.js';
 import {
   arenaTimeRemaining,
+  formatArenaRoundTime,
   formatMattRaw,
   normalizeArenaConfig,
   normalizeArenaLeaderboard,
@@ -139,6 +140,8 @@ const ui = {
   dashFill: $('#dash-fill'),
   dashMobileText: $('#dash-mobile-text'),
   runModeHud: $('#run-mode-hud'),
+  arenaRoundTimer: $('#arena-round-timer'),
+  arenaRoundTime: $('#arena-round-time'),
   weaponSlots: [...document.querySelectorAll('.weapon-slot')],
   weaponButtons: [...document.querySelectorAll('.weapon-button')],
   attackButton: $('#attack-button')
@@ -1093,6 +1096,22 @@ const game = new MattMineGame(canvas, profile, {
     ui.dashFill.style.width = `${Math.round(stats.dashReady * 100)}%`;
     ui.runModeHud.textContent = modeLabel(stats.runMode, stats.rewardWeight);
     ui.runModeHud.dataset.mode = stats.runMode;
+    const showArenaRoundTimer = stats.runMode === 'arena' && stats.roundDurationMs > 0;
+    if (ui.arenaRoundTimer) {
+      ui.arenaRoundTimer.hidden = !showArenaRoundTimer;
+      ui.arenaRoundTimer.classList.toggle(
+        'ending',
+        showArenaRoundTimer && stats.roundRemainingMs <= 60_000
+      );
+      ui.arenaRoundTimer.classList.toggle(
+        'critical',
+        showArenaRoundTimer && stats.roundRemainingMs <= 10_000
+      );
+    }
+    if (ui.arenaRoundTime && showArenaRoundTimer) {
+      const label = formatArenaRoundTime(stats.roundRemainingMs);
+      if (ui.arenaRoundTime.textContent !== label) ui.arenaRoundTime.textContent = label;
+    }
     if (ui.dashMobileText) ui.dashMobileText.textContent = stats.dashReady >= 0.999 ? 'DASH' : `${Math.ceil((1 - stats.dashReady) * 3)}s`;
     for (const slot of ui.weaponSlots) {
       const id = slot.dataset.weapon;
@@ -1159,8 +1178,16 @@ const game = new MattMineGame(canvas, profile, {
     const recorded = serverRun || arenaRun
       ? { ok: true, serverPending: true }
       : economy.apply(recordRun(economy.state, result));
-    $('#end-kicker').textContent = result.extracted ? 'EXTRACTION SUCCESSFUL' : 'THE MINE TOOK ITS CUT';
-    $('#end-title').textContent = result.extracted ? 'Loot Secured' : 'You Were Knocked Out';
+    $('#end-kicker').textContent = result.timeLimitReached
+      ? 'ARENA TIME EXPIRED'
+      : result.extracted
+        ? 'EXTRACTION SUCCESSFUL'
+        : 'THE MINE TOOK ITS CUT';
+    $('#end-title').textContent = result.timeLimitReached
+      ? 'Score Auto-Extracted'
+      : result.extracted
+        ? 'Loot Secured'
+        : 'You Were Knocked Out';
     $('#run-mode-result').textContent = modeLabel(mode, result.rewardWeight);
     $('#run-mode-result').dataset.mode = mode;
     $('#run-cosmetic-result').innerHTML = renderRunCosmeticResult();
@@ -1763,7 +1790,10 @@ function renderArena() {
   $('#arena-entry-count').textContent = formatNumber(player.entries);
   $('#arena-attempt-count').textContent = formatNumber(player.unusedAttempts);
   $('#arena-best-score').textContent = player.bestScore ? formatNumber(player.bestScore) : '—';
-  $('#arena-day-label').textContent = `${config.day} UTC · MATT entry closes 23:35 UTC · official runs close 00:00 UTC.`;
+  const entryCutoffLabel = config.entryCutoffAt
+    ? new Date(config.entryCutoffAt).toISOString().slice(11, 16)
+    : '23:35';
+  $('#arena-day-label').textContent = `${config.day} UTC · MATT entry closes ${entryCutoffLabel} UTC · official runs close 00:00 UTC.`;
 
   const canEnter =
     Boolean(serverPlayer) &&
@@ -2036,6 +2066,7 @@ async function startArenaRun() {
       seed: run.dailySeed || run.seed,
       day: run.day,
       rewardWeight: 0,
+      roundDurationMs: run.challenge?.maxTicks,
       tuning: run.challenge?.tuning || {},
       competitionSnapshot: arenaCompetitionSnapshot,
       characterId: arenaCompetitionSnapshot?.loadout?.characterId || 'matt',

@@ -11,6 +11,7 @@ import { applyMinePassGameplayBenefits } from './pass-benefits.js';
 import {
   ARENA_MAX_BATCH_EVENTS,
   ARENA_MAX_EVENTS,
+  ARENA_MAX_TICKS,
   ARENA_TICK_MS,
   ARENA_TRANSCRIPT_VERSION,
   buildArenaChallenge,
@@ -31,9 +32,11 @@ import {
 import { createSafeTransactionBuilderFile } from './safe-transaction-builder.js';
 
 const DAY_MS = 86_400_000;
-const RUN_TTL_MS = 20 * 60_000;
+const ROUND_DURATION_MS = ARENA_MAX_TICKS;
+const RUN_FINALIZATION_GRACE_MS = 5 * 60_000;
+const RUN_TTL_MS = ROUND_DURATION_MS + RUN_FINALIZATION_GRACE_MS;
 const ENTRY_CONFIRMATION_BUFFER_MS = 5 * 60_000;
-const ENTRY_CUTOFF_WINDOW_MS = RUN_TTL_MS + ENTRY_CONFIRMATION_BUFFER_MS;
+const ENTRY_CUTOFF_WINDOW_MS = ROUND_DURATION_MS + ENTRY_CONFIRMATION_BUFFER_MS;
 const EVENT_CLOCK_TOLERANCE_MS = 750;
 const MIN_ENTRY_FEE_RAW = 25_000n * 10n ** 18n;
 const MAX_ENTRY_FEE_RAW = 1_000_000n * 10n ** 18n;
@@ -90,7 +93,9 @@ export class DailyArenaService {
       chain: this.chain.publicConfig(),
       transcriptVersion: ARENA_TRANSCRIPT_VERSION,
       tickMs: ARENA_TICK_MS,
+      roundDurationSeconds: ROUND_DURATION_MS / 1_000,
       runTtlSeconds: RUN_TTL_MS / 1_000,
+      finalizationGraceSeconds: RUN_FINALIZATION_GRACE_MS / 1_000,
       maxTranscriptEvents: ARENA_MAX_EVENTS,
       entryConfirmationBufferSeconds: ENTRY_CONFIRMATION_BUFFER_MS / 1_000,
       entryCutoffSeconds: ENTRY_CUTOFF_WINDOW_MS / 1_000,
