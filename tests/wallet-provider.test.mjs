@@ -30,8 +30,15 @@ test('the browser wallet resolver initializes one Ronin Mainnet WalletConnect se
   const provider = {
     session: null,
     request: async () => [],
+    on(event, handler) {
+      if (event === 'display_uri') this.displayUriHandler = handler;
+    },
+    removeListener(event, handler) {
+      if (event === 'display_uri' && this.displayUriHandler === handler) this.displayUriHandler = null;
+    },
     async connect() {
       connectCalls += 1;
+      this.displayUriHandler?.('wc:test-pairing@2?relay-protocol=irn');
       this.session = { topic: 'connected' };
     }
   };
@@ -40,10 +47,13 @@ test('the browser wallet resolver initializes one Ronin Mainnet WalletConnect se
     return provider;
   };
 
+  let displayUri = '';
   const first = await resolveRoninProvider({
     windowObject,
     config: { walletConnect: { enabled: true, projectId: PROJECT_ID } },
-    createWalletConnectProvider
+    createWalletConnectProvider,
+    showQrModal: false,
+    onDisplayUri: (uri) => { displayUri = uri; }
   });
   const second = await resolveRoninProvider({
     windowObject,
@@ -56,11 +66,13 @@ test('the browser wallet resolver initializes one Ronin Mainnet WalletConnect se
   assert.equal(first.kind, 'walletconnect');
   assert.equal(initialized.length, 1);
   assert.equal(connectCalls, 1);
-  assert.deepEqual(initialized[0].chains, [2020]);
+  assert.deepEqual(initialized[0].optionalChains, [2020]);
+  assert.equal(initialized[0].chains, undefined);
   assert.equal(initialized[0].projectId, PROJECT_ID);
-  assert.equal(initialized[0].showQrModal, true);
+  assert.equal(initialized[0].showQrModal, false);
   assert.equal(initialized[0].qrModalOptions.enableMobileFullScreen, true);
   assert.equal(initialized[0].metadata.url, 'https://matt-mine.onrender.com');
+  assert.equal(displayUri, 'wc:test-pairing@2?relay-protocol=irn');
   resetWalletConnectProviderForTesting(windowObject);
 });
 

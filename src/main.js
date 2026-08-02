@@ -58,6 +58,11 @@ import { loadProfile, saveProfile } from './game/storage.js';
 import { loadGameplayPreferences, saveGameplayPreferences } from './game/preferences.js';
 import { RoninWalletAdapter } from './game/walletAdapter.js';
 import { mobileLandscapeRequired, touchInputDetected } from './game/mobile.js';
+import {
+  needsMobileWalletConnectHandoff,
+  rememberRoninWalletChoice,
+  roninWalletPairingUrl
+} from './game/mobileWalletConnect.js';
 
 const $ = (selector) => document.querySelector(selector);
 const app = $('#app');
@@ -69,6 +74,9 @@ const mobileOrientationGate = $('#mobile-orientation-gate');
 const mobileOrientationTitle = $('#mobile-orientation-title');
 const mobileOrientationCopy = $('#mobile-orientation-copy');
 const mobileOrientationCancel = $('#mobile-orientation-cancel');
+const mobileWalletConnectDialog = $('#walletconnect-mobile-dialog');
+const mobileWalletConnectOpenRonin = $('#walletconnect-open-ronin');
+const mobileWalletConnectCancel = $('#walletconnect-mobile-cancel');
 const isLocalPreview = ['localhost', '127.0.0.1', '[::1]'].includes(globalThis.location?.hostname);
 const economy = new LocalEconomyStore();
 const PRACTICE_CLAIM_PLACEHOLDER_PRICE = 5000;
@@ -539,7 +547,7 @@ async function connectWallet(options = {}) {
   if (walletBusy) return false;
   walletBusy = true;
   updateMenu();
-  const walletConnectWatchdog = options.forceWalletConnect === true
+  const walletConnectWatchdog = options.forceWalletConnect === true && options.showQrModal !== false
     ? setTimeout(() => {
         if (!document.querySelector('w3m-modal.open')) {
           toast('Wallet chooser did not open. In Safari, turn off content blockers for this site, reload, and try again.');
@@ -568,6 +576,23 @@ async function connectWallet(options = {}) {
     if (walletConnectWatchdog) clearTimeout(walletConnectWatchdog);
     walletBusy = false;
     updateMenu();
+  }
+}
+
+function openMobileWalletConnect(pairingUri) {
+  mobileWalletConnectOpenRonin.href = roninWalletPairingUrl(pairingUri);
+  if (typeof mobileWalletConnectDialog.showModal === 'function') {
+    if (!mobileWalletConnectDialog.open) mobileWalletConnectDialog.showModal();
+  } else {
+    mobileWalletConnectDialog.setAttribute('open', '');
+  }
+}
+
+function closeMobileWalletConnect() {
+  if (typeof mobileWalletConnectDialog.close === 'function' && mobileWalletConnectDialog.open) {
+    mobileWalletConnectDialog.close();
+  } else {
+    mobileWalletConnectDialog.removeAttribute('open');
   }
 }
 
@@ -1436,8 +1461,23 @@ $('#launch-wallet-button').addEventListener('click', () => {
 
 $('#launch-walletconnect-button').addEventListener('click', () => {
   if (serverPlayer) return;
-  toast('Opening WalletConnect chooserâ€¦');
-  void connectWallet({ forceWalletConnect: true });
+  const mobileHandoff = needsMobileWalletConnectHandoff(window);
+  toast(mobileHandoff ? 'Preparing Ronin Wallet...' : 'Opening WalletConnect chooser...');
+  void connectWallet({
+    forceWalletConnect: true,
+    showQrModal: !mobileHandoff,
+    onDisplayUri: mobileHandoff ? openMobileWalletConnect : undefined
+  }).finally(closeMobileWalletConnect);
+});
+
+mobileWalletConnectOpenRonin.addEventListener('click', () => {
+  rememberRoninWalletChoice(window);
+  toast('Approve the connection in Ronin Wallet, then return to Safari.');
+});
+
+mobileWalletConnectCancel.addEventListener('click', () => {
+  closeMobileWalletConnect();
+  window.location.reload();
 });
 
 $('#home-button').addEventListener('click', () => openLaunch(true));

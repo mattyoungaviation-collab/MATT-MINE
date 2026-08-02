@@ -1630,3 +1630,42 @@ button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{ou
   .arena-table-wrap th:nth-child(4),
   .arena-table-wrap td:nth-child(4) { display: none; }
 }
+
+.walletconnect-mobile-dialog {
+  width: min(420px, calc(100vw - 24px));
+  margin: auto;
+  padding: 0;
+  border: 1px solid rgba(90, 190, 255, 0.35);
+  border-radius: 20px;
+  background: #0b1019;
+  color: #f5f8ff;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.72), 0 0 45px rgba(78, 155, 255, 0.14);
+}
+
+.walletconnect-mobile-dialog::backdrop {
+  background: rgba(3, 6, 12, 0.82);
+  backdrop-filter: blur(8px);
+}
+
+.walletconnect-mobile-card {
+  display: grid;
+  gap: 14px;
+  padding: 24px;
+  text-align: center;
+}
+
+.walletconnect-mobile-card h2,
+.walletconnect-mobile-card p { margin: 0; }
+.walletconnect-mobile-card p { color: #c8d0dc; line-height: 1.55; }
+.walletconnect-mobile-card .walletconnect-ios-note { color: #8390a3; font-size: 12px; }
+.walletconnect-open-ronin {
+  display: grid;
+  place-items: center;
+  min-height: 52px;
+  text-decoration: none;
+}
+
+@media (max-width: 700px) {
+  .walletconnect-mobile-dialog { margin-bottom: max(18px, env(safe-area-inset-bottom)); }
+  .walletconnect-mobile-card { padding: 22px 18px; }
+}

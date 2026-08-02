@@ -25,23 +25,30 @@ export async function resolveRoninProvider(options = {}) {
   const provider = await walletConnectProvider({
     windowObject,
     projectId,
-    createProvider: options.createWalletConnectProvider
+    createProvider: options.createWalletConnectProvider,
+    showQrModal: options.showQrModal !== false
   });
   if (!provider?.request) {
     throw new Error('WalletConnect did not provide a compatible Ronin wallet connection.');
   }
 
   if (options.connect !== false && !provider.session) {
+    const displayUriHandler = typeof options.onDisplayUri === 'function'
+      ? (uri) => options.onDisplayUri(String(uri || ''))
+      : null;
+    if (displayUriHandler) provider.on?.('display_uri', displayUriHandler);
     try {
       await provider.connect();
     } catch (error) {
       throw new Error(walletConnectionError(error));
+    } finally {
+      if (displayUriHandler) provider.removeListener?.('display_uri', displayUriHandler);
     }
   }
   return { provider, kind: 'walletconnect' };
 }
 
-async function walletConnectProvider({ windowObject, projectId, createProvider }) {
+async function walletConnectProvider({ windowObject, projectId, createProvider, showQrModal }) {
   const cached = walletConnectStates.get(windowObject);
   if (cached?.projectId === projectId) return cached.promise;
 
@@ -50,8 +57,8 @@ async function walletConnectProvider({ windowObject, projectId, createProvider }
       const factory = createProvider || await loadWalletConnectFactory();
       return factory({
         projectId,
-        chains: [RONIN_MAINNET_CHAIN_ID],
-        showQrModal: true,
+        optionalChains: [RONIN_MAINNET_CHAIN_ID],
+        showQrModal,
         metadata: walletConnectMetadata(windowObject),
         qrModalOptions: {
           themeMode: 'dark',
