@@ -31,6 +31,7 @@ export function defaultServerState() {
     revivePayments: {},
     passPurchases: {},
     paidEntitlements: {},
+    arenaPassXpAwards: {},
     gameTuning: defaultGameTuning(),
     expansionConfig: defaultExpansionConfig(),
     weeklyCompetition: { weeks: {} },
@@ -72,6 +73,7 @@ export function normalizeServerState(input = {}) {
     revivePayments: normalizeRecords(source.revivePayments, 25_000),
     passPurchases: normalizePassPurchases(source.passPurchases),
     paidEntitlements: normalizePaidEntitlements(source.paidEntitlements),
+    arenaPassXpAwards: normalizeArenaPassXpAwards(source.arenaPassXpAwards),
     gameTuning: normalizeGameTuning(migrateLegacyGameTuning(source.gameTuning, source.version)),
     expansionConfig: safeExpansionConfig(source.expansionConfig),
     weeklyCompetition: normalizeCompetitionStore(source.weeklyCompetition, 'weeks'),
@@ -411,6 +413,22 @@ function normalizeRecords(input, limit) {
     .filter(([, value]) => isRecord(value))
     .slice(-limit)
     .map(([key, value]) => [String(key).slice(0, 200), { ...value }]));
+}
+
+function normalizeArenaPassXpAwards(input) {
+  if (!isRecord(input)) return {};
+  return Object.fromEntries(Object.entries(input)
+    .filter(([runId, award]) =>
+      /^arena_run_[a-f0-9]{24}$/.test(runId) &&
+      isRecord(award) &&
+      isHexAddress(award.address)
+    )
+    .slice(-25_000)
+    .map(([runId, award]) => [runId, {
+      address: award.address.toLowerCase(),
+      xp: safeBoundedInteger(award.xp, 1_000),
+      awardedAt: safeTimestamp(award.awardedAt)
+    }]));
 }
 
 function migrateLegacyGameTuning(input, version) {

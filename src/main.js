@@ -652,9 +652,22 @@ async function submitArenaRun(run) {
       bestScore: leaderboard.playerScore ?? result.score ?? arenaPlayer.bestScore,
       rank: leaderboard.playerRank ?? arenaPlayer.rank
     });
+    if (serverPlayer && accepted.passProgress) {
+      serverPlayer.passProgress = accepted.passProgress;
+    }
+    if (paymentStatus && accepted.passProgress) {
+      paymentStatus.passProgress = accepted.passProgress;
+    }
+    applyPassInventory(accepted.passInventory);
+    const passXpCopy = accepted.passXpAwarded
+      ? ` · +${accepted.passXpAwarded} Pass XP`
+      : '';
+    const unlockedCopy = accepted.passRewardsUnlocked?.length
+      ? ` · UNLOCKED ${accepted.passRewardsUnlocked.map((reward) => reward.name).join(', ')}`
+      : '';
     $('#economy-result').innerHTML = `
       <strong>ARENA SCORE VERIFIED${arenaPlayer.rank ? ` · #${arenaPlayer.rank}` : ''}</strong>
-      <span>Authoritative score: ${formatNumber(result.score || arenaPlayer.bestScore)}</span>
+      <span>Authoritative score: ${formatNumber(result.score || arenaPlayer.bestScore)}${passXpCopy}${unlockedCopy}</span>
       <small>The signed transcript was replayed against today's deterministic challenge. Browser-reported score totals were not trusted.</small>
     `;
     toast('Daily Arena score verified');

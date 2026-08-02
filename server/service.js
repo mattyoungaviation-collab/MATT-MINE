@@ -58,6 +58,7 @@ import {
 
 const FREE_PASS_XP = 25;
 const PAID_PASS_XP = 100;
+const ARENA_PASS_XP = PAID_PASS_XP;
 const ADMIN_SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 const ADMIN_STEP_UP_TTL_MS = 5 * 60 * 1000;
 
@@ -1922,8 +1923,85 @@ export class MattMineService {
     if (result.accepted === false) {
       return result;
     }
+    const progression = result.progression;
+    assertApi(
+      progression?.runId === payload?.runId && /^arena_run_[a-f0-9]{24}$/.test(progression.runId),
+      500,
+      'arena_progression_snapshot_invalid',
+      'The verified Daily Arena run is missing its progression snapshot.'
+    );
+    const timestamp = this.now();
+    const passXpMultiplier = Number(progression.passXpMultiplier);
+    const passXpAwarded = progression.passActiveAtStart === true
+      ? Math.round(ARENA_PASS_XP * (
+          Number.isFinite(passXpMultiplier)
+            ? Math.max(0, Math.min(10, passXpMultiplier))
+            : 1
+        ))
+      : 0;
+    const passAward = await this.database.transact((currentState) => {
+      const currentWallet = requireWallet(currentState, session.address);
+      currentState.arenaPassXpAwards ||= {};
+      const existing = currentState.arenaPassXpAwards[progression.runId];
+      if (existing) {
+        assertApi(
+          existing.address === session.address,
+          409,
+          'arena_pass_xp_receipt_conflict',
+          'This Daily Arena progression receipt belongs to another wallet.'
+        );
+        return {
+          passXpAwarded: Number(existing.xp || 0),
+          passXpAlreadyAwarded: true,
+          passProgress: publicPassProgress(currentWallet),
+          passInventory: publicPassInventory(currentWallet),
+          passRewardsUnlocked: []
+        };
+      }
+      currentState.arenaPassXpAwards[progression.runId] = {
+        address: session.address,
+        xp: passXpAwarded,
+        awardedAt: timestamp
+      };
+      if (passXpAwarded > 0) {
+        currentWallet.passProgress.xp += passXpAwarded;
+        currentWallet.passProgress.updatedAt = timestamp;
+        currentWallet.updatedAt = timestamp;
+      }
+      const passRewardsUnlocked = passXpAwarded > 0
+        ? syncPassRewardsForWallet(currentWallet, timestamp)
+        : [];
+      if (passXpAwarded > 0) {
+        const score = Math.max(0, Number(result.result?.score || 0));
+        addPlayerActivity(
+          currentWallet,
+          'ARENA_PASS_XP_AWARDED',
+          `${progression.runId} score ${score} +${passXpAwarded} Pass XP`,
+          timestamp
+        );
+        addAudit(
+          currentState,
+          session.address,
+          'ARENA_PASS_XP_AWARDED',
+          `${progression.runId}: score ${score}; +${passXpAwarded} Pass XP`,
+          timestamp
+        );
+      }
+      return {
+        passXpAwarded,
+        passXpAlreadyAwarded: false,
+        passProgress: publicPassProgress(currentWallet),
+        passInventory: publicPassInventory(currentWallet),
+        passRewardsUnlocked
+      };
+    });
+    wallet.passProgress.xp = passAward.passProgress.xp;
+    wallet.passProgress.updatedAt = passAward.passProgress.updatedAt;
+    wallet.passInventory = structuredClone(passAward.passInventory);
+    const { progression: _progression, ...publicResult } = result;
     return {
-      ...result,
+      ...publicResult,
+      ...passAward,
       leaderboard: enrichLeaderboardAppearances(result.leaderboard, state)
     };
   }
