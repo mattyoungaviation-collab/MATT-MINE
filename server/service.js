@@ -1113,7 +1113,7 @@ export class MattMineService {
 
   async publicMineSlots() {
     const timestamp = this.now();
-    const state = await this.database.read();
+    const state = await this.database.readPublicMineState?.() || await this.database.read();
     return {
       generatedAt: timestamp,
       slots: COMPETITION_SLOTS.map((definition) => {
@@ -1127,7 +1127,9 @@ export class MattMineService {
     const definition = COMPETITION_SLOTS.find((slot) => slot.id === String(slotId || ''));
     assertApi(definition, 404, 'mine_slot_unknown', 'That mine does not exist.');
     const timestamp = this.now();
-    const state = await this.database.read();
+    const state = definition.id === 'arena' && this.database.readPublicMineState
+      ? await this.database.readPublicMineState()
+      : await this.database.read();
     const snapshot = resolveCompetitionSnapshot(state.competitionStudio, definition.id, timestamp);
     let leaderboard = null;
     if (definition.id === 'daily' || definition.id === 'pass') {
@@ -2036,7 +2038,7 @@ export class MattMineService {
 
   async arenaLeaderboard(day = '') {
     this.assertArenaEnabled();
-    const state = await this.database.read();
+    const state = await this.database.readPublicMineState?.() || await this.database.read();
     const leaderboard = await this.arenaService.leaderboard(day, suspendedWalletAddresses(state));
     return enrichLeaderboardAppearances(leaderboard, state);
   }
@@ -2121,7 +2123,7 @@ export class MattMineService {
 
   async arenaPlayer(token, options = {}) {
     this.assertArenaEnabled();
-    const { session, state } = await this.authenticateWithState(token);
+    const { session, state } = await this.authenticateWithState(token, { arenaOnly: true });
     const wallet = requireWallet(state, session.address);
     if (!options.allowIdentityMissing) assertIdentityReady(wallet);
     if (!options.allowSuspended) {
@@ -2145,10 +2147,12 @@ export class MattMineService {
     return (await this.authenticateWithState(token)).session;
   }
 
-  async authenticateWithState(token) {
+  async authenticateWithState(token, options = {}) {
     const rawToken = assertToken(token);
     const tokenHash = hashToken(rawToken);
-    const state = await this.database.read();
+    const state = options.arenaOnly && this.database.readArenaPlayerState
+      ? await this.database.readArenaPlayerState(tokenHash)
+      : await this.database.read();
     const session = state.sessions[tokenHash];
     assertApi(session, 401, 'session_missing', 'Sign in with Ronin Wallet to continue.');
     assertApi(session.type !== 'admin', 401, 'player_session_required', 'A player wallet session is required.');

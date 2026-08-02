@@ -70,7 +70,7 @@ export function normalizeServerState(input = {}) {
     wallets: normalizeWallets(source.wallets),
     challenges: normalizeRecords(source.challenges, 2_000),
     sessions: normalizeRecords(source.sessions, 10_000),
-    runs: normalizeRecords(source.runs, 25_000),
+    runs: normalizeRuns(source.runs),
     arenaReviveRuns: normalizeRecords(source.arenaReviveRuns, 25_000),
     revivePayments: normalizeRecords(source.revivePayments, 25_000),
     passPurchases: normalizePassPurchases(source.passPurchases),
@@ -415,6 +415,43 @@ function normalizeRecords(input, limit) {
     .filter(([, value]) => isRecord(value))
     .slice(-limit)
     .map(([key, value]) => [String(key).slice(0, 200), { ...value }]));
+}
+
+function normalizeRuns(input) {
+  if (!isRecord(input)) return {};
+  return Object.fromEntries(Object.entries(input)
+    .filter(([, value]) => isRecord(value))
+    .slice(-25_000)
+    .map(([key, value]) => {
+      const runId = String(key).slice(0, 200);
+      if (value.status === 'active') return [runId, { ...value }];
+      return [runId, {
+        id: String(value.id || runId).slice(0, 200),
+        tokenHash: typeof value.tokenHash === 'string' ? value.tokenHash : '',
+        address: typeof value.address === 'string' ? value.address.toLowerCase() : '',
+        mode: typeof value.mode === 'string' ? value.mode : '',
+        seed: typeof value.seed === 'string' ? value.seed : '',
+        day: typeof value.day === 'string' ? value.day : '',
+        week: typeof value.week === 'string' ? value.week : '',
+        status: typeof value.status === 'string' ? value.status : '',
+        startedAt: safeTimestamp(value.startedAt),
+        expiresAt: safeTimestamp(value.expiresAt),
+        finishedAt: safeTimestamp(value.finishedAt),
+        passActiveAtStart: value.passActiveAtStart === true,
+        passXpAwarded: safeBoundedInteger(value.passXpAwarded, 1_000_000),
+        result: isRecord(value.result) ? { ...value.result } : null,
+        characterId: typeof value.characterId === 'string' ? value.characterId.slice(0, 80) : 'matt',
+        competitionSlotId: typeof value.competitionSlotId === 'string'
+          ? value.competitionSlotId.slice(0, 80)
+          : null,
+        competitionSnapshot: typeof value.competitionSnapshot?.id === 'string'
+          ? { id: value.competitionSnapshot.id.slice(0, 200) }
+          : null,
+        adminTerminationReason: typeof value.adminTerminationReason === 'string'
+          ? value.adminTerminationReason.slice(0, 500)
+          : ''
+      }];
+    }));
 }
 
 function normalizeArenaPassXpAwards(input) {

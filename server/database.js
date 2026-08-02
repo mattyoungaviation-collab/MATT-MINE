@@ -32,6 +32,14 @@ export class MemoryDatabase {
     return structuredClone(this.state);
   }
 
+  async readPublicMineState() {
+    return this.read();
+  }
+
+  async readArenaPlayerState() {
+    return this.read();
+  }
+
   async transact(mutator) {
     const operation = this.queue.then(async () => {
       const draft = structuredClone(this.state);
@@ -220,6 +228,41 @@ export class PostgresDatabase {
       'SELECT data FROM matt_mine_state WHERE id = 1'
     );
     return normalizeServerState(parseJsonValue(result.rows[0]?.data));
+  }
+
+  async readPublicMineState() {
+    await this.init();
+    const result = await this.query(
+      `SELECT data->'competitionStudio' AS competition_studio,
+              data->'operations' AS operations,
+              data->'wallets' AS wallets
+       FROM matt_mine_state WHERE id = 1`
+    );
+    const row = result.rows[0] || {};
+    return normalizeServerState({
+      competitionStudio: parseJsonValue(row.competition_studio),
+      operations: parseJsonValue(row.operations),
+      wallets: parseJsonValue(row.wallets)
+    });
+  }
+
+  async readArenaPlayerState(tokenHash) {
+    await this.init();
+    const result = await this.query(
+      `SELECT data->'sessions'->$1 AS session,
+              data->'wallets'->(data->'sessions'->$1->>'address') AS wallet,
+              data->'operations' AS operations
+       FROM matt_mine_state WHERE id = 1`,
+      [tokenHash]
+    );
+    const row = result.rows[0] || {};
+    const session = parseJsonValue(row.session);
+    const wallet = parseJsonValue(row.wallet);
+    return normalizeServerState({
+      sessions: session ? { [tokenHash]: session } : {},
+      wallets: session?.address && wallet ? { [session.address]: wallet } : {},
+      operations: parseJsonValue(row.operations)
+    });
   }
 
   async query(sql, params = []) {
