@@ -71,6 +71,7 @@ export class MattMineService {
     this.paymentVerifier = options.paymentVerifier || null;
     this.rewardManager = options.rewardManager || null;
     this.arenaService = options.arenaService || null;
+    this.arenaLeaderboardRequests = new Map();
     this.mainnetTransactionsEnabled =
       options.mainnetTransactionsEnabled === true && Boolean(this.paymentVerifier);
     const configuredChainId = Number(options.chainId ?? RONIN_CHAINS.MAINNET);
@@ -2038,9 +2039,22 @@ export class MattMineService {
 
   async arenaLeaderboard(day = '') {
     this.assertArenaEnabled();
-    const state = await this.database.readPublicMineState?.() || await this.database.read();
-    const leaderboard = await this.arenaService.leaderboard(day, suspendedWalletAddresses(state));
-    return enrichLeaderboardAppearances(leaderboard, state);
+    const requestKey = String(day || 'current').slice(0, 40);
+    const pending = this.arenaLeaderboardRequests.get(requestKey);
+    if (pending) return structuredClone(await pending);
+    const request = (async () => {
+      const state = await this.database.readPublicMineState?.() || await this.database.read();
+      const leaderboard = await this.arenaService.leaderboard(day, suspendedWalletAddresses(state));
+      return enrichLeaderboardAppearances(leaderboard, state);
+    })();
+    this.arenaLeaderboardRequests.set(requestKey, request);
+    try {
+      return structuredClone(await request);
+    } finally {
+      if (this.arenaLeaderboardRequests.get(requestKey) === request) {
+        this.arenaLeaderboardRequests.delete(requestKey);
+      }
+    }
   }
 
   async arenaMe(token, day = '') {

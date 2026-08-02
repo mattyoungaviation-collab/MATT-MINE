@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { PostgresDatabase } from '../server/database.js';
+import { MattMineService } from '../server/service.js';
 import { defaultServerState, defaultWalletState, normalizeServerState } from '../server/state.js';
 
 const ADDRESS = '0x1111111111111111111111111111111111111111';
@@ -75,4 +76,30 @@ test('Arena authentication reads only its session, wallet, and operations from P
   assert.equal(queries.length, 1);
   assert.match(queries[0].sql, /data->'sessions'->\$1/);
   await database.close();
+});
+
+test('concurrent Arena leaderboard requests share one database and chain snapshot', async () => {
+  let stateReads = 0;
+  let leaderboardReads = 0;
+  const database = {
+    async readPublicMineState() {
+      stateReads += 1;
+      return normalizeServerState({});
+    }
+  };
+  const arenaService = {
+    async leaderboard() {
+      leaderboardReads += 1;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return { day: '2026-08-02', rows: [] };
+    }
+  };
+  const service = new MattMineService(database, { arenaService });
+
+  const results = await Promise.all(Array.from({ length: 30 }, () => service.arenaLeaderboard('2026-08-02')));
+
+  assert.equal(results.length, 30);
+  assert.equal(stateReads, 1);
+  assert.equal(leaderboardReads, 1);
+  assert.notEqual(results[0], results[1]);
 });
