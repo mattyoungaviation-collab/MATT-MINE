@@ -739,7 +739,8 @@ test('confirmed Ronin purchases create one-time paid-run entitlements and daily-
   const paymentVerifier = createFakePaymentVerifier();
   const harness = createHarness({
     mainnetTransactionsEnabled: true,
-    paymentVerifier
+    paymentVerifier,
+    eligibilityPolicy: new PaidCompetitionEligibilityPolicy()
   });
   const { session } = await signIn(harness);
   assert.equal(harness.service.config().realPaymentsEnabled, true);

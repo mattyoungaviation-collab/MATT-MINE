@@ -116,7 +116,7 @@ Remaining test gaps: unknown-COMMIT fault injection, begin/write/commit disconne
 
 ### 12. Eligibility
 
-Paid competition is denied in production unless counsel approval and an immutable rules version are configured. A mode listed in `MATT_MINE_PUBLIC_PAID_MODES` uses one-time per-wallet age, jurisdiction, Official Rules, sanctions, fraud, automation, cheating, and location acknowledgements. The server signs the acknowledgement before payment, requires that receipt at confirmation, and records the exact rules version and hash on every Arena entry. Modes not listed remain on the server wallet allowlist. Practice remains available.
+Arena eligibility is denied in production unless counsel approval and an immutable rules version are configured. An Arena mode listed in `MATT_MINE_PUBLIC_PAID_MODES` uses one-time per-wallet age, jurisdiction, Official Rules, sanctions, fraud, automation, cheating, and location acknowledgements. The server signs the acknowledgement before payment, requires that receipt at confirmation, and records the exact rules version and hash on every Arena entry. Pass Mine is public and does not use this eligibility policy; its active Pass, paid-run entitlement, wallet, payment, pause, and suspension checks remain server-enforced. Practice remains available.
 
 ## Environment variables
 
@@ -129,7 +129,7 @@ New variables:
 - `MATT_MINE_ELIGIBILITY_RULES_VERSION`: immutable approved rules identifier.
 - `MATT_MINE_ELIGIBILITY_RULES_SHA256`: SHA-256 of the published approved rules.
 - `MATT_MINE_ELIGIBILITY_RULES_URL`: permanent same-origin URL for the approved rules.
-- `MATT_MINE_PUBLIC_PAID_MODES`: comma-separated modes (`arena` and/or `paid`) using public acknowledgement instead of an allowlist.
+- `MATT_MINE_PUBLIC_PAID_MODES`: Arena modes using public acknowledgement instead of an allowlist. Pass Mine access is public and independent of this setting.
 - `MATT_MINE_ELIGIBILITY_RECEIPT_SECRET`: optional dedicated receipt secret; defaults to the Arena receipt secret.
 - `MATT_MINE_ELIGIBLE_PAID_WALLETS`: server-controlled allowlist for modes not public.
 - `MATT_MINE_BACKUP_AGE_RECIPIENT`: age public recipient for encrypted backups.

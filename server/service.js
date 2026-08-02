@@ -591,7 +591,6 @@ export class MattMineService {
       assertApi(!operationState.operations.freeRankedPaused, 503, 'free_ranked_paused', 'Free ranked runs are temporarily paused.');
     }
     if (normalizedMode === SERVER_RUN_MODES.PAID) {
-      this.assertPaidCompetitionEligible(session.address, 'paid');
       assertApi(!operationState.operations.passRankedPaused, 503, 'pass_ranked_paused', 'Pass ranked runs are temporarily paused.');
     }
     const operationMine = mineForRunMode(normalizedMode);
