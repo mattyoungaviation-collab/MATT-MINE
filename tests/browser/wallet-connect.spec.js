@@ -52,6 +52,8 @@ test('ordinary browsers can sign in through the WalletConnect fallback', async (
   }));
 
   await page.goto('/');
+  await expect(page.locator('#launch-wallet-label')).toHaveText('WALLETCONNECT');
+  await expect(page.locator('#wallet-label')).toHaveText('CONNECT WALLET');
   await page.locator('#launch-wallet-button').click();
 
   await expect(page.locator('#launch-wallet-label')).toHaveText('WalletConnect Miner');
