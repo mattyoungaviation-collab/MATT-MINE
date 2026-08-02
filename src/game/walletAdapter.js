@@ -1,4 +1,5 @@
 import { apiClient } from './apiClient.js';
+import { resolveRoninProvider } from './walletProvider.js';
 
 export const MATT_REWARDS_CONTRACT = '0x6ba468EE15cb3634F4Ea340407E9FD7A75267619';
 export const MATT_REWARD_CLAIM_SELECTOR = '0x8a23213f';
@@ -9,6 +10,8 @@ export class RoninWalletAdapter {
     this.window = options.window || globalThis.window;
     this.player = null;
     this.provider = null;
+    this.providerKind = '';
+    this.resolveProvider = options.resolveProvider || resolveRoninProvider;
     this.onInvalidated = options.onInvalidated || (() => {});
     this.boundAccountsChanged = (accounts) => this.handleAccountsChanged(accounts);
     this.boundChainChanged = () => this.invalidate('Ronin network changed. Sign in again.');
@@ -19,6 +22,7 @@ export class RoninWalletAdapter {
     try {
       this.player = await this.api.me();
       this.provider = this.window?.ronin?.provider || null;
+      this.providerKind = this.provider ? 'injected' : '';
       this.subscribe();
       return this.player;
     } catch {
@@ -30,11 +34,14 @@ export class RoninWalletAdapter {
 
   async connect() {
     const config = await this.api.config();
-    const provider = this.window?.ronin?.provider;
-    if (!provider?.request) {
-      throw new Error('Ronin Wallet was not detected. Install the extension or open MATT Mine in the Ronin Wallet browser.');
-    }
+    const resolved = await this.resolveProvider({
+      windowObject: this.window,
+      config,
+      connect: true
+    });
+    const provider = resolved.provider;
     this.provider = provider;
+    this.providerKind = resolved.kind;
     const accounts = await provider.request({ method: 'eth_requestAccounts' });
     const address = Array.isArray(accounts) ? accounts[0] : null;
     if (!/^0x[a-fA-F0-9]{40}$/.test(address || '')) throw new Error('Ronin Wallet did not return a valid account.');
@@ -61,9 +68,14 @@ export class RoninWalletAdapter {
   }
 
   async signOut() {
+    const provider = this.provider;
+    const disconnectWalletConnect = this.providerKind === 'walletconnect';
     await this.api.signOut();
     this.unsubscribe();
     this.player = null;
+    this.provider = null;
+    this.providerKind = '';
+    if (disconnectWalletConnect) await provider?.disconnect?.().catch(() => {});
   }
 
   async refresh() {
@@ -110,9 +122,10 @@ export class RoninWalletAdapter {
   }
 
   async sendPreparedTransaction(transaction, options = {}) {
-    if (!this.player || !this.provider?.request) {
+    if (!this.player) {
       throw new Error('Sign in with Ronin Wallet before sending this transaction.');
     }
+    await this.ensureProvider();
     validatePreparedTransaction(transaction, options);
     const accounts = await this.provider.request({ method: 'eth_requestAccounts' });
     const walletAddress = Array.isArray(accounts) ? accounts[0] : '';
@@ -155,6 +168,20 @@ export class RoninWalletAdapter {
     return Boolean(this.player && this.api.hasSession());
   }
 
+  async ensureProvider() {
+    if (this.provider?.request) return this.provider;
+    const config = await this.api.config();
+    const resolved = await this.resolveProvider({
+      windowObject: this.window,
+      config,
+      connect: true
+    });
+    this.provider = resolved.provider;
+    this.providerKind = resolved.kind;
+    this.subscribe();
+    return this.provider;
+  }
+
   subscribe() {
     this.unsubscribe();
     this.provider?.on?.('accountsChanged', this.boundAccountsChanged);
@@ -177,6 +204,8 @@ export class RoninWalletAdapter {
     this.api.clearSession();
     this.unsubscribe();
     this.player = null;
+    this.provider = null;
+    this.providerKind = '';
     this.onInvalidated(reason);
   }
 }

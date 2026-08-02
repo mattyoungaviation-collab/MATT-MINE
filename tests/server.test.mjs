@@ -99,6 +99,7 @@ function createHarness(options = {}) {
     paymentVerifier: options.paymentVerifier,
     arenaService: options.arenaService,
     eligibilityPolicy: options.eligibilityPolicy,
+    walletConnectProjectId: options.walletConnectProjectId,
     randomHex(bytes) {
       randomCounter += 1;
       return randomCounter.toString(16).padStart(bytes * 2, '0').slice(-bytes * 2);
@@ -462,6 +463,22 @@ test('Ronin SIWE-style challenges bind origin, chain, address, expiry, and one-t
       origin: 'https://evil.example'
     }),
     (error) => error.code === 'origin_mismatch'
+  );
+});
+
+test('the public wallet configuration enables WalletConnect only with a valid Reown project ID', () => {
+  const projectId = '1234567890abcdef1234567890abcdef';
+  const enabled = createHarness({ walletConnectProjectId: projectId }).service.config();
+  assert.equal(enabled.walletMode, 'ronin-injected-or-walletconnect');
+  assert.deepEqual(enabled.walletConnect, { enabled: true, projectId });
+
+  const disabled = createHarness().service.config();
+  assert.equal(disabled.walletMode, 'ronin-injected-provider');
+  assert.deepEqual(disabled.walletConnect, { enabled: false, projectId: '' });
+
+  assert.throws(
+    () => createHarness({ walletConnectProjectId: 'not-a-project-id' }),
+    (error) => error.code === 'invalid_walletconnect_project_id'
   );
 });
 

@@ -82,6 +82,14 @@ export class MattMineService {
     this.appVersion = String(options.appVersion || 'unknown');
     this.buildCommit = String(options.buildCommit || process.env.RENDER_GIT_COMMIT || 'unknown').slice(0, 80);
     this.eligibilityPolicy = options.eligibilityPolicy || null;
+    const walletConnectProjectId = String(options.walletConnectProjectId || '').trim();
+    assertApi(
+      !walletConnectProjectId || /^[a-fA-F0-9]{32}$/.test(walletConnectProjectId),
+      500,
+      'invalid_walletconnect_project_id',
+      'VITE_WALLETCONNECT_PROJECT_ID must be a 32-character Reown project ID.'
+    );
+    this.walletConnectProjectId = walletConnectProjectId;
     assertApi(
       configuredChainId === RONIN_CHAINS.MAINNET,
       500,
@@ -95,7 +103,13 @@ export class MattMineService {
     return {
       chainId: this.chainId,
       chainName: 'Ronin Mainnet',
-      walletMode: 'ronin-injected-provider',
+      walletMode: this.walletConnectProjectId
+        ? 'ronin-injected-or-walletconnect'
+        : 'ronin-injected-provider',
+      walletConnect: {
+        enabled: Boolean(this.walletConnectProjectId),
+        projectId: this.walletConnectProjectId
+      },
       rankedServerEnabled: true,
       paidRunsEnabled: this.mainnetTransactionsEnabled,
       realPaymentsEnabled: this.mainnetTransactionsEnabled,

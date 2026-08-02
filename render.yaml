@@ -4,7 +4,7 @@ services:
     runtime: node
     plan: starter
     region: oregon
-    buildCommand: npm ci
+    buildCommand: npm ci && npm run build:walletconnect
     startCommand: npm start
     # Process liveness must not restart the web instance during a recoverable
     # PostgreSQL interruption. /api/ready remains the dependency-readiness
@@ -22,6 +22,8 @@ services:
           name: matt-mine-db
           property: connectionString
       - key: MATT_MINE_PUBLIC_ORIGIN
+        sync: false
+      - key: VITE_WALLETCONNECT_PROJECT_ID
         sync: false
       - key: RONIN_RPC_URLS
         sync: false
