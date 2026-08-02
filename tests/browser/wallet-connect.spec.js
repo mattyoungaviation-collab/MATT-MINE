@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 const ADDRESS = `0x${'2'.repeat(40)}`;
 
 test('ordinary browsers can sign in through the WalletConnect fallback', async ({ page }) => {
-  await page.route('**/generated/walletconnect/walletconnect.js', (route) => route.fulfill({
+  await page.route('**/generated/walletconnect/walletconnect.js*', (route) => route.fulfill({
     status: 200,
     contentType: 'text/javascript',
     body: `
@@ -83,7 +83,8 @@ test('injected Ronin browsers still show the explicit WalletConnect choice', asy
 });
 
 test('the generated WalletConnect browser bundle is served by the app', async ({ request }) => {
-  const response = await request.get('/generated/walletconnect/walletconnect.js');
+  const response = await request.get('/generated/walletconnect/walletconnect.js?v=browser-test');
   expect(response.ok()).toBeTruthy();
   expect(response.headers()['content-type']).toContain('text/javascript');
+  expect(response.headers()['cache-control']).toBe('no-cache');
 });
