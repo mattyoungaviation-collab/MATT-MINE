@@ -8,9 +8,13 @@ import {
 } from 'viem';
 import {
   ARENA_EVENT_TYPES,
+  ARENA_MAX_EVENTS,
+  ARENA_MAX_TICKS,
+  ARENA_TICK_MS,
   ARENA_TRANSCRIPT_VERSION,
   buildArenaChallenge,
   hashArenaEvent,
+  normalizeArenaEvent,
   replayArenaTranscript
 } from '../server/arena-engine.js';
 import {
@@ -201,7 +205,24 @@ test('daily replay challenges are deterministic and bind the exact day seed', ()
   assert.notDeepEqual(first, different);
   assert.equal(first.version, ARENA_TRANSCRIPT_VERSION);
   assert.equal(first.tickMs, 20);
+  assert.equal(first.maxEvents, ARENA_MAX_EVENTS);
   assert.equal(first.verificationMode, 'deterministic-input-replay');
+});
+
+test('Arena transcript capacity covers every fixed input step of the full 20-minute run', () => {
+  const fullRunInputSteps = ARENA_MAX_TICKS / ARENA_TICK_MS;
+  assert.equal(fullRunInputSteps, 60_000);
+  assert.equal(ARENA_MAX_EVENTS, 61_024);
+  assert.ok(ARENA_MAX_EVENTS > fullRunInputSteps);
+  assert.doesNotThrow(() => normalizeArenaEvent(
+    inputEvent(fullRunInputSteps, ARENA_MAX_TICKS - ARENA_TICK_MS),
+    fullRunInputSteps
+  ));
+  assert.doesNotThrow(() => normalizeArenaEvent({
+    seq: fullRunInputSteps + 1,
+    tick: ARENA_MAX_TICKS,
+    type: 'finish'
+  }, fullRunInputSteps + 1));
 });
 
 test('Daily Arena replay uses the exact Competition Studio character snapshot', () => {
@@ -652,6 +673,7 @@ test('reviewed input replay enables paid Arena only when live mode is explicitly
   assert.equal(arena.publicConfig().enabled, true);
   assert.equal(arena.publicConfig().replayReady, true);
   assert.equal(arena.publicConfig().verificationMode, 'deterministic-input-replay');
+  assert.equal(arena.publicConfig().maxTranscriptEvents, ARENA_MAX_EVENTS);
   const quote = await arena.quoteEntry(PLAYER, {});
   assert.equal(quote.quote.transactions.length, 1);
 });

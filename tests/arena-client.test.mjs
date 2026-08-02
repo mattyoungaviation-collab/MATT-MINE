@@ -233,6 +233,43 @@ test('Arena transcript sends only changed raw controls and commands with ordered
   assert.equal(Object.hasOwn(calls[0].events[0], 'score'), false);
 });
 
+test('Arena transcript batches long runs at the server maximum instead of replaying every 64 changes', async () => {
+  const batches = [];
+  const transcript = new ArenaTranscript({}, {
+    runId: 'arena_run_long',
+    runToken: 'token',
+    checkpoint: { throughSeq: 0, transcriptHash: 'genesis', signature: 'start' }
+  }, {
+    retryDelays: [],
+    async appendEvents(runId, runToken, checkpoint, events) {
+      batches.push(events);
+      return {
+        throughSeq: events.at(-1).seq,
+        throughTick: events.at(-1).tick,
+        transcriptHash: `hash-${events.at(-1).seq}`,
+        signature: `sig-${events.at(-1).seq}`
+      };
+    }
+  });
+
+  for (let index = 0; index < 600; index += 1) {
+    transcript.record({
+      type: 'input',
+      tick: index * 20,
+      moveX: 1_000,
+      moveY: 0,
+      aim: index,
+      attack: true,
+      dash: false,
+      weapon: ''
+    });
+  }
+  await transcript.close();
+
+  assert.deepEqual(batches.map((events) => events.length), [256, 256, 88]);
+  assert.equal(batches.flat().at(-1).seq, 600);
+});
+
 test('Arena honors the Admin permanent-upgrade switch instead of forcing upgrades off', () => {
   const source = fs.readFileSync(new URL('../src/game/v3/arenaCompatibility.js', import.meta.url), 'utf8');
   assert.match(source, /ignorePermanentUpgrades:\s*suppliedTuning\.ignorePermanentUpgrades === true/);

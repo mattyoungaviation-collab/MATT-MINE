@@ -11,7 +11,11 @@ import { assertApi } from './errors.js';
 export const ARENA_TRANSCRIPT_VERSION = 'matt-arena-input-v2';
 export const ARENA_TICK_MS = ARENA_FIXED_STEP_MS;
 export const ARENA_MAX_TICKS = 20 * 60_000;
-export const ARENA_MAX_EVENTS = 20_000;
+// A 20-minute run contains 60,000 fixed input steps. Most controls are
+// de-duplicated by the browser, but continuous mouse aim can legitimately
+// change on every step. Keep room for one input per step plus terminal,
+// upgrade, depth, revive, and other command events.
+export const ARENA_MAX_EVENTS = Math.ceil(ARENA_MAX_TICKS / ARENA_TICK_MS) + 1_024;
 export const ARENA_MAX_BATCH_EVENTS = 256;
 export const ARENA_EVENT_TYPES = Object.freeze(['input', 'command', 'finish']);
 export const ARENA_COMMANDS = Object.freeze(['upgrade', 'descend', 'extract', 'death', 'revive', 'decline']);
@@ -38,6 +42,7 @@ export function buildArenaChallenge(dailySeed, tuning = {}) {
     dailySeed,
     tickMs: ARENA_TICK_MS,
     maxTicks: ARENA_MAX_TICKS,
+    maxEvents: ARENA_MAX_EVENTS,
     maxDepth: 5,
     verificationMode: 'deterministic-input-replay',
     tuning: tuning && typeof tuning === 'object' ? structuredClone(tuning) : {}
@@ -56,6 +61,7 @@ export function buildCompetitiveChallenge(run) {
     dailySeed: run.seed,
     tickMs: ARENA_TICK_MS,
     maxTicks: ARENA_MAX_TICKS,
+    maxEvents: ARENA_MAX_EVENTS,
     maxDepth: competitiveMaximumDepth(run),
     verificationMode: 'deterministic-input-replay',
     tuning: structuredClone(run.tuning || {})

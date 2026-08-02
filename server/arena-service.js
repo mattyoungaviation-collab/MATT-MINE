@@ -10,6 +10,7 @@ import { isTransientPostgresError } from './postgres-resilience.js';
 import { applyMinePassGameplayBenefits } from './pass-benefits.js';
 import {
   ARENA_MAX_BATCH_EVENTS,
+  ARENA_MAX_EVENTS,
   ARENA_TICK_MS,
   ARENA_TRANSCRIPT_VERSION,
   buildArenaChallenge,
@@ -90,6 +91,7 @@ export class DailyArenaService {
       transcriptVersion: ARENA_TRANSCRIPT_VERSION,
       tickMs: ARENA_TICK_MS,
       runTtlSeconds: RUN_TTL_MS / 1_000,
+      maxTranscriptEvents: ARENA_MAX_EVENTS,
       entryConfirmationBufferSeconds: ENTRY_CONFIRMATION_BUFFER_MS / 1_000,
       entryCutoffSeconds: ENTRY_CUTOFF_WINDOW_MS / 1_000,
       seedCapRaw: ARENA_SEED_CAP_RAW,
@@ -328,6 +330,12 @@ export class DailyArenaService {
       400,
       'arena_event_batch_invalid',
       `Submit from 1 to ${ARENA_MAX_BATCH_EVENTS} Daily Arena events per batch.`
+    );
+    assertApi(
+      run.throughSeq + rawEvents.length <= ARENA_MAX_EVENTS,
+      422,
+      'arena_transcript_too_large',
+      'The Daily Arena transcript exceeded the full 20-minute event capacity.'
     );
 
     assertApi(
