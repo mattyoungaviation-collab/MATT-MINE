@@ -14,9 +14,10 @@ export function drawEnemyBody(ctx, enemy, visualAssets = {}) {
     return;
   }
   ctx.fillStyle = 'rgba(0,0,0,0.62)';
-  ctx.filter = 'blur(2px)';
+  // A live canvas blur allocates an offscreen filter surface for every enemy
+  // on every frame. The soft ellipse already reads as a shadow, so keeping it
+  // unfiltered removes a major mobile GPU hotspot without changing gameplay.
   ctx.beginPath(); ctx.ellipse(3, enemy.radius * 0.76, enemy.radius, enemy.radius * 0.38, 0, 0, TAU); ctx.fill();
-  ctx.filter = 'none';
   const squish = enemy.type === 'slime' ? Math.sin(enemy.phase * 1.6) * 0.08 : 0;
   ctx.rotate(enemy.type === 'beetle' ? enemy.facing : 0);
   ctx.scale(1 + squish, 1 - squish);
@@ -148,11 +149,9 @@ function drawAnimatedGuardian(ctx, enemy, image) {
 
   ctx.save();
   ctx.fillStyle = 'rgba(0,0,0,0.7)';
-  ctx.filter = 'blur(5px)';
   ctx.beginPath();
   ctx.ellipse(7, enemy.radius * 0.88, enemy.radius * 1.55, enemy.radius * 0.58, 0, 0, TAU);
   ctx.fill();
-  ctx.filter = 'none';
   ctx.scale(pulse, pulse);
   ctx.shadowColor = phase === 3 ? '#65f5ff' : '#9f45ed';
   ctx.shadowBlur = phase === 3 ? 28 : 18;
@@ -194,11 +193,9 @@ function drawCinematicGuardian(ctx, enemy, image) {
 
   ctx.save();
   ctx.fillStyle = 'rgba(0,0,0,0.72)';
-  ctx.filter = 'blur(5px)';
   ctx.beginPath();
   ctx.ellipse(7, enemy.radius * 0.88, enemy.radius * 1.5, enemy.radius * 0.6, 0, 0, TAU);
   ctx.fill();
-  ctx.filter = 'none';
 
   ctx.scale(pulse, pulse);
   ctx.shadowColor = phase === 3 ? '#65f5ff' : '#9f45ed';
