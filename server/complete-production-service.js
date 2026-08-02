@@ -192,6 +192,21 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     return started;
   }
 
+  async startArenaRun(token, input = {}) {
+    const state = await this.database.read();
+    const settings = state.expansionConfig.settings;
+    const reviveInfrastructureReady =
+      this.revivePaymentVerifier?.publicStatus?.().configured === true &&
+      typeof this.arenaService?.validatePaidReviveDeath === 'function';
+    return super.startArenaRun(token, {
+      ...input,
+      paidRevivesEnabled:
+        reviveInfrastructureReady && settings.paidRevivesEnabled === true,
+      reviveLimitPerRun: settings.reviveLimitPerRun,
+      reviveInvulnerabilitySeconds: settings.reviveInvulnerabilitySeconds
+    });
+  }
+
   async appendCompetitiveEvents(token, payload) {
     if (!this.competitiveReplayValidator) {
       throw new ApiError(503, 'competitive_replay_validator_missing', 'Deterministic server replay is not configured.');
@@ -642,27 +657,54 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
 
   async requestPaidRevive(token, input = {}) {
     const { session, state: currentState } = await this.authenticateWithState(token);
-    if (!this.revivePaymentVerifier?.publicStatus?.().configured || !this.reviveEligibilityValidator) {
+    const runId = String(input.runId || '');
+    const arenaRun = isArenaRunId(runId);
+    const arenaValidatorReady =
+      arenaRun && typeof this.arenaService?.validatePaidReviveDeath === 'function';
+    if (
+      !this.revivePaymentVerifier?.publicStatus?.().configured ||
+      (!arenaValidatorReady && !this.reviveEligibilityValidator)
+    ) {
       throw new ApiError(503, 'revive_payment_verifier_missing', 'Paid revives are disabled until exact payment and death replay verification are configured.');
     }
-    const runId = String(input.runId || '');
     const currentRun = currentState.runs?.[runId];
-    if (!currentRun || currentRun.address !== session.address) {
+    if (!arenaRun && (!currentRun || currentRun.address !== session.address)) {
       throw new ApiError(404, 'run_not_found', 'The active run was not found.');
     }
-    const verifiedDeath = await this.reviveEligibilityValidator.validate({
-      address: session.address,
-      runId,
-      run: structuredClone(currentRun),
-      submission: structuredClone(input.deathState || {})
-    });
+    const verifiedDeath = arenaRun
+      ? await this.arenaService.validatePaidReviveDeath(
+          session.address,
+          runId,
+          structuredClone(input.deathState || {}),
+          currentState.wallets?.[session.address]?.profile || {}
+        )
+      : await this.reviveEligibilityValidator.validate({
+          address: session.address,
+          runId,
+          run: structuredClone(currentRun),
+          submission: structuredClone(input.deathState || {})
+        });
     const timestamp = this.now();
     return this.database.transact((state) => {
-      const run = state.runs[runId];
+      state.arenaReviveRuns ||= {};
+      const run = arenaRun
+        ? (state.arenaReviveRuns[runId] ||= structuredClone(verifiedDeath.reviveRun))
+        : state.runs[runId];
       if (!run || run.address !== session.address) throw new ApiError(404, 'run_not_found', 'The active run was not found.');
-      if (run.status !== 'active') throw new ApiError(409, 'revive_run_finalized', 'This run can no longer be revived.');
       const config = state.expansionConfig.settings;
       if (!config.paidRevivesEnabled) throw new ApiError(503, 'paid_revives_disabled', 'Paid revives are paused.');
+      if (run.paidReviveEligible !== true) {
+        throw new ApiError(409, 'paid_revive_run_ineligible', 'Paid revives were not enabled when this run started.');
+      }
+      if (run.status === 'awaiting-revive' && run.pendingRevive?.status === 'pending') {
+        return {
+          ...structuredClone(run.pendingRevive),
+          transaction: this.revivePaymentVerifier.transactionForPayment(
+            run.pendingRevive.priceRonWei
+          )
+        };
+      }
+      if (run.status !== 'active') throw new ApiError(409, 'revive_run_finalized', 'This run can no longer be revived.');
       run.status = 'awaiting-revive';
       run.playerState = structuredClone(verifiedDeath.playerState);
       try {
@@ -690,7 +732,8 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     const runId = String(input.runId || '');
     const transactionHash = String(input.transactionHash || '').toLowerCase();
     const timestamp = this.now();
-    const run = state.runs[runId];
+    const arenaRun = state.arenaReviveRuns?.[runId];
+    const run = state.runs[runId] || arenaRun;
     if (!run || run.address !== session.address) throw new ApiError(404, 'run_not_found', 'The pending revive was not found.');
     const existing = state.revivePayments?.[transactionHash];
     if (existing) {
@@ -699,6 +742,9 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
       }
       return structuredClone(existing.completedResponse);
     }
+    if (arenaRun) {
+      await this.arenaService.assertPaidReviveRunOpen(session.address, runId);
+    }
     const verified = await this.revivePaymentVerifier.verifyPayment({
       transactionHash,
       address: session.address,
@@ -706,7 +752,7 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
       runId
     });
     return this.database.transact((next) => {
-      const activeRun = next.runs[runId];
+      const activeRun = next.runs[runId] || next.arenaReviveRuns?.[runId];
       const reconciled = next.revivePayments[transactionHash];
       if (reconciled) {
         if (reconciled.address !== session.address || reconciled.runId !== runId) {
@@ -744,8 +790,12 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     const session = await this.authenticate(token);
     const runId = String(runIdInput || '');
     const timestamp = this.now();
+    const snapshot = await this.database.read();
+    if (snapshot.arenaReviveRuns?.[runId]) {
+      await this.arenaService.assertPaidReviveRunOpen(session.address, runId);
+    }
     return this.database.transact((state) => {
-      const run = state.runs?.[runId];
+      const run = state.runs?.[runId] || state.arenaReviveRuns?.[runId];
       if (!run || run.address !== session.address) throw new ApiError(404, 'run_not_found', 'The paid revive run was not found.');
       const payment = Object.values(state.revivePayments || {}).find((entry) =>
         entry.address === session.address && entry.runId === runId
@@ -790,7 +840,7 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     const session = await this.authenticate(token);
     const runId = String(runIdInput || '');
     return this.database.transact((state) => {
-      const run = state.runs[runId];
+      const run = state.runs[runId] || state.arenaReviveRuns?.[runId];
       if (!run || run.address !== session.address) {
         throw new ApiError(404, 'run_not_found', 'The pending revive was not found.');
       }
@@ -801,6 +851,42 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
       run.pendingRevive.cancelledAt = this.now();
       run.status = 'active';
       return { runId, cancelled: true };
+    });
+  }
+
+  async finishArenaRun(token, payload) {
+    const result = await super.finishArenaRun(token, payload);
+    if (result.accepted !== false) {
+      await this.#closeArenaReviveRun(payload?.runId, 'finished');
+    }
+    return result;
+  }
+
+  async abandonArenaRun(token, payload) {
+    const result = await super.abandonArenaRun(token, payload);
+    await this.#closeArenaReviveRun(result.runId, 'expired');
+    return result;
+  }
+
+  async abandonActiveArenaRun(token) {
+    const result = await super.abandonActiveArenaRun(token);
+    await this.#closeArenaReviveRun(result.runId, 'expired');
+    return result;
+  }
+
+  async #closeArenaReviveRun(runIdInput, status) {
+    const runId = String(runIdInput || '');
+    if (!isArenaRunId(runId)) return;
+    const timestamp = this.now();
+    await this.database.transact((state) => {
+      const run = state.arenaReviveRuns?.[runId];
+      if (!run) return;
+      run.status = status;
+      run.finishedAt ||= timestamp;
+      if (run.pendingRevive?.status === 'pending') {
+        run.pendingRevive.status = 'cancelled';
+        run.pendingRevive.cancelledAt = timestamp;
+      }
     });
   }
 
@@ -1123,6 +1209,10 @@ function normalizedWallet(value) {
   const address = String(value || '').toLowerCase();
   if (!/^0x[a-f0-9]{40}$/.test(address)) throw new ApiError(400, 'invalid_address', 'A valid Ronin wallet address is required.');
   return address;
+}
+
+function isArenaRunId(value) {
+  return /^arena_run_[a-f0-9]{24}$/.test(String(value || ''));
 }
 
 function appendActivity(wallet, action, details, timestamp) {

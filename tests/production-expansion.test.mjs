@@ -68,6 +68,9 @@ function harness(options = {}) {
     competitiveReplayValidator: options.competitive
       ? { validate: async ({ submission }) => ({ result: structuredClone(submission) }) }
       : null,
+    revivePaymentVerifier: options.revivePaymentVerifier,
+    reviveEligibilityValidator: options.reviveEligibilityValidator,
+    arenaService: options.arenaService,
     randomHex(bytes) {
       counter += 1;
       return counter.toString(16).padStart(bytes * 2, '0').slice(-bytes * 2);
@@ -411,6 +414,89 @@ test('revive state preserves the run and rejects duplicate or finalized payments
   assert.equal(restored.reviveCount, 1);
   assert.equal(run.status, 'active');
   assert.throws(() => createPendingRevive({ ...run, status: 'awaiting-revive' }, config, START + 2), /limit/);
+});
+
+test('Arena revive payment is authoritative, retry-safe, and recorded exactly once', async () => {
+  const runId = `arena_run_${'a'.repeat(24)}`;
+  const transactionHash = `0x${'44'.repeat(32)}`;
+  let openChecks = 0;
+  const arenaService = {
+    publicConfig: () => ({ enabled: true }),
+    async validatePaidReviveDeath(address, requestedRunId) {
+      assert.equal(address, ADDRESS);
+      assert.equal(requestedRunId, runId);
+      return {
+        checkpoint: { throughSeq: 2, throughTick: 7_240 },
+        playerState: { health: 0, maximumHealth: 100, depth: 1, elapsed: 7.24 },
+        reviveRun: {
+          id: runId,
+          address,
+          status: 'active',
+          startedAt: START,
+          expiresAt: START + 60_000,
+          finishedAt: 0,
+          paidReviveEligible: true,
+          reviveInvulnerabilitySeconds: 3,
+          revives: []
+        }
+      };
+    },
+    async assertPaidReviveRunOpen(address, requestedRunId) {
+      assert.equal(address, ADDRESS);
+      assert.equal(requestedRunId, runId);
+      openChecks += 1;
+    }
+  };
+  const revivePaymentVerifier = {
+    publicStatus: () => ({ configured: true }),
+    transactionForPayment: (priceRonWei) => ({
+      to: OTHER,
+      value: `0x${BigInt(priceRonWei).toString(16)}`,
+      data: '0x'
+    }),
+    async verifyPayment(input) {
+      assert.equal(input.runId, runId);
+      assert.equal(input.address, ADDRESS);
+      assert.equal(input.transactionHash, transactionHash);
+      return {
+        transactionHash,
+        amountWei: input.amountWei,
+        transactionBlockAt: START + 1
+      };
+    }
+  };
+  const { database, service } = harness({
+    arenaService,
+    revivePaymentVerifier,
+    reviveEligibilityValidator: { validate: async () => ({}) }
+  });
+  const token = await login(service);
+  await database.transact((state) => {
+    state.expansionConfig.settings.paidRevivesEnabled = true;
+    state.expansionConfig.settings.reviveLimitPerRun = 1;
+    state.expansionConfig.settings.reviveInvulnerabilitySeconds = 3;
+  });
+
+  const pending = await service.requestPaidRevive(token, {
+    runId,
+    deathState: { checkpoint: { throughSeq: 2 } }
+  });
+  assert.equal(pending.priceRonWei, '10000000000000000000');
+  assert.equal(pending.transaction.to, OTHER);
+
+  const confirmed = await service.confirmPaidRevive(token, { runId, transactionHash });
+  assert.equal(confirmed.reviveCount, 1);
+  assert.equal(confirmed.playerState.health, 100);
+  assert.equal(confirmed.alreadyConfirmed, false);
+
+  const retried = await service.confirmPaidRevive(token, { runId, transactionHash });
+  assert.deepEqual(retried, confirmed);
+  assert.equal(openChecks, 1);
+
+  const state = await database.read();
+  assert.equal(state.arenaReviveRuns[runId].revives.length, 1);
+  assert.equal(Object.keys(state.revivePayments).length, 1);
+  assert.equal(state.revivePayments[transactionHash].runId, runId);
 });
 
 test('advertisement bonuses require a verified provider completion and remain idempotent per run', async () => {

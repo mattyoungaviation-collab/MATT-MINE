@@ -140,6 +140,8 @@ const arenaService = arenaEnabled
       receiptSecret: arenaReceiptSecret,
       seedSecret: process.env.MATT_MINE_ARENA_SEED_SECRET || arenaReceiptSecret,
       safeAddress: process.env.MATT_MINE_ARENA_SAFE_ADDRESS || MATT_MINE_ADMIN_CONTRACTS.safe,
+      getPaidReviveState: async (runId) =>
+        (await database.read()).arenaReviveRuns?.[runId] || null,
       getTuning: async () => {
         const state = await database.read();
         const tuning = structuredClone(state.gameTuning.arena);
