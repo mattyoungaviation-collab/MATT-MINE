@@ -8,7 +8,11 @@ import {
 } from '../server/external-verifiers.js';
 import { MemoryCompetitiveReplayStore } from '../server/competitive-replay-store.js';
 import { CompetitiveReplayService } from '../server/competitive-replay-service.js';
-import { buildArenaChallenge, replayArenaTranscript } from '../server/arena-engine.js';
+import {
+  applyReplayCommand,
+  buildArenaChallenge,
+  replayArenaTranscript
+} from '../server/arena-engine.js';
 import { MattMineGame } from '../src/game/GameV4.js';
 import { defaultProfile } from '../src/game/storage.js';
 import { PaidCompetitionEligibilityPolicy } from '../server/eligibility.js';
@@ -300,4 +304,41 @@ test('queued Blaster offers remain deterministic after choosing a run upgrade', 
 
   assert.equal(first.state, 'levelup');
   assert.deepEqual(first.pendingUpgradeIds, second.pendingUpgradeIds);
+});
+
+test('ranked replay accepts a queued Blaster offer only after applying the chosen upgrade', () => {
+  const createGame = (mode) => {
+    const game = new MattMineGame(null, defaultProfile(), {
+      headless: true,
+      audio: {
+        startMusic() {}, stopMusic() {}, resume() {}, play() {}, startBoss() {}, stopBoss() {}
+      }
+    });
+    game.startRun({ mode, seed: `MATT-QUEUED-UPGRADE-${mode}` });
+    game.state = 'levelup';
+    game.pendingUpgradeIds = ['power'];
+    game.pendingBlasterUpgrade = true;
+    return game;
+  };
+
+  for (const mode of ['free', 'paid', 'arena']) {
+    const game = createGame(mode);
+    applyReplayCommand(game, { command: 'upgrade', value: 'power' });
+    assert.equal(game.player.runUpgradeCounts.power, 1, `${mode} applies the original upgrade`);
+    assert.equal(game.state, 'levelup', `${mode} opens the queued Blaster offer`);
+    assert.ok(game.pendingUpgradeIds.length > 0);
+    assert.equal(game.pendingUpgradeIds.includes('power'), false);
+
+    const blasterUpgrade = game.pendingUpgradeIds[0];
+    applyReplayCommand(game, { command: 'upgrade', value: blasterUpgrade });
+    assert.equal(game.player.runUpgradeCounts[blasterUpgrade], 1);
+    assert.equal(game.state, 'playing');
+  }
+
+  const rejected = createGame('paid');
+  rejected.runContext.tuning.disableRunUpgrades = true;
+  assert.throws(
+    () => applyReplayCommand(rejected, { command: 'upgrade', value: 'power' }),
+    (error) => error.code === 'arena_upgrade_rejected'
+  );
 });
