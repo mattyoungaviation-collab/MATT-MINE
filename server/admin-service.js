@@ -3,7 +3,7 @@ import { MAX_RUN_SCORE } from './constants.js';
 import { ApiError, assertApi } from './errors.js';
 import { validateUsername } from './identity.js';
 import { MattMineService } from './service.js';
-import { utcDayKey } from '../src/game/economy.js';
+import { utcDayKey, utcWeekKey } from '../src/game/economy.js';
 import { META_UPGRADES } from '../src/game/config.js';
 import { defaultKeybindings, normalizeKeybindings } from '../src/game/keybindings.js';
 import {
@@ -41,13 +41,17 @@ export class AdminMattMineService extends MattMineService {
           startedAt: arenaActiveRun.startedAt,
           expiresAt: arenaActiveRun.expiresAt
         } : null,
-        keybindings: structuredClone(wallet?.keybindings || defaultKeybindings())
+        keybindings: structuredClone(wallet?.keybindings || defaultKeybindings()),
+        leaderboardScores: currentRankedScores(state, normalizedAddress, this.now())
       },
       editor: playerEditorMetadata()
     };
   }
 
   async adminAwardPlayer(adminKey, address, input, reason) {
+    if (String(input?.type || '') === 'score_override') {
+      return this.adminOverrideLeaderboardScore(adminKey, address, input, reason);
+    }
     if (String(input?.type || '') !== 'state_patch') {
       return super.adminAwardPlayer(adminKey, address, input, reason);
     }
@@ -128,6 +132,99 @@ export class AdminMattMineService extends MattMineService {
       terminatedRunIds: [...result.terminatedRunIds, ...arenaTerminated.runIds]
     };
   }
+
+  async adminOverrideLeaderboardScore(adminKey, address, input, reason) {
+    this.assertAdminKey(adminKey);
+    const normalizedAddress = normalizeAddress(address);
+    const normalizedReason = normalizeAdminReason(reason);
+    const mode = String(input?.mode || '');
+    assertApi(['free', 'paid'].includes(mode), 422, 'score_override_mode_invalid', 'Choose Daily Mine or Pass Mine.');
+    const score = strictInteger(input?.score, 'leaderboard_score', 0, MAX_RUN_SCORE * 7);
+    const timestamp = this.now();
+    const week = utcWeekKey(timestamp);
+    const requestedWeek = String(input?.week || week);
+    assertApi(requestedWeek === week, 409, 'score_override_week_closed', 'Only the current open leaderboard can be corrected. Finalized weeks remain immutable.');
+    const terminateActiveRuns = input?.terminateActiveRuns !== false;
+
+    const result = await this.database.transact(async (state, transaction) => {
+      const wallet = state.wallets[normalizedAddress];
+      assertApi(wallet, 404, 'wallet_missing', 'The player wallet was not found.');
+      const activeRuns = Object.values(state.runs).filter((run) =>
+        run.address === normalizedAddress &&
+        run.mode === mode &&
+        run.status === 'active'
+      );
+      assertApi(
+        terminateActiveRuns || activeRuns.length === 0,
+        409,
+        'score_override_active_run',
+        'End the player’s active run for this mine before correcting the leaderboard.'
+      );
+      const previousScore = rankedScoreFor(state, normalizedAddress, mode, week);
+      const terminatedRunIds = [];
+      for (const run of terminateActiveRuns ? activeRuns : []) {
+        run.status = 'expired';
+        run.expiresAt = Math.min(run.expiresAt, timestamp);
+        run.finishedAt = timestamp;
+        run.adminTerminatedAt = timestamp;
+        run.adminTerminationReason = normalizedReason;
+        await transaction?.upsertRun(run);
+        terminatedRunIds.push(run.id || run.runId);
+      }
+      const key = `${week}:${mode}:${normalizedAddress}`;
+      state.leaderboardOverrides[key] = {
+        address: normalizedAddress,
+        mode,
+        week,
+        score,
+        reason: normalizedReason,
+        updatedAt: timestamp,
+        updatedBy: 'SERVER_ADMIN'
+      };
+      const mine = mode === 'free' ? 'Daily Mine' : 'Pass Mine';
+      const details = `${normalizedReason}; ${normalizedAddress}: ${mine} ${week} score ${previousScore} -> ${score}; ended ${terminatedRunIds.length} active run${terminatedRunIds.length === 1 ? '' : 's'}`;
+      addPlayerActivity(wallet, 'ADMIN_LEADERBOARD_SCORE_OVERRIDE', details, timestamp);
+      addAudit(state, 'SERVER_ADMIN', 'PLAYER_LEADERBOARD_SCORE_OVERRIDDEN', details, timestamp);
+      return { previousScore, score, mode, week, terminatedRunIds };
+    });
+
+    for (const runId of result.terminatedRunIds) {
+      await this.competitiveReplayValidator?.finalize?.(runId, 'admin_score_override').catch(() => undefined);
+    }
+    const detail = await this.adminWallet(adminKey, normalizedAddress);
+    return {
+      ...detail,
+      scoreCorrection: result,
+      terminatedActiveRuns: result.terminatedRunIds.length,
+      terminatedRunIds: result.terminatedRunIds
+    };
+  }
+}
+
+function currentRankedScores(state, address, timestamp) {
+  const week = utcWeekKey(timestamp);
+  return {
+    week,
+    free: rankedScoreFor(state, address, 'free', week),
+    paid: rankedScoreFor(state, address, 'paid', week)
+  };
+}
+
+function rankedScoreFor(state, address, mode, week) {
+  const override = state.leaderboardOverrides?.[`${week}:${mode}:${address}`];
+  if (override && Number.isSafeInteger(override.score)) return override.score;
+  const dailyBest = new Map();
+  for (const run of Object.values(state.runs || {})) {
+    if (
+      run.address !== address ||
+      run.mode !== mode ||
+      run.week !== week ||
+      run.status !== 'finished' ||
+      !run.result
+    ) continue;
+    dailyBest.set(run.day, Math.max(dailyBest.get(run.day) || 0, Number(run.result.score || 0)));
+  }
+  return [...dailyBest.values()].reduce((sum, value) => sum + value, 0);
 }
 
 function applyResets(wallet, input, changes) {
@@ -361,6 +458,7 @@ function playerEditorMetadata() {
       bankedNuggets: MAX_PLAYER_VALUE,
       bestDepth: 100,
       bestScore: MAX_RUN_SCORE,
+      weeklyScore: MAX_RUN_SCORE * 7,
       totalRuns: MAX_PLAYER_VALUE,
       passXp: MAX_PLAYER_VALUE
     }

@@ -63,6 +63,30 @@ function renderPlayerEditor(address, data) {
         </div>
       </article>
 
+      <article class="editor-section leaderboard-correction">
+        <h4>Leaderboard score correction</h4>
+        <p class="notice warning">Admin-only replay bypass for a documented failed run. This changes the current open leaderboard and is permanently audit logged. Closed payout weeks cannot be changed.</p>
+        <div class="compact-grid">
+          <label>Mine
+            <select data-score-field="mode">
+              <option value="free">Daily Mine</option>
+              <option value="paid">Pass Mine</option>
+            </select>
+          </label>
+          <label>Exact current-week score
+            <input data-score-field="score" type="number" min="0" max="${Number(editor.limits?.weeklyScore || 35_000_000)}" step="1" value="${Number(wallet.leaderboardScores?.free || 0)}">
+            <small>Week ${escapeHtml(wallet.leaderboardScores?.week || '')}. Use 0 to remove this player from the open board.</small>
+          </label>
+          <label class="toggle">End active run for the selected mine
+            <input data-score-field="terminate-active-runs" type="checkbox" checked>
+            <small>Releases a stuck run before applying the correction. Other mine types are untouched.</small>
+          </label>
+        </div>
+        <label>Required correction reason<input data-score-field="reason" maxlength="240" placeholder="Example: verified failed extraction reported in support" required></label>
+        <div class="action-row"><button type="button" data-score-override>Apply exact leaderboard score</button></div>
+        <p class="score-override-status" aria-live="polite"></p>
+      </article>
+
       <article class="editor-section">
         <h4>Permanent upgrade ranks</h4>
         <div class="compact-grid">
@@ -154,6 +178,47 @@ function renderPlayerEditor(address, data) {
     const status = section.querySelector('.editor-status');
     const patch = collectExactPatch(section);
     await submitPlayerPatch(address, patch, reason, status, 'Save this exact player state?');
+  });
+
+  const scoreMode = section.querySelector('[data-score-field="mode"]');
+  const scoreInput = section.querySelector('[data-score-field="score"]');
+  scoreMode.addEventListener('change', () => {
+    scoreInput.value = Number(wallet.leaderboardScores?.[scoreMode.value] || 0);
+  });
+  section.querySelector('[data-score-override]').addEventListener('click', async () => {
+    const reason = section.querySelector('[data-score-field="reason"]').value;
+    const status = section.querySelector('.score-override-status');
+    const mode = scoreMode.value;
+    const score = numericValue(scoreInput);
+    const mine = mode === 'free' ? 'Daily Mine' : 'Pass Mine';
+    if (String(reason || '').trim().length < 5) {
+      status.textContent = 'Enter a reason of at least five characters.';
+      status.classList.add('bad');
+      return;
+    }
+    if (!globalThis.confirm(`Set this player’s ${mine} score to ${score.toLocaleString()} and bypass replay verification?`)) return;
+    status.className = status.className.replace(/\s*(good|bad)\b/g, '');
+    status.textContent = 'Applying score correction…';
+    try {
+      const result = await adminApi(`/api/admin/wallets/${address}/awards`, {
+        method: 'POST',
+        body: {
+          type: 'score_override',
+          mode,
+          score,
+          week: wallet.leaderboardScores?.week || '',
+          terminateActiveRuns: section.querySelector('[data-score-field="terminate-active-runs"]').checked,
+          reason
+        }
+      });
+      status.textContent = `Leaderboard updated: ${Number(result.scoreCorrection?.previousScore || 0).toLocaleString()} → ${Number(result.scoreCorrection?.score || score).toLocaleString()}. ${Number(result.terminatedActiveRuns || 0)} active run(s) ended.`;
+      status.classList.add('good');
+      wallet.leaderboardScores ||= {};
+      wallet.leaderboardScores[mode] = Number(result.scoreCorrection?.score || score);
+    } catch (error) {
+      status.textContent = error.message;
+      status.classList.add('bad');
+    }
   });
 
   section.querySelectorAll('[data-player-reset]').forEach((button) => {
