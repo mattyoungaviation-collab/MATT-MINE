@@ -32,6 +32,7 @@ export function defaultServerState() {
     revivePayments: {},
     passPurchases: {},
     paidEntitlements: {},
+    leaderboardOverrides: {},
     arenaPassXpAwards: {},
     gameTuning: defaultGameTuning(),
     expansionConfig: defaultExpansionConfig(),
@@ -75,6 +76,7 @@ export function normalizeServerState(input = {}) {
     revivePayments: normalizeRecords(source.revivePayments, 25_000),
     passPurchases: normalizePassPurchases(source.passPurchases),
     paidEntitlements: normalizePaidEntitlements(source.paidEntitlements),
+    leaderboardOverrides: normalizeLeaderboardOverrides(source.leaderboardOverrides),
     arenaPassXpAwards: normalizeArenaPassXpAwards(source.arenaPassXpAwards),
     gameTuning: normalizeGameTuning(migrateLegacyGameTuning(source.gameTuning, source.version)),
     expansionConfig: safeExpansionConfig(source.expansionConfig),
@@ -86,6 +88,36 @@ export function normalizeServerState(input = {}) {
       ? source.audit.filter(isRecord).slice(-2_000).map((entry) => ({ ...entry }))
       : []
   };
+}
+
+function normalizeLeaderboardOverrides(input) {
+  if (!isRecord(input)) return {};
+  return Object.fromEntries(Object.entries(input)
+    .filter(([, value]) =>
+      isRecord(value) &&
+      isHexAddress(value.address) &&
+      ['free', 'paid'].includes(value.mode) &&
+      /^\d{4}-\d{2}-\d{2}$/.test(value.week || '') &&
+      Number.isSafeInteger(value.score) &&
+      value.score >= 0 &&
+      value.score <= 35_000_000
+    )
+    .slice(-2_000)
+    .map(([, value]) => {
+      const address = value.address.toLowerCase();
+      const mode = value.mode;
+      const week = value.week;
+      const key = `${week}:${mode}:${address}`;
+      return [key, {
+        address,
+        mode,
+        week,
+        score: value.score,
+        reason: typeof value.reason === 'string' ? value.reason.slice(0, 240) : '',
+        updatedAt: safeTimestamp(value.updatedAt),
+        updatedBy: 'SERVER_ADMIN'
+      }];
+    }));
 }
 
 export function defaultOperations() {

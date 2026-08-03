@@ -14,7 +14,7 @@ It is not linked from the public game and search engines are told not to index i
 - Five independent mine operation cards with separate new-run, result, payment, and reward pauses
 - Immediate mine-wide termination of active runs during an incident, with a required reason and complete audit record
 - Immediate whole-site maintenance, Free ranked, Pass ranked, paid purchase, and claim emergency pauses
-- Player search, suspension, restoration, session revocation, forced active-run termination, exact state correction, and restoration of a legitimate daily free attempt
+- Player search, suspension, restoration, session revocation, forced active-run termination, exact state correction, restoration of a legitimate daily free attempt, and audited current-week leaderboard correction after a documented failed run
 - Separate Practice, Free, Pass, and Daily Arena tuning for player stats, weapons, enemies, creature availability, Guardian behavior, room layout, ore, XP, score, and knockout rules
 - Competition Studio drafts that remain private until **Apply Live Version**, plus one-click immediate restoration of any prior published version
 - Exact live-source panels and public mine cards that use the same published map, character, starting weapon, and rules as new runs
@@ -28,7 +28,7 @@ It is not linked from the public game and search engines are told not to index i
 
 The command center cannot:
 
-- Edit a completed score or finalized leaderboard snapshot
+- Edit a replay-verified completed run or a finalized leaderboard snapshot. A separate audited override may correct only the current open Daily or Pass leaderboard without rewriting the run.
 - Invent a paid-run credit or modify a confirmed payment
 - Change a published Merkle root or reduce a published player claim
 - Change the deployed MATT or MATT Mine contract addresses

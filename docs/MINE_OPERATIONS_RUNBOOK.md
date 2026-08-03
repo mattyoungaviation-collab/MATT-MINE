@@ -58,6 +58,19 @@ Each board displays:
 
 Press **Refresh live status** to reconcile claim status from Ronin. “Unpaid” means the wallet still has a valid on-chain claim; it does not mean the server should send a manual transfer.
 
+## Correct a failed current-week score
+
+Use this only when support has verified that a Daily or Pass run ended in the client but failed before its replay result reached the leaderboard.
+
+1. Find the wallet in the Admin player search and open **Complete player editor**.
+2. Under **Leaderboard score correction**, choose Daily Mine or Pass Mine.
+3. Enter the exact current-week score reported in the support evidence.
+4. Leave **End active run for the selected mine** checked when the player is locked out by a stale run.
+5. Enter the support reason and confirm the replay bypass.
+6. Reopen the leaderboard and verify the exact score and wallet.
+
+The action changes only the selected wallet and mine, records the previous and replacement scores, and closes only matching active runs. It cannot alter a finalized payout week.
+
 Do not recover expired or unallocated MATT until:
 
 1. The claim deadline has passed.

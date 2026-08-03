@@ -779,6 +779,7 @@ async function submitServerRun(serverRun, result) {
     if (retryable) {
       queueFinalizationRetry(() => submitServerRun(serverRun, result));
     } else {
+      await releaseIssuedServerRun(serverRun, transcript);
       if (activeServerRun === serverRun) activeServerRun = null;
       if (activeArenaTranscript === transcript) activeArenaTranscript = null;
       clearPendingFinalization();
@@ -1089,14 +1090,18 @@ async function startRunMode(mode) {
       return;
     }
     requestGameplayFullscreen();
+    let issuedRun = null;
+    let issuedTranscript = null;
     try {
       const run = await apiClient.startRun(mode);
+      issuedRun = run;
       activeServerRun = run;
       activeArenaTranscript = run.verification === 'fixed-step-input-replay'
         ? new ArenaTranscript(apiClient, run, {
             appendEvents: (...args) => apiClient.appendCompetitiveEvents(...args)
           })
         : null;
+      issuedTranscript = activeArenaTranscript;
       if (mode === RUN_MODES.FREE) serverPlayer.entitlements.freeRunAvailable = false;
       if (mode === RUN_MODES.PAID && paymentStatus) {
         paymentStatus.confirmedCredits = Math.max(0, paymentStatus.confirmedCredits - 1);
@@ -1137,6 +1142,7 @@ async function startRunMode(mode) {
       }
       updateMenu();
     } catch (error) {
+      if (issuedRun) await releaseIssuedServerRun(issuedRun, issuedTranscript);
       leaveGameplayFullscreen();
       toast(error.message);
       await refreshServerPlayer();
@@ -1460,6 +1466,8 @@ const game = new MattMineGame(canvas, profile, {
     abandonIssuedRun(context);
   },
   onFatalError(error) {
+    const failedMode = activeServerRun?.mode || activeArenaRun?.mode || RUN_MODES.PRACTICE;
+    abandonIssuedRun({ mode: failedMode, reason: 'client_runtime_error' });
     leaveGameplayFullscreen();
     showScreen('menu');
     setGameplayUi(false);
@@ -3107,10 +3115,14 @@ function abandonIssuedRun(context = {}) {
     try {
       await transcriptDiscard;
       if (arenaRun) {
-        await apiClient.abandonArenaRun(arenaRun.runId, arenaRun.runToken);
+        await retryRunFinalization(
+          () => apiClient.abandonArenaRun(arenaRun.runId, arenaRun.runToken)
+        );
         await refreshArena(true);
       } else if (serverRun) {
-        await apiClient.abandonRun(serverRun.runId, serverRun.runToken);
+        await retryRunFinalization(
+          () => apiClient.abandonRun(serverRun.runId, serverRun.runToken)
+        );
         await refreshServerPlayer();
       }
     } catch (error) {
@@ -3120,6 +3132,26 @@ function abandonIssuedRun(context = {}) {
         : 'Run closed locally; server release is pending');
     }
   })();
+}
+
+async function releaseIssuedServerRun(serverRun, transcript = null) {
+  if (!serverRun?.runId || !serverRun?.runToken) return false;
+  await transcript?.discard?.().catch(() => undefined);
+  try {
+    await retryRunFinalization(
+      () => apiClient.abandonRun(serverRun.runId, serverRun.runToken)
+    );
+    return true;
+  } catch (error) {
+    // A successful finish makes abandonment return "not active". In every
+    // other case the server TTL and Admin release control remain the final
+    // fallback, so cleanup must not hide the original run error.
+    console.warn('[MATT Mine] Issued run cleanup could not be confirmed.', error);
+    return false;
+  } finally {
+    if (activeServerRun === serverRun) activeServerRun = null;
+    if (activeArenaTranscript === transcript) activeArenaTranscript = null;
+  }
 }
 
 function formatTime(seconds) {

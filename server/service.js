@@ -2545,6 +2545,8 @@ function leaderboardForState(state, mode, week, viewerAddress) {
 }
 
 function walletWeeklyScore(state, address, mode, week) {
+  const override = state.leaderboardOverrides?.[`${week}:${mode}:${address}`];
+  if (override && Number.isSafeInteger(override.score)) return override.score;
   const dailyBest = new Map();
   for (const run of Object.values(state.runs)) {
     if (

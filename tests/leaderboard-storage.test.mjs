@@ -169,6 +169,43 @@ test('PostgreSQL initialization migrates legacy finished runs into normalized ru
   assert.match(dailyUpsert.normalized, /EXCLUDED\.BEST_SCORE > MATT_MINE_DAILY_SCORES\.BEST_SCORE/);
 });
 
+test('PostgreSQL materializes durable Admin score overrides after rebuilding replay scores', async () => {
+  const state = defaultServerState();
+  state.wallets[ADDRESS] = defaultWalletState(ADDRESS, START);
+  state.leaderboardOverrides[`2026-07-20:free:${ADDRESS}`] = {
+    address: ADDRESS,
+    mode: 'free',
+    week: '2026-07-20',
+    score: 93_245,
+    reason: 'Support verified failed extraction',
+    updatedAt: START,
+    updatedBy: 'SERVER_ADMIN'
+  };
+  const overrideWrites = [];
+  const pool = createRecordingPool({
+    state,
+    handler(normalized, params) {
+      if (
+        normalized.startsWith('INSERT INTO MATT_MINE_WEEKLY_SCORES') &&
+        normalized.includes('JSONB_TO_RECORDSET')
+      ) {
+        overrideWrites.push(JSON.parse(params[0]));
+        return { rows: [] };
+      }
+      return undefined;
+    }
+  });
+
+  await new PostgresDatabase(null, { pool, now: () => START }).init();
+
+  assert.deepEqual(overrideWrites, [[{
+    week: '2026-07-20',
+    mode: 'free',
+    address: ADDRESS,
+    score: 93_245
+  }]]);
+});
+
 test('closed weekly leaderboards are snapshotted once and read from immutable snapshot rows', async () => {
   const state = defaultServerState();
   state.wallets[SUSPENDED_ADDRESS] = {

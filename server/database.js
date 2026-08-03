@@ -190,6 +190,7 @@ export class PostgresDatabase {
       }
 
       await rebuildWeeklyScores(client);
+      await transaction.syncLeaderboardOverrides(state.leaderboardOverrides);
       await finalizeClosedLeaderboards(
         client,
         currentWeek,
@@ -298,6 +299,7 @@ export class PostgresDatabase {
       const draft = normalizeServerState(parseJsonValue(selected.rows[0]?.data));
       const transaction = new PostgresLeaderboardTransaction(client);
       const result = await mutator(draft, transaction);
+      await transaction.syncLeaderboardOverrides(draft.leaderboardOverrides);
       const currentWeek = utcWeekKey(this.now());
       await finalizeClosedLeaderboards(
         client,
@@ -656,6 +658,37 @@ class PostgresLeaderboardTransaction {
       ]
     );
     await updateWeeklyScore(this.client, run.week, run.mode, run.address);
+  }
+
+  async syncLeaderboardOverrides(overrides = {}) {
+    const rows = Object.values(overrides || {}).filter((entry) =>
+      entry &&
+      ['free', 'paid'].includes(entry.mode) &&
+      typeof entry.week === 'string' &&
+      typeof entry.address === 'string' &&
+      Number.isSafeInteger(entry.score)
+    );
+    if (!rows.length) return;
+    await this.client.query(
+      `INSERT INTO matt_mine_weekly_scores (
+         week_key, mode, address, weekly_score, days_count, updated_at
+       )
+       SELECT
+         item.week,
+         item.mode,
+         LOWER(item.address),
+         item.score,
+         CASE WHEN item.score > 0 THEN 1 ELSE 0 END,
+         NOW()
+       FROM jsonb_to_recordset($1::jsonb) AS item(
+         week TEXT, mode TEXT, address TEXT, score BIGINT
+       )
+       ON CONFLICT (week_key, mode, address) DO UPDATE SET
+         weekly_score = EXCLUDED.weekly_score,
+         days_count = EXCLUDED.days_count,
+         updated_at = NOW()`,
+      [JSON.stringify(rows.map(({ week, mode, address, score }) => ({ week, mode, address, score })))]
+    );
   }
 
   async storedRunStatus(runId) {

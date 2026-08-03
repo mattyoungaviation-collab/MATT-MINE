@@ -194,6 +194,55 @@ test('Admin can explicitly end active runs and apply an authoritative player edi
   assert.match(audit.entries[0].details, /ended 1 active run/);
 });
 
+test('Admin can set an exact current-week Daily score and release only that player’s stuck run', async () => {
+  const { service, database } = harness();
+  const session = await signIn(service);
+  const run = await service.startRun(session.token, SERVER_RUN_MODES.FREE);
+  const address = account.address.toLowerCase();
+
+  const corrected = await service.adminAwardPlayer('admin-secret', address, {
+    type: 'score_override',
+    mode: 'free',
+    score: 93_245,
+    week: '2026-07-27',
+    terminateActiveRuns: true,
+    reason: 'Support verified failed extraction'
+  }, 'Support verified failed extraction');
+
+  assert.equal(corrected.scoreCorrection.previousScore, 0);
+  assert.equal(corrected.scoreCorrection.score, 93_245);
+  assert.equal(corrected.terminatedActiveRuns, 1);
+  assert.equal(corrected.wallet.leaderboardScores.free, 93_245);
+  const state = await database.read();
+  assert.equal(state.runs[run.runId].status, 'expired');
+  assert.equal(state.runs[run.runId].adminTerminationReason, 'Support verified failed extraction');
+  assert.equal(
+    state.leaderboardOverrides[`2026-07-27:free:${address}`].score,
+    93_245
+  );
+  const board = await service.leaderboard(session.token, SERVER_RUN_MODES.FREE);
+  assert.equal(board.playerScore, 93_245);
+  assert.equal(board.rows[0].address, address);
+  const audit = await service.adminAudit('admin-secret', { action: 'PLAYER_LEADERBOARD_SCORE_OVERRIDDEN' });
+  assert.match(audit.entries[0].details, /0 -> 93245/);
+});
+
+test('Admin score correction cannot alter a finalized competition week', async () => {
+  const { service } = harness();
+  await signIn(service);
+
+  await assert.rejects(
+    () => service.adminAwardPlayer('admin-secret', account.address, {
+      type: 'score_override',
+      mode: 'free',
+      score: 50_000,
+      week: '2026-07-20',
+      reason: 'Attempt old week correction'
+    }, 'Attempt old week correction'),
+    (error) => error.code === 'score_override_week_closed'
+  );
+});
+
 test('the command center loads a complete editor with exact fields and destructive reset tools', async () => {
   const [html, script, tuning] = await Promise.all([
     readFile(`${ROOT}admin.html`, 'utf8'),
@@ -210,6 +259,9 @@ test('the command center loads a complete editor with exact fields and destructi
   assert.match(script, /Clear Pass achievements/);
   assert.match(script, /Reset all off-chain progression/);
   assert.match(script, /End active runs and apply now/);
+  assert.match(script, /Leaderboard score correction/);
+  assert.match(script, /Apply exact leaderboard score/);
+  assert.match(script, /type: 'score_override'/);
   assert.match(tuning, /Focused Core damage per level/);
   assert.match(tuning, /GuardianBosses/);
 });
