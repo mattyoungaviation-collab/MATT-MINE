@@ -2,6 +2,7 @@ import { resolveRoninProvider } from './game/walletProvider.js';
 
 const SESSION_STORAGE_KEY = 'matt-mine-server-session-v1';
 const RONIN_CHAIN_ID = 2020;
+let shopReturnScreen = 'menu';
 
 if (typeof document !== 'undefined') mountNuggetEconomyUi();
 
@@ -43,13 +44,19 @@ function mountNuggetEconomyUi() {
   app.appendChild(screen);
 
   menuButton.addEventListener('click', () => void openNuggetShop());
-  screen.querySelector('#nugget-shop-close').addEventListener('click', () => showOnlyScreen('menu'));
+  document.querySelectorAll('[data-open-nugget-shop]').forEach((button) => {
+    button.addEventListener('click', () => void openNuggetShop());
+  });
+  window.addEventListener('mattmine:open-nugget-shop', () => void openNuggetShop());
+  screen.querySelector('#nugget-shop-close').addEventListener('click', () => showOnlyScreen(shopReturnScreen));
 
   const practiceButton = document.querySelector('#practice-claim-button');
   practiceButton?.addEventListener('click', interceptPracticeClaim, { capture: true });
 }
 
 async function openNuggetShop() {
+  const currentScreen = document.querySelector('.screen.active');
+  if (currentScreen?.id && currentScreen.id !== 'nugget-shop') shopReturnScreen = currentScreen.id;
   showOnlyScreen('nugget-shop');
   const status = document.querySelector('#nugget-shop-status');
   status.textContent = 'Loading the server-authoritative nugget economy…';
@@ -342,13 +349,19 @@ function renderPurchaseHistory(history) {
 
 function updateDisplayedBalance(value) {
   if (!Number.isSafeInteger(Number(value))) return;
-  const element = document.querySelector('#menu-nuggets');
-  if (element) element.textContent = formatNumber(Number(value));
+  const formatted = formatNumber(Number(value));
+  for (const selector of ['#menu-nuggets', '#profile-nugget-value', '#profile-store-balance']) {
+    const element = document.querySelector(selector);
+    if (element) element.textContent = formatted;
+  }
+  const launchBalance = document.querySelector('#launch-nugget-balance');
+  if (launchBalance) launchBalance.textContent = `${formatted} NUGGETS`;
 }
 
 function showOnlyScreen(id) {
   document.querySelectorAll('.screen').forEach((screen) => screen.classList.toggle('active', screen.id === id));
   document.body.classList.toggle('launch-active', id === 'launch');
+  window.dispatchEvent(new CustomEvent('mattmine:screen-change', { detail: { screenId: id } }));
 }
 
 function sessionToken() {

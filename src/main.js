@@ -136,6 +136,8 @@ let abandonResetTimer = null;
 let touchInputActive = touchInputDetected(globalThis);
 let pendingLandscapeAction = null;
 let dailyMinePreviewCleanup = null;
+let liveDashboardTimer = null;
+let liveDashboardBusy = false;
 const wallet = new RoninWalletAdapter({
   api: apiClient,
   onInvalidated(reason) {
@@ -175,6 +177,49 @@ const ui = {
 function showScreen(id = null) {
   for (const screen of screens) screen.classList.toggle('active', screen.id === id);
   document.body.classList.toggle('launch-active', id === 'launch');
+  syncLiveDashboardPolling(id);
+}
+
+function syncLiveDashboardPolling(screenId) {
+  clearInterval(liveDashboardTimer);
+  liveDashboardTimer = null;
+  const liveScreens = new Set([
+    'launch', 'menu', 'daily-mine', 'pass-mine', 'miner-profile',
+    'mine-pass', 'daily-arena', 'leaderboards'
+  ]);
+  if (!serverPlayer || !liveScreens.has(screenId)) return;
+  liveDashboardTimer = setInterval(() => {
+    if (document.visibilityState === 'visible' && !app.classList.contains('gameplay-active')) {
+      void refreshVisibleDashboard(screenId);
+    }
+  }, 30_000);
+}
+
+async function refreshVisibleDashboard(screenId) {
+  if (liveDashboardBusy || !serverPlayer || !apiClient.hasSession()) return;
+  liveDashboardBusy = true;
+  try {
+    const requests = [apiClient.me()];
+    if (serverConfig?.realPaymentsEnabled === true) requests.push(apiClient.paymentStatus());
+    const [playerResult, paymentResult] = await Promise.allSettled(requests);
+    if (playerResult.status === 'fulfilled') {
+      serverPlayer = playerResult.value;
+      profile = serverPlayer.profile;
+      saveProfile(profile);
+      game.setProfile(profile);
+    }
+    if (paymentResult?.status === 'fulfilled') {
+      paymentStatus = paymentResult.value;
+      applyPassInventory(paymentStatus.passInventory);
+    }
+    updateMenu();
+    if (screenId === 'daily-arena') await refreshArena(true);
+    if (screenId === 'leaderboards') await renderServerLeaderboard(activeBoard);
+    const liveState = $('#profile-live-state');
+    if (liveState) liveState.textContent = `LIVE · ${new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+  } finally {
+    liveDashboardBusy = false;
+  }
 }
 
 function applyTouchInputMode(active = touchInputActive) {
@@ -354,6 +399,9 @@ function updateMenu() {
       }
     : runAccess(state, RUN_MODES.PAID);
   $('#menu-nuggets').textContent = formatNumber(profile.bankedNuggets);
+  if ($('#launch-nugget-balance')) $('#launch-nugget-balance').textContent = `${formatNumber(profile.bankedNuggets)} NUGGETS`;
+  if ($('#profile-nugget-value')) $('#profile-nugget-value').textContent = formatNumber(profile.bankedNuggets);
+  if ($('#profile-store-balance')) $('#profile-store-balance').textContent = formatNumber(profile.bankedNuggets);
   $('#menu-depth').textContent = String(profile.bestDepth);
   $('#menu-score').textContent = formatNumber(profile.bestScore);
   $('#wallet-label').textContent = connected
@@ -415,7 +463,183 @@ function updateMenu() {
   $('#beta-run-button').hidden = serverPlayer?.expansion?.betaAvailable !== true;
   renderPassProgress();
   renderGameplayPreferences();
+  renderMineBriefings({ connected, freeAccess, passActive, remainingPassDays, paidCredits, paidRunsToday, paidRunPrice });
+  renderProfileDashboard();
+  if (connected && !liveDashboardTimer) {
+    syncLiveDashboardPolling(document.querySelector('.screen.active')?.id || null);
+  }
 }
+
+function renderMineBriefings({ connected, freeAccess, passActive, remainingPassDays, paidCredits, paidRunsToday, paidRunPrice }) {
+  const dailyStatus = $('#daily-entry-status');
+  const dailyStart = $('#start-daily-run-button');
+  if (dailyStatus) {
+    dailyStatus.textContent = !connected
+      ? 'RONIN SIGN-IN REQUIRED'
+      : freeAccess.allowed
+        ? 'FREE RUN READY'
+        : freeAccess.reason.toUpperCase();
+  }
+  if ($('#daily-attempt-value')) $('#daily-attempt-value').textContent = freeAccess.allowed ? '1 READY' : 'USED';
+  if ($('#daily-best-value')) $('#daily-best-value').textContent = formatNumber(serverPlayer?.scores?.free || 0);
+  if ($('#daily-nugget-value')) $('#daily-nugget-value').textContent = formatNumber(profile.bankedNuggets);
+  if (dailyStart) {
+    dailyStart.disabled = connected && !freeAccess.allowed;
+    dailyStart.textContent = !connected
+      ? 'CONNECT RONIN TO PLAY'
+      : freeAccess.allowed
+        ? 'START DAILY RUN'
+        : 'DAILY RUN USED';
+  }
+
+  if ($('#pass-mine-state')) {
+    $('#pass-mine-state').textContent = passActive
+      ? `PASS ACTIVE · ${remainingPassDays} DAYS LEFT`
+      : 'MINE PASS REQUIRED';
+  }
+  if ($('#pass-credit-value')) $('#pass-credit-value').textContent = formatNumber(paidCredits);
+  const paidDailyLimit = serverConfig?.realPaymentsEnabled === true
+    ? paymentStatus?.paidRuns?.dailyLimit || 10
+    : economy.state.settings.maxPaidRunsPerDay;
+  if ($('#pass-bought-value')) $('#pass-bought-value').textContent = `${paidRunsToday} / ${paidDailyLimit}`;
+  if ($('#pass-best-value')) $('#pass-best-value').textContent = formatNumber(serverPlayer?.scores?.paid || 0);
+  const passStart = $('#start-pass-mine-button');
+  if (passStart) {
+    passStart.disabled = connected && passActive && paidCredits < 1;
+    passStart.textContent = !connected
+      ? 'CONNECT RONIN TO CONTINUE'
+      : !passActive
+        ? 'GET MINE PASS'
+        : paidCredits > 0
+          ? 'START PASS RUN · USE 1 CREDIT'
+          : 'BUY A RUN CREDIT FIRST';
+  }
+  const buyCredit = $('#buy-pass-credit-button');
+  if (buyCredit) {
+    buyCredit.disabled = !passActive || paymentBusy || paymentStatus?.paidRuns?.paused === true;
+    buyCredit.textContent = paidRunPrice === null || paidRunPrice === undefined
+      ? 'BUY RUN CREDIT'
+      : `BUY ANOTHER CREDIT · ${trimNumber(paidRunPrice)} RON`;
+  }
+}
+
+function renderProfileDashboard() {
+  if (!$('#profile-nugget-value')) return;
+  const currentProfile = serverPlayer?.profile || profile;
+  $('#profile-nugget-value').textContent = formatNumber(currentProfile.bankedNuggets || 0);
+  $('#profile-store-balance').textContent = formatNumber(currentProfile.bankedNuggets || 0);
+  $('#profile-best-score').textContent = formatNumber(currentProfile.bestScore || 0);
+  $('#profile-best-depth').textContent = formatNumber(currentProfile.bestDepth || 0);
+  $('#profile-total-runs').textContent = formatNumber(currentProfile.totalRuns || 0);
+
+  const liveProgress = paymentStatus?.passProgress || serverPlayer?.passProgress;
+  const xp = Number(liveProgress?.xp || 0);
+  const progress = liveProgress || passLevel(xp);
+  $('#profile-pass-level').textContent = String(progress.level || 1);
+  $('#profile-pass-xp').textContent = liveProgress?.nextLevelXp
+    ? `${formatNumber(liveProgress.currentLevelXp)} / ${formatNumber(liveProgress.nextLevelXp)} XP`
+    : `${formatNumber(xp)} XP`;
+  $('#profile-pass-fill').style.width = `${Math.round(Number(progress.progress || 0) * 100)}%`;
+  const activePass = serverConfig?.realPaymentsEnabled === true
+    ? paymentStatus?.pass?.active === true
+    : passIsActive(economy.state);
+  const days = serverConfig?.realPaymentsEnabled === true && paymentStatus
+    ? Math.max(0, Math.ceil((paymentStatus.pass.expiresAt - Date.now()) / 86_400_000))
+    : passDaysRemaining(economy.state);
+  $('#profile-pass-days').textContent = activePass ? `${days} DAYS LEFT` : 'PASS INACTIVE';
+  $('#profile-pass-badge').textContent = activePass ? `PASS ACTIVE · ${days} DAYS LEFT` : 'FREE TIER';
+
+  const upgradeMarkup = META_UPGRADES.map((upgrade) => {
+    const rank = Number(currentProfile.meta?.[upgrade.id] || 0);
+    const percent = Math.round(Math.min(1, rank / upgrade.max) * 100);
+    return `<div class="profile-upgrade-row"><strong>${escapeHtml(upgrade.name)}</strong><div class="profile-upgrade-bar"><i style="width:${percent}%"></i></div><span>RANK ${rank} / ${upgrade.max}</span></div>`;
+  }).join('');
+  replaceProfileMarkup($('#profile-upgrade-summary'), META_UPGRADES.slice(0, 3).map((upgrade) => {
+    const rank = Number(currentProfile.meta?.[upgrade.id] || 0);
+    const percent = Math.round(Math.min(1, rank / upgrade.max) * 100);
+    return `<div class="profile-upgrade-row"><strong>${escapeHtml(upgrade.name)}</strong><div class="profile-upgrade-bar"><i style="width:${percent}%"></i></div><span>RANK ${rank}</span></div>`;
+  }).join(''));
+  replaceProfileMarkup($('#profile-upgrade-grid'), upgradeMarkup);
+
+  const recentRuns = Array.isArray(serverPlayer?.recentRuns) ? serverPlayer.recentRuns : [];
+  const compactRows = recentRuns.slice(0, 4).map((run) => `<tr>
+    <td>${escapeHtml(profileRunLabel(run.mode))}</td>
+    <td>${escapeHtml(formatProfileRunDate(run.finishedAt))}</td>
+    <td>${formatNumber(run.result?.score || 0)}</td>
+    <td>${run.result?.extracted ? 'EXTRACTED' : 'VERIFIED'}</td>
+  </tr>`).join('');
+  replaceProfileMarkup($('#profile-recent-runs'), compactRows || '<tr><td colspan="4">No completed server runs yet.</td></tr>');
+  replaceProfileMarkup($('#profile-full-run-history'), recentRuns.map((run) => `<tr>
+    <td>${escapeHtml(profileRunLabel(run.mode))}</td>
+    <td>${escapeHtml(formatProfileRunDate(run.finishedAt))}</td>
+    <td>${formatNumber(run.result?.score || 0)}</td>
+    <td>${formatNumber(run.result?.depth || 0)}</td>
+    <td>${run.result?.extracted ? 'EXTRACTED' : 'VERIFIED'}</td>
+  </tr>`).join('') || '<tr><td colspan="5">No completed server runs yet.</td></tr>');
+
+  const equipped = serverPlayer?.passInventory?.equipped || {};
+  const weapon = cosmeticById(equipped.weapon);
+  const frame = cosmeticById(equipped.frame);
+  const selectedCharacter = serverPlayer?.expansion?.selectedCharacter || 'matt';
+  const character = serverPlayer?.expansion?.characters?.[selectedCharacter];
+  $('#profile-character-name').textContent = character?.name || 'MATT';
+  $('#profile-weapon-name').textContent = weapon?.name || 'STANDARD PICKAXE';
+  $('#profile-frame-name').textContent = frame?.name || 'STANDARD FRAME';
+  replaceProfileMarkup($('#profile-loadout-summary'), `
+    <span>CHARACTER · ${escapeHtml(character?.name || 'MATT')}</span>
+    <span>WEAPON · ${escapeHtml(weapon?.name || 'STANDARD PICKAXE')}</span>
+    <span>FRAME · ${escapeHtml(frame?.name || 'STANDARD FRAME')}</span>`);
+}
+
+function replaceProfileMarkup(element, markup) {
+  if (!element) return;
+  const range = document.createRange();
+  range.selectNode(element);
+  element.replaceChildren(range.createContextualFragment(markup));
+}
+
+function profileRunLabel(mode) {
+  if (mode === RUN_MODES.FREE) return 'DAILY MINE';
+  if (mode === RUN_MODES.PAID) return 'PASS MINE';
+  if (mode === RUN_MODES.PRACTICE) return 'PRACTICE';
+  if (mode === RUN_MODES.WEEKLY) return 'SEVEN-DAY MINE';
+  if (mode === RUN_MODES.ENDLESS) return 'ENDLESS MINE';
+  return String(mode || 'MINE').replaceAll('_', ' ').toUpperCase();
+}
+
+function formatProfileRunDate(timestamp) {
+  if (!Number(timestamp)) return '—';
+  return new Date(Number(timestamp)).toLocaleString('en-US', {
+    timeZone: 'UTC', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
+  });
+}
+
+function activateProfileTab(tabId) {
+  for (const button of document.querySelectorAll('[data-profile-tab]')) {
+    button.classList.toggle('active', button.dataset.profileTab === tabId);
+  }
+  for (const panel of document.querySelectorAll('[data-profile-panel]')) {
+    panel.classList.toggle('active', panel.dataset.profilePanel === tabId);
+  }
+}
+
+function openDailyMine() {
+  updateMenu();
+  showScreen('daily-mine');
+}
+
+function openPassMine() {
+  updateMenu();
+  showScreen('pass-mine');
+}
+
+function requestNuggetShop() {
+  window.dispatchEvent(new CustomEvent('mattmine:open-nugget-shop'));
+}
+
+window.addEventListener('mattmine:screen-change', (event) => {
+  syncLiveDashboardPolling(event.detail?.screenId || null);
+});
 
 function updateLaunch({ connected, freeAccess, passPrice, paidRunPrice, livePayments, passActive }) {
   const walletCopy = disconnectedWalletCopy();
@@ -509,10 +733,10 @@ function openMinerProfile(forceSetup = false) {
   const requiresSetup = forceSetup || identity.requiresSetup || !identity.name;
   const panel = $('.miner-profile-panel');
   panel?.classList.toggle('setup-required', requiresSetup);
-  $('#profile-title').textContent = requiresSetup ? 'Create Your Miner' : 'Your Miner Profile';
+  $('#profile-title').textContent = requiresSetup ? 'Create Your Miner' : 'Miner Profile';
   $('#profile-intro').textContent = requiresSetup
     ? 'Choose carefully. Your miner name is unique and permanently tied to this wallet.'
-    : 'Your miner name is permanent. You can upload a new leaderboard picture whenever you want.';
+    : 'Your identity, permanent progress, and mine history.';
   $('#profile-name').value = identity.name || '';
   $('#profile-name').readOnly = !requiresSetup;
   $('#profile-name-note').textContent = requiresSetup
@@ -528,6 +752,8 @@ function openMinerProfile(forceSetup = false) {
   renderKeybindings();
   loadControllerSettings();
   renderCharacters();
+  renderProfileDashboard();
+  activateProfileTab('overview');
   showScreen('miner-profile');
   if (requiresSetup) $('#profile-name').focus();
 }
@@ -1500,6 +1726,10 @@ for (const button of document.querySelectorAll('[data-launch-action]')) {
       void openArena();
       return;
     }
+    if (action === 'leaderboards') {
+      openLeaderboards(RUN_MODES.FREE);
+      return;
+    }
     showScreen('menu');
     updateMenu();
   });
@@ -1544,7 +1774,7 @@ mobileWalletConnectCancel.addEventListener('click', () => {
 });
 
 $('#home-button').addEventListener('click', () => openLaunch(true));
-$('#free-run-button').addEventListener('click', () => void startRunMode(RUN_MODES.FREE));
+$('#free-run-button').addEventListener('click', openDailyMine);
 $('#practice-run-button').addEventListener('click', () => void startRunMode(RUN_MODES.PRACTICE));
 $('#weekly-run-button').addEventListener('click', () => void startRunMode(RUN_MODES.WEEKLY));
 $('#endless-run-button').addEventListener('click', () => void startRunMode(RUN_MODES.ENDLESS));
@@ -1576,18 +1806,39 @@ $('#beta-copy-config').addEventListener('click', () => {
   toast('Beta configuration copied');
 });
 $('#paid-run-button').addEventListener('click', () => {
+  openPassMine();
+});
+$('#start-daily-run-button').addEventListener('click', () => void startRunMode(RUN_MODES.FREE));
+$('#daily-leaderboard-button').addEventListener('click', () => openLeaderboards(RUN_MODES.FREE));
+$('#daily-back-button').addEventListener('click', () => { showScreen('menu'); updateMenu(); });
+$('#start-pass-mine-button').addEventListener('click', async () => {
+  if (!serverPlayer && serverConfig?.paidRunsEnabled === true) {
+    const connected = await connectWallet();
+    if (!connected) return;
+  }
   if (serverConfig?.paidRunsEnabled === true) {
-    if ((paymentStatus?.confirmedCredits || 0) > 0 && paymentStatus?.pass?.active) {
-      void startRunMode(RUN_MODES.PAID);
-    } else {
-      openPass();
-    }
+    if (!paymentStatus?.pass?.active) return openPass();
+    if ((paymentStatus.confirmedCredits || 0) < 1) return openPassMine();
+    void startRunMode(RUN_MODES.PAID);
     return;
   }
   const access = runAccess(economy.state, RUN_MODES.PAID);
   if (access.allowed) void startRunMode(RUN_MODES.PAID);
   else openPass();
 });
+$('#buy-pass-credit-button').addEventListener('click', () => {
+  if (serverConfig?.realPaymentsEnabled === true) {
+    void purchaseLivePaidRun('pass-mine');
+    return;
+  }
+  const result = economy.apply(purchasePaidRun(economy.state));
+  toast(result.ok
+    ? `${result.priceRon} RON modeled → ${formatNumber(result.mattBought)} MATT · 0 burned`
+    : result.error);
+  openPassMine();
+});
+$('#pass-mine-leaderboard-button').addEventListener('click', () => openLeaderboards(RUN_MODES.PAID));
+$('#pass-mine-back-button').addEventListener('click', () => { showScreen('menu'); updateMenu(); });
 $('#wallet-button').addEventListener('click', () => {
   if (serverPlayer) {
     void refreshServerPlayer().then(() => toast('Server wallet session refreshed'));
@@ -1643,6 +1894,15 @@ $('#shake-toggle-button').addEventListener('click', () => {
   toast(gameplayPreferences.screenShake ? 'Screen shake on' : 'Screen shake off');
 });
 $('#profile-button').addEventListener('click', () => openMinerProfile(false));
+$('#profile-back-button').addEventListener('click', () => { showScreen('menu'); updateMenu(); });
+$('#profile-manage-upgrades-button').addEventListener('click', () => { renderShop(); showScreen('upgrade-shop'); });
+$('#profile-open-upgrades-button').addEventListener('click', () => { renderShop(); showScreen('upgrade-shop'); });
+$('#profile-manage-loadout-button').addEventListener('click', () => void openCosmetics());
+$('#profile-loadout-button').addEventListener('click', () => void openCosmetics());
+$('#profile-pass-button').addEventListener('click', openPass);
+for (const tab of document.querySelectorAll('[data-profile-tab]')) {
+  tab.addEventListener('click', () => activateProfileTab(tab.dataset.profileTab));
+}
 $('#controls-button').addEventListener('click', () => void openPlayerControls());
 $('#save-profile-button').addEventListener('click', () => void saveMinerIdentity());
 $('#update-avatar-button').addEventListener('click', () => void updateMinerAvatar());
@@ -1873,7 +2133,7 @@ async function purchaseLivePass() {
   }
 }
 
-async function purchaseLivePaidRun() {
+async function purchaseLivePaidRun(returnScreen = 'mine-pass') {
   if (paymentBusy) return;
   if (!serverPlayer) {
     const connected = await connectWallet();
@@ -1904,7 +2164,8 @@ async function purchaseLivePaidRun() {
     toast(error?.message || 'Paid-run purchase failed.');
   } finally {
     paymentBusy = false;
-    openPass();
+    if (returnScreen === 'pass-mine') openPassMine();
+    else openPass();
   }
 }
 
@@ -3047,6 +3308,7 @@ async function openPlayerControls() {
   openMinerProfile(false);
   loadControllerSettings();
   renderCharacters();
+  activateProfileTab('controls');
   requestAnimationFrame(() => {
     const editor = $('#keybind-editor');
     editor.classList.add('keybind-highlight');
@@ -3255,20 +3517,15 @@ window.addEventListener('mattmine:slot-enter', (event) => {
     return;
   }
   if (slot.id === 'pass') {
-    if (
-      serverConfig?.paidRunsEnabled === true &&
-      (paymentStatus?.confirmedCredits || 0) > 0 &&
-      paymentStatus?.pass?.active
-    ) {
-      void startRunMode(RUN_MODES.PAID);
-    } else {
-      openPass();
-    }
+    openPassMine();
+    return;
+  }
+  if (slot.id === 'daily') {
+    openDailyMine();
     return;
   }
   const mode = {
     practice: RUN_MODES.PRACTICE,
-    daily: RUN_MODES.FREE,
     weekly: RUN_MODES.WEEKLY
   }[slot.id];
   if (mode) void startRunMode(mode);

@@ -1,0 +1,1256 @@
+:root {
+  --ui-ink: #05070a;
+  --ui-panel: rgba(9, 13, 18, 0.96);
+  --ui-panel-soft: rgba(14, 19, 25, 0.92);
+  --ui-line: rgba(196, 159, 68, 0.34);
+  --ui-line-bright: #d7a91d;
+  --ui-gold: #f7c430;
+  --ui-gold-deep: #b67a08;
+  --ui-purple: #a34fff;
+  --ui-purple-soft: rgba(163, 79, 255, 0.18);
+  --ui-cyan: #38d8ff;
+  --ui-green: #44e09b;
+  --ui-white: #f5f6f7;
+  --ui-muted: #929aa6;
+  --ui-danger: #ff625f;
+  --ui-cut: polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px), 0 10px);
+  --ui-shadow: 0 24px 80px rgba(0, 0, 0, 0.52);
+}
+
+body {
+  background: var(--ui-ink);
+  color: var(--ui-white);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--ui-cyan);
+  outline-offset: 3px;
+}
+
+.screen:not(#hud):not(#launch) {
+  background:
+    linear-gradient(90deg, rgba(4, 6, 9, 0.98), rgba(6, 7, 11, 0.88)),
+    url('../assets/launch/matt-mine-hero.png') center / cover fixed;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-color: var(--ui-gold-deep) #07090c;
+}
+
+.screen:not(#hud):not(#launch)::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 85% 12%, rgba(145, 47, 255, 0.15), transparent 34%),
+    linear-gradient(rgba(255, 255, 255, 0.012) 1px, transparent 1px);
+  background-size: auto, 100% 4px;
+  z-index: 0;
+}
+
+.screen > .panel,
+.screen > .menu-card {
+  position: relative;
+  z-index: 1;
+}
+
+.panel {
+  border: 1px solid var(--ui-line);
+  background: linear-gradient(145deg, rgba(14, 18, 23, 0.98), rgba(6, 9, 13, 0.98));
+  box-shadow: var(--ui-shadow), inset 0 1px rgba(255, 255, 255, 0.04);
+}
+
+.wide-panel {
+  width: min(1500px, calc(100vw - 42px));
+  max-height: none;
+  margin: 22px auto;
+}
+
+#leaderboards,
+#mine-pass,
+#daily-arena,
+#pass-cosmetics,
+#upgrade-shop,
+#nugget-shop,
+#miner-profile,
+#daily-mine,
+#pass-mine {
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.eyebrow {
+  color: var(--ui-purple);
+  letter-spacing: 0.14em;
+}
+
+.primary-button,
+.secondary-button,
+.gold-button,
+.buy-button,
+.text-button,
+.profile-tabs button,
+.profile-rail-card button,
+.section-heading-row button {
+  min-height: 46px;
+  border-radius: 0;
+  clip-path: var(--ui-cut);
+  letter-spacing: 0.055em;
+  font-weight: 900;
+  text-transform: uppercase;
+  transition: transform 140ms ease, filter 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+
+.primary-button,
+.gold-button {
+  color: #17120a;
+  border: 1px solid #ffe073;
+  background: linear-gradient(180deg, #ffdf5a, #dfa00e);
+  box-shadow: inset 0 1px #fff3a5, 0 0 25px rgba(247, 196, 48, 0.13);
+}
+
+.secondary-button,
+.text-button,
+.profile-rail-card button,
+.section-heading-row button {
+  color: var(--ui-white);
+  border: 1px solid #3b4551;
+  background: linear-gradient(180deg, #151a20, #090c10);
+}
+
+button:not(:disabled):hover {
+  filter: brightness(1.13);
+  transform: translateY(-1px);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.close-button {
+  z-index: 12;
+  width: 46px;
+  height: 46px;
+  border: 1px solid #3d4651;
+  border-radius: 0;
+  clip-path: var(--ui-cut);
+  color: var(--ui-white);
+  background: rgba(7, 10, 14, 0.94);
+}
+
+.preview-note,
+.panel-copy,
+.panel p,
+.panel small {
+  color: var(--ui-muted);
+}
+
+/* Global website navigation and home store access */
+.launch-nav {
+  border-bottom-color: rgba(196, 159, 68, 0.22);
+  background: rgba(3, 5, 8, 0.96);
+  backdrop-filter: blur(18px);
+}
+
+.launch-links button {
+  color: #b5bbc3;
+  letter-spacing: 0.08em;
+}
+
+.launch-links button:hover {
+  color: var(--ui-gold);
+}
+
+.launch-nugget-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid rgba(247, 196, 48, 0.65);
+  clip-path: var(--ui-cut);
+  color: var(--ui-gold);
+  background: rgba(21, 16, 4, 0.78);
+  letter-spacing: 0.04em;
+}
+
+.launch-nugget-button span {
+  font-size: 1.1rem;
+  text-shadow: 0 0 14px rgba(247, 196, 48, 0.7);
+}
+
+.launch-store-shortcut {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+  margin-top: 10px;
+  padding: 13px 15px;
+  border: 1px solid rgba(247, 196, 48, 0.48);
+  clip-path: var(--ui-cut);
+  color: var(--ui-gold);
+  background: linear-gradient(90deg, rgba(63, 42, 4, 0.7), rgba(11, 13, 16, 0.95));
+  text-align: left;
+}
+
+.launch-store-shortcut span {
+  display: grid;
+  gap: 2px;
+}
+
+.launch-store-shortcut small {
+  color: #a8adb5;
+  font-size: 0.66rem;
+  letter-spacing: 0.04em;
+}
+
+.launch-store-shortcut strong {
+  white-space: nowrap;
+}
+
+.launch-hero-content h1,
+.profile-dashboard-heading h2,
+.mine-briefing-hero h2,
+.economy-panel > h2,
+.wide-panel > h2 {
+  text-transform: uppercase;
+  text-shadow: 0 4px 32px rgba(0, 0, 0, 0.75);
+}
+
+/* Mine select */
+#menu {
+  padding: 20px;
+}
+
+.economy-menu-card {
+  width: min(1540px, calc(100vw - 40px));
+  margin: auto;
+  border: 1px solid var(--ui-line);
+  background: linear-gradient(145deg, rgba(12, 16, 21, 0.98), rgba(5, 8, 11, 0.98));
+  box-shadow: var(--ui-shadow);
+  clip-path: var(--ui-cut);
+}
+
+.lobby-topbar {
+  border-bottom: 1px solid rgba(196, 159, 68, 0.22);
+}
+
+.compact-brand h1 span,
+.matchmaking-day strong,
+.menu-stats strong {
+  color: var(--ui-gold);
+}
+
+.run-mode-card {
+  border-radius: 0;
+  clip-path: var(--ui-cut);
+  background: linear-gradient(150deg, rgba(20, 25, 31, 0.96), rgba(7, 10, 14, 0.98));
+  border-color: #34404b;
+}
+
+.run-mode-card:hover,
+.run-mode-card.ready {
+  border-color: var(--ui-gold);
+  box-shadow: 0 0 30px rgba(247, 196, 48, 0.1);
+}
+
+.paid-run-card {
+  border-color: rgba(163, 79, 255, 0.55);
+  background: linear-gradient(145deg, rgba(41, 20, 61, 0.76), rgba(8, 10, 15, 0.98));
+}
+
+.arena-run-card {
+  border-color: rgba(56, 216, 255, 0.45);
+}
+
+.menu-nav-grid .secondary-button,
+#nugget-shop-button {
+  min-height: 48px;
+}
+
+.wallet-chip,
+.home-chip {
+  border-radius: 0;
+  clip-path: var(--ui-cut);
+}
+
+/* Shared Daily and Pass Mine briefing screens */
+.mine-briefing-screen {
+  padding: 18px;
+  align-items: flex-start;
+}
+
+.mine-briefing-panel {
+  padding: 0;
+  overflow: hidden;
+}
+
+.mine-briefing-hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(460px, 1.1fr);
+  min-height: 250px;
+  padding: 42px 48px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--ui-line);
+  background:
+    linear-gradient(90deg, #070a0e 0%, rgba(7, 10, 14, 0.93) 42%, rgba(7, 10, 14, 0.12) 75%),
+    url('../assets/launch/matt-mine-hero.png') right 34% / cover;
+}
+
+.mine-briefing-hero > div:first-child {
+  position: relative;
+  z-index: 2;
+  align-self: center;
+}
+
+.mine-briefing-hero h2 {
+  margin: 6px 0 8px;
+  color: var(--ui-gold);
+  font-size: clamp(3.2rem, 6vw, 6.6rem);
+  line-height: 0.84;
+}
+
+.pass-briefing-hero h2 {
+  color: var(--ui-white);
+}
+
+.pass-briefing-hero h2::first-letter {
+  color: var(--ui-purple);
+}
+
+.mine-briefing-hero p:not(.eyebrow) {
+  max-width: 650px;
+  margin: 12px 0 18px;
+  color: #cbd0d6;
+  font-size: 1.08rem;
+}
+
+.dashboard-live-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 13px;
+  border: 1px solid rgba(56, 216, 255, 0.55);
+  clip-path: var(--ui-cut);
+  color: var(--ui-cyan);
+  background: rgba(5, 31, 39, 0.7);
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.dashboard-live-pill::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 12px currentColor;
+}
+
+.pass-live-pill {
+  color: #c47cff;
+  border-color: rgba(163, 79, 255, 0.62);
+  background: rgba(45, 16, 68, 0.68);
+}
+
+.mine-briefing-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(380px, 0.65fr);
+  gap: 16px;
+  padding: 18px;
+}
+
+.mine-route-card,
+.mine-entry-card,
+.profile-section-card,
+.profile-rail-card {
+  border: 1px solid rgba(196, 159, 68, 0.28);
+  background: linear-gradient(150deg, rgba(16, 21, 27, 0.96), rgba(6, 9, 13, 0.98));
+  clip-path: var(--ui-cut);
+}
+
+.mine-route-card,
+.mine-entry-card {
+  padding: 18px;
+}
+
+.section-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.section-heading-row h3 {
+  margin: 0;
+  color: var(--ui-white);
+  letter-spacing: 0.045em;
+}
+
+.section-heading-row > span {
+  color: var(--ui-cyan);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.route-legend {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  margin-top: 10px;
+  color: #aab1ba;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-align: center;
+}
+
+.mine-entry-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mine-entry-card > h3 {
+  margin: 2px 0 4px;
+  font-size: 1.5rem;
+}
+
+.dashboard-metrics {
+  display: grid;
+  gap: 8px;
+}
+
+.dashboard-metrics.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.dashboard-metrics.four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.dashboard-metrics > div {
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid #303a45;
+  background: rgba(8, 11, 15, 0.88);
+}
+
+.dashboard-metrics span,
+.profile-rail-card > span {
+  display: block;
+  margin-bottom: 5px;
+  color: #929ba6;
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.07em;
+}
+
+.dashboard-metrics strong {
+  display: block;
+  overflow: hidden;
+  color: var(--ui-cyan);
+  font-size: clamp(1rem, 1.8vw, 1.55rem);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-metrics > div:first-child strong {
+  color: var(--ui-gold);
+}
+
+.mine-rule-list {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mine-rule-list li {
+  padding: 9px 10px 9px 34px;
+  border: 1px solid #2b343e;
+  color: #c7ccd2;
+  background: #090c10;
+  font-size: 0.82rem;
+  position: relative;
+}
+
+.mine-rule-list li::before {
+  content: '✓';
+  position: absolute;
+  left: 11px;
+  color: var(--ui-cyan);
+}
+
+.mine-entry-card .text-button {
+  border-color: transparent;
+  background: transparent;
+  color: #9aa2ac;
+}
+
+.pass-route-card,
+.pass-entry-card {
+  border-color: rgba(163, 79, 255, 0.42);
+}
+
+.pass-route-flow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 128px;
+  padding: 20px;
+  border: 1px solid rgba(163, 79, 255, 0.24);
+  background: radial-gradient(circle at center, rgba(116, 40, 175, 0.2), #080b0f 70%);
+}
+
+.pass-route-flow span {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  color: #d5c3e8;
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
+.pass-route-flow b {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  place-items: center;
+  border: 2px solid var(--ui-purple);
+  clip-path: var(--ui-cut);
+  color: #e2bdff;
+  background: rgba(50, 18, 74, 0.85);
+  box-shadow: 0 0 20px rgba(163, 79, 255, 0.28);
+  font-size: 1.3rem;
+}
+
+.pass-route-flow i {
+  flex: 1;
+  height: 2px;
+  margin: 0 5px;
+  background: linear-gradient(90deg, var(--ui-purple), var(--ui-gold));
+}
+
+.pass-route-scene {
+  min-height: 240px;
+  margin-top: 12px;
+  border: 1px solid rgba(163, 79, 255, 0.2);
+  background:
+    linear-gradient(0deg, rgba(7, 9, 13, 0.12), rgba(7, 9, 13, 0.7)),
+    url('../assets/launch/matt-mine-hero.png') center 45% / cover;
+}
+
+.pass-xp-banner {
+  padding: 10px;
+  color: var(--ui-gold);
+  border: 1px solid rgba(247, 196, 48, 0.3);
+  background: rgba(58, 40, 4, 0.5);
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-align: center;
+}
+
+.cyan-button {
+  color: var(--ui-cyan);
+  border-color: rgba(56, 216, 255, 0.55);
+}
+
+/* Miner Profile live dashboard */
+.profile-dashboard-shell {
+  padding: 22px;
+}
+
+.profile-dashboard-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  min-height: 132px;
+  padding: 12px 16px 20px;
+  border-bottom: 1px solid rgba(196, 159, 68, 0.24);
+  background:
+    linear-gradient(90deg, rgba(7, 10, 14, 0.98), rgba(7, 10, 14, 0.45)),
+    url('../assets/launch/matt-mine-hero.png') right 41% / 62% auto no-repeat;
+}
+
+.profile-dashboard-heading h2 {
+  margin: 2px 0 4px;
+  color: var(--ui-gold);
+  font-size: clamp(2.7rem, 5vw, 5.3rem);
+  line-height: 0.9;
+}
+
+.profile-dashboard-heading p {
+  margin: 0;
+}
+
+.profile-dashboard-layout {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr) 290px;
+  gap: 14px;
+  padding-top: 15px;
+}
+
+.profile-identity-card,
+.profile-dashboard-main,
+.profile-dashboard-rail {
+  min-width: 0;
+}
+
+.profile-identity-card {
+  padding: 12px;
+  border: 1px solid var(--ui-line);
+  background: linear-gradient(180deg, rgba(19, 22, 27, 0.98), rgba(6, 9, 12, 0.98));
+  clip-path: var(--ui-cut);
+}
+
+.profile-identity-card .profile-avatar-shell {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  margin: 0 0 14px;
+  border: 1px solid rgba(247, 196, 48, 0.6);
+  border-radius: 0;
+  clip-path: var(--ui-cut);
+  background:
+    radial-gradient(circle at 50% 25%, rgba(163, 79, 255, 0.25), transparent 54%),
+    #080b0f;
+}
+
+.profile-avatar-shell img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-avatar-shell span {
+  color: var(--ui-gold);
+  font-size: 6rem;
+}
+
+.profile-fields {
+  display: grid;
+  gap: 8px;
+}
+
+.profile-fields input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid #3a4550;
+  color: var(--ui-white);
+  background: #080b0f;
+}
+
+.profile-fields small {
+  line-height: 1.45;
+}
+
+.profile-upload-button {
+  min-height: 42px;
+  padding: 11px;
+  border: 1px solid #3b4651;
+  clip-path: var(--ui-cut);
+  color: #d3d7dc;
+  background: #0d1116;
+  text-align: center;
+  cursor: pointer;
+}
+
+.profile-identity-badges {
+  display: grid;
+  gap: 7px;
+  margin: 12px 0;
+}
+
+.profile-identity-badges span {
+  padding: 9px;
+  border: 1px solid rgba(56, 216, 255, 0.45);
+  color: var(--ui-cyan);
+  background: rgba(4, 27, 34, 0.6);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.07em;
+  text-align: center;
+}
+
+.profile-identity-badges span:last-child {
+  border-color: rgba(163, 79, 255, 0.52);
+  color: #c983ff;
+  background: rgba(38, 14, 56, 0.68);
+}
+
+.profile-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.profile-back-button {
+  width: 100%;
+  margin-top: 16px;
+}
+
+.profile-dashboard-main {
+  border: 1px solid var(--ui-line);
+  background: rgba(7, 10, 14, 0.96);
+}
+
+.profile-tabs {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  border-bottom: 1px solid rgba(196, 159, 68, 0.22);
+}
+
+.profile-tabs button {
+  min-height: 54px;
+  padding: 8px;
+  border: 0;
+  border-right: 1px solid #242c34;
+  clip-path: none;
+  color: #9ba3ad;
+  background: #0a0d11;
+  font-size: 0.7rem;
+}
+
+.profile-tabs button.active {
+  color: var(--ui-gold);
+  box-shadow: inset 0 -3px var(--ui-gold);
+  background: linear-gradient(180deg, rgba(53, 39, 7, 0.5), #0a0d11);
+}
+
+.profile-tab-panel {
+  display: none;
+  padding: 13px;
+}
+
+.profile-tab-panel.active {
+  display: grid;
+  gap: 12px;
+}
+
+.profile-section-card {
+  padding: 14px;
+}
+
+.profile-section-card p {
+  margin-top: 0;
+}
+
+.profile-upgrade-summary,
+.profile-upgrade-grid {
+  display: grid;
+  gap: 7px;
+}
+
+.profile-upgrade-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.7fr) minmax(120px, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 11px;
+  border: 1px solid #2c3540;
+  background: #090c10;
+}
+
+.profile-upgrade-row strong {
+  font-size: 0.82rem;
+}
+
+.profile-upgrade-row span {
+  color: #b9c0c8;
+  font-size: 0.74rem;
+}
+
+.profile-upgrade-bar {
+  height: 7px;
+  overflow: hidden;
+  background: #1c2229;
+}
+
+.profile-upgrade-bar i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--ui-purple), var(--ui-gold));
+}
+
+.compact-history-wrap {
+  max-height: 210px;
+}
+
+.profile-history-table td,
+.profile-history-table th {
+  padding: 9px 10px;
+}
+
+.profile-dashboard-rail {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+}
+
+.profile-rail-card {
+  display: grid;
+  gap: 8px;
+  padding: 17px;
+}
+
+.profile-rail-card > strong {
+  color: var(--ui-purple);
+  font-size: 1.75rem;
+  letter-spacing: 0.03em;
+}
+
+.profile-rail-card > small {
+  color: #b3bac2;
+  font-weight: 700;
+}
+
+.profile-rail-card button {
+  width: 100%;
+  min-height: 42px;
+  margin-top: 4px;
+}
+
+.pass-rail-card {
+  border-color: rgba(163, 79, 255, 0.5);
+  background: linear-gradient(145deg, rgba(47, 19, 68, 0.82), rgba(8, 10, 14, 0.98));
+}
+
+.loadout-rail-card {
+  min-height: 170px;
+  background:
+    linear-gradient(90deg, rgba(7, 10, 14, 0.95), rgba(7, 10, 14, 0.58)),
+    url('../assets/launch/matt-mine-hero.png') 55% 45% / cover;
+}
+
+.loadout-rail-card > strong {
+  color: var(--ui-gold);
+}
+
+.nugget-rail-card {
+  border-color: rgba(247, 196, 48, 0.55);
+  background:
+    radial-gradient(circle at 20% 20%, rgba(247, 196, 48, 0.14), transparent 55%),
+    #0a0c0f;
+}
+
+.nugget-rail-card > strong {
+  color: var(--ui-gold);
+  font-size: 2.2rem;
+}
+
+.nugget-rail-card button {
+  color: #17120a;
+  border-color: #ffe073;
+  background: linear-gradient(180deg, #ffdf5a, #dfa00e);
+}
+
+.profile-loadout-summary {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.profile-loadout-summary span {
+  padding: 10px 12px;
+  border: 1px solid #2c3540;
+  color: #cfd4da;
+  background: #090c10;
+}
+
+.miner-profile-panel.setup-required .profile-dashboard-main,
+.miner-profile-panel.setup-required .profile-dashboard-rail,
+.miner-profile-panel.setup-required .profile-back-button,
+.miner-profile-panel.setup-required .profile-identity-badges {
+  display: none;
+}
+
+.miner-profile-panel.setup-required .profile-dashboard-layout {
+  grid-template-columns: minmax(300px, 560px);
+  justify-content: center;
+}
+
+.miner-profile-panel.setup-required .profile-identity-card {
+  padding: 20px;
+}
+
+.miner-profile-panel.setup-required .profile-avatar-shell {
+  max-width: 280px;
+  margin-inline: auto;
+}
+
+/* Existing economy, leaderboard, Arena, Pass, shops and popups share the same system */
+#mine-pass .economy-panel,
+#daily-arena .arena-panel,
+#leaderboards .economy-panel,
+#pass-cosmetics .cosmetics-panel,
+#upgrade-shop .wide-panel,
+#nugget-shop .nugget-shop-panel,
+#sound-settings .audio-settings-panel,
+#run-end .panel,
+#level-up .panel,
+#depth-choice .panel {
+  padding: 28px;
+  clip-path: var(--ui-cut);
+}
+
+.pass-offer,
+.pass-benefits,
+.pass-progress-card,
+.paid-run-purchase-card,
+.arena-pool-grid article,
+.arena-entry-card,
+.arena-clock-card,
+.reward-claim-card,
+.shop-card,
+.nugget-package-card,
+.practice-claim-card {
+  border-radius: 0;
+  clip-path: var(--ui-cut);
+  border-color: rgba(196, 159, 68, 0.3);
+  background: linear-gradient(145deg, rgba(18, 23, 29, 0.96), rgba(7, 10, 14, 0.98));
+}
+
+.pass-offer,
+.pass-progress-card,
+.cosmetics-panel {
+  border-color: rgba(163, 79, 255, 0.42);
+}
+
+.leaderboard-tabs {
+  border-bottom: 1px solid rgba(196, 159, 68, 0.26);
+}
+
+.leaderboard-tab {
+  border-radius: 0;
+  clip-path: var(--ui-cut);
+}
+
+.leaderboard-tab.active {
+  color: var(--ui-gold);
+  border-color: var(--ui-gold);
+  background: rgba(65, 43, 4, 0.45);
+}
+
+.leaderboard-table-wrap {
+  border-color: #2c3540;
+  background: #070a0d;
+}
+
+.leaderboard-table thead {
+  color: var(--ui-cyan);
+  background: #0c1117;
+}
+
+.leaderboard-table tr.player-row {
+  background: rgba(247, 196, 48, 0.09);
+}
+
+.arena-state-badge,
+.pass-state-label {
+  border-radius: 0;
+  clip-path: var(--ui-cut);
+}
+
+.nugget-package-grid {
+  gap: 14px;
+}
+
+.nugget-package-card button {
+  min-height: 44px;
+  border-radius: 0;
+  clip-path: var(--ui-cut);
+}
+
+dialog.walletconnect-mobile-dialog,
+dialog#arena-eligibility-dialog {
+  color: var(--ui-white);
+  border: 1px solid var(--ui-line);
+  background: rgba(4, 6, 9, 0.84);
+  backdrop-filter: blur(16px);
+}
+
+.walletconnect-mobile-card,
+.arena-eligibility-card {
+  border: 1px solid rgba(163, 79, 255, 0.48);
+  border-radius: 0;
+  clip-path: var(--ui-cut);
+  background: linear-gradient(145deg, #16101f, #090c10);
+  box-shadow: var(--ui-shadow);
+}
+
+.toast {
+  border-radius: 0;
+  clip-path: var(--ui-cut);
+  border: 1px solid rgba(56, 216, 255, 0.45);
+  background: rgba(7, 11, 15, 0.96);
+}
+
+/* Production competition hub and its dynamically mounted detail popup */
+.competition-hub-heading {
+  padding: 6px 2px 14px;
+  border-bottom: 1px solid rgba(196, 159, 68, 0.2);
+}
+
+.competition-hub-heading span,
+.mine-detail header span {
+  color: var(--ui-gold);
+}
+
+.competition-slot-grid {
+  gap: 12px;
+  padding-top: 2px;
+}
+
+.competition-slot-card {
+  min-height: 218px;
+  border-radius: 0;
+  clip-path: var(--ui-cut);
+  border-color: color-mix(in srgb, var(--slot-color) 64%, #303541);
+  background-color: #090c11;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.04), 0 14px 34px rgba(0, 0, 0, 0.3);
+}
+
+.competition-slot-card::before {
+  background:
+    linear-gradient(90deg, rgba(4, 6, 9, 0.98) 0%, rgba(5, 7, 11, 0.86) 48%, rgba(5, 7, 11, 0.3) 100%),
+    linear-gradient(0deg, rgba(4, 6, 9, 0.94), transparent 64%);
+}
+
+.competition-slot-card .slot-state,
+.competition-slot-card .slot-meta {
+  letter-spacing: 0.12em;
+}
+
+.competition-slot-card .slot-meta {
+  border-radius: 0;
+  clip-path: var(--ui-cut);
+}
+
+.mine-detail {
+  background: rgba(2, 4, 7, 0.9);
+  backdrop-filter: blur(18px);
+}
+
+.mine-detail-shell {
+  width: min(1320px, 96vw);
+  border-color: rgba(196, 159, 68, 0.36);
+  border-radius: 0;
+  clip-path: var(--ui-cut);
+  background:
+    radial-gradient(circle at 85% 10%, rgba(163, 79, 255, 0.12), transparent 38%),
+    linear-gradient(145deg, #11161d, #06090d);
+  box-shadow: var(--ui-shadow);
+}
+
+.mine-detail-shell > [data-mine-close] {
+  width: 44px;
+  height: 44px;
+  border-color: #46515d;
+  border-radius: 0;
+  clip-path: var(--ui-cut);
+  background: rgba(8, 11, 15, 0.95);
+}
+
+.mine-detail header > b {
+  border-radius: 0;
+  clip-path: var(--ui-cut);
+  background: color-mix(in srgb, var(--slot-color) 10%, #090c10);
+}
+
+.mine-detail-map,
+.mine-detail-board {
+  border-radius: 0;
+  clip-path: var(--ui-cut);
+  border-color: #303a45;
+  background: #070a0e;
+}
+
+.mine-depth-tabs button,
+.mine-detail-map span {
+  border-radius: 0;
+  clip-path: var(--ui-cut);
+}
+
+.mine-detail-board > button {
+  border-radius: 0;
+  clip-path: var(--ui-cut);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.35);
+}
+
+@media (max-width: 1180px) {
+  .launch-nugget-button {
+    display: none;
+  }
+
+  .profile-dashboard-layout {
+    grid-template-columns: 240px minmax(0, 1fr);
+  }
+
+  .profile-dashboard-rail {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .mine-briefing-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 820px) {
+  .wide-panel,
+  .economy-menu-card {
+    width: min(100%, calc(100vw - 18px));
+    margin: 9px auto;
+  }
+
+  #menu,
+  .mine-briefing-screen {
+    padding: 8px;
+  }
+
+  .launch-nav {
+    padding-inline: 10px;
+  }
+
+  .launch-links {
+    display: none;
+  }
+
+  .launch-store-shortcut {
+    padding: 11px;
+  }
+
+  .mine-briefing-hero {
+    grid-template-columns: 1fr;
+    min-height: 235px;
+    padding: 30px 24px;
+    background-position: 60% center;
+  }
+
+  .mine-briefing-hero h2 {
+    font-size: clamp(3rem, 15vw, 5.2rem);
+  }
+
+  .mine-briefing-grid {
+    padding: 9px;
+  }
+
+  .pass-route-flow {
+    overflow-x: auto;
+    justify-content: flex-start;
+  }
+
+  .pass-route-flow span {
+    min-width: 68px;
+  }
+
+  .route-legend {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .profile-dashboard-shell {
+    padding: 10px;
+  }
+
+  .profile-dashboard-heading {
+    min-height: 118px;
+    padding: 18px 12px;
+  }
+
+  .profile-dashboard-heading h2 {
+    font-size: clamp(2.3rem, 12vw, 4rem);
+  }
+
+  .profile-dashboard-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-identity-card .profile-avatar-shell {
+    max-width: 230px;
+    margin-inline: auto;
+  }
+
+  .profile-dashboard-rail {
+    grid-column: auto;
+    grid-template-columns: 1fr;
+  }
+
+  .profile-tabs {
+    display: flex;
+    overflow-x: auto;
+  }
+
+  .profile-tabs button {
+    flex: 0 0 auto;
+    min-width: 130px;
+  }
+
+  .dashboard-metrics.four,
+  .dashboard-metrics.three {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .profile-upgrade-row {
+    grid-template-columns: 1fr auto;
+  }
+
+  .profile-upgrade-bar {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  #mine-pass .economy-panel,
+  #daily-arena .arena-panel,
+  #leaderboards .economy-panel,
+  #pass-cosmetics .cosmetics-panel,
+  #upgrade-shop .wide-panel,
+  #nugget-shop .nugget-shop-panel,
+  #sound-settings .audio-settings-panel,
+  #run-end .panel,
+  #level-up .panel,
+  #depth-choice .panel {
+    padding: 18px 12px;
+  }
+}
+
+@media (max-width: 520px) {
+  .dashboard-metrics.four,
+  .dashboard-metrics.three {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .section-heading-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .profile-dashboard-heading .dashboard-live-pill {
+    display: none;
+  }
+
+  .mine-entry-card,
+  .mine-route-card {
+    padding: 12px;
+  }
+}
