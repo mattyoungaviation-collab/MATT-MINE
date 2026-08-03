@@ -2,9 +2,9 @@ services:
   - type: web
     name: matt-mine
     runtime: node
-    # Keep the Blueprint aligned with the approved 1-CPU web-service upgrade.
-    # Otherwise a Blueprint sync silently returns the service to Starter.
-    plan: standard
+    # Keep the Blueprint aligned with the approved Pro 2-CPU web-service upgrade.
+    # Otherwise a Blueprint sync can silently return the service to a smaller plan.
+    plan: pro
     region: oregon
     buildCommand: npm ci && npm run build:walletconnect
     startCommand: npm start
