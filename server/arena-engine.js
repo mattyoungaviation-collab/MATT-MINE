@@ -179,7 +179,7 @@ export function replayArenaTranscript(challenge, inputEvents, options = {}) {
       control = decodeArenaControlState(event);
     } else if (event.type === 'command') {
       if (event.command === 'revive') reviveCommands += 1;
-      applyCommand(game, event, {
+      applyReplayCommand(game, event, {
         mode: replayMode,
         allowPaidRevive: options.allowPaidRevive === true,
         confirmedPaidRevives: Math.max(0, Math.floor(Number(options.confirmedPaidRevives || 0))),
@@ -309,7 +309,7 @@ export function canonicalJson(value) {
   return JSON.stringify(value);
 }
 
-function applyCommand(game, event, options = {}) {
+export function applyReplayCommand(game, event, options = {}) {
   if (event.command === 'upgrade') {
     assertApi(
       game.state === 'levelup' && game.pendingUpgradeIds?.includes(event.value),
@@ -317,8 +317,22 @@ function applyCommand(game, event, options = {}) {
       'arena_upgrade_not_offered',
       'The replayed game did not offer that upgrade.'
     );
+    const previousCount = Number(game.player?.runUpgradeCounts?.[event.value] || 0);
+    const blasterUpgradeQueued = game.pendingBlasterUpgrade === true;
     game.chooseRunUpgrade(event.value);
-    assertApi(game.state === 'playing', 422, 'arena_upgrade_rejected', 'The replayed upgrade was rejected.');
+    const upgradeApplied = Number(game.player?.runUpgradeCounts?.[event.value] || 0) === previousCount + 1;
+    const queuedBlasterOfferOpened =
+      blasterUpgradeQueued &&
+      game.state === 'levelup' &&
+      Array.isArray(game.pendingUpgradeIds) &&
+      game.pendingUpgradeIds.length > 0 &&
+      !game.pendingUpgradeIds.includes(event.value);
+    assertApi(
+      upgradeApplied && (game.state === 'playing' || queuedBlasterOfferOpened),
+      422,
+      'arena_upgrade_rejected',
+      'The replayed upgrade was rejected.'
+    );
     return;
   }
   if (event.command === 'death') {
