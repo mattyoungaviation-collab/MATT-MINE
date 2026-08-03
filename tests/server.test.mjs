@@ -563,6 +563,10 @@ test('the server owns the free entitlement, run token, replay protection, profil
   const player = await harness.service.me(session.token);
   assert.equal(player.entitlements.freeRunAvailable, false);
   assert.equal(player.scores.free, 1_000);
+  assert.equal(player.recentRuns.length, 1);
+  assert.equal(player.recentRuns[0].mode, SERVER_RUN_MODES.FREE);
+  assert.equal(player.recentRuns[0].result.score, 1_000);
+  assert.equal(player.recentRuns[0].result.extracted, true);
 });
 
 test('abandoning a server run releases it without recording profile or leaderboard progress', async () => {

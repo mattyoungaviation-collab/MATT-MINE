@@ -44,7 +44,7 @@ test('production lobby mounts a real canvas preview with the cinematic mine floo
   const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
   const source = await readFile(new URL('../src/game/dailyMapPreview.js', import.meta.url), 'utf8');
 
-  assert.equal((html.match(/data-daily-mine-preview/g) || []).length, 2);
+  assert.equal((html.match(/data-daily-mine-preview/g) || []).length, 3);
   assert.match(html, /ACTUAL FREE DAILY MAP/);
   assert.doesNotMatch(html, /mine-route-shadow/);
   assert.equal(DAILY_MINE_PREVIEW_FLOOR_ART, '/assets/game/mine-floor-cinematic.webp');

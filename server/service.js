@@ -2476,6 +2476,11 @@ function publicWalletSnapshot(state, address, timestamp) {
   const day = utcDayKey(timestamp);
   const week = utcWeekKey(timestamp);
   const freeDaily = wallet.daily[day] || { freeRunUsed: false, freeRunId: '' };
+  const recentRuns = Object.values(state.runs)
+    .filter((run) => run.address === address && run.status === 'finished' && run.result)
+    .sort((left, right) => Number(right.finishedAt || 0) - Number(left.finishedAt || 0))
+    .slice(0, 20)
+    .map(publicRun);
   const activeRanked = Object.values(state.runs).find((run) =>
     run.address === address &&
     ![SERVER_RUN_MODES.PRACTICE, SERVER_RUN_MODES.BETA].includes(run.mode) &&
@@ -2501,7 +2506,8 @@ function publicWalletSnapshot(state, address, timestamp) {
     scores: {
       free: walletWeeklyScore(state, address, SERVER_RUN_MODES.FREE, week),
       paid: walletWeeklyScore(state, address, SERVER_RUN_MODES.PAID, week)
-    }
+    },
+    recentRuns
   };
 }
 

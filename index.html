@@ -24,6 +24,7 @@
     <link rel="stylesheet" href="./src/v4.css" />
     <link rel="stylesheet" href="./src/launch.css" />
     <link rel="stylesheet" href="./src/production.css" />
+    <link rel="stylesheet" href="./src/ui-refresh.css" />
   </head>
   <body>
     <main id="app">
@@ -36,12 +37,15 @@
             <span><b>MATT</b> MINE<small>RONIN ACTION ROGUELITE</small></span>
           </button>
           <nav class="launch-links" aria-label="Main navigation">
-            <button type="button" data-launch-scroll="launch-gameplay">GAME</button>
-            <button type="button" data-launch-scroll="launch-economy">ECONOMY</button>
-            <button type="button" data-launch-scroll="launch-roadmap">ROADMAP</button>
-            <button type="button" data-launch-scroll="launch-contracts">CONTRACTS</button>
+            <button type="button" data-launch-scroll="launch-gameplay">HOW TO PLAY</button>
+            <button type="button" data-launch-action="leaderboards">LEADERBOARDS</button>
+            <button type="button" data-launch-action="pass">PASS</button>
           </nav>
           <div class="launch-nav-actions">
+            <button id="launch-nugget-button" class="launch-nugget-button" type="button" data-open-nugget-shop>
+              <span aria-hidden="true">◆</span>
+              <strong id="launch-nugget-balance">0 NUGGETS</strong>
+            </button>
             <button id="launch-wallet-button" class="launch-wallet-button" type="button">
               <span class="status-dot"></span>
               <span id="launch-wallet-label">WALLETCONNECT</span>
@@ -102,6 +106,10 @@
                 <div><span>PAID RUN</span><strong><span id="launch-run-price">10</span> RON</strong></div>
               </div>
               <button type="button" data-launch-action="enter">VIEW RUN SELECT</button>
+              <button class="launch-store-shortcut" type="button" data-open-nugget-shop>
+                <span><b>NUGGET STORE</b><small>Verified packages · Live balance</small></span>
+                <strong>OPEN STORE →</strong>
+              </button>
             </aside>
 
             <div class="launch-scroll-cue" aria-hidden="true"><span></span> DESCEND</div>
@@ -411,69 +419,175 @@
         </button>
       </section>
 
+      <section id="daily-mine" class="screen mine-briefing-screen" aria-labelledby="daily-mine-title">
+        <div class="panel wide-panel mine-briefing-panel daily-briefing-panel">
+          <button class="close-button" data-close="daily-mine" aria-label="Close">×</button>
+          <header class="mine-briefing-hero">
+            <div>
+              <p class="eyebrow">FREE DAILY RANKED</p>
+              <h2 id="daily-mine-title">Daily Mine</h2>
+              <p>One verified attempt. Every player receives the same daily mine.</p>
+              <span id="daily-entry-status" class="dashboard-live-pill">CHECKING LIVE STATUS</span>
+            </div>
+            <div class="mine-briefing-art" aria-hidden="true"></div>
+          </header>
+          <div class="mine-briefing-grid">
+            <article class="mine-route-card">
+              <div class="section-heading-row"><h3>TODAY'S ROUTE</h3><span>SERVER-VERIFIED SCORE</span></div>
+              <div class="mine-route-map" role="img" aria-label="Actual top-down preview of today's Free Daily Mine">
+                <canvas data-daily-mine-preview width="1100" height="300" aria-hidden="true"></canvas>
+              </div>
+              <div class="route-legend"><span>CACHE</span><span>FIGHT</span><span>ELITE</span><span>VAULT</span><span>GUARDIAN</span><span>EXTRACT</span></div>
+            </article>
+            <aside class="mine-entry-card">
+              <h3>YOUR DAILY RUN</h3>
+              <div class="dashboard-metrics three">
+                <div><span>ATTEMPT</span><strong id="daily-attempt-value">—</strong></div>
+                <div><span>WEEKLY BEST</span><strong id="daily-best-value">0</strong></div>
+                <div><span>BANKED</span><strong id="daily-nugget-value">0</strong></div>
+              </div>
+              <ul class="mine-rule-list">
+                <li>One ranked attempt per UTC day</li>
+                <li>Identical seed and rules for every player</li>
+                <li>Score accepted only after server verification</li>
+                <li>Extract to secure the complete run score</li>
+              </ul>
+              <button id="start-daily-run-button" class="primary-button gold-button">START DAILY RUN</button>
+              <button id="daily-leaderboard-button" class="secondary-button">VIEW FREE LEADERBOARD</button>
+              <button id="daily-back-button" class="text-button" type="button">← BACK TO MINES</button>
+            </aside>
+          </div>
+        </div>
+      </section>
+
+      <section id="pass-mine" class="screen mine-briefing-screen pass-mine-screen" aria-labelledby="pass-mine-title">
+        <div class="panel wide-panel mine-briefing-panel pass-briefing-panel">
+          <button class="close-button" data-close="pass-mine" aria-label="Close">×</button>
+          <header class="mine-briefing-hero pass-briefing-hero">
+            <div>
+              <p class="eyebrow">PREMIUM RANKED</p>
+              <h2 id="pass-mine-title">Pass Mine</h2>
+              <p>Spend one run credit. Climb the weekly Pass leaderboard.</p>
+              <span id="pass-mine-state" class="dashboard-live-pill pass-live-pill">PASS STATUS LOADING</span>
+            </div>
+            <div class="mine-briefing-art" aria-hidden="true"></div>
+          </header>
+          <div class="mine-briefing-grid">
+            <article class="mine-route-card pass-route-card">
+              <div class="section-heading-row"><h3>THIS WEEK'S PASS MINE</h3><span>WEEKLY RANKED</span></div>
+              <div class="pass-route-flow" aria-label="Pass Mine route">
+                <span><b>◆</b>CACHE</span><i></i><span><b>⚔</b>FIGHT</span><i></i><span><b>☠</b>ELITE</span><i></i><span><b>▣</b>VAULT</span><i></i><span><b>♛</b>BOSS</span>
+              </div>
+              <div class="pass-route-scene" aria-hidden="true"></div>
+            </article>
+            <aside class="mine-entry-card pass-entry-card">
+              <h3>YOUR PASS RUN</h3>
+              <div class="dashboard-metrics three">
+                <div><span>RUN CREDITS</span><strong id="pass-credit-value">0</strong></div>
+                <div><span>BOUGHT TODAY</span><strong id="pass-bought-value">0 / 10</strong></div>
+                <div><span>WEEKLY BEST</span><strong id="pass-best-value">0</strong></div>
+              </div>
+              <div class="pass-xp-banner">100 PASS XP ON COMPLETION</div>
+              <button id="start-pass-mine-button" class="primary-button gold-button">START PASS RUN · USE 1 CREDIT</button>
+              <button id="buy-pass-credit-button" class="secondary-button">BUY RUN CREDIT</button>
+              <small id="pass-mine-live-note">Price and limits use current live settings.</small>
+              <button id="pass-mine-leaderboard-button" class="secondary-button cyan-button">VIEW PASS LEADERBOARD</button>
+              <button id="pass-mine-back-button" class="text-button" type="button">← BACK TO MINES</button>
+            </aside>
+          </div>
+        </div>
+      </section>
+
       <section id="miner-profile" class="screen" aria-labelledby="profile-title">
-        <div class="panel miner-profile-panel">
-          <button id="profile-close-button" class="close-button" data-close="miner-profile" aria-label="Close">&times;</button>
-          <p class="eyebrow">SERVER IDENTITY</p>
-          <h2 id="profile-title">Create Your Miner</h2>
-          <p id="profile-intro">Choose carefully. Your miner name is unique and permanently tied to this wallet.</p>
-          <div class="profile-editor">
-            <div class="profile-avatar-shell">
-              <img id="profile-avatar-preview" alt="Profile picture preview" hidden />
-              <span id="profile-avatar-fallback" aria-hidden="true">M</span>
-            </div>
-            <div class="profile-fields">
-              <label for="profile-name">MINER NAME</label>
-              <input id="profile-name" type="text" minlength="3" maxlength="16" autocomplete="off" spellcheck="false" placeholder="3–16 letters, numbers, or _" />
-              <small id="profile-name-note">Names ignore capitalization when checking duplicates and cannot be changed after saving.</small>
-              <label class="profile-upload-button" for="profile-avatar-input">CHOOSE PROFILE PICTURE</label>
-              <input id="profile-avatar-input" type="file" accept="image/png,image/jpeg,image/webp" hidden />
-              <small>Images are cropped square, resized, and safely stored with your server profile.</small>
-            </div>
-          </div>
-          <div class="profile-actions">
-            <button id="save-profile-button" class="primary-button">LOCK IN MINER NAME</button>
-            <button id="update-avatar-button" class="secondary-button" hidden>UPDATE PROFILE PICTURE</button>
-          </div>
-          <p id="profile-status" class="preview-note">Sign in with Ronin Wallet to manage your miner profile.</p>
-          <div class="character-selector">
-            <p class="eyebrow">PLAYABLE CHARACTER</p>
-            <h3>Choose Your Miner</h3>
-            <div id="character-grid" class="character-grid"></div>
-          </div>
-          <div class="run-mode-grid expansion-lobbies" aria-label="Additional competitive modes">
-            <button id="weekly-run-button" class="run-mode-card" hidden>
-              <span class="mode-kicker">SEVEN-DAY MINE</span><strong>One stage each UTC day</strong>
-              <small>Same seed, character, and immutable rules for every player.</small><b>PLAY TODAY'S STAGE</b>
-            </button>
-            <button id="endless-run-button" class="run-mode-card" hidden>
-              <span class="mode-kicker">ENDLESS MINE</span><strong>Go as deep as you can</strong>
-              <small>Depth, score, bosses, then survival time decide rank.</small><b>START ENDLESS</b>
-            </button>
-            <button id="beta-run-button" class="run-mode-card" hidden>
-              <span class="mode-kicker">BETA TESTING</span><strong>Developer test mine</strong>
-              <small>No nuggets, MATT, Pass XP, achievements, or permanent progress.</small><b>ENTER BETA</b>
-            </button>
-          </div>
-          <div id="keybind-editor" class="keybind-editor">
-            <p class="eyebrow">GAMEPLAY CONTROLS</p>
-            <h3>Choose Your Keys</h3>
-            <p class="preview-note">Select an action, press its new key, then save. These controls follow your wallet.</p>
-            <div id="keybind-grid" class="keybind-grid"></div>
-            <div class="keybind-actions">
-              <button id="reset-keybinds-button" class="secondary-button" type="button">RESET DEFAULTS</button>
-              <button id="save-keybinds-button" class="primary-button" type="button">SAVE CONTROLS</button>
-            </div>
-            <div class="controller-settings">
-              <p class="eyebrow">CONTROLLER</p>
-              <p id="controller-status" class="preview-note">Connect an Xbox-style or PlayStation-style controller.</p>
-              <label>STICK DEAD ZONE <input id="controller-dead-zone" type="range" min="0" max="0.5" step="0.01" value="0.18"><output id="controller-dead-zone-value">18%</output></label>
-              <label>AIM SENSITIVITY <input id="controller-aim-sensitivity" type="range" min="0.25" max="3" step="0.05" value="1"><output id="controller-aim-sensitivity-value">1.00×</output></label>
-              <label class="preference-toggle"><input id="controller-vibration" type="checkbox" checked> VIBRATION</label>
-              <div id="controller-mapping-grid" class="controller-mapping-grid"></div>
-              <button id="reset-controller-button" class="secondary-button" type="button">RESET CONTROLLER</button>
-              <button id="save-controller-button" class="primary-button" type="button">SAVE CONTROLLER</button>
-            </div>
+        <div class="panel wide-panel miner-profile-panel profile-dashboard-shell">
+          <button id="profile-close-button" class="close-button" data-close="miner-profile" aria-label="Close">×</button>
+          <header class="profile-dashboard-heading">
+            <div><p class="eyebrow">SERVER IDENTITY</p><h2 id="profile-title">Miner Profile</h2><p id="profile-intro">Your identity, permanent progress, and mine history.</p></div>
+            <span id="profile-live-state" class="dashboard-live-pill">LIVE DASHBOARD</span>
+          </header>
+
+          <div class="profile-dashboard-layout">
+            <aside class="profile-identity-card">
+              <div class="profile-avatar-shell">
+                <img id="profile-avatar-preview" alt="Profile picture preview" hidden />
+                <span id="profile-avatar-fallback" aria-hidden="true">M</span>
+              </div>
+              <div class="profile-fields">
+                <label for="profile-name">MINER NAME</label>
+                <input id="profile-name" type="text" minlength="3" maxlength="16" autocomplete="off" spellcheck="false" placeholder="3–16 letters, numbers, or _" />
+                <small id="profile-name-note">Names ignore capitalization when checking duplicates and cannot be changed after saving.</small>
+                <label class="profile-upload-button" for="profile-avatar-input">UPDATE PICTURE</label>
+                <input id="profile-avatar-input" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+              </div>
+              <div class="profile-identity-badges"><span>RONIN MAINNET</span><span id="profile-pass-badge">FREE TIER</span></div>
+              <div class="profile-actions">
+                <button id="save-profile-button" class="primary-button">LOCK IN MINER NAME</button>
+                <button id="update-avatar-button" class="secondary-button" hidden>UPDATE PROFILE PICTURE</button>
+              </div>
+              <p id="profile-status" class="preview-note">Sign in with Ronin Wallet to manage your miner profile.</p>
+              <button id="profile-back-button" class="secondary-button profile-back-button" type="button">← BACK TO MINES</button>
+            </aside>
+
+            <main class="profile-dashboard-main">
+              <nav class="profile-tabs" aria-label="Miner profile sections">
+                <button class="active" type="button" data-profile-tab="overview">OVERVIEW</button>
+                <button type="button" data-profile-tab="upgrades">PERMANENT UPGRADES</button>
+                <button type="button" data-profile-tab="loadout">LOADOUT</button>
+                <button type="button" data-profile-tab="history">RUN HISTORY</button>
+                <button type="button" data-profile-tab="controls">CONTROLS</button>
+              </nav>
+
+              <section class="profile-tab-panel active" data-profile-panel="overview">
+                <div class="dashboard-metrics four">
+                  <div><span>BANKED NUGGETS</span><strong id="profile-nugget-value">0</strong></div>
+                  <div><span>BEST SCORE</span><strong id="profile-best-score">0</strong></div>
+                  <div><span>BEST DEPTH</span><strong id="profile-best-depth">0</strong></div>
+                  <div><span>TOTAL RUNS</span><strong id="profile-total-runs">0</strong></div>
+                </div>
+                <article class="profile-section-card">
+                  <div class="section-heading-row"><h3>PERMANENT UPGRADES</h3><button id="profile-manage-upgrades-button" type="button">MANAGE UPGRADES</button></div>
+                  <div id="profile-upgrade-summary" class="profile-upgrade-summary"></div>
+                </article>
+                <article class="profile-section-card">
+                  <div class="section-heading-row"><h3>RECENT RUNS</h3><span id="profile-history-status">SERVER VERIFIED</span></div>
+                  <div class="leaderboard-table-wrap compact-history-wrap">
+                    <table class="leaderboard-table profile-history-table"><thead><tr><th>Mine</th><th>UTC Date</th><th>Score</th><th>Status</th></tr></thead><tbody id="profile-recent-runs"><tr><td colspan="4">No completed runs yet.</td></tr></tbody></table>
+                  </div>
+                </article>
+                <div class="run-mode-grid expansion-lobbies" aria-label="Additional competitive modes">
+                  <button id="weekly-run-button" class="run-mode-card" hidden><span class="mode-kicker">SEVEN-DAY MINE</span><strong>One stage each UTC day</strong><small>Same seed, character, and immutable rules for every player.</small><b>PLAY TODAY'S STAGE</b></button>
+                  <button id="endless-run-button" class="run-mode-card" hidden><span class="mode-kicker">ENDLESS MINE</span><strong>Go as deep as you can</strong><small>Depth, score, bosses, then survival time decide rank.</small><b>START ENDLESS</b></button>
+                  <button id="beta-run-button" class="run-mode-card" hidden><span class="mode-kicker">BETA TESTING</span><strong>Developer test mine</strong><small>No nuggets, MATT, Pass XP, achievements, or permanent progress.</small><b>ENTER BETA</b></button>
+                </div>
+              </section>
+
+              <section class="profile-tab-panel" data-profile-panel="upgrades">
+                <article class="profile-section-card"><div class="section-heading-row"><h3>PERMANENT UPGRADES</h3><span>SERVER-SAVED</span></div><p>Spend banked nuggets on persistent miner upgrades. Ranked modes still obey their configured rules.</p><div id="profile-upgrade-grid" class="profile-upgrade-grid"></div><button id="profile-open-upgrades-button" class="primary-button gold-button">OPEN UPGRADE WORKSHOP</button></article>
+              </section>
+
+              <section class="profile-tab-panel" data-profile-panel="loadout">
+                <div class="character-selector"><p class="eyebrow">PLAYABLE CHARACTER</p><h3>Choose Your Miner</h3><div id="character-grid" class="character-grid"></div></div>
+                <article class="profile-section-card"><div class="section-heading-row"><h3>PASS LOADOUT</h3><span>PERMANENT COLLECTION</span></div><div id="profile-loadout-summary" class="profile-loadout-summary"></div><button id="profile-manage-loadout-button" class="primary-button">MANAGE COSMETICS &amp; REWARDS</button></article>
+              </section>
+
+              <section class="profile-tab-panel" data-profile-panel="history">
+                <article class="profile-section-card"><div class="section-heading-row"><h3>RUN HISTORY</h3><span>LIVE SERVER DATA</span></div><div class="leaderboard-table-wrap"><table class="leaderboard-table"><thead><tr><th>Mine</th><th>UTC Date</th><th>Score</th><th>Depth</th><th>Result</th></tr></thead><tbody id="profile-full-run-history"><tr><td colspan="5">No completed runs yet.</td></tr></tbody></table></div></article>
+              </section>
+
+              <section class="profile-tab-panel" data-profile-panel="controls">
+                <div id="keybind-editor" class="keybind-editor">
+                  <p class="eyebrow">GAMEPLAY CONTROLS</p><h3>Choose Your Keys</h3><p class="preview-note">Select an action, press its new key, then save. These controls follow your wallet.</p><div id="keybind-grid" class="keybind-grid"></div>
+                  <div class="keybind-actions"><button id="reset-keybinds-button" class="secondary-button" type="button">RESET DEFAULTS</button><button id="save-keybinds-button" class="primary-button" type="button">SAVE CONTROLS</button></div>
+                  <div class="controller-settings"><p class="eyebrow">CONTROLLER</p><p id="controller-status" class="preview-note">Connect an Xbox-style or PlayStation-style controller.</p><label>STICK DEAD ZONE <input id="controller-dead-zone" type="range" min="0" max="0.5" step="0.01" value="0.18"><output id="controller-dead-zone-value">18%</output></label><label>AIM SENSITIVITY <input id="controller-aim-sensitivity" type="range" min="0.25" max="3" step="0.05" value="1"><output id="controller-aim-sensitivity-value">1.00×</output></label><label class="preference-toggle"><input id="controller-vibration" type="checkbox" checked> VIBRATION</label><div id="controller-mapping-grid" class="controller-mapping-grid"></div><button id="reset-controller-button" class="secondary-button" type="button">RESET CONTROLLER</button><button id="save-controller-button" class="primary-button" type="button">SAVE CONTROLLER</button></div>
+                </div>
+              </section>
+            </main>
+
+            <aside class="profile-dashboard-rail">
+              <article class="profile-rail-card pass-rail-card"><span>MINE PASS</span><strong>LEVEL <b id="profile-pass-level">1</b></strong><div class="bar"><div id="profile-pass-fill" class="bar-fill pass-xp-fill"></div></div><small id="profile-pass-xp">0 XP</small><small id="profile-pass-days">PASS INACTIVE</small><button id="profile-pass-button" type="button">VIEW PASS REWARDS</button></article>
+              <article class="profile-rail-card loadout-rail-card"><span>EQUIPPED LOADOUT</span><strong id="profile-character-name">MATT</strong><small id="profile-weapon-name">STANDARD PICKAXE</small><small id="profile-frame-name">STANDARD FRAME</small><button id="profile-loadout-button" type="button">MANAGE LOADOUT</button></article>
+              <article class="profile-rail-card nugget-rail-card"><span>NUGGET STORE</span><strong id="profile-store-balance">0</strong><small>BUY VERIFIED NUGGET PACKAGES</small><button id="profile-open-store-button" type="button" data-open-nugget-shop>VIEW NUGGET PACKAGES</button></article>
+            </aside>
           </div>
         </div>
       </section>

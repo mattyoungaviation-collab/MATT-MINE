@@ -409,7 +409,7 @@ test('production run selection has four clear lobbies, a full mine map, and offi
   assert.equal((html.match(/class="lobby-number"/g) || []).length, 4);
   assert.match(html, /ACTUAL FREE DAILY MAP/);
   assert.match(html, /7 rooms → beat the boss → return to the lift/);
-  assert.equal((html.match(/data-daily-mine-preview/g) || []).length, 2);
+  assert.equal((html.match(/data-daily-mine-preview/g) || []).length, 3);
   assert.match(html, /ronin-mark-official\.png/);
   assert.match(html, /BUILT ON RONIN/);
   assert.ok(roninLogo.size > 1_000);
@@ -471,7 +471,7 @@ test('production lobby exposes wallet-saved custom gameplay controls', () => {
   assert.match(html, /id="keybind-editor"/);
   assert.match(html, /id="reset-keybinds-button"/);
   assert.match(html, /id="save-keybinds-button"/);
-  assert.match(html, /id="profile-close-button"[^>]*>&times;<\/button>/);
+  assert.match(html, /id="profile-close-button"[^>]*>×<\/button>/);
   assert.doesNotMatch(html, /Ã—/);
 });
 
