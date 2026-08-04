@@ -89,6 +89,7 @@ const mobileTransactionCopy = $('#wallet-transaction-copy');
 const isLocalPreview = ['localhost', '127.0.0.1', '[::1]'].includes(globalThis.location?.hostname);
 const economy = new LocalEconomyStore();
 const PRACTICE_CLAIM_PLACEHOLDER_PRICE = 5000;
+const ARENA_LEADERBOARD_MODE = 'arena';
 const CONTROLLER_ACTION_LABELS = Object.freeze({
   attack: 'Attack', dash: 'Dash', pickaxe: 'Pickaxe', dynamite: 'Dynamite',
   blaster: 'Blaster', interact: 'Interact', pause: 'Pause', confirm: 'Confirm',
@@ -2070,7 +2071,7 @@ $('#start-arena-run-button').addEventListener('click', () => void startArenaRun(
 $('#arena-refund-button').addEventListener('click', () => void claimArenaRefund());
 
 for (const tab of document.querySelectorAll('.leaderboard-tab')) {
-  tab.addEventListener('click', () => openLeaderboards(tab.dataset.board === 'paid' ? RUN_MODES.PAID : RUN_MODES.FREE));
+  tab.addEventListener('click', () => openLeaderboards(tab.dataset.board));
 }
 
 $('#publish-rewards').addEventListener('click', () => {
@@ -2907,8 +2908,27 @@ async function openPassChest() {
 function openLeaderboards(mode) {
   activeBoard = mode;
   for (const tab of document.querySelectorAll('.leaderboard-tab')) {
-    tab.classList.toggle('active', tab.dataset.board === (mode === RUN_MODES.PAID ? 'paid' : 'free'));
+    tab.classList.toggle('active', tab.dataset.board === mode);
   }
+  if (mode === ARENA_LEADERBOARD_MODE) {
+    $('#board-pool-label').textContent = 'Current Daily Pool';
+    $('#board-score-label').textContent = 'Your Daily Score';
+    $('#board-reward-label').textContent = 'Projected Arena Reward';
+    $('#board-score-column-label').textContent = 'Daily Score';
+    $('#board-pool').textContent = formatMattRaw(arenaLeaderboard.totalPoolRaw || arenaConfig.prizePoolRaw);
+    $('#board-score').textContent = arenaPlayer.bestScore ? formatNumber(arenaPlayer.bestScore) : '—';
+    $('#board-reward').textContent = '—';
+    replaceProfileMarkup($('#leaderboard-body'), '<tr><td colspan="4">Loading current Arena rankings…</td></tr>');
+    renderLeaderboardPodium([]);
+    activeServerClaim = null;
+    showScreen('leaderboards');
+    void renderServerLeaderboard(mode);
+    return;
+  }
+  $('#board-pool-label').textContent = 'Weekly Pool';
+  $('#board-score-label').textContent = 'Your Weekly Score';
+  $('#board-reward-label').textContent = 'Projected Reward';
+  $('#board-score-column-label').textContent = 'Weekly Score';
   const rows = previewLeaderboard(economy.state, mode);
   const player = rows.find((row) => row.isPlayer);
   const pool = mode === RUN_MODES.PAID ? passPoolMatt(economy.state) : economy.state.settings.freeWeeklyPoolMatt;
@@ -2947,6 +2967,10 @@ function openLeaderboards(mode) {
 }
 
 async function renderServerLeaderboard(mode) {
+  if (mode === ARENA_LEADERBOARD_MODE) {
+    await renderArenaLeaderboardPanel();
+    return;
+  }
   const note = $('#leaderboard-note');
   if (note) note.textContent = 'Loading server-verified rankings…';
   try {
@@ -2976,6 +3000,60 @@ async function renderServerLeaderboard(mode) {
     activeServerClaim = null;
     renderServerClaim(null);
     if (note) note.textContent = `Server leaderboard unavailable: ${error.message}`;
+  }
+}
+
+async function renderArenaLeaderboardPanel() {
+  const note = $('#leaderboard-note');
+  if (note) note.textContent = 'Loading current server-verified Arena rankings…';
+  try {
+    await refreshArena(true);
+    const leaderboard = arenaLeaderboard;
+    const rows = leaderboard.rows;
+    const viewerAddress = String(serverPlayer?.address || '').toLowerCase();
+    const playerRow = rows.find((row) => row.isPlayer) ||
+      rows.find((row) => viewerAddress && row.address.toLowerCase() === viewerAddress) ||
+      rows.find((row) => arenaPlayer.rank > 0 && row.rank === arenaPlayer.rank);
+    const playerScore = arenaPlayer.bestScore || playerRow?.score || 0;
+    const playerRewardRaw = playerRow?.payoutRaw || playerRow?.projectedRaw || 0n;
+
+    $('#board-pool').textContent = formatMattRaw(leaderboard.totalPoolRaw || arenaConfig.prizePoolRaw);
+    $('#board-score').textContent = playerScore ? formatNumber(playerScore) : '—';
+    $('#board-reward').textContent = playerRewardRaw ? formatMattRaw(playerRewardRaw) : '—';
+    renderLeaderboardPodium(rows);
+    replaceProfileMarkup($('#leaderboard-body'), rows.length > 3
+      ? rows.slice(3).map((row) => `
+          <tr class="${row === playerRow ? 'player-row' : ''}">
+            <td>#${row.rank}</td>
+            <td>${renderMinerIdentity(row)}${row === playerRow ? ' · YOU' : ''}</td>
+            <td>${formatNumber(row.score)}</td>
+            <td>SERVER VERIFIED</td>
+          </tr>
+        `).join('')
+      : `<tr><td colspan="4">${rows.length ? 'More miners will appear as verified Arena scores arrive.' : 'No verified Arena scores yet today.'}</td></tr>`);
+
+    $('#published-reward-text').textContent = playerRow
+      ? `${playerRewardRaw ? formatMattRaw(playerRewardRaw) : 'Reward pending'} · Rank #${playerRow.rank}`
+      : 'No Arena reward position yet';
+    $('#published-reward-status').textContent = leaderboard.finalized
+      ? `Final Arena standings for ${leaderboard.day} UTC.`
+      : `Live projection for ${leaderboard.day} UTC · final payout follows Arena settlement.`;
+    const claimButton = $('#claim-reward-button');
+    claimButton.disabled = true;
+    claimButton.textContent = leaderboard.finalized ? 'ARENA SETTLEMENT' : 'LIVE PROJECTION';
+    if (note) {
+      note.textContent = leaderboard.finalized
+        ? `Permanent server snapshot · Arena ${leaderboard.day} UTC`
+        : `Server-authoritative Arena rankings · ${leaderboard.day} UTC · ${formatNumber(leaderboard.participantCount)} miners`;
+    }
+  } catch (error) {
+    renderLeaderboardPodium([]);
+    replaceProfileMarkup($('#leaderboard-body'), '<tr><td colspan="4">Arena rankings are temporarily unavailable.</td></tr>');
+    $('#board-pool').textContent = '—';
+    $('#board-score').textContent = '—';
+    $('#board-reward').textContent = '—';
+    renderServerClaim(null);
+    if (note) note.textContent = `Arena leaderboard unavailable: ${error.message}`;
   }
 }
 

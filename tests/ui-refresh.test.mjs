@@ -27,6 +27,7 @@ test('approved UI refresh exposes every player dashboard and unique control id',
   assert.match(html, /data-site-action="store"/);
   assert.match(html, /data-launch-action="daily"/);
   assert.match(html, /data-launch-action="pass-mine"/);
+  assert.match(html, /class="leaderboard-tab arena-leaderboard-tab" data-board="arena"/);
   assert.match(html, /src\/ui-refresh\.css/);
 });
 
@@ -45,6 +46,8 @@ test('UI controls are wired to existing run, Pass, leaderboard, loadout, and sho
   assert.match(source, /action === 'how-to-play'[\s\S]*showScreen\('how-to-play'\)/);
   assert.match(source, /action === 'store'[\s\S]*mattmine:open-nugget-shop/);
   assert.match(source, /renderLeaderboardPodium\(rows\)/);
+  assert.match(source, /mode === ARENA_LEADERBOARD_MODE/);
+  assert.match(source, /await refreshArena\(true\)/);
   assert.match(shop, /\[data-open-nugget-shop\]/);
   assert.match(shop, /mattmine:open-nugget-shop/);
 });
@@ -68,6 +71,7 @@ test('live dashboards poll only while visible and the shared theme covers popups
   assert.match(css, /\.launch-mine-card-grid/);
   assert.match(css, /\.how-to-steps/);
   assert.match(css, /\.leaderboard-podium/);
+  assert.doesNotMatch(css, /\.leaderboard-tabs::after/);
   assert.match(css, /@media \(max-width: 760px\)/);
   assert.match(css, /#run-end \.panel/);
   assert.match(css, /#level-up \.panel/);

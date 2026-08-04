@@ -74,3 +74,55 @@ test('profile tabs, store return path, and shared color accents remain usable', 
   });
   expect(colors).toEqual({ gold: '#f7c430', purple: '#a34fff', cyan: '#38d8ff' });
 });
+
+test('desktop Arena leaderboard renders the live daily Arena dataset', async ({ page }) => {
+  await page.route('**/api/arena/config', (route) => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({
+      ok: true,
+      arena: {
+        enabled: true,
+        configured: true,
+        status: 'open',
+        day: '2026-08-04',
+        prizePoolRaw: '1100000000000000000000000',
+        feeRaw: '25000000000000000000000',
+        seedRaw: '500000000000000000000000',
+        entryPoolRaw: '600000000000000000000000'
+      }
+    })
+  }));
+  await page.route('**/api/arena/leaderboard?*', (route) => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({
+      ok: true,
+      leaderboard: {
+        day: '2026-08-04',
+        status: 'open',
+        participantCount: 4,
+        entryCount: 12,
+        prizePoolRaw: '1100000000000000000000000',
+        rows: [
+          { rank: 1, address: '0x0000000000000000000000000000000000000001', walletId: 'Lucky1', score: 142592, entries: 2 },
+          { rank: 2, address: '0x0000000000000000000000000000000000000002', walletId: 'Lord', score: 141947, entries: 4 },
+          { rank: 3, address: '0x0000000000000000000000000000000000000003', walletId: 'Aeezy', score: 141690, entries: 1 },
+          { rank: 4, address: '0x0000000000000000000000000000000000000004', walletId: 'Qweezatz', score: 97283, entries: 5 }
+        ]
+      }
+    })
+  }));
+
+  await page.goto('/');
+  await page.locator('[data-launch-action="enter"].launch-primary-cta').click();
+  await page.locator('#leaderboards-button').click();
+  await page.locator('[data-board="arena"]').click();
+
+  await expect(page.locator('[data-board="arena"]')).toHaveClass(/active/);
+  await expect(page.locator('#board-pool-label')).toHaveText('Current Daily Pool');
+  await expect(page.locator('#board-pool')).toHaveText('1,100,000 MATT');
+  await expect(page.locator('.podium-place.place-1')).toContainText('Lucky1');
+  await expect(page.locator('.podium-place.place-1')).toContainText('142,592');
+  await expect(page.locator('#leaderboard-body')).toContainText('Qweezatz');
+  await expect(page.locator('#leaderboard-body')).toContainText('97,283');
+  await expect(page.locator('#leaderboard-note')).toContainText('2026-08-04 UTC');
+});
