@@ -8,6 +8,7 @@ export const RUN_TTL_MS = 45 * 60 * 1000;
 export const PRACTICE_CLAIM_TTL_MS = 24 * 60 * 60 * 1000;
 export const MIN_RANKED_RUN_WINDOW_MS = 5 * 60 * 1000;
 export const MAX_REQUEST_BYTES = 96 * 1024;
+export const MAX_COMPETITION_DRAFT_REQUEST_BYTES = 1024 * 1024;
 export const MAX_RUN_SCORE = 5_000_000;
 export const SERVER_STATE_VERSION = 17;
 export const MATT_TOKEN_DECIMALS = 18;

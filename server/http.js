@@ -1,7 +1,7 @@
 import http from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, isAbsolute, relative, resolve } from 'node:path';
-import { MAX_REQUEST_BYTES } from './constants.js';
+import { MAX_COMPETITION_DRAFT_REQUEST_BYTES, MAX_REQUEST_BYTES } from './constants.js';
 import { ApiError, assertApi } from './errors.js';
 import { normalizeOrigin } from './auth-message.js';
 import { isTransientPostgresError } from './postgres-resilience.js';
@@ -524,7 +524,7 @@ async function handleApiRequest({
   }
   const competitionDraftMatch = path.match(/^\/api\/admin\/competition-studio\/(practice|arena|daily|pass|weekly)\/draft$/);
   if (method === 'PUT' && competitionDraftMatch) {
-    const body = await readJson(request, maxRequestBytes);
+    const body = await readJson(request, Math.max(maxRequestBytes, MAX_COMPETITION_DRAFT_REQUEST_BYTES));
     const result = await service.saveCompetitionDraft(
       request.headers['x-matt-admin-key'],
       competitionDraftMatch[1],
