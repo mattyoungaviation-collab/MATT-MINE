@@ -162,6 +162,20 @@
         </div>
         <div id="studio-live-source" class="notice studio-live-source">Loading the live server version…</div>
         <div id="studio-slot-tabs" class="studio-slot-tabs" role="tablist" aria-label="Competition slots"></div>
+        <div class="studio-map-library panel" aria-labelledby="studio-library-title">
+          <div>
+            <p class="eyebrow">LOCAL MAP LIBRARY</p>
+            <h3 id="studio-library-title">Save unlimited mine builds to your computer</h3>
+            <p>Each file preserves all five depth maps, enemies, tuning, loadout, and rules. Importing changes only this editable draft—it never applies a live version.</p>
+            <small id="studio-library-status">Choose a mine above, then download or import its map package.</small>
+          </div>
+          <div class="studio-library-actions">
+            <span id="studio-library-mine">PRACTICE MINE</span>
+            <button id="studio-export-map" type="button" class="ghost">DOWNLOAD MINE FILE</button>
+            <button id="studio-import-map" type="button">IMPORT MINE FILE</button>
+            <input id="studio-import-map-file" type="file" accept=".json,.mattmine,application/json" hidden>
+          </div>
+        </div>
         <div class="studio-workspace">
           <aside class="studio-toolbox panel">
             <div class="studio-panel-title"><span>BUILD</span><b>Map tools</b></div>

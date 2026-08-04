@@ -16,6 +16,12 @@ import {
   CHARACTER_DEFAULTS,
   CHARACTER_IDS
 } from './game/expansionConfig.js';
+import {
+  COMPETITION_MAP_FILE_MAX_BYTES,
+  competitionMapFileName,
+  createCompetitionMapFile,
+  parseCompetitionMapFile
+} from './game/competitionMapFile.js';
 
 const studio = {
   payload: null,
@@ -62,6 +68,16 @@ function bindOnce() {
   });
   $('#studio-copy-depth').addEventListener('click', copyPreviousDepth);
   $('#studio-reset-depth').addEventListener('click', resetCurrentDepth);
+  $('#studio-export-map').addEventListener('click', () => void runLibraryAction(downloadMineFile));
+  $('#studio-import-map').addEventListener('click', () => $('#studio-import-map-file').click());
+  $('#studio-import-map-file').addEventListener('change', async (event) => {
+    const file = event.target.files?.[0];
+    try {
+      if (file) await runLibraryAction(() => importMineFile(file));
+    } finally {
+      event.target.value = '';
+    }
+  });
   document.querySelector('.studio-tool-grid').addEventListener('click', (event) => {
     const button = event.target.closest('[data-studio-tool]');
     if (!button) return;
@@ -105,10 +121,12 @@ function selectSlot(slotId) {
   studio.tool = 'select';
   studio.connectFrom = '';
   renderAll();
+  $('#studio-library-status').textContent = `${definition.name} selected · downloads stay on this computer until imported again.`;
 }
 
 function renderAll() {
   renderSlotTabs();
+  renderMapLibrary();
   renderDepthTabs();
   renderTools();
   renderCanvas();
@@ -117,6 +135,66 @@ function renderAll() {
   renderVersions();
   renderValidation();
   renderLiveSource();
+}
+
+function renderMapLibrary() {
+  const slot = COMPETITION_SLOTS.find((entry) => entry.id === studio.slotId);
+  $('#studio-library-mine').textContent = `${slot?.name || studio.slotId} · FIVE DEPTHS`;
+  $('#studio-export-map').disabled = !studio.draft;
+  $('#studio-import-map').disabled = !studio.draft;
+}
+
+function downloadMineFile() {
+  if (!studio.draft) throw new Error('Choose a mine before downloading a map file.');
+  syncActiveMap();
+  const mapFile = createCompetitionMapFile(studio.draft, studio.slotId);
+  const fileName = competitionMapFileName(mapFile);
+  const url = URL.createObjectURL(new Blob([
+    `${JSON.stringify(mapFile, null, 2)}\n`
+  ], { type: 'application/json' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  link.hidden = true;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+  $('#studio-library-status').textContent = `Downloaded ${fileName} · stored on this computer only.`;
+}
+
+async function importMineFile(file) {
+  if (file.size > COMPETITION_MAP_FILE_MAX_BYTES) throw new Error('The selected map file is larger than 5 MB.');
+  const imported = parseCompetitionMapFile(await file.text(), studio.slotId);
+  const blockers = imported.validation.errors.length;
+  const warnings = imported.validation.warnings.length;
+  const review = imported.validation.valid
+    ? `${imported.validation.counts.rooms} rooms and ${imported.validation.counts.objects} objects passed validation.`
+    : `${blockers} validation blocker${blockers === 1 ? '' : 's'} will need editing before this draft can be published.`;
+  if (!confirm(
+    `Import “${imported.file.name}” into ${studio.slotId}?\n\n` +
+    `${review}\n\nThis replaces only the current unsaved editor draft. It does not save to the server or apply anything live.`
+  )) return;
+
+  studio.draft = structuredClone(imported.draft);
+  studio.depth = 1;
+  studio.selected = null;
+  studio.tool = 'select';
+  studio.connectFrom = '';
+  syncActiveMap();
+  renderAll();
+  setSaveState('IMPORTED · UNSAVED', 'dirty');
+  $('#studio-library-status').textContent = `Imported ${file.name} · ${blockers} blockers · ${warnings} warnings · review, edit, then save the draft.`;
+}
+
+async function runLibraryAction(action) {
+  try {
+    await action();
+  } catch (error) {
+    const message = error?.message || 'MAP FILE ACTION FAILED';
+    $('#studio-library-status').textContent = message;
+    setSaveState(message, 'error');
+  }
 }
 
 function selectDepth(depth) {
