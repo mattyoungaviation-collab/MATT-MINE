@@ -608,6 +608,19 @@ test('wallet-authenticated Admin controls update mine gates, tuning, and exact p
   draft.depths[0].map.name = 'Wallet Admin Depth One';
   draft.depths[0].map.rooms[0].width = 1.5;
   draft.map = structuredClone(draft.depths[0].map);
+  draft._requestSizeRegressionPadding = 'x'.repeat(110 * 1024);
+
+  const oversizedControl = await fetch(`${base}/api/admin/operations`, {
+    method: 'PUT',
+    headers: mutationHeaders,
+    body: JSON.stringify({
+      patch: { freeRankedPaused: false },
+      reason: 'Verify the standard API request limit remains protected',
+      padding: 'x'.repeat(110 * 1024)
+    })
+  });
+  assert.equal(oversizedControl.status, 413);
+  assert.equal((await oversizedControl.json()).error.code, 'request_too_large');
 
   const saved = await fetch(`${base}/api/admin/competition-studio/practice/draft`, {
     method: 'PUT',
