@@ -140,6 +140,17 @@ test('mobile canvas buffer follows visible size and caps pixel density', () => {
     scaleX: 1.5,
     scaleY: 1.5
   });
+
+  const largeDesktop = canvasRenderSize({
+    cssWidth: 2_560,
+    cssHeight: 1_440,
+    logicalWidth: 1_280,
+    logicalHeight: 720,
+    devicePixelRatio: 2,
+    touchInput: false
+  });
+  assert.ok(largeDesktop.pixelWidth * largeDesktop.pixelHeight <= 1_920 * 1_080);
+  assert.equal(largeDesktop.pixelWidth / largeDesktop.pixelHeight, 16 / 9);
 });
 
 test('mobile gameplay requests native fullscreen and keeps an iOS viewport fallback', async () => {

@@ -14,6 +14,7 @@ import {
   weightedChoice
 } from './utils.js';
 
+const MAX_COSMETIC_PARTICLES = 600;
 const TAU = Math.PI * 2;
 
 export class MattMineGame {
@@ -909,6 +910,9 @@ export class MattMineGame {
       particle.vy *= 0.96;
     }
     this.particles = this.particles.filter((particle) => particle.life > 0);
+    if (this.particles.length > MAX_COSMETIC_PARTICLES) {
+      this.particles.splice(0, this.particles.length - MAX_COSMETIC_PARTICLES);
+    }
     for (const floater of this.floaters) {
       floater.life -= dt;
       floater.y -= 34 * dt;

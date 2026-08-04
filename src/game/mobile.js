@@ -1,4 +1,5 @@
 const MOBILE_PORTRAIT_MAX_WIDTH = 760;
+const MAX_CANVAS_PIXELS = 1_920 * 1_080;
 
 export function touchInputDetected(runtime = globalThis) {
   const touchPoints = Number(runtime.navigator?.maxTouchPoints || 0);
@@ -78,14 +79,20 @@ export function canvasRenderSize({
   // common frame-time bottleneck.
   const ratioCap = touchInput ? 1.25 : 1.5;
   const pixelRatio = Math.min(Math.max(1, positive(devicePixelRatio) || 1), ratioCap);
-  const pixelWidth = Math.max(
+  let pixelWidth = Math.max(
     1,
     Math.min(Math.round(renderedWidth * pixelRatio), Math.round(safeLogicalWidth * 2))
   );
-  const pixelHeight = Math.max(
+  let pixelHeight = Math.max(
     1,
     Math.min(Math.round(renderedHeight * pixelRatio), Math.round(safeLogicalHeight * 2))
   );
+  const pixelCount = pixelWidth * pixelHeight;
+  if (pixelCount > MAX_CANVAS_PIXELS) {
+    const budgetScale = Math.sqrt(MAX_CANVAS_PIXELS / pixelCount);
+    pixelWidth = Math.max(1, Math.round(pixelWidth * budgetScale));
+    pixelHeight = Math.max(1, Math.round(pixelHeight * budgetScale));
+  }
   return {
     pixelWidth,
     pixelHeight,

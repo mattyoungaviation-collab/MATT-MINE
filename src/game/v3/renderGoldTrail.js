@@ -20,6 +20,7 @@ export const renderGoldTrailMethods = {
   drawParticles(ctx) {
     for (const particle of this.particles) {
       if (particle.layer === 'ground') continue;
+      if (!this.inView(particle, 40)) continue;
       ctx.globalAlpha = clamp(particle.life / particle.maxLife, 0, 1);
       ctx.fillStyle = particle.color;
       ctx.beginPath();
@@ -40,8 +41,6 @@ function drawGoldGlowSegment(ctx, particle, alpha) {
 
   ctx.globalAlpha = fade * 0.22;
   ctx.strokeStyle = '#f2a91f';
-  ctx.shadowColor = '#ffc83d';
-  ctx.shadowBlur = 15;
   ctx.lineWidth = width * 3.2;
   ctx.beginPath();
   ctx.moveTo(particle.x1, particle.y1);
@@ -50,8 +49,6 @@ function drawGoldGlowSegment(ctx, particle, alpha) {
 
   ctx.globalAlpha = fade * 0.68;
   ctx.strokeStyle = '#ffe18a';
-  ctx.shadowColor = '#ffd151';
-  ctx.shadowBlur = 7;
   ctx.lineWidth = Math.max(1.5, width * 0.68);
   ctx.beginPath();
   ctx.moveTo(particle.x1, particle.y1);
@@ -66,7 +63,6 @@ function drawGoldGlowSegment(ctx, particle, alpha) {
   glow.addColorStop(0.28, `rgba(255,205,66,${fade * 0.34})`);
   glow.addColorStop(1, 'rgba(255,171,26,0)');
   ctx.fillStyle = glow;
-  ctx.shadowBlur = 0;
   ctx.globalAlpha = 1;
   ctx.beginPath();
   ctx.arc(0, 0, width * 2.7, 0, TAU);
@@ -84,8 +80,6 @@ function drawGoldSpark(ctx, particle, alpha, elapsed) {
   ctx.globalCompositeOperation = 'lighter';
   ctx.globalAlpha = alpha * (0.62 + twinkle * 0.38);
   ctx.strokeStyle = '#fff2b8';
-  ctx.shadowColor = '#ffd447';
-  ctx.shadowBlur = 9;
   ctx.lineCap = 'round';
   ctx.lineWidth = Math.max(0.8, size * 0.55);
   ctx.beginPath();
