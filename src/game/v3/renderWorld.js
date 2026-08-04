@@ -66,12 +66,9 @@ export const renderWorldMethods = {
       stone.addColorStop(0.48, `rgba(28,30,39,${Math.min(0.72, rock.alpha + 0.28)})`);
       stone.addColorStop(1, `rgba(3,4,8,${Math.min(0.86, rock.alpha + 0.42)})`);
       ctx.fillStyle = stone;
-      ctx.shadowColor = 'rgba(0,0,0,0.8)';
-      ctx.shadowBlur = 12;
       ctx.beginPath();
       ctx.ellipse(0, 0, rock.radius, rock.radius * 0.58, 0, 0, TAU);
       ctx.fill();
-      ctx.shadowBlur = 0;
       ctx.strokeStyle = 'rgba(171,158,194,0.1)';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
@@ -93,8 +90,6 @@ export const renderWorldMethods = {
         ctx.fillStyle = `rgba(87,218,255,${0.14 + pulse * 0.12})`;
         ctx.strokeStyle = 'rgba(156,239,255,0.78)';
         ctx.lineWidth = 3;
-        ctx.shadowColor = '#56dfff';
-        ctx.shadowBlur = 24;
         for (let index = 0; index < 7; index += 1) {
           const angle = (index / 7) * TAU;
           polygon(ctx, Math.cos(angle) * 29, Math.sin(angle) * 23, 12 + index % 3 * 3, 5);
@@ -158,11 +153,8 @@ export const renderWorldMethods = {
     ctx.save();
     ctx.strokeStyle = 'rgba(0,0,0,0.74)';
     ctx.lineWidth = 28;
-    ctx.shadowColor = '#000000';
-    ctx.shadowBlur = 24;
     roundRect(ctx, x, y, room.width, room.height, 26);
     ctx.stroke();
-    ctx.shadowBlur = 0;
     ctx.strokeStyle = room.type === 'guardian' ? 'rgba(147,70,224,0.38)' : 'rgba(114,107,126,0.22)';
     ctx.lineWidth = 4;
     roundRect(ctx, x + 3, y + 3, room.width - 6, room.height - 6, 23);
@@ -215,8 +207,6 @@ export const renderWorldMethods = {
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = '#ffd88b';
-      ctx.shadowColor = '#ff8d2e';
-      ctx.shadowBlur = 22 * pulse;
       ctx.beginPath();
       ctx.moveTo(0, -9);
       ctx.quadraticCurveTo(10, 2, 0, 11);
@@ -233,7 +223,6 @@ export const renderWorldMethods = {
       ctx.translate(ore.x, ore.y);
       ctx.rotate(ore.rotation);
       const glow = ore.kind === 'crystal' || ore.rich;
-      const pulse = 0.85 + Math.sin(performance.now() / 230 + ore.id) * 0.15;
       ctx.fillStyle = 'rgba(0,0,0,0.6)';
       ctx.beginPath();
       ctx.ellipse(3, ore.radius * 0.55, ore.radius * 1.15, ore.radius * 0.46, 0, 0, TAU);
@@ -253,10 +242,6 @@ export const renderWorldMethods = {
         ctx.fillStyle = '#f3c152';
         ctx.fillRect(-4, -ore.radius * 0.26, 8, ore.radius * 0.52);
       } else {
-        if (glow) {
-          ctx.shadowColor = ore.color;
-          ctx.shadowBlur = (22 + Math.sin(performance.now() / 220 + ore.id) * 6) * pulse;
-        }
         const mineral = ctx.createLinearGradient(-ore.radius, -ore.radius, ore.radius, ore.radius);
         mineral.addColorStop(0, ore.hitFlash > 0 ? '#ffffff' : '#f0eaff');
         mineral.addColorStop(0.18, ore.hitFlash > 0 ? '#ffffff' : ore.color);
@@ -280,7 +265,6 @@ export const renderWorldMethods = {
             ctx.restore();
           }
         }
-        ctx.shadowBlur = 0;
         ctx.globalAlpha = 0.45;
         ctx.fillStyle = '#ffffff';
         polygon(ctx, -ore.radius * 0.2, -ore.radius * 0.28, ore.radius * 0.34, 5);
