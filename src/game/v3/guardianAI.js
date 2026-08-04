@@ -11,7 +11,8 @@ const TAU = Math.PI * 2;
 
 export const guardianAIMethods = {
   updateGuardian(enemy, dt) {
-    if (this.runContext?.mode === 'arena') {
+    const competitionSnapshot = this.runContext?.competitionSnapshot || this.runContext?.tuning?._competitionSnapshot;
+    if (this.runContext?.mode === 'arena' && competitionSnapshot?.guardianAiMode !== 'advanced') {
       this.updateLegacyArenaGuardian(enemy, dt);
       return;
     }

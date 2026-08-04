@@ -755,12 +755,8 @@ export class MattMineService {
         baseTuning.playerMaxHealth = competitionSnapshot.loadout.startingHealth;
         baseTuning.dynamiteStartAmmo = competitionSnapshot.loadout.startingDynamite;
         baseTuning.blasterEnergy = competitionSnapshot.loadout.blasterEnergy;
-        baseTuning.ignorePermanentUpgrades =
-          baseTuning.ignorePermanentUpgrades === true ||
-          competitionSnapshot.loadout.permanentUpgrades === false;
-        baseTuning.disableRunUpgrades =
-          baseTuning.disableRunUpgrades === true ||
-          competitionSnapshot.loadout.runUpgrades === false;
+        baseTuning.ignorePermanentUpgrades = competitionSnapshot.loadout.permanentUpgrades === false;
+        baseTuning.disableRunUpgrades = competitionSnapshot.loadout.runUpgrades === false;
         baseTuning.maximumDrones = competitionSnapshot.loadout.maximumDrones;
       }
       if (weeklyStage) {

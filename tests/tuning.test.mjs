@@ -77,8 +77,8 @@ test('custom keybindings reject duplicates and a tuned run applies player, weapo
   assert.equal(guardian.maxHp, 820 * 3);
 });
 
-test('every creature supports exact validated stats at every configured depth', () => {
-  const expectedFields = ['Health', 'Damage', 'Speed', 'Xp'];
+test('every creature supports exact validated stats and behavior at every configured depth', () => {
+  const expectedFields = ['Health', 'Damage', 'Speed', 'Xp', 'Radius', 'AwarenessRange', 'ContactCooldown'];
   for (let depth = 1; depth <= 5; depth += 1) {
     for (const type of ['Slime', 'Bat', 'Crawler', 'Beetle', 'Exploder', 'Spitter', 'Guardian']) {
       for (const field of expectedFields) {
@@ -108,6 +108,10 @@ test('per-depth exact stats replace calculated values for normal enemies and Gua
     depth1SlimeDamage: 21,
     depth1SlimeSpeed: 111,
     depth1SlimeXp: 55,
+    depth1SlimeRadius: 33,
+    depth1SlimeAwarenessRange: 777,
+    depth1SlimeContactCooldown: 2.5,
+    depth1SlimeSlimeBurstSpeed: 4.2,
     depth2SlimeHealth: 200,
     depth2GuardianHealth: 4_000,
     depth2GuardianDamage: 40,
@@ -127,6 +131,10 @@ test('per-depth exact stats replace calculated values for normal enemies and Gua
     },
     { health: 100, damage: 21, speed: 111, xp: 55 }
   );
+  assert.equal(depthOneSlime.radius, 33);
+  assert.equal(depthOneSlime.behavior.awarenessRange, 777);
+  assert.equal(depthOneSlime.behavior.contactCooldown, 2.5);
+  assert.equal(depthOneSlime.behavior.slimeBurstSpeed, 4.2);
 
   game.run.depth = 2;
   const depthTwoSlime = game.spawnEnemy(false, room, 'slime');

@@ -1,4 +1,6 @@
 import { CHARACTER_IDS } from './expansionConfig.js';
+import { bossTuningSchema } from './bossTuning.js';
+import { enemyDepthTuningSchema } from './enemyDepthTuning.js';
 
 export const COMPETITION_SLOTS = Object.freeze([
   Object.freeze({ id: 'practice', number: 1, name: 'Practice Mine', mode: 'practice', leaderboard: false, color: '#55dfb4' }),
@@ -23,6 +25,52 @@ const OBJECT_TYPES = new Set(Object.values(MAP_OBJECT_KINDS).flat());
 const MAX_ROOMS = 30;
 const MAX_OBJECTS = 300;
 export const COMPETITION_DEPTH_COUNT = 5;
+
+const tuningNumber = (id, category, label, value, min, max, step = 1, description = '') => ({
+  id, category, label, type: 'number', default: value, min, max, step, description
+});
+const tuningToggle = (id, category, label, value, description = '') => ({
+  id, category, label, type: 'boolean', default: value, description
+});
+const competitionEnemySchema = enemyDepthTuningSchema(tuningNumber, tuningToggle, COMPETITION_DEPTH_COUNT);
+const guardianBaseSchema = bossTuningSchema(tuningNumber, tuningToggle);
+const roomSpawnFields = Object.freeze([
+  Object.freeze({ suffix: 'StartEnemies', label: 'Lift / extraction enemies', value: 0, max: 30 }),
+  Object.freeze({ suffix: 'MiningEnemies', label: 'Enemies per mining room', value: 1, max: 30 }),
+  Object.freeze({ suffix: 'CombatEnemies', label: 'Enemies per combat room', value: 4, max: 30 }),
+  Object.freeze({ suffix: 'MixedEnemies', label: 'Enemies per mixed room', value: 3, max: 30 }),
+  Object.freeze({ suffix: 'TreasureEnemies', label: 'Enemies in Prospector Cache', value: 1, max: 30 }),
+  Object.freeze({ suffix: 'GuardianEnemies', label: 'Guardian-vault minions', value: 0, max: 30 }),
+  Object.freeze({ suffix: 'GuardianBosses', label: 'Guardian bosses', value: 1, max: 5 })
+]);
+const competitionRoomSchema = Array.from({ length: COMPETITION_DEPTH_COUNT }, (_, index) => index + 1)
+  .flatMap((depth) => roomSpawnFields.map((field) => tuningNumber(
+    `depth${depth}${field.suffix}`,
+    `Depth ${depth} generated room plan`,
+    field.label,
+    field.value,
+    0,
+    field.max,
+    1,
+    `Used only when this published Studio version selects Generated room plan on depth ${depth}.`
+  )));
+
+// Guardian phase/attack controls are depth-scoped in Competition Studio even
+// though the general Game Balance screen keeps one lobby-wide Guardian setup.
+const competitionGuardianSchema = Array.from({ length: COMPETITION_DEPTH_COUNT }, (_, index) => index + 1)
+  .flatMap((depth) => guardianBaseSchema.map((definition) => ({
+    ...definition,
+    id: `depth${depth}${capitalize(definition.id)}`,
+    category: `Depth ${depth} ${definition.category}`,
+    runtimeId: definition.id,
+    depth
+  })));
+
+export const COMPETITION_MONSTER_TUNING_SCHEMA = Object.freeze([
+  ...competitionRoomSchema,
+  ...competitionEnemySchema,
+  ...competitionGuardianSchema
+].map((definition) => Object.freeze(definition)));
 
 export function defaultCompetitionStudio(timestamp = Date.now()) {
   const snapshots = {};
@@ -106,9 +154,35 @@ export function normalizeCompetitionDraft(input, forcedSlotId = '') {
     subtitle: cleanText(source.subtitle || defaultSubtitle(slotId), 120),
     depths,
     map: depths[0].map,
+    enemyPlanMode: source.enemyPlanMode === 'generated' ? 'generated' : 'authored',
+    guardianAiMode: source.guardianAiMode === 'legacy' ? 'legacy' : 'advanced',
+    monsterTuning: normalizeCompetitionMonsterTuning(source.monsterTuning),
     loadout: normalizeLoadout(source.loadout),
     rules: normalizeRules(source.rules, slotId)
   };
+}
+
+export function normalizeCompetitionMonsterTuning(input = {}) {
+  const source = isRecord(input) ? input : {};
+  return Object.fromEntries(COMPETITION_MONSTER_TUNING_SCHEMA.map((definition) => {
+    if (definition.type === 'boolean') {
+      return [definition.id, typeof source[definition.id] === 'boolean' ? source[definition.id] : definition.default];
+    }
+    return [definition.id, boundedNumber(
+      source[definition.id],
+      definition.min,
+      definition.max,
+      definition.default
+    )];
+  }));
+}
+
+export function competitionGuardianTuningForDepth(snapshot, depth = 1) {
+  const level = Math.max(1, Math.min(COMPETITION_DEPTH_COUNT, Math.floor(Number(depth) || 1)));
+  const tuning = isRecord(snapshot?.monsterTuning) ? snapshot.monsterTuning : {};
+  return Object.fromEntries(COMPETITION_MONSTER_TUNING_SCHEMA
+    .filter((definition) => definition.depth === level && definition.runtimeId)
+    .map((definition) => [definition.runtimeId, tuning[definition.id] ?? definition.default]));
 }
 
 export function normalizeCompetitionDepths(input, slotId) {
@@ -503,6 +577,10 @@ function cleanText(value, max) {
 function cleanId(value) {
   const id = String(value || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-').slice(0, 48);
   return id || 'item';
+}
+
+function capitalize(value) {
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 function boundedNumber(value, min, max, fallback) {

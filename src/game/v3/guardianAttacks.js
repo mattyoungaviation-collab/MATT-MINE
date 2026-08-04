@@ -25,7 +25,10 @@ export const guardianAttackMethods = {
     }
   },
   fireEnemyVolley(enemy, count, spread, speed, radial = false, options = {}) {
-    if (enemy.isBoss) {
+    // Phase-configured Guardian attacks pass an explicit attack type and own
+    // their speed/spread. The lobby-wide legacy overrides remain available to
+    // the old Arena controller only.
+    if (enemy.isBoss && !options.attackType) {
       speed = this.runContext?.tuning?.bossProjectileSpeed || speed;
       if (!radial) spread = this.runContext?.tuning?.bossVolleySpread || spread;
     }
@@ -47,8 +50,8 @@ export const guardianAttackMethods = {
         y: enemy.y + Math.sin(angle) * enemy.radius,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
-        radius: this.runContext?.mode === 'arena' ? 9 : enemy.isBoss ? 7 : 8,
-        life: 2.2,
+        radius: options.radius ?? (this.runContext?.mode === 'arena' ? 9 : enemy.isBoss ? 7 : 8),
+        life: options.life ?? 2.2,
         travelled: 0,
         maxRange: options.maxRange || CONFIG.guardianProjectileRange,
         damage: options.damage ?? enemy.damage * 0.62,
@@ -60,10 +63,21 @@ export const guardianAttackMethods = {
     this.audio.play('blaster');
   },
   enemyExplode(enemy) {
+    const behavior = enemy.behavior || {};
     const roomId = enemy.roomId;
     this.enemies = this.enemies.filter((entry) => entry.id !== enemy.id);
-    this.explode(enemy.x, enemy.y, 138, enemy.damage * 0.9);
-    if (distance(enemy, this.player) < 145 + this.player.radius) this.damagePlayer(enemy.damage, angleTo(enemy, this.player));
+    this.explode(
+      enemy.x,
+      enemy.y,
+      behavior.exploderBlastRadius ?? 138,
+      enemy.damage * (behavior.exploderBlastDamage ?? .9)
+    );
+    if (distance(enemy, this.player) < (behavior.exploderPlayerRadius ?? 145) + this.player.radius) {
+      this.damagePlayer(
+        enemy.damage * (behavior.exploderPlayerDamage ?? 1),
+        angleTo(enemy, this.player)
+      );
+    }
     this.checkRoomClear(roomId);
   }
 };

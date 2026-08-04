@@ -93,8 +93,8 @@ export const stateMethods = {
     if (loadout) {
       this.player.unlockedWeapons = {
         pickaxe: true,
-        dynamite: loadout.availableWeapons?.includes('dynamite') && loadout.startingDynamite > 0,
-        blaster: loadout.availableWeapons?.includes('blaster') && loadout.startingWeapon === 'blaster'
+        dynamite: loadout.availableWeapons?.includes('dynamite') === true,
+        blaster: loadout.availableWeapons?.includes('blaster') === true
       };
       this.player.weapon = loadout.startingWeapon || 'pickaxe';
     }

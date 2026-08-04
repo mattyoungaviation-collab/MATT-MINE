@@ -7,9 +7,11 @@ import { roomsMethods } from './rooms.js';
 import { stateMethods } from './state.js';
 import {
   isEnemySpawnEnabled,
+  resolveEnemyDepthBehavior,
   resolveEnemyDepthStats,
   resolveEnemySpawnType
 } from '../enemyDepthTuning.js';
+import { competitionGuardianTuningForDepth } from '../competitionStudio.js';
 
 const TAU = Math.PI * 2;
 const MAX_CONFIGURED_DEPTH = 5;
@@ -19,9 +21,12 @@ export const spawnTuningMethods = {
     const tuning = this.runContext?.tuning || {};
     const competitionSnapshot = this.runContext?.competitionSnapshot ||
       tuning._competitionSnapshot;
-    // Published maps always own geometry, loot, hazards, and objectives. When
-    // Admin enables per-depth room spawns, the live lobby tuning owns the mob
-    // plan inside that geometry instead of being silently discarded.
+    if (competitionSnapshot) {
+      Object.assign(tuning, competitionGuardianTuningForDepth(competitionSnapshot, this.run.depth));
+    }
+    // Published maps always own geometry, loot, hazards, and objectives. A
+    // Studio version uses its exact authored mob objects by default. Generated
+    // room spawns are available only when that version explicitly selects it.
     if (competitionSnapshot) {
       const result = stateMethods.generateDepth.call(this);
       if (tuning.usePerDepthRoomSpawns === true) {
@@ -184,6 +189,7 @@ export const spawnTuningMethods = {
       baseStats: stats,
       isBoss
     });
+    const behavior = resolveEnemyDepthBehavior({ type, depth: this.run.depth, tuning });
     const dormant = roomRequiresLock(room.type) && !isBoss;
 
     const enemy = {
@@ -196,7 +202,7 @@ export const spawnTuningMethods = {
       vy: 0,
       knockbackX: 0,
       knockbackY: 0,
-      radius: stats.radius * (isBoss ? 1 + (this.run.depth - 1) * .05 : 1),
+      radius: resolvedStats.radius,
       hp: resolvedStats.health,
       maxHp: resolvedStats.health,
       speed: resolvedStats.speed,
@@ -215,7 +221,8 @@ export const spawnTuningMethods = {
       summonTimer: 4.5,
       fuseTimer: 0,
       lastBossPhase: 1,
-      guardianReinforcement: false
+      guardianReinforcement: false,
+      behavior
     };
     this.enemies.push(enemy);
     if (isBoss && Array.isArray(this.run?.customGuardianSpawns)) {

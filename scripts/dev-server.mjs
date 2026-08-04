@@ -157,12 +157,8 @@ const arenaService = arenaEnabled
           tuning.playerMaxHealth = competitionSnapshot.loadout.startingHealth;
           tuning.dynamiteStartAmmo = competitionSnapshot.loadout.startingDynamite;
           tuning.blasterEnergy = competitionSnapshot.loadout.blasterEnergy;
-          tuning.ignorePermanentUpgrades =
-            tuning.ignorePermanentUpgrades === true ||
-            competitionSnapshot.loadout.permanentUpgrades === false;
-          tuning.disableRunUpgrades =
-            tuning.disableRunUpgrades === true ||
-            competitionSnapshot.loadout.runUpgrades === false;
+          tuning.ignorePermanentUpgrades = competitionSnapshot.loadout.permanentUpgrades === false;
+          tuning.disableRunUpgrades = competitionSnapshot.loadout.runUpgrades === false;
           tuning.maximumDrones = competitionSnapshot.loadout.maximumDrones;
         }
         tuning._competitionCharacter = structuredClone(

@@ -1,11 +1,13 @@
 import {
   COMPETITION_DEPTH_COUNT,
+  COMPETITION_MONSTER_TUNING_SCHEMA,
   COMPETITION_SLOTS,
   createStarterMap,
   normalizeCompetitionDraft,
   validateCompetitionDraft,
   validateCompetitionMap
 } from './game/competitionStudio.js';
+import { PER_DEPTH_ENEMY_TYPES } from './game/enemyDepthTuning.js';
 import {
   drawCompetitionMap,
   mapBounds
@@ -359,8 +361,16 @@ function updateInspector(event) {
 function renderCompetition() {
   const draft = studio.draft;
   $('#studio-competition-fields').innerHTML = `
-    ${field('Competition name', 'competition.name', draft.name, 'text')}
-    ${field('Card description', 'competition.subtitle', draft.subtitle, 'text')}
+    ${field('Competition name', 'name', draft.name, 'text')}
+    ${field('Card description', 'subtitle', draft.subtitle, 'text')}
+    <label class="tuning-field">Enemy placement source<select data-competition="enemyPlanMode">
+      <option value="authored" ${draft.enemyPlanMode !== 'generated' ? 'selected' : ''}>Exact Studio map objects</option>
+      <option value="generated" ${draft.enemyPlanMode === 'generated' ? 'selected' : ''}>Generated room plan</option>
+    </select><small>Exact Studio objects preserves every placed enemy. Generated mode replaces them using room-count balancing.</small></label>
+    <label class="tuning-field">Guardian control system<select data-competition="guardianAiMode">
+      <option value="advanced" ${draft.guardianAiMode !== 'legacy' ? 'selected' : ''}>Advanced phase controller</option>
+      <option value="legacy" ${draft.guardianAiMode === 'legacy' ? 'selected' : ''}>Legacy Arena controller</option>
+    </select><small>Advanced makes every phase and attack control below authoritative. Legacy is retained only for compatibility.</small></label>
     <label class="tuning-field">Locked character<select data-competition="loadout.characterId">${CHARACTER_IDS.map((characterId) => `<option value="${characterId}" ${draft.loadout.characterId === characterId ? 'selected' : ''}>${escapeHtml(CHARACTER_DEFAULTS[characterId]?.name || titleCase(characterId))}</option>`).join('')}</select></label>
     <label class="tuning-field">Starting weapon<select data-competition="loadout.startingWeapon">${['pickaxe','dynamite','blaster'].map((weapon) => `<option value="${weapon}" ${draft.loadout.startingWeapon === weapon ? 'selected' : ''}>${titleCase(weapon)}</option>`).join('')}</select></label>
     ${['pickaxe','dynamite','blaster'].map((weapon) => `<label class="tuning-field studio-check">${titleCase(weapon)} available<input data-competition="loadout.availableWeapons" data-weapon="${weapon}" type="checkbox" ${(draft.loadout.availableWeapons || []).includes(weapon) ? 'checked' : ''} ${weapon === 'pickaxe' ? 'disabled' : ''}></label>`).join('')}
@@ -375,7 +385,50 @@ function renderCompetition() {
     ${field('Player instructions', 'rules.instructions', draft.rules.instructions, 'text')}
     ${check('Permanent upgrades enabled', 'loadout.permanentUpgrades', draft.loadout.permanentUpgrades)}
     ${check('Run upgrades enabled', 'loadout.runUpgrades', draft.loadout.runUpgrades)}
-    ${check('Paid revive enabled', 'loadout.paidRevive', draft.loadout.paidRevive)}`;
+    ${check('Paid revive enabled', 'loadout.paidRevive', draft.loadout.paidRevive)}
+    <section class="studio-monster-tuning">
+      <div class="studio-monster-heading">
+        <span><b>DEPTH ${studio.depth} CREATURE CONTROL</b><small>Every field is pinned into the published version and read by the live enemy engine.</small></span>
+        <em>${draft.enemyPlanMode === 'generated' ? 'GENERATED PLACEMENT' : 'EXACT MAP PLACEMENT'}</em>
+      </div>
+      <div class="studio-monster-grid">${renderMonsterTuning()}</div>
+    </section>`;
+}
+
+function renderMonsterTuning() {
+  const depthPrefix = `depth${studio.depth}`;
+  const roomDefinitions = COMPETITION_MONSTER_TUNING_SCHEMA.filter((definition) =>
+    definition.category === `Depth ${studio.depth} generated room plan`
+  );
+  const roomPlan = `<details class="studio-monster-card">
+    <summary><span><b>Generated room plan</b><small>Used only when Enemy placement source is Generated room plan.</small></span><em>${roomDefinitions.length} CONTROLS</em></summary>
+    <div class="studio-monster-fields">${roomDefinitions.map(renderMonsterField).join('')}</div>
+  </details>`;
+  const creatures = PER_DEPTH_ENEMY_TYPES.map((type) => {
+    const typePrefix = `${depthPrefix}${type.id.charAt(0).toUpperCase()}${type.id.slice(1)}`;
+    const definitions = COMPETITION_MONSTER_TUNING_SCHEMA.filter((definition) =>
+      (definition.id.startsWith(typePrefix) && definition.category === `Depth ${studio.depth} enemy tuning`) ||
+      (type.id === 'guardian' && definition.id.startsWith(`${depthPrefix}Boss`))
+    );
+    const summary = definitions
+      .filter((definition) => /(?:Health|Damage|Speed|Enabled)$/.test(definition.id))
+      .slice(0, 4)
+      .map((definition) => `${definition.label}: ${formatTuningValue(studio.draft.monsterTuning[definition.id])}`)
+      .join(' · ');
+    return `<details class="studio-monster-card" ${type.id === 'slime' ? 'open' : ''}>
+      <summary><span><b>${escapeHtml(type.label)}</b><small>${escapeHtml(summary || `${definitions.length} behavior controls`)}</small></span><em>${definitions.length} CONTROLS</em></summary>
+      <div class="studio-monster-fields">${definitions.map(renderMonsterField).join('')}</div>
+    </details>`;
+  }).join('');
+  return `${roomPlan}${creatures}`;
+}
+
+function renderMonsterField(definition) {
+  const value = studio.draft.monsterTuning[definition.id] ?? definition.default;
+  if (definition.type === 'boolean') {
+    return `<label class="tuning-field studio-check" title="${escapeHtml(definition.description || '')}">${escapeHtml(definition.label)}<input data-competition="monsterTuning.${definition.id}" type="checkbox" ${value ? 'checked' : ''}></label>`;
+  }
+  return `<label class="tuning-field" title="${escapeHtml(definition.description || '')}">${escapeHtml(definition.label)}<input data-competition="monsterTuning.${definition.id}" type="number" value="${escapeHtml(value)}" min="${definition.min}" max="${definition.max}" step="${definition.step}"><small>${escapeHtml(definition.description || '')}</small></label>`;
 }
 
 function updateCompetition(event) {
@@ -394,9 +447,14 @@ function updateCompetition(event) {
   }
   const path = input.dataset.competition.split('.');
   let target = studio.draft;
-  while (path.length > 1) target = target[path.shift()];
+  while (path.length > 1) {
+    const segment = path.shift();
+    if (!target[segment] || typeof target[segment] !== 'object') target[segment] = {};
+    target = target[segment];
+  }
   target[path[0]] = input.type === 'checkbox' ? input.checked : input.type === 'number' ? Number(input.value) : input.value;
   markDirty();
+  if (['enemyPlanMode', 'guardianAiMode'].includes(input.dataset.competition)) renderCompetition();
 }
 
 function renderValidation() {
@@ -610,6 +668,7 @@ function copyPreviousDepth() {
   if (!previous || !current) return;
   current.map = structuredClone(previous);
   current.map.name = `${previous.name.replace(/\s*·\s*Depth\s+\d+$/i, '')} · Depth ${studio.depth}`;
+  copyDepthMonsterTuning(studio.depth - 1, studio.depth);
   syncActiveMap();
   studio.selected = null;
   markDirty();
@@ -621,6 +680,11 @@ function resetCurrentDepth() {
   const current = studio.draft.depths.find((entry) => entry.depth === studio.depth);
   if (!current) return;
   current.map = createStarterMap(studio.slotId, studio.depth);
+  for (const definition of COMPETITION_MONSTER_TUNING_SCHEMA.filter((entry) =>
+    entry.id.startsWith(`depth${studio.depth}`)
+  )) {
+    studio.draft.monsterTuning[definition.id] = definition.default;
+  }
   syncActiveMap();
   studio.selected = null;
   markDirty();
@@ -683,6 +747,20 @@ function clamp(value, min, max) {
 
 function titleCase(value) {
   return String(value || '').replace(/[_-]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function copyDepthMonsterTuning(fromDepth, toDepth) {
+  const sourcePrefix = `depth${fromDepth}`;
+  const targetPrefix = `depth${toDepth}`;
+  for (const definition of COMPETITION_MONSTER_TUNING_SCHEMA.filter((entry) => entry.id.startsWith(targetPrefix))) {
+    const sourceId = `${sourcePrefix}${definition.id.slice(targetPrefix.length)}`;
+    studio.draft.monsterTuning[definition.id] = studio.draft.monsterTuning[sourceId] ?? definition.default;
+  }
+}
+
+function formatTuningValue(value) {
+  if (typeof value === 'boolean') return value ? 'on' : 'off';
+  return Number.isFinite(Number(value)) ? String(Number(value)) : 'default';
 }
 
 function escapeHtml(value) {
