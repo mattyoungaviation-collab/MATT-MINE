@@ -11,14 +11,14 @@
     <meta property="og:type" content="website" />
     <meta property="og:title" content="MATT Mine — Dig. Fight. Extract." />
     <meta property="og:description" content="One free ranked run every day. Enter the mine, defeat the Guardian, and extract your best score." />
-    <meta property="og:image" content="/assets/launch/matt-mine-hero.png" />
+    <meta property="og:image" content="/assets/ui/matt-mine-hero-reference.png" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="MATT Mine — Dig. Fight. Extract." />
     <meta name="twitter:description" content="A browser action roguelite and daily competition built on Ronin." />
-    <meta name="twitter:image" content="/assets/launch/matt-mine-hero.png" />
+    <meta name="twitter:image" content="/assets/ui/matt-mine-hero-reference.png" />
     <title>MATT Mine — Dig. Fight. Extract.</title>
     <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg" />
-    <link rel="preload" as="image" href="./assets/launch/matt-mine-hero.png" fetchpriority="high" />
+    <link rel="preload" as="image" href="./assets/ui/matt-mine-hero-reference.png" fetchpriority="high" />
     <link rel="stylesheet" href="./src/styles.css" />
     <link rel="stylesheet" href="./src/v3.css" />
     <link rel="stylesheet" href="./src/v4.css" />
@@ -30,6 +30,21 @@
     <main id="app">
       <canvas id="game" width="1280" height="720" aria-label="MATT Mine game canvas"></canvas>
 
+      <header id="site-nav" class="site-nav" aria-label="MATT Mine navigation">
+        <button class="site-brand" type="button" data-site-action="home" aria-label="MATT Mine home">
+          <span aria-hidden="true">⛏</span><strong>MATT <b>MINE</b></strong>
+        </button>
+        <nav aria-label="Player pages">
+          <button type="button" data-site-action="how-to-play">HOW TO PLAY</button>
+          <button type="button" data-site-action="leaderboards">LEADERBOARDS</button>
+          <button type="button" data-site-action="pass">PASS</button>
+          <button type="button" data-site-action="store">STORE</button>
+        </nav>
+        <button id="site-account-button" class="site-account-button" type="button" data-site-action="account">
+          <span aria-hidden="true">▣</span><strong id="site-account-label">CONNECT WALLET</strong>
+        </button>
+      </header>
+
       <section id="launch" class="screen active launch-screen" aria-labelledby="launch-title">
         <header class="launch-nav">
           <button class="launch-brand" type="button" data-launch-scroll="launch-top" aria-label="MATT Mine home">
@@ -37,7 +52,7 @@
             <span><b>MATT</b> MINE<small>RONIN ACTION ROGUELITE</small></span>
           </button>
           <nav class="launch-links" aria-label="Main navigation">
-            <button type="button" data-launch-scroll="launch-gameplay">HOW TO PLAY</button>
+            <button type="button" data-launch-action="how-to-play">HOW TO PLAY</button>
             <button type="button" data-launch-action="leaderboards">LEADERBOARDS</button>
             <button type="button" data-launch-action="pass">PASS</button>
           </nav>
@@ -48,11 +63,11 @@
             </button>
             <button id="launch-wallet-button" class="launch-wallet-button" type="button">
               <span class="status-dot"></span>
-              <span id="launch-wallet-label">WALLETCONNECT</span>
+              <span id="launch-wallet-label">CONNECT WALLET</span>
             </button>
             <button id="launch-walletconnect-button" class="launch-wallet-button launch-walletconnect-button" type="button">
               <span class="status-dot"></span>
-              <span>WALLETCONNECT</span>
+              <span>CONNECT WALLET</span>
             </button>
             <button class="launch-enter-button" type="button" data-launch-action="enter">ENTER MINE</button>
           </div>
@@ -65,8 +80,8 @@
             <div class="launch-hero-content">
               <div class="launch-live-pill"><span></span> LIVE ON RONIN MAINNET</div>
               <p class="launch-kicker">THE MINE OPENS EVERY DAY</p>
-              <h1 id="launch-title"><span>MATT</span><br />MINE</h1>
-              <p class="launch-hero-copy">Dig for ore. Fight through sealed chambers. Defeat the Guardian. Extract before the mine takes everything.</p>
+              <h1 id="launch-title"><span>MATT MINE</span><small>DIG. FIGHT. EXTRACT.</small></h1>
+              <p class="launch-hero-copy">Enter the mine, secure your score,<br />and extract before time runs out.</p>
               <div class="launch-hero-actions">
                 <button class="launch-primary-cta" type="button" data-launch-action="enter">
                   <span>PLAY FREE</span>
@@ -89,7 +104,7 @@
               </div>
             </div>
 
-            <aside class="launch-daily-card" aria-label="Today's mine status">
+            <aside class="launch-daily-summary-card" aria-label="Today's mine status">
               <div class="launch-daily-heading">
                 <div>
                   <span>TODAY'S MINE</span>
@@ -113,6 +128,29 @@
             </aside>
 
             <div class="launch-scroll-cue" aria-hidden="true"><span></span> DESCEND</div>
+          </section>
+
+          <section class="launch-mine-select" aria-labelledby="launch-mine-select-title">
+            <div class="launch-mine-select-heading">
+              <span></span><h2 id="launch-mine-select-title">CHOOSE YOUR MINE</h2><span></span>
+            </div>
+            <div class="launch-mine-card-grid">
+              <button class="launch-mine-card launch-daily-card daily" type="button" data-launch-action="daily">
+                <i aria-hidden="true">▦</i><strong>DAILY MINE</strong><small>One ranked run every day</small><b>PLAY FREE</b><em>AVAILABLE DAILY</em>
+              </button>
+              <button class="launch-mine-card pass" type="button" data-launch-action="pass-mine">
+                <i aria-hidden="true">M</i><strong>PASS MINE</strong><small>Premium competitive run</small><b>PLAY NOW</b><em>PASS HOLDERS</em>
+              </button>
+              <button class="launch-mine-card arena" type="button" data-launch-action="arena">
+                <i aria-hidden="true">⚔</i><strong>MATT ARENA</strong><small>10M MATT LAUNCH POOL</small><b>ENTER ARENA</b><em>COMPETITIVE</em>
+              </button>
+              <button class="launch-mine-card practice" type="button" data-launch-action="practice">
+                <i aria-hidden="true">◎</i><strong>PRACTICE</strong><small>No wallet required</small><b>PRACTICE NOW</b><em>ALWAYS OPEN</em>
+              </button>
+            </div>
+            <button class="launch-home-store" type="button" data-open-nugget-shop>
+              <span><i aria-hidden="true">◆</i><strong>NUGGET STORE</strong><small>Live server balance · Verified packages</small></span><b>OPEN STORE →</b>
+            </button>
           </section>
 
           <section class="launch-proof-rail" aria-label="Game highlights">
@@ -304,6 +342,26 @@
               <button type="button" data-launch-action="enter">PLAY</button>
             </div>
           </footer>
+        </div>
+      </section>
+
+      <section id="how-to-play" class="screen experience-screen" aria-labelledby="how-to-title">
+        <div class="experience-page how-to-page">
+          <header class="experience-hero how-to-hero">
+            <div><p class="eyebrow">HOW TO PLAY</p><h1 id="how-to-title"><span>HOW TO PLAY</span></h1><p>ENTER. DIG. EXTRACT.</p></div>
+          </header>
+          <div class="how-to-steps">
+            <article class="gold"><b>1</b><div><h2>CHOOSE YOUR MINE</h2><p>Daily, Pass, Arena, or unlimited Practice.</p></div><span aria-hidden="true">▦ &nbsp; M &nbsp; ⚔ &nbsp; ◎</span></article>
+            <article class="cyan"><b>2</b><div><h2>DIG &amp; FIGHT</h2><p>Break ore, clear sealed chambers, collect upgrades, and defeat enemies.</p></div><span aria-hidden="true">⛏</span></article>
+            <article class="purple"><b>3</b><div><h2>EXTRACT &amp; SCORE</h2><p>Reach the Lift Station and extract before the mine takes everything.</p></div><span aria-hidden="true">⇧</span></article>
+          </div>
+          <div class="how-to-bottom">
+            <article class="run-glance-card">
+              <h2>THE RUN AT A GLANCE</h2>
+              <div class="run-glance-flow"><span><i>▱</i><b>ENTER</b></span><em>›</em><span><i>◆</i><b>MINE</b></span><em>›</em><span><i>⇧</i><b>UPGRADE</b></span><em>›</em><span><i>♛</i><b>GUARDIAN</b></span><em>›</em><span><i>▥</i><b>EXTRACT</b></span></div>
+            </article>
+            <aside class="goal-card"><span aria-hidden="true">✦</span><h2>YOUR GOAL</h2><p>Secure the highest score you can and get out alive.</p><button class="primary-button" type="button" data-site-action="mines">⛏ CHOOSE YOUR MINE</button></aside>
+          </div>
         </div>
       </section>
 
@@ -595,8 +653,7 @@
       <section id="mine-pass" class="screen" aria-labelledby="pass-title">
         <div class="panel wide-panel economy-panel">
           <button class="close-button" data-close="mine-pass" aria-label="Close">×</button>
-          <p class="eyebrow">30-DAY PREMIUM ACCESS</p>
-          <h2 id="pass-title">MATT Mine Pass</h2>
+          <header class="pass-page-hero"><div><p class="eyebrow">30-DAY PREMIUM ACCESS</p><h2 id="pass-title">MATT MINE <span>PASS</span></h2><p>Unlock more from every run.</p></div><i aria-hidden="true">M</i></header>
           <div class="pass-hero-grid">
             <div class="pass-offer">
               <span class="pass-state-label" id="pass-state-label">FREE TIER ACTIVE</span>
@@ -617,6 +674,7 @@
               </ul>
             </div>
           </div>
+          <div class="pass-feature-rail" aria-label="Mine Pass benefits"><span>♛ <b>PREMIUM PASS<br />LEADERBOARD</b></span><span>⚒ <b>PAID RANKED<br />RUNS</b></span><span>2× <b>RUN XP &amp;<br />NUGGETS</b></span><span>◆ <b>PERMANENT<br />REWARDS</b></span></div>
           <div class="pass-progress-card">
             <div class="label-row"><span>PASS LEVEL <strong id="pass-level">1</strong></span><span id="pass-xp-text">0 XP</span></div>
             <div class="bar"><div id="pass-xp-fill" class="bar-fill pass-xp-fill"></div></div>
@@ -728,12 +786,12 @@
       <section id="leaderboards" class="screen" aria-labelledby="leaderboards-title">
         <div class="panel wide-panel economy-panel">
           <button class="close-button" data-close="leaderboards" aria-label="Close">×</button>
-          <p class="eyebrow">WEEKLY COMPETITION</p>
-          <h2 id="leaderboards-title">MATT Mine Leaderboards</h2>
+          <header class="leaderboard-page-hero"><div><p class="eyebrow">COMPETE · EXTRACT · CLIMB</p><h2 id="leaderboards-title"><span>MATT</span> LEADERBOARDS</h2></div></header>
           <div class="leaderboard-tabs">
             <button class="leaderboard-tab active" data-board="free">FREE LEADERBOARD</button>
             <button class="leaderboard-tab" data-board="paid">PASS LEADERBOARD</button>
           </div>
+          <div id="leaderboard-podium" class="leaderboard-podium" aria-label="Top three miners"></div>
           <div class="leaderboard-summary">
             <div><span>Weekly Pool</span><strong id="board-pool">0 MATT</strong></div>
             <div><span>Your Weekly Score</span><strong id="board-score">0</strong></div>

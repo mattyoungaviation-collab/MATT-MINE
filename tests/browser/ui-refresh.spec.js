@@ -5,8 +5,8 @@ test('desktop player navigation opens every redesigned public surface', async ({
   page.on('pageerror', (error) => runtimeErrors.push(error.message));
   await page.goto('/');
 
-  await expect(page.locator('#launch-nugget-button')).toBeVisible();
-  await page.locator('#launch-nugget-button').click();
+  await expect(page.locator('.launch-home-store')).toBeVisible();
+  await page.locator('.launch-home-store').click();
   await expect(page.locator('#nugget-shop')).toHaveClass(/active/);
   await expect(page.locator('#nugget-shop-status')).toContainText('Sign in with Ronin Wallet');
   await page.locator('#nugget-shop-close').click();
@@ -31,15 +31,15 @@ test('desktop player navigation opens every redesigned public surface', async ({
 
   await page.locator('#leaderboards-button').click();
   await expect(page.locator('#leaderboards')).toHaveClass(/active/);
-  await page.locator('#leaderboards [data-close]').click();
+  await page.locator('#site-nav [data-site-action="home"]').click();
+  await expect(page.locator('#launch')).toHaveClass(/active/);
 
-  await page.locator('#pass-button').click();
+  await page.locator('[data-launch-action="pass"]').first().click();
   await expect(page.locator('#mine-pass')).toHaveClass(/active/);
-  await page.locator('#mine-pass [data-close]').click();
+  await page.locator('#site-nav [data-site-action="home"]').click();
+  await expect(page.locator('#launch')).toHaveClass(/active/);
 
-  await page.locator('[data-mine-slot="arena"]').click();
-  await expect(page.locator('#mine-detail')).toHaveClass(/active/);
-  await page.locator('#mine-detail [data-mine-enter]').click();
+  await page.locator('.launch-mine-card.arena').click();
   await expect(page.locator('#daily-arena')).toHaveClass(/active/);
   await page.locator('#daily-arena [data-close]').click();
   await expect(page.locator('#menu')).toHaveClass(/active/);

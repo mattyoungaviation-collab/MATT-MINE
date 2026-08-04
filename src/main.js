@@ -177,6 +177,16 @@ const ui = {
 function showScreen(id = null) {
   for (const screen of screens) screen.classList.toggle('active', screen.id === id);
   document.body.classList.toggle('launch-active', id === 'launch');
+  document.body.dataset.activeScreen = id || 'game';
+  for (const button of document.querySelectorAll('#site-nav [data-site-action]')) {
+    const action = button.dataset.siteAction;
+    const active = (action === 'how-to-play' && id === 'how-to-play') ||
+      (action === 'leaderboards' && id === 'leaderboards') ||
+      (action === 'pass' && (id === 'mine-pass' || id === 'pass-mine' || id === 'pass-cosmetics')) ||
+      (action === 'store' && id === 'nugget-shop') ||
+      (action === 'account' && id === 'miner-profile');
+    button.classList.toggle('active', active);
+  }
   syncLiveDashboardPolling(id);
 }
 
@@ -413,6 +423,9 @@ function updateMenu() {
   $('#wallet-button').title = walletCopy.title;
   $('#wallet-button').classList.toggle('connected', connected);
   $('#wallet-button').disabled = walletBusy;
+  if ($('#site-account-label')) $('#site-account-label').textContent = connected
+    ? serverPlayer.identity?.name || 'MINER PROFILE'
+    : walletBusy ? 'CONNECTING…' : 'CONNECT WALLET';
   $('#free-run-status').textContent = connected
     ? serverPlayer.suspended ? 'SUSPENDED' : freeAccess.allowed ? 'AVAILABLE' : 'USED TODAY'
     : 'WALLET REQUIRED';
@@ -1724,6 +1737,18 @@ window.__MATT_MINE_API__ = apiClient;
 for (const button of document.querySelectorAll('[data-launch-action]')) {
   button.addEventListener('click', () => {
     const action = button.dataset.launchAction;
+    if (action === 'how-to-play') {
+      showScreen('how-to-play');
+      return;
+    }
+    if (action === 'daily') {
+      openDailyMine();
+      return;
+    }
+    if (action === 'pass-mine') {
+      openPassMine();
+      return;
+    }
     if (action === 'practice') {
       void startRunMode(RUN_MODES.PRACTICE);
       return;
@@ -1742,6 +1767,25 @@ for (const button of document.querySelectorAll('[data-launch-action]')) {
     }
     showScreen('menu');
     updateMenu();
+  });
+}
+
+for (const button of document.querySelectorAll('[data-site-action]')) {
+  button.addEventListener('click', () => {
+    const action = button.dataset.siteAction;
+    if (action === 'home') return openLaunch(true);
+    if (action === 'how-to-play') return showScreen('how-to-play');
+    if (action === 'leaderboards') return openLeaderboards(RUN_MODES.FREE);
+    if (action === 'pass') return openPass();
+    if (action === 'store') return window.dispatchEvent(new CustomEvent('mattmine:open-nugget-shop'));
+    if (action === 'mines') {
+      showScreen('menu');
+      return updateMenu();
+    }
+    if (action === 'account') {
+      if (serverPlayer) return openMinerProfile(false);
+      return void connectWallet();
+    }
   });
 }
 
@@ -2887,7 +2931,8 @@ function openLeaderboards(mode) {
       : isLocalPreview
         ? 'LOCAL CLAIM PREVIEW'
         : 'CONNECT WALLET TO CLAIM';
-  $('#leaderboard-body').innerHTML = rows.map((row) => `
+  renderLeaderboardPodium(rows);
+  $('#leaderboard-body').innerHTML = rows.slice(3).map((row) => `
     <tr class="${row.isPlayer ? 'player-row' : ''}">
       <td>#${row.rank}</td>
       <td>${renderMinerIdentity(row)}${row.isPlayer ? ' · YOU' : ''}</td>
@@ -2908,8 +2953,9 @@ async function renderServerLeaderboard(mode) {
     const leaderboard = await apiClient.leaderboard(mode);
     $('#board-score').textContent = formatNumber(leaderboard.playerScore);
     const rows = leaderboard.rows;
-    $('#leaderboard-body').innerHTML = rows.length
-      ? rows.map((row) => `
+    renderLeaderboardPodium(rows);
+    $('#leaderboard-body').innerHTML = rows.length > 3
+      ? rows.slice(3).map((row) => `
           <tr class="${row.isPlayer ? 'player-row' : ''}">
             <td>#${row.rank}</td>
             <td>${renderMinerIdentity(row)}${row.isPlayer ? ' · YOU' : ''}</td>
@@ -2917,7 +2963,7 @@ async function renderServerLeaderboard(mode) {
             <td>SERVER VERIFIED</td>
           </tr>
         `).join('')
-      : `<tr><td colspan="4">No verified ${mode === RUN_MODES.PAID ? 'Pass' : 'Free'} scores yet this week.</td></tr>`;
+      : `<tr><td colspan="4">${rows.length ? 'More miners will appear as verified scores arrive.' : `No verified ${mode === RUN_MODES.PAID ? 'Pass' : 'Free'} scores yet this week.`}</td></tr>`;
     const claims = await apiClient.rewardClaims();
     activeServerClaim = claims.find((claim) => claim.mode === mode) || null;
     renderServerClaim(activeServerClaim);
@@ -2931,6 +2977,19 @@ async function renderServerLeaderboard(mode) {
     renderServerClaim(null);
     if (note) note.textContent = `Server leaderboard unavailable: ${error.message}`;
   }
+}
+
+function renderLeaderboardPodium(rows = []) {
+  const podium = $('#leaderboard-podium');
+  if (!podium) return;
+  const places = [2, 1, 3];
+  replaceProfileMarkup(podium, places.map((place) => {
+    const row = rows.find((entry) => Number(entry.rank) === place);
+    const fallback = `<span class="podium-avatar" aria-hidden="true">${place}</span><strong>OPEN POSITION</strong><small>NO VERIFIED SCORE</small>`;
+    return `<article class="podium-place place-${place}"><b>#${place}</b>${row
+      ? `${renderMinerIdentity(row)}<small>${formatNumber(row.score)}</small>`
+      : fallback}</article>`;
+  }).join(''));
 }
 
 function renderMinerIdentity(row) {
