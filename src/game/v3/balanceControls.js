@@ -18,8 +18,11 @@ const LEGACY_META_SCALE = Object.freeze({
 export const balanceControlMethods = {
   startRun() {
     const tuning = this.runContext?.tuning || {};
-    const originalProfile = this.profile;
-    const originalMeta = originalProfile?.meta || {};
+    const browserProfile = this.profile;
+    const runProfile = tuning._playerProfile && typeof tuning._playerProfile === 'object'
+      ? tuning._playerProfile
+      : browserProfile;
+    const originalMeta = runProfile?.meta || {};
     const ignorePermanent = tuning.ignorePermanentUpgrades === true;
     const meta = ignorePermanent
       ? zeroMeta(originalMeta)
@@ -29,11 +32,11 @@ export const balanceControlMethods = {
     // restored after startup so gameplay must not fall back to the unscaled
     // browser profile when a later authored depth is generated.
     this.effectivePermanentMeta = meta;
-    this.profile = { ...originalProfile, meta };
+    this.profile = { ...runProfile, meta };
     try {
       stateMethods.startRun.call(this);
     } finally {
-      this.profile = originalProfile;
+      this.profile = browserProfile;
     }
 
     const permanentArmor = ignorePermanent

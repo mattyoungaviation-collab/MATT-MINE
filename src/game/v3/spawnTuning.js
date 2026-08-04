@@ -5,7 +5,11 @@ import { distance, random, randomInt, randomRange, weightedChoice } from '../uti
 import { enemySpawnMethods } from './enemySpawn.js';
 import { roomsMethods } from './rooms.js';
 import { stateMethods } from './state.js';
-import { resolveEnemyDepthStats, resolveEnemySpawnType } from '../enemyDepthTuning.js';
+import {
+  isEnemySpawnEnabled,
+  resolveEnemyDepthStats,
+  resolveEnemySpawnType
+} from '../enemyDepthTuning.js';
 
 const TAU = Math.PI * 2;
 const MAX_CONFIGURED_DEPTH = 5;
@@ -15,10 +19,38 @@ export const spawnTuningMethods = {
     const tuning = this.runContext?.tuning || {};
     const competitionSnapshot = this.runContext?.competitionSnapshot ||
       tuning._competitionSnapshot;
-    // A published Admin Studio snapshot is the authoritative source for both
-    // geometry and placed objects. Per-depth procedural spawn tuning is only
-    // allowed when no authored competition map exists.
-    if (competitionSnapshot || tuning.usePerDepthRoomSpawns === false) {
+    // Published maps always own geometry, loot, hazards, and objectives. When
+    // Admin enables per-depth room spawns, the live lobby tuning owns the mob
+    // plan inside that geometry instead of being silently discarded.
+    if (competitionSnapshot) {
+      const result = stateMethods.generateDepth.call(this);
+      if (tuning.usePerDepthRoomSpawns === true) {
+        this.enemies = [];
+        for (const room of this.layout.rooms) {
+          const enemyCount = configuredSpawnCount(
+            tuning,
+            this.run.depth,
+            roomTypeSuffix(room.type),
+            defaultRoomEnemyCount(room.type)
+          );
+          for (let index = 0; index < enemyCount; index += 1) {
+            this.spawnEnemy(false, room);
+          }
+        }
+        this.run.customGuardianCount = configuredSpawnCount(
+          tuning,
+          this.run.depth,
+          'GuardianBosses',
+          1
+        );
+      }
+      this.run.bossGoal = Math.max(0, Math.floor(this.run.customGuardianCount ?? 1));
+      this.run.bossKills = 0;
+      this.updateObjective();
+      this.updateHud();
+      return result;
+    }
+    if (tuning.usePerDepthRoomSpawns === false) {
       const result = stateMethods.generateDepth.call(this);
       this.run.bossGoal = Math.max(1, Math.floor(this.run.customGuardianCount || 1));
       this.run.bossKills = 0;
@@ -126,6 +158,11 @@ export const spawnTuningMethods = {
 
     const tuning = this.runContext?.tuning || {};
     const arenaMode = this.runContext?.mode === 'arena';
+    if (
+      !isBoss &&
+      forcedType &&
+      !isEnemySpawnEnabled(forcedType, this.run.depth, tuning)
+    ) return null;
     const roll = isBoss || forcedType ? 0 : random();
     const type = isBoss
       ? 'guardian'
@@ -135,6 +172,7 @@ export const spawnTuningMethods = {
         tuning,
         legacySelector: arenaMode ? legacyArenaArchetype : enemyArchetypeForRoll
       });
+    if (!type) return null;
     const configuredStats = ENEMY_STATS[type];
     const stats = arenaMode && isBoss
       ? { ...configuredStats, health: 620, speed: 56, damage: 24, xp: 160 }

@@ -739,6 +739,10 @@ export class MattMineService {
         'Select an enabled character owned by this wallet.'
       );
       const baseTuning = structuredClone(state.gameTuning[normalizedMode] || state.gameTuning.practice);
+      // Pin the authoritative profile used when the run is issued. This keeps
+      // browser gameplay and deterministic replay aligned after Admin changes
+      // a logged-in player's permanent ranks.
+      baseTuning._playerProfile = structuredClone(wallet.profile);
       const retentionPercent = normalizedMode === SERVER_RUN_MODES.FREE
         ? state.expansionConfig.settings.deathRetentionFree
         : normalizedMode === SERVER_RUN_MODES.PAID
@@ -751,10 +755,13 @@ export class MattMineService {
         baseTuning.playerMaxHealth = competitionSnapshot.loadout.startingHealth;
         baseTuning.dynamiteStartAmmo = competitionSnapshot.loadout.startingDynamite;
         baseTuning.blasterEnergy = competitionSnapshot.loadout.blasterEnergy;
-        baseTuning.ignorePermanentUpgrades = !competitionSnapshot.loadout.permanentUpgrades;
-        baseTuning.disableRunUpgrades = !competitionSnapshot.loadout.runUpgrades;
+        baseTuning.ignorePermanentUpgrades =
+          baseTuning.ignorePermanentUpgrades === true ||
+          competitionSnapshot.loadout.permanentUpgrades === false;
+        baseTuning.disableRunUpgrades =
+          baseTuning.disableRunUpgrades === true ||
+          competitionSnapshot.loadout.runUpgrades === false;
         baseTuning.maximumDrones = competitionSnapshot.loadout.maximumDrones;
-        baseTuning.usePerDepthRoomSpawns = false;
       }
       if (weeklyStage) {
         baseTuning.enemyHealthMultiplier = (baseTuning.enemyHealthMultiplier || 1) * weeklyStage.difficulty;
@@ -1955,6 +1962,10 @@ export class MattMineService {
             : 1
         ))
       : 0;
+    const arenaNuggets = Math.max(
+      0,
+      Math.min(MAX_RUN_SCORE, Math.floor(Number(result.result?.banked || 0)))
+    );
     const passAward = await this.database.transact((currentState) => {
       const currentWallet = requireWallet(currentState, session.address);
       currentState.arenaPassXpAwards ||= {};
@@ -1966,28 +1977,23 @@ export class MattMineService {
           'arena_pass_xp_receipt_conflict',
           'This Daily Arena progression receipt belongs to another wallet.'
         );
-        return {
-          passXpAwarded: Number(existing.xp || 0),
-          passXpAlreadyAwarded: true,
-          passProgress: publicPassProgress(currentWallet),
-          passInventory: publicPassInventory(currentWallet),
-          passRewardsUnlocked: []
+      } else {
+        currentState.arenaPassXpAwards[progression.runId] = {
+          address: session.address,
+          xp: passXpAwarded,
+          awardedAt: timestamp
         };
+        if (passXpAwarded > 0) {
+          currentWallet.passProgress.xp += passXpAwarded;
+          currentWallet.passProgress.updatedAt = timestamp;
+          currentWallet.updatedAt = timestamp;
+        }
       }
-      currentState.arenaPassXpAwards[progression.runId] = {
-        address: session.address,
-        xp: passXpAwarded,
-        awardedAt: timestamp
-      };
-      if (passXpAwarded > 0) {
-        currentWallet.passProgress.xp += passXpAwarded;
-        currentWallet.passProgress.updatedAt = timestamp;
-        currentWallet.updatedAt = timestamp;
-      }
-      const passRewardsUnlocked = passXpAwarded > 0
+      const awardedXp = existing ? Number(existing.xp || 0) : passXpAwarded;
+      const passRewardsUnlocked = !existing && passXpAwarded > 0
         ? syncPassRewardsForWallet(currentWallet, timestamp)
         : [];
-      if (passXpAwarded > 0) {
+      if (!existing && passXpAwarded > 0) {
         const score = Math.max(0, Number(result.result?.score || 0));
         addPlayerActivity(
           currentWallet,
@@ -2003,17 +2009,44 @@ export class MattMineService {
           timestamp
         );
       }
+      const nuggetUpdate = applyNuggetLedgerDelta(currentWallet, arenaNuggets, {
+        type: NUGGET_LEDGER_TYPES.ARENA_RUN,
+        runId: progression.runId,
+        idempotencyKey: `arena-run:${progression.runId}`,
+        details: 'Server-replayed Daily Arena banked nuggets',
+        timestamp
+      });
+      if (!nuggetUpdate.duplicate && arenaNuggets > 0) {
+        currentWallet.updatedAt = timestamp;
+        addPlayerActivity(
+          currentWallet,
+          'ARENA_NUGGETS_BANKED',
+          `${progression.runId} +${arenaNuggets} nuggets`,
+          timestamp
+        );
+        addAudit(
+          currentState,
+          session.address,
+          'ARENA_NUGGETS_BANKED',
+          `${progression.runId}: +${arenaNuggets} nuggets`,
+          timestamp
+        );
+      }
       return {
-        passXpAwarded,
-        passXpAlreadyAwarded: false,
+        passXpAwarded: awardedXp,
+        passXpAlreadyAwarded: Boolean(existing),
         passProgress: publicPassProgress(currentWallet),
         passInventory: publicPassInventory(currentWallet),
-        passRewardsUnlocked
+        passRewardsUnlocked,
+        arenaNuggetsBanked: nuggetUpdate.entry?.amount || 0,
+        arenaNuggetsAlreadyAwarded: nuggetUpdate.duplicate,
+        profile: structuredClone(currentWallet.profile)
       };
     });
     wallet.passProgress.xp = passAward.passProgress.xp;
     wallet.passProgress.updatedAt = passAward.passProgress.updatedAt;
     wallet.passInventory = structuredClone(passAward.passInventory);
+    wallet.profile = structuredClone(passAward.profile);
     const { progression: _progression, ...publicResult } = result;
     return {
       ...publicResult,

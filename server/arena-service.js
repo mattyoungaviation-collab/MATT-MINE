@@ -321,6 +321,8 @@ export class DailyArenaService {
         issuedAt: startedAt,
         expiresAt,
         paidReviveEligible: receipt.tuning?._paidRevive?.eligible === true,
+        reviveLimitPerRun:
+          receipt.tuning?._paidRevive?.limitPerRun || 0,
         reviveInvulnerabilitySeconds:
           receipt.tuning?._paidRevive?.invulnerabilitySeconds || 0,
         receipt: { ...receipt, signature: receiptSignature },
@@ -1098,6 +1100,7 @@ export class DailyArenaService {
       requireTerminal,
       profile: run.tuning?._playerProfile || playerProfile,
       allowPaidRevive: eligible,
+      reviveLimitPerRun: run.tuning?._paidRevive?.limitPerRun || 0,
       confirmedPaidRevives: Array.isArray(reviveState?.revives)
         ? reviveState.revives.length
         : 0,

@@ -96,9 +96,8 @@ export function resolveEnemySpawnType({
   const normalizedRoll = Math.max(0, Math.min(.999999, Number(roll) || 0));
   const candidates = PER_DEPTH_ENEMY_TYPES
     .filter((entry) => entry.spawnable)
-    .filter((entry) => globallyEnabled(entry.id, tuning))
-    .filter((entry) => depthEnabled(entry.id, depth, tuning));
-  if (!candidates.length) return 'slime';
+    .filter((entry) => isEnemySpawnEnabled(entry.id, depth, tuning));
+  if (!candidates.length) return null;
 
   const weighted = candidates
     .map((entry) => ({
@@ -120,6 +119,12 @@ export function resolveEnemySpawnType({
     ? legacySelector(normalizedRoll, depth)
     : candidates[0].id;
   return candidates.some((entry) => entry.id === legacy) ? legacy : candidates[0].id;
+}
+
+export function isEnemySpawnEnabled(type, depth, tuning = {}) {
+  const definition = TYPE_BY_ID.get(type);
+  if (!definition?.spawnable) return false;
+  return globallyEnabled(type, tuning) && depthEnabled(type, depth, tuning);
 }
 
 export function resolveEnemyDepthStats({

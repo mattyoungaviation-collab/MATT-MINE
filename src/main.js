@@ -1067,6 +1067,12 @@ async function submitArenaRun(run) {
     if (serverPlayer && accepted.passProgress) {
       serverPlayer.passProgress = accepted.passProgress;
     }
+    if (accepted.profile) {
+      profile = accepted.profile;
+      saveProfile(profile);
+      game.setProfile(profile);
+      if (serverPlayer) serverPlayer.profile = accepted.profile;
+    }
     if (paymentStatus && accepted.passProgress) {
       paymentStatus.passProgress = accepted.passProgress;
     }
@@ -1077,9 +1083,12 @@ async function submitArenaRun(run) {
     const unlockedCopy = accepted.passRewardsUnlocked?.length
       ? ` · UNLOCKED ${accepted.passRewardsUnlocked.map((reward) => reward.name).join(', ')}`
       : '';
+    const nuggetsCopy = accepted.arenaNuggetsBanked > 0
+      ? ` · +${formatNumber(accepted.arenaNuggetsBanked)} nuggets banked`
+      : '';
     $('#economy-result').innerHTML = `
       <strong>ARENA SCORE VERIFIED${arenaPlayer.rank ? ` · #${arenaPlayer.rank}` : ''}</strong>
-      <span>Authoritative score: ${formatNumber(result.score || arenaPlayer.bestScore)}${passXpCopy}${unlockedCopy}</span>
+      <span>Authoritative score: ${formatNumber(result.score || arenaPlayer.bestScore)}${nuggetsCopy}${passXpCopy}${unlockedCopy}</span>
       <small>The signed transcript was replayed against today's deterministic challenge. Browser-reported score totals were not trusted.</small>
     `;
     toast('Daily Arena score verified');
@@ -1352,6 +1361,7 @@ async function startRunMode(mode) {
         endlessSnapshot: run.endlessSnapshot,
         competitionSnapshot: run.competitionSnapshot,
         allowPaidRevive: run.paidReviveEligible === true,
+        reviveLimitPerRun: run.reviveLimitPerRun,
         reviveInvulnerabilitySeconds: run.reviveInvulnerabilitySeconds
       });
       if (run.tuning?._minePassBenefits?.active === true) {
@@ -2558,6 +2568,7 @@ async function startArenaRun() {
       characterId: arenaCompetitionSnapshot?.loadout?.characterId || 'matt',
       character: run.challenge?.tuning?._competitionCharacter || {},
       allowPaidRevive: run.paidReviveEligible === true,
+      reviveLimitPerRun: run.reviveLimitPerRun,
       reviveInvulnerabilitySeconds: run.reviveInvulnerabilitySeconds
     });
     if (run.challenge?.tuning?._minePassBenefits?.active === true) {

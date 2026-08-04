@@ -981,6 +981,7 @@ test('Daily Arena preserves a knockout and resumes only after paid-revive confir
   });
   assert.equal(started.run.mode, 'arena');
   assert.equal(started.run.paidReviveEligible, true);
+  assert.equal(started.run.reviveLimitPerRun, 1);
   assert.equal(started.run.reviveInvulnerabilitySeconds, 3);
 
   timestamp += 7_360;
