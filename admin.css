@@ -1425,6 +1425,66 @@ dialog::backdrop {
   color: var(--gold);
 }
 
+.studio-map-library {
+  align-items: center;
+  background:
+    linear-gradient(115deg, rgba(255, 207, 50, .11), transparent 48%),
+    rgba(12, 16, 23, .96);
+  border-color: rgba(255, 207, 50, .28);
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin: 0 0 12px;
+  padding: 16px 18px;
+}
+
+.studio-map-library h3,
+.studio-map-library p {
+  margin: 0;
+}
+
+.studio-map-library h3 {
+  font-size: 1rem;
+  margin-bottom: 5px;
+}
+
+.studio-map-library p:not(.eyebrow) {
+  color: var(--muted);
+  font-size: .75rem;
+  line-height: 1.5;
+  max-width: 820px;
+}
+
+#studio-library-status {
+  color: #55dfb4;
+  display: block;
+  font-size: .68rem;
+  font-weight: 800;
+  margin-top: 8px;
+}
+
+.studio-library-actions {
+  align-items: stretch;
+  display: grid;
+  gap: 7px;
+  grid-template-columns: repeat(2, minmax(165px, auto));
+}
+
+.studio-library-actions > span {
+  color: var(--gold);
+  font-size: .65rem;
+  font-weight: 900;
+  grid-column: 1 / -1;
+  letter-spacing: .13em;
+  text-align: right;
+}
+
+.studio-library-actions button {
+  font-size: .7rem;
+  min-height: 42px;
+  white-space: nowrap;
+}
+
 .studio-workspace {
   display: grid;
   gap: 12px;
@@ -1860,6 +1920,14 @@ dialog::backdrop {
 
   .studio-live-source {
     grid-template-columns: 1fr;
+  }
+
+  .studio-map-library {
+    grid-template-columns: 1fr;
+  }
+
+  .studio-library-actions > span {
+    text-align: left;
   }
 }
 

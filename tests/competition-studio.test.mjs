@@ -20,8 +20,53 @@ import { MattMineService } from '../server/service.js';
 import { buildCompetitiveChallenge, competitiveMaximumDepth } from '../server/arena-engine.js';
 import { defaultWalletState, normalizeServerState } from '../server/state.js';
 import { SERVER_STATE_VERSION } from '../server/constants.js';
+import {
+  COMPETITION_MAP_FILE_FORMAT,
+  competitionMapFileName,
+  createCompetitionMapFile,
+  parseCompetitionMapFile
+} from '../src/game/competitionMapFile.js';
 
 const NOW = Date.UTC(2026, 6, 28, 18, 0, 0);
+
+test('Competition Studio map files preserve a complete editable five-depth mine build', () => {
+  const draft = structuredClone(defaultCompetitionStudio(NOW).slots.arena.draft);
+  draft.name = 'Crystal Gauntlet 47';
+  draft.depths[2].map.name = 'Saved Crystal Depth Three';
+  draft.depths[2].map.rooms[1].width = 1.75;
+  draft.depths[2].map.objects.find((object) => object.type === 'slime').quantity = 11;
+  draft.monsterTuning.depth3SlimeHealth = 321;
+  draft.loadout.permanentUpgrades = true;
+
+  const file = createCompetitionMapFile(draft, 'arena', NOW);
+  const imported = parseCompetitionMapFile(JSON.stringify(file), 'arena');
+
+  assert.equal(file.format, COMPETITION_MAP_FILE_FORMAT);
+  assert.equal(file.version, 1);
+  assert.equal(file.mineType, 'arena');
+  assert.equal(file.summary.depths, 5);
+  assert.equal(imported.validation.valid, true, imported.validation.errors.join('\n'));
+  assert.equal(imported.draft.name, 'Crystal Gauntlet 47');
+  assert.equal(imported.draft.depths[2].map.name, 'Saved Crystal Depth Three');
+  assert.equal(imported.draft.depths[2].map.rooms[1].width, 1.75);
+  assert.equal(imported.draft.depths[2].map.objects.find((object) => object.type === 'slime').quantity, 11);
+  assert.equal(imported.draft.monsterTuning.depth3SlimeHealth, 321);
+  assert.equal(imported.draft.loadout.permanentUpgrades, true);
+  assert.match(competitionMapFileName(file), /^matt-mine-arena-crystal-gauntlet-47-2026-07-28T18-00-00\.mattmine\.json$/);
+});
+
+test('Competition Studio map imports reject wrong-mine and malformed local files before replacing a draft', () => {
+  const file = createCompetitionMapFile(defaultCompetitionStudio(NOW).slots.daily.draft, 'daily', NOW);
+  assert.throws(
+    () => parseCompetitionMapFile(JSON.stringify(file), 'arena'),
+    /This file is for Daily Mine.*Switch from MATT Arena to Daily Mine/
+  );
+  assert.throws(() => parseCompetitionMapFile('{broken', 'daily'), /not valid JSON/);
+  assert.throws(() => parseCompetitionMapFile(JSON.stringify({ ...file, format: 'unknown' }), 'daily'), /not a MATT Mine/);
+  const incomplete = structuredClone(file);
+  incomplete.draft.depths.pop();
+  assert.throws(() => parseCompetitionMapFile(JSON.stringify(incomplete), 'daily'), /exactly 5 depth maps/);
+});
 
 test('Competition Studio owns five playable slots and keeps PvP visibly locked', () => {
   const studio = defaultCompetitionStudio(NOW);
@@ -497,6 +542,9 @@ test('production surfaces include the six-card hub, exact-map loading screen, an
   assert.match(admin, /id="studio-depth-tabs"/);
   assert.match(admin, /APPLY LIVE VERSION/);
   assert.match(admin, /id="studio-live-source"/);
+  assert.match(admin, /id="studio-export-map"/);
+  assert.match(admin, /id="studio-import-map"/);
+  assert.match(admin, /id="studio-import-map-file"[^>]+type="file"/);
   assert.match(hub, /competition-slot-grid/);
   assert.match(hub, /slot-map-preview/);
   assert.match(hub, /slot-character-preview/);
@@ -520,6 +568,9 @@ test('production surfaces include the six-card hub, exact-map loading screen, an
   assert.match(studioJs, /field\('Competition name', 'name'/);
   assert.match(studioJs, /DEPTH \$\{studio\.depth\} CREATURE CONTROL/);
   assert.match(studioJs, /monsterTuning\./);
+  assert.match(studioJs, /createCompetitionMapFile/);
+  assert.match(studioJs, /parseCompetitionMapFile/);
+  assert.match(studioJs, /does not save to the server or apply anything live/);
 });
 
 function installBrowserStubs() {
