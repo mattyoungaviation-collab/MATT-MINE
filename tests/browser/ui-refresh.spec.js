@@ -72,7 +72,31 @@ test('profile tabs, store return path, and shared color accents remain usable', 
       cyan: style.getPropertyValue('--ui-cyan').trim()
     };
   });
-  expect(colors).toEqual({ gold: '#f7c430', purple: '#a34fff', cyan: '#38d8ff' });
+  expect(colors).toEqual({ gold: '#ffd84a', purple: '#a34fff', cyan: '#38d8ff' });
+});
+
+test('desktop leaderboard and Arena use the viewport without clipping tables', async ({ page }) => {
+  await page.setViewportSize({ width: 1536, height: 1024 });
+  await page.goto('/');
+  await page.locator('[data-launch-action="enter"].launch-primary-cta').click();
+  await page.locator('#leaderboards-button').click();
+
+  const leaderboardLayout = await page.locator('#leaderboards > .economy-panel').evaluate((panel) => ({
+    width: panel.getBoundingClientRect().width,
+    viewport: window.innerWidth,
+    maxHeight: getComputedStyle(panel).maxHeight
+  }));
+  expect(leaderboardLayout.width).toBeGreaterThanOrEqual(leaderboardLayout.viewport - 2);
+  expect(leaderboardLayout.maxHeight).toBe('none');
+
+  await page.locator('#site-nav [data-site-action="home"]').click();
+  await page.locator('.launch-mine-card.arena').click();
+  const arenaTable = await page.locator('#daily-arena .arena-table-wrap').evaluate((table) => ({
+    maxHeight: getComputedStyle(table).maxHeight,
+    overflowY: getComputedStyle(table).overflowY
+  }));
+  expect(arenaTable.maxHeight).toBe('none');
+  expect(['auto', 'visible']).toContain(arenaTable.overflowY);
 });
 
 test('desktop Arena leaderboard renders the live daily Arena dataset', async ({ page }) => {

@@ -62,7 +62,7 @@ test('live dashboards poll only while visible and the shared theme covers popups
   assert.match(source, /app\.classList\.contains\('gameplay-active'\)/);
   assert.match(source, /30_000/);
   assert.match(source, /apiClient\.me\(\)/);
-  assert.match(css, /--ui-gold: #f7c430/);
+  assert.match(css, /--ui-gold: #ffd84a/);
   assert.match(css, /--ui-purple: #a34fff/);
   assert.match(css, /--ui-cyan: #38d8ff/);
   assert.match(css, /dialog\.walletconnect-mobile-dialog/);

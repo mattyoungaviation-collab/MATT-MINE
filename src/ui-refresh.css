@@ -4,13 +4,13 @@
   --ui-panel-soft: rgba(14, 19, 25, 0.92);
   --ui-line: rgba(196, 159, 68, 0.34);
   --ui-line-bright: #d7a91d;
-  --ui-gold: #f7c430;
-  --ui-gold-deep: #b67a08;
+  --ui-gold: #ffd84a;
+  --ui-gold-deep: #d89b12;
   --ui-purple: #a34fff;
   --ui-purple-soft: rgba(163, 79, 255, 0.18);
   --ui-cyan: #38d8ff;
   --ui-green: #44e09b;
-  --ui-white: #f5f6f7;
+  --ui-white: #e3e7eb;
   --ui-muted: #929aa6;
   --ui-danger: #ff625f;
   --ui-cut: polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px), 0 10px);
@@ -1281,6 +1281,9 @@ h3,
 .dashboard-metrics strong {
   font-family: var(--ui-display);
   font-stretch: condensed;
+  -webkit-text-stroke: 0.45px rgba(0, 0, 0, 0.92);
+  paint-order: stroke fill;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.92);
 }
 
 .site-nav {
@@ -1414,7 +1417,7 @@ h3,
 
 .launch-hero-content h1 span {
   color: var(--ui-gold);
-  background: linear-gradient(180deg, #ffe16a, #c78208);
+  background: linear-gradient(180deg, #fff0a0, #e3ad1e);
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -1455,6 +1458,7 @@ h3,
 
 .launch-mine-select-heading h2 {
   margin: 0;
+  color: #e1e5e8;
   font-size: clamp(2rem, 3vw, 3rem);
   letter-spacing: 0.03em;
 }
@@ -1477,7 +1481,7 @@ h3,
   overflow: hidden;
   border: 1px solid rgba(247, 196, 48, 0.58);
   clip-path: var(--ui-cut);
-  color: #f3f3f1;
+  color: #dfe3e6;
   background:
     radial-gradient(circle at 50% 18%, rgba(247, 196, 48, 0.18), transparent 31%),
     linear-gradient(150deg, rgba(18, 20, 22, 0.98), rgba(5, 7, 9, 0.99));
@@ -2832,9 +2836,21 @@ h3,
 
   #leaderboards > .economy-panel {
     display: grid;
-    grid-template-columns: 500px minmax(0, 1fr) 330px;
+    grid-template-columns: minmax(360px, 0.9fr) minmax(460px, 1.3fr) minmax(250px, 0.7fr);
     grid-template-rows: auto auto minmax(180px, auto) auto;
     gap: 14px;
+  }
+
+  #leaderboards.screen:not(#hud) > .economy-panel,
+  #daily-arena.screen:not(#hud) > .arena-panel {
+    width: 100%;
+    max-width: none;
+    min-height: calc(100dvh - var(--reference-header));
+    max-height: none;
+    margin: 0;
+    overflow: visible;
+    border-right: 0;
+    border-left: 0;
   }
 
   #leaderboards .leaderboard-page-hero,
@@ -2906,9 +2922,9 @@ h3,
     border: 1px solid rgba(255, 255, 255, 0.18);
     background-color: #07090b;
     background-image: linear-gradient(180deg, transparent 0 62%, #07090b 91%), url('../assets/ui/leaderboard-podium.png');
-    background-position: center 36px;
+    background-position: center, center top;
     background-repeat: no-repeat;
-    background-size: 100% 82%;
+    background-size: 100% 100%, 100% auto;
   }
 
   #leaderboards .podium-place {
@@ -2921,6 +2937,8 @@ h3,
     grid-column: 2;
     grid-row: 3 / 5;
     margin: 0;
+    overflow-x: auto;
+    overflow-y: visible;
   }
 
   #leaderboards .leaderboard-table th,
@@ -2951,8 +2969,7 @@ h3,
     display: none;
   }
 
-  #daily-mine .mine-briefing-panel,
-  #daily-arena .arena-panel {
+  #daily-mine .mine-briefing-panel {
     width: calc(100vw - 48px);
     max-width: 1488px;
     margin: 20px auto;
@@ -3030,6 +3047,40 @@ h3,
   #daily-arena .arena-table-wrap {
     border-radius: 0;
     clip-path: var(--ui-cut);
+  }
+
+  #daily-arena .arena-table-wrap {
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: visible;
+  }
+}
+
+@media (min-width: 1000px) and (max-width: 1399px) and (min-height: 700px) {
+  #leaderboards > .economy-panel {
+    grid-template-columns: minmax(340px, 0.85fr) minmax(0, 1.15fr);
+    grid-template-rows: auto auto auto auto auto;
+  }
+
+  #leaderboards .leaderboard-podium {
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  #leaderboards .leaderboard-table-wrap {
+    grid-column: 2;
+    grid-row: 3;
+  }
+
+  #leaderboards .leaderboard-summary {
+    grid-column: 1 / -1;
+    grid-row: 4;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  #leaderboards .reward-claim-card {
+    grid-column: 1 / -1;
+    grid-row: 5;
   }
 }
 
