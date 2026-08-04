@@ -790,12 +790,13 @@
           <div class="leaderboard-tabs">
             <button class="leaderboard-tab active" data-board="free">FREE LEADERBOARD</button>
             <button class="leaderboard-tab" data-board="paid">PASS LEADERBOARD</button>
+            <button class="leaderboard-tab arena-leaderboard-tab" data-board="arena">MATT ARENA <span>· CURRENT DAILY POOL</span></button>
           </div>
           <div id="leaderboard-podium" class="leaderboard-podium" aria-label="Top three miners"></div>
           <div class="leaderboard-summary">
-            <div><span>Weekly Pool</span><strong id="board-pool">0 MATT</strong></div>
-            <div><span>Your Weekly Score</span><strong id="board-score">0</strong></div>
-            <div><span>Projected Reward</span><strong id="board-reward">0 MATT</strong></div>
+            <div><span id="board-pool-label">Weekly Pool</span><strong id="board-pool">0 MATT</strong></div>
+            <div><span id="board-score-label">Your Weekly Score</span><strong id="board-score">0</strong></div>
+            <div><span id="board-reward-label">Projected Reward</span><strong id="board-reward">0 MATT</strong></div>
           </div>
           <div id="reward-claim-card" class="reward-claim-card">
             <div><span class="eyebrow">RONIN REWARD</span><strong id="published-reward-text">No reward ready</strong><small id="published-reward-status">Finalized pilot rewards will appear here.</small></div>
@@ -803,7 +804,7 @@
           </div>
           <div class="leaderboard-table-wrap">
             <table class="leaderboard-table">
-              <thead><tr><th>Rank</th><th>Miner</th><th>Weekly Score</th><th>Status</th></tr></thead>
+              <thead><tr><th>Rank</th><th>Miner</th><th id="board-score-column-label">Weekly Score</th><th>Status</th></tr></thead>
               <tbody id="leaderboard-body"></tbody>
             </table>
           </div>
