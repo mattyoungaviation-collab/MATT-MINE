@@ -264,7 +264,7 @@ test('authored maps materialize exact player, Guardian, extraction, loot, and ha
   game.startRun({
     mode: 'practice',
     seed: 'AUTHORED-MAP',
-    tuning: { usePerDepthRoomSpawns: true, enemyMaximum: 0, _competitionSnapshot: snapshot },
+    tuning: { usePerDepthRoomSpawns: false, enemyMaximum: 0, _competitionSnapshot: snapshot },
     competitionSnapshot: snapshot
   });
   assert.equal(game.layout.rooms.length, draft.map.rooms.length);
@@ -300,6 +300,58 @@ test('authored maps materialize exact player, Guardian, extraction, loot, and ha
   game.run.depth = 5;
   game.generateDepth();
   assert.equal(game.layout.source.name, 'Published Depth Five');
+});
+
+test('published map geometry honors live per-depth mob counts and creature switches', async () => {
+  installBrowserStubs();
+  const { MattMineGame } = await import('../src/game/GameV4.js');
+  const draft = structuredClone(defaultCompetitionStudio(NOW).slots.practice.draft);
+  const snapshot = {
+    ...draft,
+    map: draft.depths[0].map,
+    id: 'snapshot-live-mob-controls',
+    status: 'live',
+    fingerprint: 'c'.repeat(64)
+  };
+  const tuning = {
+    usePerDepthRoomSpawns: true,
+    spawnSlimes: false,
+    spawnBats: true,
+    spawnCrawlers: false,
+    spawnBeetles: false,
+    spawnExploders: false,
+    spawnRanged: false,
+    depth1StartEnemies: 2,
+    depth1MiningEnemies: 0,
+    depth1CombatEnemies: 1,
+    depth1MixedEnemies: 0,
+    depth1TreasureEnemies: 0,
+    depth1GuardianEnemies: 0,
+    depth1GuardianBosses: 2,
+    _competitionSnapshot: snapshot
+  };
+  const game = new MattMineGame(browserCanvas(), defaultProfile(), { headless: true });
+  game.startRun({
+    mode: 'practice',
+    seed: 'LIVE-MOB-CONTROLS',
+    tuning,
+    competitionSnapshot: snapshot
+  });
+
+  assert.equal(game.layout.rooms.length, draft.map.rooms.length, 'published geometry remains active');
+  assert.equal(game.enemies.filter((enemy) => enemy.roomId === game.layout.startRoom.id).length, 2);
+  assert.equal(game.enemies.every((enemy) => enemy.type === 'bat'), true);
+  assert.equal(game.run.bossGoal, 2);
+
+  tuning.spawnBats = false;
+  const noMobs = new MattMineGame(browserCanvas(), defaultProfile(), { headless: true });
+  noMobs.startRun({
+    mode: 'practice',
+    seed: 'LIVE-MOB-CONTROLS-OFF',
+    tuning,
+    competitionSnapshot: snapshot
+  });
+  assert.equal(noMobs.enemies.length, 0, 'turning every creature off must not fall back to Slimes');
 });
 
 test('published weekly mines descend through all five authored maps before extraction', async () => {

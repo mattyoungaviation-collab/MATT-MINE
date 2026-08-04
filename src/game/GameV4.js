@@ -42,13 +42,24 @@ export class MattMineGame extends V3MattMineGame {
         ? normalizeRoundDuration(context.roundDurationMs)
         : 0,
       allowPaidRevive: context.allowPaidRevive === true,
+      reviveLimitPerRun: context.allowPaidRevive === true
+        ? Math.max(
+            1,
+            Math.min(
+              3,
+              Math.floor(Number(
+                context.reviveLimitPerRun ?? context.tuning?._paidRevive?.limitPerRun ?? 1
+              ) || 1)
+            )
+          )
+        : 0,
       reviveInvulnerabilitySeconds: Math.max(0, Number(context.reviveInvulnerabilitySeconds || 3)),
       tuning: context.tuning && typeof context.tuning === 'object' ? { ...context.tuning } : {}
     };
     this.baseRunTuning = structuredClone(this.runContext.tuning);
     this.arenaAccumulator = 0;
     this.arenaFinishRecorded = false;
-    this.paidReviveUsed = false;
+    this.paidReviveCount = 0;
     this.arenaRandom = DETERMINISTIC_SERVER_MODES.has(this.runContext.mode)
       ? seededRandom(
           this.runContext.mode === 'arena'
@@ -281,9 +292,13 @@ export class MattMineGame extends V3MattMineGame {
   }
 
   applyPaidRevive(options = {}) {
-    if (this.state !== 'awaitingrevive' || !this.player || this.paidReviveUsed) return false;
+    if (
+      this.state !== 'awaitingrevive' ||
+      !this.player ||
+      this.paidReviveCount >= this.runContext.reviveLimitPerRun
+    ) return false;
     if (options.record !== false) this.recordArenaCommand('revive');
-    this.paidReviveUsed = true;
+    this.paidReviveCount += 1;
     this.player.health = this.player.maxHealth;
     this.player.invulnerable = this.runContext.reviveInvulnerabilitySeconds;
     this.player.vx = 0;
@@ -314,7 +329,7 @@ export class MattMineGame extends V3MattMineGame {
     if (
       extracted === false &&
       this.runContext?.allowPaidRevive &&
-      !this.paidReviveUsed &&
+      this.paidReviveCount < this.runContext.reviveLimitPerRun &&
       this.state !== 'awaitingrevive'
     ) {
       this.player.health = 0;

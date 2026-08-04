@@ -171,16 +171,23 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
           mineAllowsRevive;
         if (run) {
           run.paidReviveEligible = eligible;
+          run.reviveLimitPerRun = eligible
+            ? Math.max(1, Math.min(3, state.expansionConfig.settings.reviveLimitPerRun))
+            : 0;
           run.reviveInvulnerabilitySeconds =
             state.expansionConfig.settings.reviveInvulnerabilitySeconds;
         }
         return {
           eligible,
+          limitPerRun: eligible
+            ? Math.max(1, Math.min(3, state.expansionConfig.settings.reviveLimitPerRun))
+            : 0,
           invulnerabilitySeconds:
             state.expansionConfig.settings.reviveInvulnerabilitySeconds
         };
       });
       started.paidReviveEligible = reviveSnapshot.eligible;
+      started.reviveLimitPerRun = reviveSnapshot.limitPerRun;
       started.reviveInvulnerabilitySeconds = reviveSnapshot.invulnerabilitySeconds;
     }
     if (this.competitiveReplayValidator?.publicStatus?.().modes?.includes(started.mode)) {

@@ -285,6 +285,7 @@ function replayOptions(run, requireTerminal, currentStateRun = run) {
     weeklyStage: run.weeklyStage,
     endlessSnapshot: run.endlessSnapshot,
     allowPaidRevive: run.paidReviveEligible === true,
+    reviveLimitPerRun: run.reviveLimitPerRun || 0,
     confirmedPaidRevives: Array.isArray(currentStateRun?.revives)
       ? currentStateRun.revives.length
       : 0,

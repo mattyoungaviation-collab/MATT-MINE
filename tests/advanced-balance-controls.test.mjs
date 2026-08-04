@@ -270,3 +270,42 @@ test('Daily Arena applies permanent upgrades when its authoritative tuning enabl
   assert.equal(game.player.blasterDamageScale, .56 * 1.6);
   assert.equal(game.runContext.tuning.usePerDepthRoomSpawns, false);
 });
+
+test('every server mode uses the profile pinned into its issued run', () => {
+  const browserProfile = defaultProfile();
+  const serverProfile = defaultProfile();
+  serverProfile.meta.health = 4;
+  serverProfile.meta.damage = 3;
+
+  for (const mode of ['practice', 'free', 'paid', 'arena']) {
+    const tuning = structuredClone(defaultGameTuning()[mode]);
+    tuning._playerProfile = serverProfile;
+    const game = gameFor(tuning, browserProfile, mode);
+    assert.equal(game.player.maxHealth, tuning.playerMaxHealth + 32, `${mode} health`);
+    assert.equal(
+      game.player.damage,
+      tuning.playerBaseDamage * (1 + 3 * tuning.permanentDamagePerRank),
+      `${mode} damage`
+    );
+  }
+});
+
+test('the paid revive limit reaches the game engine without weakening payment replay checks', () => {
+  const game = new MattMineGame(null, defaultProfile(), { headless: true, audio: NOOP_AUDIO });
+  game.startRun({
+    mode: 'arena',
+    seed: 'TWO-PAID-REVIVES',
+    allowPaidRevive: true,
+    reviveLimitPerRun: 2
+  });
+
+  game.endRun(false);
+  assert.equal(game.state, 'awaitingrevive');
+  assert.equal(game.applyPaidRevive({ record: false }), true);
+  game.endRun(false);
+  assert.equal(game.state, 'awaitingrevive');
+  assert.equal(game.applyPaidRevive({ record: false }), true);
+  game.endRun(false);
+  assert.equal(game.state, 'ended');
+  assert.equal(game.paidReviveCount, 2);
+});

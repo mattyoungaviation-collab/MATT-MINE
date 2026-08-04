@@ -167,7 +167,7 @@ test('a verified Arena run awards an active pass exactly once and honors the Are
     finishRun: async () => ({
       accepted: true,
       alreadyFinished: finishCalls++ > 0,
-      result: { score: 12_345 },
+      result: { score: 12_345, banked: 4_321 },
       leaderboard: { rows: [], playerScore: 12_345, playerRank: 1 },
       progression: {
         runId,
@@ -184,11 +184,17 @@ test('a verified Arena run awards an active pass exactly once and honors the Are
   assert.equal(first.passXpAwarded, 150);
   assert.equal(first.passXpAlreadyAwarded, false);
   assert.equal(first.passProgress.xp, 150);
+  assert.equal(first.arenaNuggetsBanked, 4_321);
+  assert.equal(first.arenaNuggetsAlreadyAwarded, false);
+  assert.equal(first.profile.bankedNuggets, 4_321);
 
   const retry = await harness.service.finishArenaRun(session.token, payload);
   assert.equal(retry.passXpAwarded, 150);
   assert.equal(retry.passXpAlreadyAwarded, true);
   assert.equal(retry.passProgress.xp, 150);
+  assert.equal(retry.arenaNuggetsBanked, 4_321);
+  assert.equal(retry.arenaNuggetsAlreadyAwarded, true);
+  assert.equal(retry.profile.bankedNuggets, 4_321);
 
   const state = await harness.database.read();
   assert.deepEqual(state.arenaPassXpAwards[runId], {
@@ -201,6 +207,11 @@ test('a verified Arena run awards an active pass exactly once and honors the Are
       .filter((entry) => entry.action === 'ARENA_PASS_XP_AWARDED').length,
     1
   );
+  assert.equal(
+    state.wallets[account.address.toLowerCase()].nuggetLedger
+      .filter((entry) => entry.type === 'ARENA_RUN').length,
+    1
+  );
 });
 
 test('Arena completion does not award Pass XP when the pass was inactive at run start', async () => {
@@ -209,7 +220,7 @@ test('Arena completion does not award Pass XP when the pass was inactive at run 
     publicConfig: () => ({ enabled: true }),
     finishRun: async () => ({
       accepted: true,
-      result: { score: 2_500 },
+      result: { score: 2_500, banked: 250 },
       leaderboard: { rows: [], playerScore: 2_500, playerRank: 1 },
       progression: {
         runId,
@@ -229,6 +240,8 @@ test('Arena completion does not award Pass XP when the pass was inactive at run 
 
   assert.equal(completed.passXpAwarded, 0);
   assert.equal(completed.passProgress.xp, 0);
+  assert.equal(completed.arenaNuggetsBanked, 250);
+  assert.equal(completed.profile.bankedNuggets, 250);
   const state = await harness.database.read();
   assert.equal(state.arenaPassXpAwards[runId].xp, 0);
 });
@@ -1075,6 +1088,7 @@ test('competitive runs preserve the authoritative player profile for replay', as
   const state = await harness.database.read();
 
   assert.equal(state.runs[run.runId].playerProfile.meta.health, 3);
+  assert.equal(run.tuning._playerProfile.meta.health, 3);
   assert.notEqual(state.runs[run.runId].playerProfile, state.wallets[account.address.toLowerCase()].profile);
 });
 

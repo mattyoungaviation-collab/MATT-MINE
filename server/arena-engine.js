@@ -149,6 +149,10 @@ export function replayArenaTranscript(challenge, inputEvents, options = {}) {
     endlessSnapshot: options.endlessSnapshot || null,
     roundDurationMs: replayMode === 'arena' ? challenge.maxTicks : 0,
     allowPaidRevive: options.allowPaidRevive === true,
+    reviveLimitPerRun:
+      options.reviveLimitPerRun ||
+      challenge.tuning?._paidRevive?.limitPerRun ||
+      Math.max(1, Math.floor(Number(options.confirmedPaidRevives || 0))),
     reviveInvulnerabilitySeconds: options.reviveInvulnerabilitySeconds
   });
 
