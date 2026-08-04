@@ -42,6 +42,31 @@ test('Competition Studio owns five playable slots and keeps PvP visibly locked',
   assert.equal(COMPETITION_SLOTS.at(-1).comingSoon, true);
 });
 
+test('Competition Studio preserves names, exact layouts, authored placement, and per-depth monster controls', () => {
+  const original = defaultCompetitionStudio(NOW).slots.arena.draft;
+  const edited = structuredClone(original);
+  edited.name = 'Crystal Clash Championship';
+  edited.subtitle = 'A fully authored Arena build.';
+  edited.depths[2].map.name = 'Crystal Maze Depth Three';
+  edited.depths[2].map.rooms[1].x = 4.25;
+  edited.depths[2].map.objects.find((object) => object.type === 'slime').quantity = 9;
+  edited.enemyPlanMode = 'authored';
+  edited.monsterTuning.depth3SlimeHealth = 345;
+  edited.monsterTuning.depth3SlimeSlimeBurstSpeed = 3.5;
+  edited.monsterTuning.depth3BossPhase2VolleyProjectileCount = 11;
+
+  const normalized = normalizeCompetitionDraft(edited, 'arena');
+  assert.equal(normalized.name, 'Crystal Clash Championship');
+  assert.equal(normalized.subtitle, 'A fully authored Arena build.');
+  assert.equal(normalized.depths[2].map.name, 'Crystal Maze Depth Three');
+  assert.equal(normalized.depths[2].map.rooms[1].x, 4.25);
+  assert.equal(normalized.depths[2].map.objects.find((object) => object.type === 'slime').quantity, 9);
+  assert.equal(normalized.enemyPlanMode, 'authored');
+  assert.equal(normalized.monsterTuning.depth3SlimeHealth, 345);
+  assert.equal(normalized.monsterTuning.depth3SlimeSlimeBurstSpeed, 3.5);
+  assert.equal(normalized.monsterTuning.depth3BossPhase2VolleyProjectileCount, 11);
+});
+
 test('state migration adds safe Competition Studio drafts without disturbing legacy data', () => {
   const address = '0x1111111111111111111111111111111111111111';
   const migrated = normalizeServerState({
@@ -309,10 +334,26 @@ test('published map geometry honors live per-depth mob counts and creature switc
   const snapshot = {
     ...draft,
     map: draft.depths[0].map,
+    enemyPlanMode: 'generated',
     id: 'snapshot-live-mob-controls',
     status: 'live',
     fingerprint: 'c'.repeat(64)
   };
+  Object.assign(snapshot.monsterTuning, {
+    depth1StartEnemies: 2,
+    depth1MiningEnemies: 0,
+    depth1CombatEnemies: 1,
+    depth1MixedEnemies: 0,
+    depth1TreasureEnemies: 0,
+    depth1GuardianEnemies: 0,
+    depth1GuardianBosses: 2,
+    depth1SlimeEnabled: false,
+    depth1BatEnabled: true,
+    depth1CrawlerEnabled: false,
+    depth1BeetleEnabled: false,
+    depth1ExploderEnabled: false,
+    depth1SpitterEnabled: false
+  });
   const tuning = {
     usePerDepthRoomSpawns: true,
     spawnSlimes: false,
@@ -343,13 +384,14 @@ test('published map geometry honors live per-depth mob counts and creature switc
   assert.equal(game.enemies.every((enemy) => enemy.type === 'bat'), true);
   assert.equal(game.run.bossGoal, 2);
 
-  tuning.spawnBats = false;
+  const noMobSnapshot = structuredClone(snapshot);
+  noMobSnapshot.monsterTuning.depth1BatEnabled = false;
   const noMobs = new MattMineGame(browserCanvas(), defaultProfile(), { headless: true });
   noMobs.startRun({
     mode: 'practice',
     seed: 'LIVE-MOB-CONTROLS-OFF',
     tuning,
-    competitionSnapshot: snapshot
+    competitionSnapshot: noMobSnapshot
   });
   assert.equal(noMobs.enemies.length, 0, 'turning every creature off must not fall back to Slimes');
 });
@@ -475,6 +517,9 @@ test('production surfaces include the six-card hub, exact-map loading screen, an
   );
   assert.match(main, /startingDepth: testDepth/);
   assert.match(studioJs, /testDepth: studio\.depth/);
+  assert.match(studioJs, /field\('Competition name', 'name'/);
+  assert.match(studioJs, /DEPTH \$\{studio\.depth\} CREATURE CONTROL/);
+  assert.match(studioJs, /monsterTuning\./);
 });
 
 function installBrowserStubs() {

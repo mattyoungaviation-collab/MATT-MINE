@@ -2,7 +2,7 @@ import { CONFIG } from '../config.js';
 import { randomPointInRoom, roomAt } from '../layout.js';
 import { distance, random, randomInt, randomRange } from '../utils.js';
 import { ENEMY_STATS, enemyArchetypeForRoll, roomRequiresLock } from '../combat.js';
-import { resolveEnemyDepthStats, resolveEnemySpawnType } from '../enemyDepthTuning.js';
+import { resolveEnemyDepthBehavior, resolveEnemyDepthStats, resolveEnemySpawnType } from '../enemyDepthTuning.js';
 
 const TAU = Math.PI * 2;
 
@@ -50,6 +50,7 @@ export const enemySpawnMethods = {
       baseStats: stats,
       isBoss
     });
+    const behavior = resolveEnemyDepthBehavior({ type, depth: this.run.depth, tuning });
     const dormant = roomRequiresLock(room.type) && !isBoss;
 
     const enemy = {
@@ -62,7 +63,7 @@ export const enemySpawnMethods = {
       vy: 0,
       knockbackX: 0,
       knockbackY: 0,
-      radius: stats.radius * (isBoss ? 1 + (this.run.depth - 1) * 0.05 : 1),
+      radius: resolvedStats.radius,
       hp: resolvedStats.health,
       maxHp: resolvedStats.health,
       speed: resolvedStats.speed,
@@ -81,7 +82,8 @@ export const enemySpawnMethods = {
       summonTimer: 4.5,
       fuseTimer: 0,
       lastBossPhase: 1,
-      guardianReinforcement: false
+      guardianReinforcement: false,
+      behavior
     };
     this.enemies.push(enemy);
     return enemy;

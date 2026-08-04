@@ -26,6 +26,24 @@ export class MattMineGame extends V3MattMineGame {
     const startingDepth = context.mode === 'practice' && competitionSnapshot?.status === 'test'
       ? Math.max(1, Math.min(5, Math.floor(Number(context.startingDepth) || 1)))
       : 1;
+    const runtimeTuning = context.tuning && typeof context.tuning === 'object'
+      ? { ...context.tuning }
+      : {};
+    if (competitionSnapshot) {
+      Object.assign(runtimeTuning, competitionSnapshot.monsterTuning || {});
+      runtimeTuning.usePerDepthRoomSpawns = competitionSnapshot.enemyPlanMode === 'generated';
+      // A published Studio version owns its creature plan. Lobby-wide type
+      // switches must not silently remove objects that Admin placed; the
+      // Studio's per-depth Enabled switches remain authoritative.
+      Object.assign(runtimeTuning, {
+        spawnSlimes: true,
+        spawnBats: true,
+        spawnCrawlers: true,
+        spawnBeetles: true,
+        spawnExploders: true,
+        spawnRanged: true
+      });
+    }
     this.runContext = {
       mode: context.mode || 'practice',
       seed: context.seed || `MATT-PRACTICE-${Date.now()}`,
@@ -54,7 +72,7 @@ export class MattMineGame extends V3MattMineGame {
           )
         : 0,
       reviveInvulnerabilitySeconds: Math.max(0, Number(context.reviveInvulnerabilitySeconds || 3)),
-      tuning: context.tuning && typeof context.tuning === 'object' ? { ...context.tuning } : {}
+      tuning: runtimeTuning
     };
     this.baseRunTuning = structuredClone(this.runContext.tuning);
     this.arenaAccumulator = 0;
