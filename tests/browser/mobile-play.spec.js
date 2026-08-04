@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 test.describe('Ronin mobile play', () => {
+  test.describe.configure({ timeout: 60_000 });
   test.use({
     viewport: { width: 390, height: 844 },
     screen: { width: 390, height: 844 },

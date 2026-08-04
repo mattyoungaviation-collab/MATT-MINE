@@ -336,7 +336,7 @@
 .launch-primary-cta:hover,
 .launch-secondary-cta:hover,
 .launch-enter-button:hover,
-.launch-daily-card > button:hover,
+.launch-daily-summary-card > button:hover,
 .launch-tier-card > button:hover,
 .launch-arsenal button:hover,
 .launch-final-cta > button:hover {
@@ -374,7 +374,7 @@
   font-weight: 950;
 }
 
-.launch-daily-card {
+.launch-daily-summary-card {
   position: absolute;
   right: clamp(24px, 5vw, 86px);
   bottom: clamp(65px, 9vh, 110px);
@@ -510,7 +510,7 @@
   letter-spacing: inherit;
 }
 
-.launch-daily-card > button,
+.launch-daily-summary-card > button,
 .launch-tier-card > button,
 .launch-arsenal button {
   width: 100%;
@@ -1187,7 +1187,7 @@
   .launch-links { display: none; }
   .launch-nav { grid-template-columns: 1fr auto; }
   .launch-hero-content { width: 62vw; }
-  .launch-daily-card { width: 34vw; right: 24px; }
+  .launch-daily-summary-card { width: 34vw; right: 24px; }
   .launch-proof-rail { padding-inline: 24px; }
   .launch-proof-rail > div { padding-inline: 12px; }
   .launch-loop-grid { grid-template-columns: repeat(2, 1fr); }
@@ -1263,7 +1263,7 @@
     flex-wrap: wrap;
   }
 
-  .launch-daily-card {
+  .launch-daily-summary-card {
     position: relative;
     inset: auto;
     width: 100%;
@@ -1355,7 +1355,7 @@
   .launch-primary-cta,
   .launch-secondary-cta,
   .launch-enter-button,
-  .launch-daily-card > button,
+  .launch-daily-summary-card > button,
   .launch-tier-card > button,
   .launch-contract-grid a { transition: none; }
 }
