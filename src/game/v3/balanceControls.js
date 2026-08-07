@@ -131,7 +131,6 @@ export const balanceControlMethods = {
       const maximumDrones = Math.max(0, Math.min(4, Math.floor(tuning.maximumDrones ?? 4)));
       this.player.droneCount = Math.min(maximumDrones, this.player.droneCount + 1);
     }
-    if (id === 'fortune') this.run.lootMultiplier *= 1 + (tuning.runFortunePerLevel ?? .15);
     if (id === 'blastercap') {
       this.player.blasterEnergyMax += tuning.blasterCapacityPerLevel ?? 30;
       this.player.blasterEnergy = this.player.blasterEnergyMax;
@@ -231,7 +230,6 @@ function describeUpgrade(upgrade, tuning) {
     magnet: `+${Math.round(tuning.runMagnetPerLevel ?? 45)} pickup range`,
     armor: `Take ${percent(tuning.armorUpgradePerLevel ?? .08)} less damage, capped at ${percent(tuning.armorMaximum ?? .45)}`,
     dash: `Dash recharges ${percent(tuning.runDashRechargePerLevel ?? .25)} faster`,
-    fortune: `+${percent(tuning.runFortunePerLevel ?? .15)} loot value`,
     blastercap: `+${Math.round(tuning.blasterCapacityPerLevel ?? 30)} maximum Blaster energy and refill it`,
     blasterregen: `+${percent(tuning.blasterRechargePerLevel ?? .35)} Blaster recharge speed`,
     blasterpower: `+${percent(tuning.blasterFocusedCoreBonus ?? .10)} Blaster damage`,

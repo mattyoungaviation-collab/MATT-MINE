@@ -107,7 +107,6 @@ export class MattMineGame {
       elapsed: 0,
       runLevelUps: 0,
       startedAt: Date.now(),
-      lootMultiplier: 1,
       attackCounter: 0
     };
     this.player = {
@@ -659,7 +658,6 @@ export class MattMineGame {
     if (id === 'dash') this.player.dashCooldownMax = Math.max(0.65, this.player.dashCooldownMax * 0.75);
     if (id === 'dynamite') this.player.dynamiteEvery = this.player.dynamiteEvery ? Math.max(3, this.player.dynamiteEvery - 1) : 5;
     if (id === 'drone') this.player.droneCount = Math.min(4, this.player.droneCount + 1);
-    if (id === 'fortune') this.run.lootMultiplier *= 1.15;
     if (id === 'blastercap') {
       this.player.blasterEnergyMax += 30;
       this.player.blasterEnergy = this.player.blasterEnergyMax;
@@ -851,7 +849,7 @@ export class MattMineGame {
   }
 
   projectedPayout() {
-    return Math.floor(this.run.rawNuggets * this.run.lootMultiplier * this.depthMultiplier());
+    return Math.floor(this.run.rawNuggets * this.depthMultiplier());
   }
 
   descend() {
