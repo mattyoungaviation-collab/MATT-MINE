@@ -31,7 +31,6 @@ export const stateMethods = {
       elapsed: 0,
       runLevelUps: 0,
       startedAt: Date.now(),
-      lootMultiplier: 1,
       attackCounter: 0,
       safeStartUntil: 0,
       bossTelemetry: {
@@ -318,7 +317,6 @@ export const stateMethods = {
     const tuning = this.runContext?.tuning || {};
     return Math.floor(
       this.run.rawNuggets *
-      this.run.lootMultiplier *
       this.depthMultiplier() *
       (tuning.scoreMultiplier ?? 1) *
       (1 + (this.run.depth - 1) * ((tuning.depthScoreMultiplier ?? 1) - 1))

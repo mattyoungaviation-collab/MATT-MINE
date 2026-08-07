@@ -73,7 +73,6 @@ export const GAME_TUNING_SCHEMA = Object.freeze([
   number('armorUpgradePerLevel', 'Run upgrade scaling', 'Rock Armor reduction per level', .08, 0, .4, .01, 'Damage reduction added by each Rock Armor selection.'),
   number('armorMaximum', 'Run upgrade scaling', 'Maximum total armor', .45, 0, .9, .01, 'Hard cap across permanent and in-run armor.'),
   number('runDashRechargePerLevel', 'Run upgrade scaling', 'Blast Boots recharge reduction', .25, 0, .75, .01),
-  number('runFortunePerLevel', 'Run upgrade scaling', 'Prospector Luck value per level', .15, 0, 2, .01),
 
   number('pickaxeDamageMultiplier', 'Pickaxe', 'Damage multiplier', CONFIG.pickaxeDamageScale, .1, 10, .05),
   number('pickaxeRange', 'Pickaxe', 'Attack range', CONFIG.baseAttackRange, 40, 500, 5),

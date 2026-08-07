@@ -454,6 +454,38 @@ test('maxed run upgrades leave the selection pool and drones are hard-capped at 
   assert.equal(game.player.droneCount, 4);
 });
 
+test('Prospector Luck and its loot multiplier are removed without replacement', async () => {
+  const {
+    GAME_TUNING_SCHEMA,
+    normalizeGameTuning,
+    normalizeTuningPatch
+  } = await import('../src/game/tuning.js');
+  const { MattMineGame } = await import('../src/game/GameV4.js');
+  const stubs = installBrowserStubs();
+  const game = new MattMineGame(stubs.canvas, stubs.profile);
+
+  assert.equal(RUN_UPGRADES.some((upgrade) => upgrade.id === 'fortune'), false);
+  assert.equal(RUN_UPGRADES.some((upgrade) => /prospector luck/i.test(upgrade.name)), false);
+  assert.equal(GAME_TUNING_SCHEMA.some((entry) => entry.id === 'runFortunePerLevel'), false);
+  assert.equal(
+    Object.hasOwn(normalizeGameTuning({ arena: { runFortunePerLevel: 2 } }).arena, 'runFortunePerLevel'),
+    false
+  );
+  assert.throws(
+    () => normalizeTuningPatch({ runFortunePerLevel: .15 }),
+    /Unknown game setting/
+  );
+
+  game.startRun({ mode: RUN_MODES.PRACTICE, seed: 'NO-PROSPECTOR-LUCK' });
+  game.run.rawNuggets = 100;
+  assert.equal(Object.hasOwn(game.run, 'lootMultiplier'), false);
+  assert.equal(game.projectedPayout(), 100);
+  game.state = 'levelup';
+  game.pendingUpgradeIds = ['fortune'];
+  game.chooseRunUpgrade('fortune');
+  assert.equal(game.projectedPayout(), 100);
+});
+
 test('damage floaters use the larger outlined combat font', async () => {
   const { MattMineGame } = await import('../src/game/GameV4.js');
   const stubs = installBrowserStubs();

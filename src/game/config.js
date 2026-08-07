@@ -115,8 +115,7 @@ export const RUN_UPGRADES = Object.freeze([
   { id: 'armor', name: 'Rock Armor', description: 'Take 8% less damage', icon: '⬢', max: 5 },
   { id: 'dash', name: 'Blast Boots', description: 'Dash recharges 25% faster', icon: '➤', max: 5 },
   { id: 'dynamite', name: 'Pocket Dynamite', description: 'Every fifth hit explodes nearby targets', icon: '🧨', max: 3 },
-  { id: 'drone', name: 'Mining Drone', description: 'A drone automatically attacks nearby threats', icon: '◆', max: 4 },
-  { id: 'fortune', name: 'Prospector Luck', description: '+15% value from all collected loot', icon: '♛', max: 6 }
+  { id: 'drone', name: 'Mining Drone', description: 'A drone automatically attacks nearby threats', icon: '◆', max: 4 }
 ]);
 
 export const META_UPGRADES = Object.freeze([
