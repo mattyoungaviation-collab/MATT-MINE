@@ -1,7 +1,7 @@
 import { BLASTER_RUN_UPGRADES, CONFIG, ORE_TYPES, RUN_UPGRADES } from './config.js';
 import { InputController } from './input.js';
 import { createMineLayout, pointInLayout, randomPointInRoom, roomAt, segmentInLayout } from './layout.js';
-import { canvasRenderSize, touchInputDetected } from './mobile.js';
+import { canvasRenderSize, gameplayViewportSize, touchInputDetected } from './mobile.js';
 import {
   angleTo,
   clamp,
@@ -56,22 +56,30 @@ export class MattMineGame {
   }
 
   resize() {
-    const logicalWidth = CONFIG.width;
-    const logicalHeight = CONFIG.height;
     const rect = this.canvas.getBoundingClientRect?.() || {};
+    const touchInput = touchInputDetected(window);
+    const viewport = gameplayViewportSize({
+      cssWidth: rect.width,
+      cssHeight: rect.height,
+      defaultWidth: CONFIG.width,
+      defaultHeight: CONFIG.height,
+      touchInput
+    });
+    const { logicalWidth, logicalHeight } = viewport;
     const renderSize = canvasRenderSize({
       cssWidth: rect.width,
       cssHeight: rect.height,
       logicalWidth,
       logicalHeight,
       devicePixelRatio: window.devicePixelRatio || 1,
-      touchInput: touchInputDetected(window)
+      touchInput
     });
     if (this.canvas.width !== renderSize.pixelWidth) this.canvas.width = renderSize.pixelWidth;
     if (this.canvas.height !== renderSize.pixelHeight) this.canvas.height = renderSize.pixelHeight;
     this.canvas.dataset.logicalWidth = logicalWidth;
     this.canvas.dataset.logicalHeight = logicalHeight;
-    this.canvas.style.aspectRatio = `${logicalWidth} / ${logicalHeight}`;
+    this.canvas.style.aspectRatio = viewport.portrait ? 'auto' : `${logicalWidth} / ${logicalHeight}`;
+    this.canvas.dataset.orientation = viewport.portrait ? 'portrait' : 'landscape';
     this.ctx.setTransform(renderSize.scaleX, 0, 0, renderSize.scaleY, 0, 0);
     this.viewportWidth = logicalWidth;
     this.viewportHeight = logicalHeight;

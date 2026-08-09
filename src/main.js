@@ -60,7 +60,7 @@ import { RoninWalletAdapter } from './game/walletAdapter.js';
 import {
   enterMobileGameplayFullscreen,
   exitMobileGameplayFullscreen,
-  mobileLandscapeRequired,
+  mobilePortraitGameplay,
   touchInputDetected
 } from './game/mobile.js';
 import {
@@ -75,11 +75,6 @@ const canvas = $('#game');
 const screens = [...document.querySelectorAll('.screen')];
 const hud = $('#hud');
 const mobileControls = $('#mobile-controls');
-const mobileOrientationGate = $('#mobile-orientation-gate');
-const mobileOrientationTitle = $('#mobile-orientation-title');
-const mobileOrientationCopy = $('#mobile-orientation-copy');
-const mobileOrientationStart = $('#mobile-orientation-start');
-const mobileOrientationCancel = $('#mobile-orientation-cancel');
 const mobileWalletConnectDialog = $('#walletconnect-mobile-dialog');
 const mobileWalletConnectOpenRonin = $('#walletconnect-open-ronin');
 const mobileWalletConnectCancel = $('#walletconnect-mobile-cancel');
@@ -135,7 +130,6 @@ let pendingAvatarDataUrl = '';
 let abandonConfirmUntil = 0;
 let abandonResetTimer = null;
 let touchInputActive = touchInputDetected(globalThis);
-let pendingLandscapeAction = null;
 let dailyMinePreviewCleanup = null;
 let liveDashboardTimer = null;
 let liveDashboardBusy = false;
@@ -237,48 +231,18 @@ function applyTouchInputMode(active = touchInputActive) {
   touchInputActive = Boolean(active);
   document.documentElement.classList.toggle('touch-input', touchInputActive);
   app.classList.toggle('touch-input', touchInputActive);
+  syncMobileGameplayLayout();
   mobileControls.setAttribute(
     'aria-hidden',
     String(!(touchInputActive && hud.classList.contains('active')))
   );
 }
 
-function needsMobileLandscape() {
-  return mobileLandscapeRequired(globalThis, touchInputActive);
-}
-
-function queueUntilMobileLandscape(action) {
-  if (!needsMobileLandscape()) return false;
-  pendingLandscapeAction = action;
-  syncMobileOrientationGate();
-  return true;
-}
-
-function syncMobileOrientationGate() {
-  const portrait = needsMobileLandscape();
-  const gameplayActive = app.classList.contains('gameplay-active');
-  if (pendingLandscapeAction && !portrait) {
-    mobileOrientationTitle.textContent = 'Ready for fullscreen';
-    mobileOrientationCopy.textContent = 'Tap below to open the mine at the largest size this browser supports.';
-    mobileOrientationStart.hidden = false;
-    mobileOrientationCancel.hidden = false;
-    mobileOrientationGate.hidden = false;
-    return;
-  }
-  if (!portrait || (!pendingLandscapeAction && !gameplayActive)) {
-    mobileOrientationGate.hidden = true;
-    return;
-  }
-  const waitingToStart = Boolean(pendingLandscapeAction);
-  mobileOrientationTitle.textContent = waitingToStart
-    ? 'Rotate to start your run'
-    : 'Rotate back to keep playing';
-  mobileOrientationCopy.textContent = waitingToStart
-    ? 'Turn your phone sideways. Your run has not started and no entry has been used.'
-    : 'Turn your phone sideways again. Timed Arena play continues while the phone is vertical.';
-  mobileOrientationStart.hidden = true;
-  mobileOrientationCancel.hidden = !waitingToStart;
-  mobileOrientationGate.hidden = false;
+function syncMobileGameplayLayout() {
+  const portrait = mobilePortraitGameplay(globalThis, touchInputActive);
+  document.documentElement.classList.toggle('portrait-mobile', portrait);
+  app.classList.toggle('portrait-mobile', portrait);
+  requestAnimationFrame(() => globalThis.__MATT_MINE_GAME__?.resize?.());
 }
 
 function setGameplayUi(active) {
@@ -286,7 +250,7 @@ function setGameplayUi(active) {
   mobileControls.classList.toggle('active', active);
   app.classList.toggle('gameplay-active', active);
   mobileControls.setAttribute('aria-hidden', String(!(active && touchInputActive)));
-  syncMobileOrientationGate();
+  syncMobileGameplayLayout();
   if (!active) {
     if ($('#beta-tools')) $('#beta-tools').hidden = true;
     if ($('#controller-pause-overlay')) $('#controller-pause-overlay').hidden = true;
@@ -327,24 +291,13 @@ function closeMobileWalletTransactionRequest() {
 applyTouchInputMode();
 globalThis.matchMedia?.('(pointer: coarse)')?.addEventListener?.('change', () => {
   applyTouchInputMode(touchInputDetected(globalThis));
-  syncMobileOrientationGate();
 });
 window.addEventListener('pointerdown', (event) => {
   if (event.pointerType === 'touch' && !touchInputActive) applyTouchInputMode(true);
 }, { passive: true });
-window.addEventListener('resize', syncMobileOrientationGate);
-window.visualViewport?.addEventListener?.('resize', syncMobileOrientationGate);
-globalThis.screen?.orientation?.addEventListener?.('change', syncMobileOrientationGate);
-mobileOrientationCancel.addEventListener('click', () => {
-  pendingLandscapeAction = null;
-  mobileOrientationGate.hidden = true;
-});
-mobileOrientationStart.addEventListener('click', () => {
-  const action = pendingLandscapeAction;
-  pendingLandscapeAction = null;
-  mobileOrientationGate.hidden = true;
-  if (action) void action();
-});
+window.addEventListener('resize', syncMobileGameplayLayout);
+window.visualViewport?.addEventListener?.('resize', syncMobileGameplayLayout);
+globalThis.screen?.orientation?.addEventListener?.('change', syncMobileGameplayLayout);
 
 function applyPassInventory(passInventory) {
   if (!passInventory) return;
@@ -1320,7 +1273,6 @@ async function declinePracticeRewards() {
 }
 
 async function startRunMode(mode) {
-  if (queueUntilMobileLandscape(() => startRunMode(mode))) return;
   const useServer =
     mode === RUN_MODES.FREE ||
     (mode === RUN_MODES.PAID && serverConfig?.paidRunsEnabled === true) ||
@@ -2567,7 +2519,6 @@ async function purchaseArenaEntry() {
 }
 
 async function startArenaRun() {
-  if (queueUntilMobileLandscape(startArenaRun)) return;
   if (arenaPlayer.activeRunId && !activeArenaRun) {
     await releaseActiveArenaRun();
     return;

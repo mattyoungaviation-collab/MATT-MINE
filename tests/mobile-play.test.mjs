@@ -6,7 +6,8 @@ import {
   canvasRenderSize,
   enterMobileGameplayFullscreen,
   exitMobileGameplayFullscreen,
-  mobileLandscapeRequired,
+  gameplayViewportSize,
+  mobilePortraitGameplay,
   touchInputDetected,
   viewportDimensions
 } from '../src/game/mobile.js';
@@ -104,13 +105,38 @@ test('touch input detection supports both Ronin mobile signals', () => {
   assert.equal(touchInputDetected({ navigator: { maxTouchPoints: 0 } }), false);
 });
 
-test('phone portrait requires landscape before a run starts', () => {
+test('phone portrait is a supported gameplay layout', () => {
   const portrait = { visualViewport: { width: 390, height: 844 } };
   const landscape = { visualViewport: { width: 844, height: 390 } };
   assert.deepEqual(viewportDimensions(portrait), { width: 390, height: 844 });
-  assert.equal(mobileLandscapeRequired(portrait, true), true);
-  assert.equal(mobileLandscapeRequired(landscape, true), false);
-  assert.equal(mobileLandscapeRequired(portrait, false), false);
+  assert.equal(mobilePortraitGameplay(portrait, true), true);
+  assert.equal(mobilePortraitGameplay(landscape, true), false);
+  assert.equal(mobilePortraitGameplay(portrait, false), false);
+});
+
+test('portrait gameplay uses a close mobile camera without stretching the world', () => {
+  assert.deepEqual(gameplayViewportSize({
+    cssWidth: 390,
+    cssHeight: 654,
+    defaultWidth: 1_280,
+    defaultHeight: 720,
+    touchInput: true
+  }), {
+    logicalWidth: 429,
+    logicalHeight: 720,
+    portrait: true
+  });
+  assert.deepEqual(gameplayViewportSize({
+    cssWidth: 844,
+    cssHeight: 390,
+    defaultWidth: 1_280,
+    defaultHeight: 720,
+    touchInput: true
+  }), {
+    logicalWidth: 1_280,
+    logicalHeight: 720,
+    portrait: false
+  });
 });
 
 test('mobile canvas buffer follows visible size and caps pixel density', () => {
@@ -153,9 +179,10 @@ test('mobile canvas buffer follows visible size and caps pixel density', () => {
   assert.equal(largeDesktop.pixelWidth / largeDesktop.pixelHeight, 16 / 9);
 });
 
-test('mobile gameplay requests native fullscreen and keeps an iOS viewport fallback', async () => {
+test('portrait mobile gameplay fills the viewport without invoking fullscreen or rotation', async () => {
   const classes = new Set();
   const calls = [];
+  let orientationLocks = 0;
   const element = {
     requestFullscreen(options) {
       calls.push(options);
@@ -164,6 +191,8 @@ test('mobile gameplay requests native fullscreen and keeps an iOS viewport fallb
     }
   };
   const runtime = {
+    visualViewport: { width: 390, height: 844 },
+    navigator: { maxTouchPoints: 5 },
     document: {
       documentElement: {
         classList: {
@@ -177,13 +206,53 @@ test('mobile gameplay requests native fullscreen and keeps an iOS viewport fallb
         return Promise.resolve();
       }
     },
-    screen: { orientation: { lock: async () => undefined } },
+    screen: { orientation: { lock: async () => { orientationLocks += 1; } } },
+    scrollTo(x, y) { calls.push([x, y]); }
+  };
+
+  assert.equal(await enterMobileGameplayFullscreen(element, runtime), false);
+  assert.equal(classes.has('mobile-gameplay-fullscreen'), true);
+  assert.deepEqual(calls, [[0, 1]]);
+  assert.equal(orientationLocks, 0);
+  assert.equal(await exitMobileGameplayFullscreen(runtime), false);
+  assert.equal(classes.has('mobile-gameplay-fullscreen'), false);
+});
+
+test('landscape mobile gameplay may request fullscreen without locking orientation', async () => {
+  const classes = new Set();
+  const calls = [];
+  let orientationLocks = 0;
+  const element = {
+    requestFullscreen(options) {
+      calls.push(options);
+      runtime.document.fullscreenElement = element;
+      return Promise.resolve();
+    }
+  };
+  const runtime = {
+    visualViewport: { width: 844, height: 390 },
+    navigator: { maxTouchPoints: 5 },
+    document: {
+      documentElement: {
+        classList: {
+          add: (name) => classes.add(name),
+          remove: (name) => classes.delete(name)
+        }
+      },
+      fullscreenElement: null,
+      exitFullscreen() {
+        this.fullscreenElement = null;
+        return Promise.resolve();
+      }
+    },
+    screen: { orientation: { lock: async () => { orientationLocks += 1; } } },
     scrollTo(x, y) { calls.push([x, y]); }
   };
 
   assert.equal(await enterMobileGameplayFullscreen(element, runtime), true);
   assert.equal(classes.has('mobile-gameplay-fullscreen'), true);
   assert.deepEqual(calls, [[0, 1], { navigationUI: 'hide' }]);
+  assert.equal(orientationLocks, 0);
   assert.equal(await exitMobileGameplayFullscreen(runtime), true);
   assert.equal(classes.has('mobile-gameplay-fullscreen'), false);
 });

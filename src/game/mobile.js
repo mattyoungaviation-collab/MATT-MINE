@@ -1,5 +1,6 @@
 const MOBILE_PORTRAIT_MAX_WIDTH = 760;
 const MAX_CANVAS_PIXELS = 1_920 * 1_080;
+const MIN_PORTRAIT_LOGICAL_WIDTH = 420;
 
 export function touchInputDetected(runtime = globalThis) {
   const touchPoints = Number(runtime.navigator?.maxTouchPoints || 0);
@@ -15,7 +16,7 @@ export function viewportDimensions(runtime = globalThis) {
   };
 }
 
-export function mobileLandscapeRequired(
+export function mobilePortraitGameplay(
   runtime = globalThis,
   touchInput = touchInputDetected(runtime)
 ) {
@@ -23,22 +24,61 @@ export function mobileLandscapeRequired(
   return touchInput && width > 0 && height > 0 && width < height && width <= MOBILE_PORTRAIT_MAX_WIDTH;
 }
 
+export function gameplayViewportSize({
+  cssWidth,
+  cssHeight,
+  defaultWidth,
+  defaultHeight,
+  touchInput = false
+}) {
+  const safeDefaultWidth = Math.max(1, positive(defaultWidth) || 1);
+  const safeDefaultHeight = Math.max(1, positive(defaultHeight) || 1);
+  const renderedWidth = positive(cssWidth) || safeDefaultWidth;
+  const renderedHeight = positive(cssHeight) || safeDefaultHeight;
+  const portrait = touchInput && renderedHeight > renderedWidth && renderedWidth <= MOBILE_PORTRAIT_MAX_WIDTH;
+  if (!portrait) {
+    return {
+      logicalWidth: safeDefaultWidth,
+      logicalHeight: safeDefaultHeight,
+      portrait: false
+    };
+  }
+
+  let logicalHeight = safeDefaultHeight;
+  let logicalWidth = logicalHeight * renderedWidth / renderedHeight;
+  if (logicalWidth < MIN_PORTRAIT_LOGICAL_WIDTH) {
+    const scale = MIN_PORTRAIT_LOGICAL_WIDTH / logicalWidth;
+    logicalWidth *= scale;
+    logicalHeight *= scale;
+  }
+  return {
+    logicalWidth: Math.round(logicalWidth),
+    logicalHeight: Math.round(logicalHeight),
+    portrait: true
+  };
+}
+
 export function enterMobileGameplayFullscreen(element, runtime = globalThis) {
   const documentObject = runtime.document;
   documentObject?.documentElement?.classList?.add('mobile-gameplay-fullscreen');
   runtime.scrollTo?.(0, 1);
+
+  // Embedded wallets commonly reject orientation changes, while browsers that
+  // do accept fullscreen may resize a portrait page into a landscape surface.
+  // The portrait layout already fills the available dynamic viewport, so it
+  // deliberately avoids the native fullscreen API.
+  const portraitLayoutActive =
+    mobilePortraitGameplay(runtime) ||
+    documentObject?.documentElement?.classList?.contains?.('portrait-mobile') === true;
+  if (portraitLayoutActive) return Promise.resolve(false);
 
   const requestFullscreen = element?.requestFullscreen || element?.webkitRequestFullscreen;
   if (typeof requestFullscreen !== 'function') return Promise.resolve(false);
 
   try {
     const requested = requestFullscreen.call(element, { navigationUI: 'hide' });
-    const orientationLock = () => runtime.screen?.orientation?.lock?.('landscape')?.catch?.(() => undefined);
     return Promise.resolve(requested)
-      .then(() => {
-        orientationLock();
-        return true;
-      })
+      .then(() => true)
       .catch(() => false);
   } catch {
     return Promise.resolve(false);

@@ -10,7 +10,7 @@ test.describe('Ronin mobile play', () => {
     deviceScaleFactor: 3
   });
 
-  test('keeps the launch actions clear and protects portrait run starts', async ({ page }) => {
+  test('starts portrait play directly without a rotation gate', async ({ page }) => {
     await page.goto('/');
 
     const wallet = page.locator('#launch-walletconnect-button');
@@ -27,19 +27,13 @@ test.describe('Ronin mobile play', () => {
     expect(practiceBox.y + practiceBox.height).toBeLessThan(dailyCardBox.y);
 
     await practice.click();
-    const orientationGate = page.locator('#mobile-orientation-gate');
-    await expect(orientationGate).toBeVisible();
-    await expect(orientationGate).toContainText('Rotate to start your run');
-    await expect(orientationGate).toContainText('no entry has been used');
-
-    await page.locator('#mobile-orientation-cancel').click();
-    await expect(orientationGate).toBeHidden();
-    await expect(page.locator('#launch')).toHaveClass(/active/);
-    await expect(page.locator('#hud')).not.toHaveClass(/active/);
+    await expect(page.locator('#mobile-orientation-gate')).toHaveCount(0);
+    await expect(page.locator('#hud')).toHaveClass(/active/, { timeout: 15_000 });
+    await expect(page.locator('#app')).toHaveClass(/portrait-mobile/);
+    await expect(page.locator('#game')).toHaveAttribute('data-orientation', 'portrait');
   });
 
-  test('shows separated touch controls and scales the canvas in landscape', async ({ page }) => {
-    await page.setViewportSize({ width: 844, height: 390 });
+  test('separates portrait controls from the playable canvas', async ({ page }) => {
     await page.goto('/');
     await page.locator('[data-launch-action="practice"].launch-secondary-cta').click();
 
@@ -58,6 +52,8 @@ test.describe('Ronin mobile play', () => {
       const overlaps = (one, two) => !(
         one.right <= two.left || one.left >= two.right || one.bottom <= two.top || one.top >= two.bottom
       );
+      const canvas = rectangle('#game');
+      const deck = rectangle('.mobile-control-deck');
       const joystick = rectangle('#joystick');
       const dash = rectangle('#dash-button');
       const weapons = rectangle('.mobile-weapon-buttons');
@@ -67,6 +63,8 @@ test.describe('Ronin mobile play', () => {
         dash,
         weapons,
         attack,
+        canvas,
+        deck,
         overlaps: [
           overlaps(joystick, dash),
           overlaps(joystick, weapons),
@@ -78,6 +76,7 @@ test.describe('Ronin mobile play', () => {
       };
     });
     expect(controls.overlaps).toEqual([false, false, false, false, false, false]);
+    expect(controls.canvas.bottom).toBeLessThanOrEqual(controls.deck.top + 1);
 
     const canvas = await page.locator('#game').evaluate((element) => {
       const rect = element.getBoundingClientRect();
@@ -85,16 +84,20 @@ test.describe('Ronin mobile play', () => {
         pixelWidth: element.width,
         pixelHeight: element.height,
         cssWidth: rect.width,
-        cssHeight: rect.height
+        cssHeight: rect.height,
+        logicalWidth: Number(element.dataset.logicalWidth),
+        logicalHeight: Number(element.dataset.logicalHeight)
       };
     });
+    expect(canvas.cssHeight).toBeGreaterThan(canvas.cssWidth);
+    expect(canvas.logicalHeight).toBeGreaterThan(canvas.logicalWidth);
     expect(canvas.pixelWidth).toBeLessThanOrEqual(Math.ceil(canvas.cssWidth * 1.5));
     expect(canvas.pixelHeight).toBeLessThanOrEqual(Math.ceil(canvas.cssHeight * 1.5));
     expect(canvas.pixelWidth).toBeLessThan(2_560);
     expect(canvas.pixelHeight).toBeLessThan(1_440);
   });
 
-  test('uses a fresh tap to start mobile play in fullscreen after rotation', async ({ page }) => {
+  test('does not invoke native fullscreen from a portrait start', async ({ page }) => {
     await page.addInitScript(() => {
       Element.prototype.requestFullscreen = function requestFullscreen(options) {
         window.__mattMineFullscreenRequest = { id: this.id, options };
@@ -103,18 +106,9 @@ test.describe('Ronin mobile play', () => {
     });
     await page.goto('/');
     await page.locator('[data-launch-action="practice"].launch-secondary-cta').click();
-    await expect(page.locator('#mobile-orientation-gate')).toBeVisible();
-
-    await page.setViewportSize({ width: 844, height: 390 });
-    await expect(page.locator('#mobile-orientation-title')).toHaveText('Ready for fullscreen');
-    await expect(page.locator('#mobile-orientation-start')).toBeVisible();
-    await page.locator('#mobile-orientation-start').click();
 
     await expect(page.locator('html')).toHaveClass(/mobile-gameplay-fullscreen/);
     await expect(page.locator('#hud')).toHaveClass(/active/, { timeout: 15_000 });
-    expect(await page.evaluate(() => window.__mattMineFullscreenRequest)).toMatchObject({
-      id: 'app',
-      options: { navigationUI: 'hide' }
-    });
+    expect(await page.evaluate(() => window.__mattMineFullscreenRequest)).toBeUndefined();
   });
 });

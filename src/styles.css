@@ -268,6 +268,7 @@ h1 span { color: var(--yellow); }
 .mobile-controls { display: none; position: absolute; inset: 0; z-index: 6; pointer-events: none; }
 .mobile-controls.active { display: none; }
 .touch-input .mobile-controls.active { display: block; }
+.mobile-control-deck { display: none; }
 .joystick, .attack-button {
   pointer-events: auto;
   touch-action: none;
@@ -368,62 +369,6 @@ h1 span { color: var(--yellow); }
 #app.touch-input.gameplay-active .depth-badge,
 #app.touch-input.gameplay-active .dash-meter { backdrop-filter: none; }
 #app.touch-input.gameplay-active .dash-meter { display: none; }
-
-.mobile-orientation-gate {
-  position: fixed;
-  inset: 0;
-  z-index: 130;
-  display: grid;
-  place-items: center;
-  padding: max(22px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(22px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
-  background: rgba(4, 6, 10, 0.94);
-  text-align: center;
-}
-.mobile-orientation-gate[hidden] { display: none; }
-.mobile-orientation-card {
-  width: min(100%, 390px);
-  padding: 26px 22px;
-  border: 1px solid rgba(245, 209, 66, 0.34);
-  border-radius: 20px;
-  background: linear-gradient(150deg, #181c25, #0b0e14);
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
-}
-.mobile-orientation-card h2 { margin: 4px 0 10px; color: #fff; font-size: 27px; }
-.mobile-orientation-card > p:not(.eyebrow) { margin: 0; color: #aeb5c1; font-size: 14px; line-height: 1.55; }
-.mobile-orientation-card .secondary-button { min-height: 48px; margin-top: 18px; }
-.mobile-orientation-card .primary-button { min-height: 52px; margin-top: 20px; }
-.mobile-rotate-icon {
-  width: 84px;
-  height: 56px;
-  margin: 0 auto 22px;
-  position: relative;
-  border: 3px solid #f5d142;
-  border-radius: 13px;
-  transform: rotate(-12deg);
-}
-.mobile-rotate-icon span::before,
-.mobile-rotate-icon span::after {
-  content: "";
-  position: absolute;
-}
-.mobile-rotate-icon span::before {
-  width: 18px;
-  height: 18px;
-  right: -17px;
-  top: -14px;
-  border-top: 3px solid #fff0a0;
-  border-right: 3px solid #fff0a0;
-  transform: rotate(12deg);
-}
-.mobile-rotate-icon span::after {
-  width: 34px;
-  height: 34px;
-  right: -17px;
-  top: -14px;
-  border-top: 3px solid #fff0a0;
-  border-radius: 50%;
-  transform: rotate(12deg);
-}
 
 @media (max-width: 760px), (max-height: 620px) {
   .objective { min-width: 0; }
