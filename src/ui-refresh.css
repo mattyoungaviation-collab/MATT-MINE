@@ -3134,7 +3134,7 @@ h3,
     height: calc(100dvh - var(--mobile-control-deck-height));
     max-height: none;
     aspect-ratio: auto !important;
-    filter: brightness(1.4) saturate(1.08);
+    filter: brightness(1.65) saturate(1.08);
     box-shadow: none;
   }
 

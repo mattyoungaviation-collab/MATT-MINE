@@ -12,6 +12,7 @@ import {
   touchInputDetected,
   viewportDimensions
 } from '../src/game/mobile.js';
+import { floorVisibilityProfile } from '../src/game/v3/renderWorld.js';
 
 class FakeTarget {
   constructor({ rect, dataset = {}, locked = false } = {}) {
@@ -144,6 +145,18 @@ test('portrait gameplay disables the cave darkness overlay', () => {
   assert.equal(portraitGameplayCanvas({ dataset: { orientation: 'portrait' } }), true);
   assert.equal(portraitGameplayCanvas({ dataset: { orientation: 'landscape' } }), false);
   assert.equal(portraitGameplayCanvas(null), false);
+});
+
+test('portrait gameplay uses a brighter floor profile without changing desktop rendering', () => {
+  const portrait = floorVisibilityProfile({ dataset: { orientation: 'portrait' } });
+  const desktop = floorVisibilityProfile({ dataset: { orientation: 'landscape' } });
+
+  assert.equal(portrait.roomBase, '#35404f');
+  assert.equal(portrait.textureAlphaLimit, 0.55);
+  assert.equal(portrait.wash, 'rgba(178,200,229,0.3)');
+  assert.equal(desktop.roomBase, '#11131a');
+  assert.equal(desktop.textureAlphaLimit, 1);
+  assert.equal(desktop.wash, null);
 });
 
 test('mobile canvas buffer follows visible size and caps pixel density', () => {
