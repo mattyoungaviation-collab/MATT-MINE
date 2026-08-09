@@ -13,31 +13,61 @@ const ROOM_TINTS = Object.freeze({
   guardian: 'rgba(73,20,90,0.34)'
 });
 
+const DESKTOP_FLOOR_PROFILE = Object.freeze({
+  backdrop: ['#05060a', '#090811', '#030407'],
+  corridorBase: '#0d0f14',
+  roomBase: '#11131a',
+  textureAlphaLimit: 1,
+  tintAlpha: 1,
+  wash: null
+});
+
+const PORTRAIT_FLOOR_PROFILE = Object.freeze({
+  backdrop: ['#0c1017', '#121722', '#090c12'],
+  corridorBase: '#28313e',
+  roomBase: '#35404f',
+  textureAlphaLimit: 0.55,
+  tintAlpha: 0.16,
+  wash: 'rgba(178,200,229,0.3)'
+});
+
+export function floorVisibilityProfile(canvas) {
+  return portraitGameplayCanvas(canvas) ? PORTRAIT_FLOOR_PROFILE : DESKTOP_FLOOR_PROFILE;
+}
+
 export const renderWorldMethods = {
   drawWorld(ctx) {
+    const floorProfile = floorVisibilityProfile(this.canvas);
     const backdrop = ctx.createLinearGradient(
       this.camera.x,
       this.camera.y,
       this.camera.x,
       this.camera.y + this.viewportHeight
     );
-    backdrop.addColorStop(0, '#05060a');
-    backdrop.addColorStop(0.55, '#090811');
-    backdrop.addColorStop(1, '#030407');
+    backdrop.addColorStop(0, floorProfile.backdrop[0]);
+    backdrop.addColorStop(0.55, floorProfile.backdrop[1]);
+    backdrop.addColorStop(1, floorProfile.backdrop[2]);
     ctx.fillStyle = backdrop;
     ctx.fillRect(this.camera.x - 30, this.camera.y - 30, this.viewportWidth + 60, this.viewportHeight + 60);
     if (!this.layout) return;
 
     for (const corridor of this.layout.corridors) {
       if (!this.rectInView(corridor, 80)) continue;
-      this.drawFloorRect(ctx, corridor, '#0d0f14', 18);
-      this.drawCinematicFloor(ctx, corridor, 'rgba(22,20,28,0.42)', 18, 0.66);
+      this.drawFloorRect(ctx, corridor, floorProfile.corridorBase, 18);
+      this.drawCinematicFloor(ctx, corridor, 'rgba(22,20,28,0.42)', 18, 0.66, floorProfile);
     }
 
     for (const room of this.layout.rooms) {
       if (!this.rectInView(room, 100)) continue;
-      this.drawFloorRect(ctx, room, '#11131a', 26);
-      this.drawCinematicFloor(ctx, room, ROOM_TINTS[room.type] || ROOM_TINTS.mixed, 26, 0.88);
+      this.drawFloorRect(ctx, room, floorProfile.roomBase, 26);
+      this.drawCinematicFloor(
+        ctx,
+        room,
+        ROOM_TINTS[room.type] || ROOM_TINTS.mixed,
+        26,
+        0.88,
+        floorProfile
+      );
       this.drawRoomStoneEdge(ctx, room);
       this.drawRoomGrid(ctx, room);
       this.drawRoomTorches(ctx, room);
@@ -118,7 +148,7 @@ export const renderWorldMethods = {
     }
   },
 
-  drawCinematicFloor(ctx, rect, tint, radius, alpha) {
+  drawCinematicFloor(ctx, rect, tint, radius, alpha, floorProfile = floorVisibilityProfile(this.canvas)) {
     const x = rect.x - rect.width / 2;
     const y = rect.y - rect.height / 2;
     const portrait = portraitGameplayCanvas(this.canvas);
@@ -127,23 +157,23 @@ export const renderWorldMethods = {
     ctx.clip();
     const floor = this.visualAssets?.floor;
     if (imageIsReady(floor)) {
-      ctx.globalAlpha = alpha;
+      ctx.globalAlpha = Math.min(alpha, floorProfile.textureAlphaLimit);
       ctx.drawImage(floor, x, y, rect.width, rect.height);
     } else {
       const fallback = ctx.createLinearGradient(x, y, x + rect.width, y + rect.height);
-      fallback.addColorStop(0, '#24242d');
-      fallback.addColorStop(0.5, '#101218');
-      fallback.addColorStop(1, '#1d1722');
+      fallback.addColorStop(0, portrait ? '#3a424f' : '#24242d');
+      fallback.addColorStop(0.5, portrait ? '#252c36' : '#101218');
+      fallback.addColorStop(1, portrait ? '#322d3a' : '#1d1722');
       ctx.fillStyle = fallback;
       ctx.fillRect(x, y, rect.width, rect.height);
     }
-    ctx.globalAlpha = portrait ? 0.45 : 1;
+    ctx.globalAlpha = floorProfile.tintAlpha;
     ctx.fillStyle = tint;
     ctx.fillRect(x, y, rect.width, rect.height);
     ctx.globalAlpha = 1;
     if (portrait) {
       ctx.globalCompositeOperation = 'screen';
-      ctx.fillStyle = 'rgba(139,158,188,0.14)';
+      ctx.fillStyle = floorProfile.wash;
       ctx.fillRect(x, y, rect.width, rect.height);
     } else {
       const soot = ctx.createRadialGradient(rect.x, rect.y, 20, rect.x, rect.y, Math.max(rect.width, rect.height) * 0.68);

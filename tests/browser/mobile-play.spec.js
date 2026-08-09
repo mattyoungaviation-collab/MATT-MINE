@@ -92,7 +92,7 @@ test.describe('Ronin mobile play', () => {
       };
     });
     expect(canvas.cssHeight).toBeGreaterThan(canvas.cssWidth);
-    expect(canvas.filter).toContain('brightness(1.4)');
+    expect(canvas.filter).toContain('brightness(1.65)');
     expect(canvas.logicalHeight).toBeGreaterThan(canvas.logicalWidth);
     expect(canvas.pixelWidth).toBeLessThanOrEqual(Math.ceil(canvas.cssWidth * 1.5));
     expect(canvas.pixelHeight).toBeLessThanOrEqual(Math.ceil(canvas.cssHeight * 1.5));
