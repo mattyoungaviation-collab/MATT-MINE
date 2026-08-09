@@ -2034,7 +2034,6 @@ h3,
 
 .walletconnect-mobile-card,
 .arena-eligibility-dialog form,
-.mobile-orientation-card,
 .choice-panel {
   border: 1px solid rgba(247, 196, 48, 0.55);
   clip-path: var(--ui-cut);
@@ -3107,5 +3106,225 @@ h3,
 
   .launch-hero-content h1 > span {
     white-space: nowrap;
+  }
+}
+
+/* Portrait-first gameplay for Ronin Wallet and other embedded mobile browsers. */
+@media (max-width: 760px) and (orientation: portrait) {
+  html.portrait-mobile,
+  html.portrait-mobile body,
+  #app.touch-input.portrait-mobile {
+    --mobile-control-deck-height: clamp(186px, 23dvh, 210px);
+    width: 100%;
+    height: 100dvh;
+    min-height: -webkit-fill-available;
+    overflow: hidden;
+  }
+
+  #app.touch-input.portrait-mobile.gameplay-active {
+    display: block;
+    background: #030407;
+  }
+
+  #app.touch-input.portrait-mobile.gameplay-active #game {
+    position: absolute;
+    inset: 0 0 auto;
+    width: 100vw;
+    max-width: none;
+    height: calc(100dvh - var(--mobile-control-deck-height));
+    max-height: none;
+    aspect-ratio: auto !important;
+    box-shadow: none;
+  }
+
+  #app.touch-input.portrait-mobile.gameplay-active .hud {
+    padding: max(8px, env(safe-area-inset-top)) 8px calc(var(--mobile-control-deck-height) + 8px);
+  }
+
+  #app.touch-input.portrait-mobile.gameplay-active .hud-top,
+  #app.touch-input.portrait-mobile.gameplay-active .hud-bottom {
+    display: block;
+  }
+
+  #app.touch-input.portrait-mobile.gameplay-active .health-block {
+    position: absolute;
+    top: max(8px, env(safe-area-inset-top));
+    left: max(8px, env(safe-area-inset-left));
+    width: calc(100% - max(92px, calc(env(safe-area-inset-right) + 92px)));
+    min-width: 0;
+    padding: 8px 10px;
+  }
+
+  #app.touch-input.portrait-mobile.gameplay-active .depth-badge {
+    position: absolute;
+    top: max(8px, env(safe-area-inset-top));
+    right: max(8px, env(safe-area-inset-right));
+    width: 68px;
+    padding: 6px 8px;
+  }
+
+  #app.touch-input.portrait-mobile.gameplay-active .depth-badge strong {
+    font-size: 19px;
+  }
+
+  #app.touch-input.portrait-mobile.gameplay-active .loot-block {
+    top: max(65px, calc(env(safe-area-inset-top) + 65px));
+    right: auto;
+    left: max(8px, env(safe-area-inset-left));
+    padding: 7px 10px;
+    text-align: left;
+  }
+
+  #app.touch-input.portrait-mobile.gameplay-active .abandon-run-button {
+    top: max(68px, calc(env(safe-area-inset-top) + 68px));
+    right: max(8px, env(safe-area-inset-right));
+    min-width: 98px;
+  }
+
+  #app.touch-input.portrait-mobile.gameplay-active .run-mode-hud {
+    top: max(110px, calc(env(safe-area-inset-top) + 110px));
+    left: max(8px, env(safe-area-inset-left));
+    max-width: 46vw;
+    overflow: hidden;
+    padding: 6px 10px;
+    transform: none;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #app.touch-input.portrait-mobile.gameplay-active .arena-round-timer {
+    top: max(105px, calc(env(safe-area-inset-top) + 105px));
+    right: max(8px, env(safe-area-inset-right));
+    left: auto;
+    min-width: 112px;
+    padding: 6px 9px;
+    transform: none;
+  }
+
+  #app.touch-input.portrait-mobile.gameplay-active .arena-round-timer strong {
+    font-size: 18px;
+  }
+
+  #app.touch-input.portrait-mobile.gameplay-active .objective {
+    position: absolute;
+    right: max(8px, env(safe-area-inset-right));
+    bottom: calc(var(--mobile-control-deck-height) + 52px);
+    left: max(8px, env(safe-area-inset-left));
+    width: auto;
+    max-width: none;
+    min-width: 0;
+    padding: 6px 10px;
+    transform: none;
+  }
+
+  #app.touch-input.portrait-mobile.gameplay-active .objective span {
+    font-size: 7px;
+  }
+
+  #app.touch-input.portrait-mobile.gameplay-active .objective strong {
+    overflow: hidden;
+    font-size: 9px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #app.touch-input.portrait-mobile.gameplay-active .xp-wrap {
+    position: absolute;
+    right: max(8px, env(safe-area-inset-right));
+    bottom: calc(var(--mobile-control-deck-height) + 8px);
+    left: max(8px, env(safe-area-inset-left));
+    width: auto;
+    margin: 0;
+    padding: 7px 10px;
+    transform: none;
+  }
+
+  #app.touch-input.portrait-mobile.gameplay-active .toast {
+    top: max(154px, calc(env(safe-area-inset-top) + 154px));
+    width: calc(100% - 24px);
+    padding: 10px 13px;
+    border-radius: 12px;
+    font-size: 11px;
+    text-align: center;
+  }
+
+  #app.touch-input.portrait-mobile.gameplay-active .mobile-controls.active {
+    display: block;
+  }
+
+  #app.touch-input.portrait-mobile.gameplay-active .mobile-control-deck {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 0;
+    height: var(--mobile-control-deck-height);
+    display: grid;
+    grid-template-columns: 132px 1fr 96px;
+    align-items: start;
+    padding: 11px max(14px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+    border-top: 1px solid rgba(247, 196, 48, 0.32);
+    background:
+      radial-gradient(circle at 18% 62%, rgba(71, 138, 155, 0.16), transparent 35%),
+      radial-gradient(circle at 86% 58%, rgba(247, 196, 48, 0.12), transparent 34%),
+      linear-gradient(180deg, rgba(8, 11, 15, 0.98), #030507);
+    box-shadow: 0 -16px 42px rgba(0, 0, 0, 0.66);
+  }
+
+  #app.touch-input.portrait-mobile.gameplay-active .mobile-control-deck span {
+    color: rgba(255, 255, 255, 0.48);
+    font: 900 8px/1 var(--ui-body);
+    letter-spacing: 0.16em;
+  }
+
+  #app.touch-input.portrait-mobile.gameplay-active .mobile-control-deck span:nth-child(2),
+  #app.touch-input.portrait-mobile.gameplay-active .mobile-control-deck span:nth-child(3) {
+    text-align: right;
+  }
+
+  #app.touch-input.portrait-mobile.gameplay-active .joystick {
+    z-index: 2;
+    left: max(16px, env(safe-area-inset-left));
+    bottom: max(24px, calc(env(safe-area-inset-bottom) + 18px));
+    width: 116px;
+    height: 116px;
+    border-color: rgba(111, 220, 224, 0.42);
+    background: rgba(5, 10, 14, 0.82);
+    box-shadow: inset 0 0 28px rgba(75, 196, 205, 0.08), 0 10px 28px rgba(0, 0, 0, 0.4);
+  }
+
+  #app.touch-input.portrait-mobile.gameplay-active .joystick-knob {
+    width: 52px;
+    height: 52px;
+    margin: -26px;
+    background: linear-gradient(145deg, rgba(151, 238, 239, 0.88), rgba(70, 146, 158, 0.82));
+  }
+
+  #app.touch-input.portrait-mobile.gameplay-active .attack-button {
+    z-index: 2;
+    right: max(16px, env(safe-area-inset-right));
+    bottom: max(26px, calc(env(safe-area-inset-bottom) + 20px));
+    width: 88px;
+    height: 88px;
+  }
+
+  #app.touch-input.portrait-mobile.gameplay-active .dash-button {
+    z-index: 2;
+    right: max(116px, calc(env(safe-area-inset-right) + 116px));
+    bottom: max(40px, calc(env(safe-area-inset-bottom) + 34px));
+    width: 56px;
+    height: 56px;
+  }
+
+  #app.touch-input.portrait-mobile.gameplay-active .mobile-weapon-buttons {
+    z-index: 2;
+    right: max(14px, env(safe-area-inset-right));
+    bottom: calc(var(--mobile-control-deck-height) - 59px);
+    gap: 6px;
+  }
+
+  #app.touch-input.portrait-mobile.gameplay-active .weapon-button {
+    width: 44px;
+    height: 44px;
   }
 }
