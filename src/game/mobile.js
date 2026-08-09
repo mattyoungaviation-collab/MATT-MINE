@@ -58,6 +58,10 @@ export function gameplayViewportSize({
   };
 }
 
+export function portraitGameplayCanvas(canvas) {
+  return canvas?.dataset?.orientation === 'portrait';
+}
+
 export function enterMobileGameplayFullscreen(element, runtime = globalThis) {
   const documentObject = runtime.document;
   documentObject?.documentElement?.classList?.add('mobile-gameplay-fullscreen');

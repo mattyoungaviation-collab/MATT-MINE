@@ -1,4 +1,5 @@
 import { CONFIG } from '../config.js';
+import { portraitGameplayCanvas } from '../mobile.js';
 import { clamp } from '../utils.js';
 import { TAU, polygon, roundRect } from './drawHelpers.js';
 import { imageIsReady } from './visualAssets.js';
@@ -120,6 +121,7 @@ export const renderWorldMethods = {
   drawCinematicFloor(ctx, rect, tint, radius, alpha) {
     const x = rect.x - rect.width / 2;
     const y = rect.y - rect.height / 2;
+    const portrait = portraitGameplayCanvas(this.canvas);
     ctx.save();
     roundRect(ctx, x + 7, y + 7, rect.width - 14, rect.height - 14, Math.max(4, radius - 7));
     ctx.clip();
@@ -135,15 +137,22 @@ export const renderWorldMethods = {
       ctx.fillStyle = fallback;
       ctx.fillRect(x, y, rect.width, rect.height);
     }
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = portrait ? 0.45 : 1;
     ctx.fillStyle = tint;
     ctx.fillRect(x, y, rect.width, rect.height);
-    const soot = ctx.createRadialGradient(rect.x, rect.y, 20, rect.x, rect.y, Math.max(rect.width, rect.height) * 0.68);
-    soot.addColorStop(0, 'rgba(0,0,0,0)');
-    soot.addColorStop(0.72, 'rgba(0,0,0,0.08)');
-    soot.addColorStop(1, 'rgba(0,0,0,0.58)');
-    ctx.fillStyle = soot;
-    ctx.fillRect(x, y, rect.width, rect.height);
+    ctx.globalAlpha = 1;
+    if (portrait) {
+      ctx.globalCompositeOperation = 'screen';
+      ctx.fillStyle = 'rgba(139,158,188,0.14)';
+      ctx.fillRect(x, y, rect.width, rect.height);
+    } else {
+      const soot = ctx.createRadialGradient(rect.x, rect.y, 20, rect.x, rect.y, Math.max(rect.width, rect.height) * 0.68);
+      soot.addColorStop(0, 'rgba(0,0,0,0)');
+      soot.addColorStop(0.72, 'rgba(0,0,0,0.08)');
+      soot.addColorStop(1, 'rgba(0,0,0,0.58)');
+      ctx.fillStyle = soot;
+      ctx.fillRect(x, y, rect.width, rect.height);
+    }
     ctx.restore();
   },
 
@@ -278,21 +287,23 @@ export const renderWorldMethods = {
 
   drawLighting(ctx) {
     const radius = 470 + this.player.droneCount * 22;
-    const darkness = ctx.createRadialGradient(
-      this.player.x,
-      this.player.y,
-      105,
-      this.player.x,
-      this.player.y,
-      radius
-    );
-    darkness.addColorStop(0, 'rgba(0,0,0,0)');
-    darkness.addColorStop(0.46, 'rgba(2,2,6,0.04)');
-    darkness.addColorStop(0.76, 'rgba(2,2,7,0.46)');
-    darkness.addColorStop(1, 'rgba(0,0,3,0.86)');
     ctx.save();
-    ctx.fillStyle = darkness;
-    ctx.fillRect(this.camera.x - 20, this.camera.y - 20, this.viewportWidth + 40, this.viewportHeight + 40);
+    if (!portraitGameplayCanvas(this.canvas)) {
+      const darkness = ctx.createRadialGradient(
+        this.player.x,
+        this.player.y,
+        105,
+        this.player.x,
+        this.player.y,
+        radius
+      );
+      darkness.addColorStop(0, 'rgba(0,0,0,0)');
+      darkness.addColorStop(0.46, 'rgba(2,2,6,0.04)');
+      darkness.addColorStop(0.76, 'rgba(2,2,7,0.46)');
+      darkness.addColorStop(1, 'rgba(0,0,3,0.86)');
+      ctx.fillStyle = darkness;
+      ctx.fillRect(this.camera.x - 20, this.camera.y - 20, this.viewportWidth + 40, this.viewportHeight + 40);
+    }
 
     ctx.globalCompositeOperation = 'screen';
     const playerLight = ctx.createRadialGradient(

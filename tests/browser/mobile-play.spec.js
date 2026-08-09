@@ -29,6 +29,7 @@ test.describe('Ronin mobile play', () => {
     await practice.click();
     await expect(page.locator('#mobile-orientation-gate')).toHaveCount(0);
     await expect(page.locator('#hud')).toHaveClass(/active/, { timeout: 15_000 });
+    await expect(page.locator('.screen.active')).toHaveCount(0);
     await expect(page.locator('#app')).toHaveClass(/portrait-mobile/);
     await expect(page.locator('#game')).toHaveAttribute('data-orientation', 'portrait');
   });
@@ -85,11 +86,13 @@ test.describe('Ronin mobile play', () => {
         pixelHeight: element.height,
         cssWidth: rect.width,
         cssHeight: rect.height,
+        filter: getComputedStyle(element).filter,
         logicalWidth: Number(element.dataset.logicalWidth),
         logicalHeight: Number(element.dataset.logicalHeight)
       };
     });
     expect(canvas.cssHeight).toBeGreaterThan(canvas.cssWidth);
+    expect(canvas.filter).toContain('brightness(1.4)');
     expect(canvas.logicalHeight).toBeGreaterThan(canvas.logicalWidth);
     expect(canvas.pixelWidth).toBeLessThanOrEqual(Math.ceil(canvas.cssWidth * 1.5));
     expect(canvas.pixelHeight).toBeLessThanOrEqual(Math.ceil(canvas.cssHeight * 1.5));
