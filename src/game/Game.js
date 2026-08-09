@@ -1,7 +1,12 @@
 import { BLASTER_RUN_UPGRADES, CONFIG, ORE_TYPES, RUN_UPGRADES } from './config.js';
 import { InputController } from './input.js';
 import { createMineLayout, pointInLayout, randomPointInRoom, roomAt, segmentInLayout } from './layout.js';
-import { canvasRenderSize, gameplayViewportSize, touchInputDetected } from './mobile.js';
+import {
+  canvasRenderSize,
+  gameplayViewportSize,
+  portraitGameplayCanvas,
+  touchInputDetected
+} from './mobile.js';
 import {
   angleTo,
   clamp,
@@ -1405,22 +1410,24 @@ export class MattMineGame {
 
   drawLighting(ctx) {
     const radius = 500 + this.player.droneCount * 20;
-    const gradient = ctx.createRadialGradient(
-      this.player.x,
-      this.player.y,
-      110,
-      this.player.x,
-      this.player.y,
-      radius
-    );
-    gradient.addColorStop(0, 'rgba(0,0,0,0)');
-    gradient.addColorStop(0.48, 'rgba(0,0,0,0.05)');
-    gradient.addColorStop(0.78, 'rgba(0,0,0,0.38)');
-    gradient.addColorStop(1, 'rgba(0,0,0,0.76)');
-    ctx.save();
-    ctx.fillStyle = gradient;
-    ctx.fillRect(this.camera.x - 20, this.camera.y - 20, this.viewportWidth + 40, this.viewportHeight + 40);
-    ctx.restore();
+    if (!portraitGameplayCanvas(this.canvas)) {
+      const gradient = ctx.createRadialGradient(
+        this.player.x,
+        this.player.y,
+        110,
+        this.player.x,
+        this.player.y,
+        radius
+      );
+      gradient.addColorStop(0, 'rgba(0,0,0,0)');
+      gradient.addColorStop(0.48, 'rgba(0,0,0,0.05)');
+      gradient.addColorStop(0.78, 'rgba(0,0,0,0.38)');
+      gradient.addColorStop(1, 'rgba(0,0,0,0.76)');
+      ctx.save();
+      ctx.fillStyle = gradient;
+      ctx.fillRect(this.camera.x - 20, this.camera.y - 20, this.viewportWidth + 40, this.viewportHeight + 40);
+      ctx.restore();
+    }
   }
 
   drawHealthBar(ctx, entity, fraction, width, height) {

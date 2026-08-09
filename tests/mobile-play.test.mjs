@@ -8,6 +8,7 @@ import {
   exitMobileGameplayFullscreen,
   gameplayViewportSize,
   mobilePortraitGameplay,
+  portraitGameplayCanvas,
   touchInputDetected,
   viewportDimensions
 } from '../src/game/mobile.js';
@@ -137,6 +138,12 @@ test('portrait gameplay uses a close mobile camera without stretching the world'
     logicalHeight: 720,
     portrait: false
   });
+});
+
+test('portrait gameplay disables the cave darkness overlay', () => {
+  assert.equal(portraitGameplayCanvas({ dataset: { orientation: 'portrait' } }), true);
+  assert.equal(portraitGameplayCanvas({ dataset: { orientation: 'landscape' } }), false);
+  assert.equal(portraitGameplayCanvas(null), false);
 });
 
 test('mobile canvas buffer follows visible size and caps pixel density', () => {
