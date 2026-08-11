@@ -60,7 +60,7 @@ describe('NFT metadata service', function () {
     const service = await createService();
     const metadata = await service.minerMetadata(1);
     assert.equal(metadata.name, 'MATT Mine Miner #1');
-    assert.equal(metadata.properties.owner, OWNER.toLowerCase());
+    assert.equal('properties' in metadata, false);
     assert.match(metadata.image, /^https:\/\/matt-mine\.onrender\.com\/api\/nft\/miners\/1\/image\.png\?v=[a-f0-9]{16}$/);
     assert.deepEqual(metadata.attributes.slice(0, 2), [
       { trait_type: 'Level', value: 1 },
@@ -74,8 +74,9 @@ describe('NFT metadata service', function () {
     const image = await service.minerImage(1);
     const info = await sharp(image.body).metadata();
     assert.equal(info.format, 'png');
-    assert.equal(info.width, 1254);
-    assert.equal(info.height, 1254);
+    assert.equal(info.width, 960);
+    assert.equal(info.height, 960);
+    assert.ok(image.body.length < 1_000_000);
     assert.match(image.etag, /^"[a-f0-9]{64}"$/);
     assert.equal((await service.minerImage(1)).body, image.body);
   });
@@ -84,6 +85,7 @@ describe('NFT metadata service', function () {
     const service = await createService();
     const equipment = await service.equipmentMetadata(7);
     assert.equal(equipment.name, 'Crystal Fang Pick #7');
+    assert.equal('properties' in equipment, false);
     assert.deepEqual(equipment.attributes.slice(0, 3), [
       { trait_type: 'Type', value: 'Weapon' },
       { trait_type: 'Rarity', value: 'Rare' },
