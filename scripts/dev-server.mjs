@@ -31,6 +31,7 @@ import {
   HmacAdvertisementVerifier
 } from '../server/external-verifiers.js';
 import { PaidCompetitionEligibilityPolicy } from '../server/eligibility.js';
+import { NftMetadataService } from '../server/nft-metadata-service.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const packageMetadata = JSON.parse(
@@ -210,6 +211,22 @@ const advertisementVerifier =
         provider: advertisementProvider
       })
     : null;
+const nftMetadataEnabled = process.env.MATT_MINE_NFT_ENABLED === 'true';
+const nftMetadataService = nftMetadataEnabled
+  ? await new NftMetadataService({
+      enabled: true,
+      root,
+      publicOrigin: process.env.MATT_MINE_NFT_PUBLIC_BASE_URL || process.env.MATT_MINE_PUBLIC_ORIGIN,
+      chainId: Number(process.env.MATT_MINE_NFT_CHAIN_ID || 202601),
+      rpcUrl: process.env.MATT_MINE_NFT_RPC_URL || 'https://saigon-testnet.roninchain.com/rpc',
+      timeoutMs: Number(process.env.MATT_MINE_RPC_TIMEOUT_MS || 10_000),
+      addresses: {
+        miner: process.env.MATT_MINE_NFT_MINER_ADDRESS,
+        equipment: process.env.MATT_MINE_NFT_EQUIPMENT_ADDRESS,
+        loadout: process.env.MATT_MINE_NFT_LOADOUT_ADDRESS
+      }
+    }).init()
+  : null;
 const service = new CompleteProductionMattMineService(database, {
   appVersion,
   buildCommit: process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || 'unknown',
@@ -234,6 +251,7 @@ const service = new CompleteProductionMattMineService(database, {
   nuggetPaymentVerifier,
   nuggetPaymentsEnabled: mainnetTransactionsEnabled && nuggetPaymentsRequested,
   competitiveReplayValidator,
+  nftMetadataService,
   ...(revivePaymentVerifier && competitiveReplayValidator ? {
     revivePaymentVerifier,
     reviveEligibilityValidator: {
@@ -258,6 +276,7 @@ server.listen(port, '0.0.0.0', () => {
     : 'disabled until MATT_MINE_COMPETITIVE_REPLAY_SECRET is configured'}`);
   console.log(`Paid revive verifier: ${revivePaymentVerifier ? 'EXACT RON TRANSFER ENABLED' : 'disabled'}`);
   console.log(`Advertisement verifier: ${advertisementVerifier ? `SIGNED ${advertisementProvider}` : 'disabled'}`);
+  console.log(`NFT metadata: ${nftMetadataService ? `ENABLED (chain ${nftMetadataService.chainId})` : 'disabled'}`);
   console.log(`Server data: ${database.kind}${databaseUrl ? '' : ` (${dataFile})`}`);
   console.log(`Nugget economy data: ${nuggetEconomyStore.kind}${databaseUrl ? '' : ` (${nuggetEconomyFile})`}`);
 });

@@ -71,6 +71,7 @@ export class MattMineService {
     this.paymentVerifier = options.paymentVerifier || null;
     this.rewardManager = options.rewardManager || null;
     this.arenaService = options.arenaService || null;
+    this.nftMetadataService = options.nftMetadataService || null;
     this.arenaLeaderboardRequests = new Map();
     this.mainnetTransactionsEnabled =
       options.mainnetTransactionsEnabled === true && Boolean(this.paymentVerifier);
@@ -118,6 +119,9 @@ export class MattMineService {
       mainnetTransactionsEnabled: this.mainnetTransactionsEnabled,
       arena: this.arenaService
         ? this.arenaService.publicConfig()
+        : { enabled: false },
+      nft: this.nftMetadataService
+        ? this.nftMetadataService.publicStatus()
         : { enabled: false },
       eligibility: this.eligibilityPolicy
         ? this.eligibilityPolicy.publicStatus()

@@ -26,6 +26,15 @@
     "contracts:deploy-arena:ronin": "npm --workspace contracts run deploy-arena:ronin",
     "contracts:check-arena-deployment:ronin": "npm --workspace contracts run check-arena-deployment:ronin",
     "contracts:verify-arena:ronin": "npm --workspace contracts run verify-arena:ronin",
+    "contracts:validate-nft:ronin": "npm --workspace contracts run validate-nft:ronin",
+    "contracts:deploy-nft:ronin": "npm --workspace contracts run deploy-nft:ronin",
+    "contracts:validate-nft:saigon": "npm --workspace contracts run validate-nft:saigon",
+    "contracts:deploy-nft:saigon": "npm --workspace contracts run deploy-nft:saigon",
+    "contracts:configure-nft:saigon": "npm --workspace contracts run configure-nft:saigon",
+    "contracts:check-nft:saigon": "npm --workspace contracts run check-nft:saigon",
+    "contracts:verify-nft:saigon": "npm --workspace contracts run verify-nft:saigon",
+    "contracts:bootstrap-nft-rehearsal:saigon": "npm --workspace contracts run bootstrap-nft-rehearsal:saigon",
+    "contracts:check-nft-rehearsal:saigon": "npm --workspace contracts run check-nft-rehearsal:saigon",
     "db:migrate": "node scripts/database-admin.mjs migrate",
     "db:migrate:dry-run": "node scripts/database-admin.mjs migrate --dry-run",
     "db:backfill": "node scripts/database-admin.mjs backfill",
@@ -45,6 +54,7 @@
   "dependencies": {
     "@walletconnect/ethereum-provider": "2.23.10",
     "pg": "8.16.3",
+    "sharp": "0.35.3",
     "viem": "2.55.8",
     "vite": "8.2.0"
   },
@@ -55,6 +65,7 @@
   },
   "overrides": {
     "axios": "1.19.0",
+    "nanoid": "3.3.18",
     "tmp": "0.2.7",
     "undici": "6.28.0"
   }

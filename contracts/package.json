@@ -15,7 +15,16 @@
     "check-arena-deployer:ronin": "hardhat run --build-profile production scripts/check-arena-deployer.js --network ronin",
     "deploy-arena:ronin": "hardhat run --build-profile production scripts/deploy-arena-mainnet.js --network ronin",
     "check-arena-deployment:ronin": "hardhat run --build-profile production scripts/check-arena-mainnet-deployment.js --network roninReadOnly",
-    "verify-arena:ronin": "hardhat run --build-profile production scripts/verify-arena-mainnet.js --network roninReadOnly"
+    "verify-arena:ronin": "hardhat run --build-profile production scripts/verify-arena-mainnet.js --network roninReadOnly",
+    "validate-nft:ronin": "hardhat run scripts/validate-nft-mainnet-config.js --network roninReadOnly",
+    "deploy-nft:ronin": "hardhat run --build-profile production scripts/deploy-nft-mainnet.js --network ronin",
+    "validate-nft:saigon": "hardhat run scripts/validate-nft-saigon-config.js --network saigonReadOnly",
+    "deploy-nft:saigon": "hardhat run --build-profile production scripts/deploy-nft-saigon.js --network saigon",
+    "configure-nft:saigon": "hardhat run --build-profile production scripts/configure-nft-saigon.js --network saigon",
+    "check-nft:saigon": "hardhat run --build-profile production scripts/check-nft-saigon.js --network saigonReadOnly",
+    "verify-nft:saigon": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-nft-saigon.ps1",
+    "bootstrap-nft-rehearsal:saigon": "hardhat run --build-profile production scripts/bootstrap-nft-saigon-rehearsal.js --network saigon",
+    "check-nft-rehearsal:saigon": "hardhat run --build-profile production scripts/check-nft-saigon-rehearsal.js --network saigonReadOnly"
   },
   "dependencies": {
     "@openzeppelin/contracts": "5.4.0"

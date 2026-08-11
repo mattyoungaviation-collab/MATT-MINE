@@ -31,6 +31,30 @@ services:
         sync: false
       - key: MATT_MINE_RPC_TIMEOUT_MS
         value: "10000"
+      # NFT metadata reads the isolated Saigon rehearsal contracts. This does
+      # not change the main game's Ronin Mainnet authentication or payments.
+      - key: MATT_MINE_NFT_ENABLED
+        value: "true"
+      - key: MATT_MINE_NFT_PUBLIC_BASE_URL
+        value: "https://matt-mine.onrender.com"
+      - key: MATT_MINE_NFT_CHAIN_ID
+        value: "202601"
+      - key: MATT_MINE_NFT_RPC_URL
+        value: "https://saigon-testnet.roninchain.com/rpc"
+      - key: MATT_MINE_NFT_MINER_ADDRESS
+        value: "0x545d5d4c714eB4d2242BBFE82C31fe9a1E5Cff29"
+      - key: MATT_MINE_NFT_EQUIPMENT_ADDRESS
+        value: "0x73A4Ad9a2b4bfeeE1b98F5D99AaB24B702dEb093"
+      - key: MATT_MINE_NFT_LOADOUT_ADDRESS
+        value: "0x6cf168cdD198D0d111faE2286aE6dcD86FA960d8"
+      - key: MATT_MINE_NFT_CHEST_ADDRESS
+        value: "0x52f66358ae951638a794777F3cc3448513d5be37"
+      - key: MATT_MINE_NFT_SETTLEMENT_ADDRESS
+        value: "0x08d6FE054A75a59b7Abd4942D890f56f8e1896B2"
+      - key: MATT_MINE_NFT_REDEMPTION_ADDRESS
+        value: "0xc06b131C160701150Cea5b2C22dB3c6d7f451309"
+      - key: MATT_MINE_NFT_RANDOMNESS_ADDRESS
+        value: "0x13B2CC4744657bbc75a1f7588A1Ca8e397E69521"
       - key: MATT_MINE_ADMIN_WALLETS
         sync: false
       - key: MATT_MINE_ADMIN_KEY

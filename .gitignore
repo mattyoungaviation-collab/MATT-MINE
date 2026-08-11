@@ -12,3 +12,14 @@ contracts/cache/
 contracts/coverage/
 contracts/deployments/
 contracts/config/ronin.json
+contracts/config/ronin-nft.json
+contracts/config/saigon-nft.json
+contracts/verification/
+
+# Local NFT working renders and chroma masters are kept outside deployment.
+assets/nft/previews/
+assets/nft/renders/mine-legend-level-100-v1.png
+assets/nft/renders/mine-legend-level-100-v2.png
+assets/nft/renders/mine-legend-level-100-contrast-v2.png
+assets/nft/layers/**/*-chroma-*.png
+assets/nft/layers/weapons/*-overlay-v1.png
