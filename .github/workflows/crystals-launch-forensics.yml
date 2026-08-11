@@ -1,0 +1,407 @@
+name: CRYSTALS launch forensics
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Fetch and analyze Ronin launch swaps
+        shell: bash
+        run: |
+          cat > /tmp/analyze.py <<'PY'
+          import csv
+          import json
+          import math
+          import os
+          import time
+          import urllib.parse
+          import urllib.request
+          from collections import defaultdict, deque
+          from concurrent.futures import ThreadPoolExecutor, as_completed
+          from datetime import datetime, timezone
+
+          API = 'https://api.dexpaprika.com'
+          RPC = 'https://api.roninchain.com/rpc'
+          FROM_TS = int(datetime(2026, 8, 8, 0, 0, tzinfo=timezone.utc).timestamp())
+          TO_TS = int(datetime(2026, 8, 9, 12, 0, tzinfo=timezone.utc).timestamp())
+
+          CRYSTALS = '0x2d2034e55900d285dc05d30a0c14846d7a30285b'
+          MATT = '0xa5450417bdca0bdfb058ffe41205400ffda1174d'
+          USDC = '0x0b7007c13325c48911f73a2dad5fa5dcbf808adc'
+          WRON = '0xe514d9deb7966c8be0ca922de8a064264ea6bcd4'
+          OWNER_WALLETS = {
+              '0xf79913cb83cc9cabd95d0ba9250103fbb939f984',
+              '0x1dab596d0121c250a24b00137e84170fa6874be6',
+          }
+          POOLS = {
+              'CRYSTALS_MATT': '0x0cbe4dc4087307ef3ce4edcfa7ee85eab7c61255',
+              'CRYSTALS_USDC_A': '0x93df886238beeaa9cad27c12a9465ad5183d10f3',
+              'CRYSTALS_USDC_B': '0xc0206b9a7822591a9355af520590d39f2d526290',
+              'MATT_WRON': '0xa517e05e96728e80284f2ae157ddf309449d7ce8',
+              'MATT_USDC': '0x415c997ce1adcfea7b3ac8949ff4220749ad7dc6',
+          }
+          CRYSTAL_POOL_NAMES = {'CRYSTALS_MATT', 'CRYSTALS_USDC_A', 'CRYSTALS_USDC_B'}
+          TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
+
+          def get_json(url, retries=5):
+              last = None
+              for attempt in range(retries):
+                  try:
+                      req = urllib.request.Request(url, headers={'User-Agent': 'MATT-MINE-forensics/1.0', 'Accept': 'application/json'})
+                      with urllib.request.urlopen(req, timeout=30) as r:
+                          return json.loads(r.read().decode())
+                  except Exception as e:
+                      last = e
+                      time.sleep(0.5 * (attempt + 1))
+              raise last
+
+          def fetch_pool(name, address):
+              rows = []
+              seen = set()
+              page = 0
+              switched = False
+              while page < 100:
+                  params = urllib.parse.urlencode({'limit': 100, 'page': page, 'from': FROM_TS, 'to': TO_TS})
+                  url = f'{API}/networks/ronin/pools/{address}/transactions?{params}'
+                  try:
+                      data = get_json(url)
+                  except Exception as e:
+                      if page == 0 and not switched:
+                          page = 1
+                          switched = True
+                          continue
+                      print(f'WARN pool {name} page {page}: {e}', flush=True)
+                      break
+                  txs = data.get('transactions') or []
+                  new = 0
+                  for tx in txs:
+                      key = (tx.get('id'), tx.get('log_index'), tx.get('pool_id'))
+                      if key not in seen:
+                          seen.add(key)
+                          tx = dict(tx)
+                          tx['_pool_name'] = name
+                          rows.append(tx)
+                          new += 1
+                  info = data.get('page_info') or {}
+                  print(f'POOL {name} page={page} rows={len(txs)} new={new} info={info}', flush=True)
+                  if not txs or new == 0:
+                      break
+                  total_pages = info.get('total_pages')
+                  current = info.get('page')
+                  if isinstance(total_pages, int) and isinstance(current, int):
+                      # Handle either zero- or one-based page metadata.
+                      if current >= total_pages - 1 and page == 0:
+                          break
+                      if current >= total_pages and page >= 1:
+                          break
+                  if len(txs) < 100:
+                      break
+                  page += 1
+              rows.sort(key=lambda x: (x.get('created_at') or '', x.get('id') or '', x.get('log_index') or 0))
+              return rows
+
+          all_rows = []
+          pool_rows = {}
+          for name, addr in POOLS.items():
+              rows = fetch_pool(name, addr)
+              pool_rows[name] = rows
+              all_rows.extend(rows)
+              print(f'FETCHED {name}: {len(rows)}', flush=True)
+
+          by_hash = defaultdict(list)
+          for row in all_rows:
+              by_hash[(row.get('id') or '').lower()].append(row)
+
+          crystal_hashes = sorted({(r.get('id') or '').lower() for name in CRYSTAL_POOL_NAMES for r in pool_rows.get(name, []) if r.get('id')})
+          print(f'Unique CRYSTALS-related tx hashes: {len(crystal_hashes)}', flush=True)
+
+          def rpc_one(txhash):
+              out = {'hash': txhash, 'tx': None, 'receipt': None, 'error': None}
+              for attempt in range(5):
+                  try:
+                      payload = [
+                          {'jsonrpc':'2.0','id':1,'method':'eth_getTransactionByHash','params':[txhash]},
+                          {'jsonrpc':'2.0','id':2,'method':'eth_getTransactionReceipt','params':[txhash]},
+                      ]
+                      body = json.dumps(payload).encode()
+                      req = urllib.request.Request(RPC, data=body, headers={'Content-Type':'application/json','User-Agent':'MATT-MINE-forensics/1.0'}, method='POST')
+                      with urllib.request.urlopen(req, timeout=30) as r:
+                          data = json.loads(r.read().decode())
+                      if isinstance(data, list):
+                          for item in data:
+                              if item.get('id') == 1: out['tx'] = item.get('result')
+                              if item.get('id') == 2: out['receipt'] = item.get('result')
+                      else:
+                          raise RuntimeError(f'non-batch RPC response: {data}')
+                      if out['tx'] is not None:
+                          return out
+                  except Exception as e:
+                      out['error'] = str(e)
+                      time.sleep(0.25 * (attempt + 1))
+              return out
+
+          rpc_data = {}
+          with ThreadPoolExecutor(max_workers=8) as ex:
+              futures = {ex.submit(rpc_one, h): h for h in crystal_hashes}
+              done = 0
+              for f in as_completed(futures):
+                  d = f.result()
+                  rpc_data[d['hash']] = d
+                  done += 1
+                  if done % 50 == 0 or done == len(crystal_hashes):
+                      print(f'RPC resolved {done}/{len(crystal_hashes)}', flush=True)
+
+          def raw_signed(row, idx):
+              v = row.get(f'amount_{idx}')
+              if v is None: return 0
+              try: return int(v)
+              except Exception: return int(float(v))
+
+          def token_side(row, token):
+              token = token.lower()
+              if (row.get('token_0') or '').lower() == token:
+                  return 0, raw_signed(row, 0), float(row.get('volume_0') or 0), float(row.get('price_0_usd') or 0)
+              if (row.get('token_1') or '').lower() == token:
+                  return 1, raw_signed(row, 1), float(row.get('volume_1') or 0), float(row.get('price_1_usd') or 0)
+              return None, 0, 0.0, 0.0
+
+          def signed_volume(row, token):
+              idx, raw, vol, price = token_side(row, token)
+              if idx is None: return 0.0
+              return vol if raw > 0 else (-vol if raw < 0 else 0.0)
+
+          def token_price(row, token):
+              return token_side(row, token)[3]
+
+          def receipt_wallet_delta(receipt, wallet, token, decimals):
+              if not receipt or not wallet: return 0.0
+              wallet = wallet.lower()
+              token = token.lower()
+              total = 0
+              for log in receipt.get('logs') or []:
+                  if (log.get('address') or '').lower() != token: continue
+                  topics = log.get('topics') or []
+                  if len(topics) < 3 or (topics[0] or '').lower() != TRANSFER_TOPIC: continue
+                  frm = '0x' + topics[1][-40:].lower()
+                  to = '0x' + topics[2][-40:].lower()
+                  try: val = int(log.get('data') or '0x0', 16) / (10 ** decimals)
+                  except Exception: continue
+                  if to == wallet: total += val
+                  if frm == wallet: total -= val
+              return total
+
+          events = []
+          for h in crystal_hashes:
+              rows = by_hash.get(h, [])
+              crystal_rows = [r for r in rows if r.get('_pool_name') in CRYSTAL_POOL_NAMES]
+              if not crystal_rows: continue
+              rpcd = rpc_data.get(h) or {}
+              tx = rpcd.get('tx') or {}
+              receipt = rpcd.get('receipt') or {}
+              wallet = (tx.get('from') or '').lower()
+              if not wallet:
+                  wallet = 'UNRESOLVED'
+
+              pool_crys = sum(signed_volume(r, CRYSTALS) for r in crystal_rows)
+              user_crys_delta = -pool_crys
+              if abs(user_crys_delta) < 1e-9:
+                  continue
+
+              # Weighted CRYSTALS USD price from the actual Crystal pool legs.
+              px_num = 0.0
+              px_den = 0.0
+              for r in crystal_rows:
+                  q = abs(signed_volume(r, CRYSTALS))
+                  p = token_price(r, CRYSTALS)
+                  if q > 0 and p > 0:
+                      px_num += q * p
+                      px_den += q
+              crystal_px_usd = px_num / px_den if px_den else 0.0
+
+              usdc_wallet_delta = receipt_wallet_delta(receipt, wallet, USDC, 6) if wallet != 'UNRESOLVED' else 0.0
+              wron_wallet_delta = receipt_wallet_delta(receipt, wallet, WRON, 18) if wallet != 'UNRESOLVED' else 0.0
+
+              direct_usdc_out = 0.0
+              route_usdc_out = 0.0
+              route_wron_out = 0.0
+              wron_px = 0.0
+              for r in rows:
+                  pname = r.get('_pool_name')
+                  if pname in {'CRYSTALS_USDC_A','CRYSTALS_USDC_B'}:
+                      su = signed_volume(r, USDC)
+                      if su < 0: direct_usdc_out += -su
+                  if pname == 'MATT_USDC':
+                      sm = signed_volume(r, MATT)
+                      su = signed_volume(r, USDC)
+                      if sm > 0 and su < 0: route_usdc_out += -su
+                  if pname == 'MATT_WRON':
+                      sm = signed_volume(r, MATT)
+                      sw = signed_volume(r, WRON)
+                      if sm > 0 and sw < 0:
+                          route_wron_out += -sw
+                          p = token_price(r, WRON)
+                          if p > 0: wron_px = p
+
+              # Prefer output actually delivered to the outer wallet when visible.
+              usdc_out = max(usdc_wallet_delta, direct_usdc_out, route_usdc_out, 0.0)
+              wron_out = max(wron_wallet_delta, route_wron_out, 0.0)
+              direction = 'BUY' if user_crys_delta > 0 else 'SELL'
+              exit_asset = ''
+              exit_amount = 0.0
+              exit_usd = 0.0
+              if direction == 'SELL':
+                  if usdc_out > 0.000001:
+                      exit_asset = 'USDC'
+                      exit_amount = usdc_out
+                      exit_usd = usdc_out
+                  elif wron_out > 0.000000001:
+                      exit_asset = 'RON/WRON'
+                      exit_amount = wron_out
+                      if wron_px <= 0:
+                          # Fall back to the USD quote embedded in any WRON pool row.
+                          for r in rows:
+                              p = token_price(r, WRON)
+                              if p > 0:
+                                  wron_px = p
+                                  break
+                      exit_usd = wron_out * wron_px if wron_px > 0 else 0.0
+
+              # Approximate USD notional for buys/sells using the CRYSTALS execution price.
+              crystal_qty = abs(user_crys_delta)
+              notional_usd = crystal_qty * crystal_px_usd
+              created = min((r.get('created_at') or '9999' for r in crystal_rows), default='')
+              events.append({
+                  'created_at': created,
+                  'tx_hash': h,
+                  'wallet': wallet,
+                  'direction': direction,
+                  'crystals': crystal_qty,
+                  'crystal_price_usd': crystal_px_usd,
+                  'notional_usd': notional_usd,
+                  'exit_asset': exit_asset,
+                  'exit_amount': exit_amount,
+                  'exit_usd': exit_usd,
+                  'usdc_wallet_delta': usdc_wallet_delta,
+                  'wron_wallet_delta': wron_wallet_delta,
+                  'direct_usdc_out': direct_usdc_out,
+                  'route_usdc_out': route_usdc_out,
+                  'route_wron_out': route_wron_out,
+                  'owner_wallet': wallet in OWNER_WALLETS,
+                  'rpc_error': rpcd.get('error') or '',
+              })
+
+          events.sort(key=lambda e: (e['created_at'], e['tx_hash']))
+
+          # FIFO cost basis from observed DEX CRYSTALS buys in this launch window.
+          lots = defaultdict(deque)
+          for e in events:
+              w = e['wallet']
+              if e['direction'] == 'BUY':
+                  unit = e['crystal_price_usd']
+                  lots[w].append([e['crystals'], unit, e['tx_hash'], e['created_at']])
+                  e['fifo_cost_usd'] = 0.0
+                  e['cost_basis_coverage'] = 0.0
+                  e['realized_profit_usd'] = 0.0
+                  continue
+              qty = e['crystals']
+              remaining = qty
+              cost = 0.0
+              matched = 0.0
+              while remaining > 1e-9 and lots[w]:
+                  lot = lots[w][0]
+                  take = min(remaining, lot[0])
+                  cost += take * lot[1]
+                  matched += take
+                  lot[0] -= take
+                  remaining -= take
+                  if lot[0] <= 1e-9: lots[w].popleft()
+              e['fifo_cost_usd'] = cost
+              e['cost_basis_coverage'] = matched / qty if qty else 0.0
+              e['unmatched_crystals'] = max(0.0, remaining)
+              e['realized_profit_usd'] = (e['exit_usd'] - cost) if e['exit_asset'] and matched > 0 else None
+
+          cashouts = [e for e in events if e['direction'] == 'SELL' and e['exit_asset']]
+          cashouts.sort(key=lambda e: e['exit_usd'], reverse=True)
+
+          summaries = defaultdict(lambda: {
+              'cashout_tx_count': 0, 'crystals_sold': 0.0, 'usdc_received': 0.0,
+              'wron_received': 0.0, 'exit_usd': 0.0, 'fifo_cost_usd': 0.0,
+              'matched_crystals': 0.0, 'total_crystals': 0.0, 'profit_known_usd': 0.0,
+              'profit_known_tx_count': 0, 'tx_hashes': []
+          })
+          for e in cashouts:
+              if e['owner_wallet']: continue
+              s = summaries[e['wallet']]
+              s['cashout_tx_count'] += 1
+              s['crystals_sold'] += e['crystals']
+              if e['exit_asset'] == 'USDC': s['usdc_received'] += e['exit_amount']
+              else: s['wron_received'] += e['exit_amount']
+              s['exit_usd'] += e['exit_usd']
+              s['fifo_cost_usd'] += e.get('fifo_cost_usd') or 0.0
+              cov = e.get('cost_basis_coverage') or 0.0
+              s['matched_crystals'] += e['crystals'] * cov
+              s['total_crystals'] += e['crystals']
+              if e.get('realized_profit_usd') is not None:
+                  s['profit_known_usd'] += e['realized_profit_usd']
+                  s['profit_known_tx_count'] += 1
+              s['tx_hashes'].append(e['tx_hash'])
+
+          summary_rows = []
+          for wallet, s in summaries.items():
+              coverage = s['matched_crystals'] / s['total_crystals'] if s['total_crystals'] else 0.0
+              row = {'wallet': wallet, **s, 'cost_basis_coverage': coverage}
+              summary_rows.append(row)
+          summary_rows.sort(key=lambda r: r['exit_usd'], reverse=True)
+
+          report = {
+              'window_utc': {'from': datetime.fromtimestamp(FROM_TS, timezone.utc).isoformat(), 'to': datetime.fromtimestamp(TO_TS, timezone.utc).isoformat()},
+              'pools': {k: {'address': v, 'rows': len(pool_rows.get(k, []))} for k,v in POOLS.items()},
+              'crystal_related_hashes': len(crystal_hashes),
+              'rpc_resolved': sum(1 for h in crystal_hashes if (rpc_data.get(h) or {}).get('tx')),
+              'owner_wallets': sorted(OWNER_WALLETS),
+              'cashout_events': cashouts,
+              'wallet_summaries': summary_rows,
+              'all_crystal_events': events,
+          }
+          with open('/tmp/crystals-forensics.json','w') as f:
+              json.dump(report, f, indent=2)
+
+          fields = ['created_at','wallet','tx_hash','crystals','exit_asset','exit_amount','exit_usd','fifo_cost_usd','cost_basis_coverage','realized_profit_usd','owner_wallet']
+          with open('/tmp/crystals-cashouts.csv','w',newline='') as f:
+              w = csv.DictWriter(f, fieldnames=fields, extrasaction='ignore')
+              w.writeheader(); w.writerows(cashouts)
+
+          sum_fields = ['wallet','cashout_tx_count','crystals_sold','usdc_received','wron_received','exit_usd','fifo_cost_usd','cost_basis_coverage','profit_known_usd','profit_known_tx_count','tx_hashes']
+          with open('/tmp/crystals-wallet-summary.csv','w',newline='') as f:
+              w = csv.DictWriter(f, fieldnames=sum_fields, extrasaction='ignore')
+              w.writeheader()
+              for row in summary_rows:
+                  rr = dict(row); rr['tx_hashes'] = '|'.join(rr['tx_hashes']); w.writerow(rr)
+
+          print('\n=== TOP NON-OWNER CASHOUT WALLETS ===')
+          for r in summary_rows[:30]:
+              print(json.dumps(r, separators=(',',':')))
+          print('\n=== TOP NON-OWNER CASHOUT TRANSACTIONS ===')
+          for e in [x for x in cashouts if not x['owner_wallet']][:40]:
+              slim = {k:e.get(k) for k in fields}
+              print(json.dumps(slim, separators=(',',':')))
+          PY
+          python /tmp/analyze.py
+      - name: Upload forensic report
+        uses: actions/upload-artifact@v4
+        with:
+          name: crystals-launch-forensics
+          path: |
+            /tmp/crystals-forensics.json
+            /tmp/crystals-cashouts.csv
+            /tmp/crystals-wallet-summary.csv
+          if-no-files-found: error
+          retention-days: 1
