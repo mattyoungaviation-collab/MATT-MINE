@@ -20,6 +20,15 @@ const EQUIPMENT_ABI = parseAbi([
 ]);
 const ITEM_TYPES = Object.freeze(['Weapon', 'Backpack', 'Helmet', 'Armor']);
 const RARITIES = Object.freeze(['Common', 'Uncommon', 'Rare', 'Mythic', 'Legendary']);
+const MARKET_IMAGE_SIZE = 960;
+const MARKET_IMAGE_MAX_BYTES = 1_000_000;
+const MARKET_PNG_OPTIONS = Object.freeze({
+  compressionLevel: 9,
+  palette: true,
+  quality: 100,
+  colours: 256,
+  effort: 10
+});
 const EVOLUTION_NAMES = Object.freeze([
   'Rookie Miner',
   'Apprentice Miner',
@@ -94,14 +103,7 @@ export class NftMetadataService {
         trait('Armor State', profile.equipped.armor
           ? profile.gameplay.armorEffective ? 'Active' : 'Damaged'
           : 'None')
-      ],
-      properties: {
-        chainId: this.chainId,
-        contract: this.addresses.miner,
-        owner: profile.owner,
-        equipped: profile.equipped,
-        renderRevision: revision
-      }
+      ]
     };
   }
 
@@ -145,14 +147,7 @@ export class NftMetadataService {
         ...(item.itemType === 3 ? [numericTrait('Maximum Health', item.armorHp)] : []),
         ...(item.itemType === 3 ? [trait('Armor State', item.damaged ? 'Damaged' : 'Active')] : []),
         trait('Equipped', item.equippedToMiner ? `Miner #${item.equippedToMiner}` : 'No')
-      ],
-      properties: {
-        chainId: this.chainId,
-        contract: this.addresses.equipment,
-        owner: item.owner,
-        definitionId: item.definitionId,
-        equippedToMiner: item.equippedToMiner
-      }
+      ]
     };
   }
 
@@ -257,10 +252,6 @@ export class ViemNftChainReader {
 
 async function renderPlanToPng(plan, root) {
   const basePath = localAssetPath(root, plan.base.image);
-  const base = await sharp(basePath)
-    .resize(plan.canvas.width, plan.canvas.height, { fit: 'fill', kernel: sharp.kernel.nearest })
-    .png()
-    .toBuffer();
   const composites = [];
   for (const layer of [...plan.underlays, ...plan.layers]) {
     composites.push(await transformedLayer(root, layer, plan.canvas));
@@ -272,8 +263,25 @@ async function renderPlanToPng(plan, root) {
       top: 0
     });
   }
-  if (!composites.length) return base;
-  return sharp(base).composite(composites).png({ compressionLevel: 9 }).toBuffer();
+  const composed = await sharp(basePath)
+    .resize(plan.canvas.width, plan.canvas.height, { fit: 'fill', kernel: sharp.kernel.nearest })
+    .composite(composites)
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const body = await sharp(composed.data, {
+    raw: {
+      width: composed.info.width,
+      height: composed.info.height,
+      channels: composed.info.channels
+    }
+  })
+    .resize(MARKET_IMAGE_SIZE, MARKET_IMAGE_SIZE, { fit: 'fill', kernel: sharp.kernel.nearest })
+    .png(MARKET_PNG_OPTIONS)
+    .toBuffer();
+  if (body.length > MARKET_IMAGE_MAX_BYTES) {
+    throw new Error(`Ronin Market NFT image exceeds ${MARKET_IMAGE_MAX_BYTES} bytes.`);
+  }
+  return body;
 }
 
 async function transformedLayer(root, layer, canvas) {
