@@ -1,0 +1,209 @@
+{
+  "schemaVersion": "matt-mine-nft-render-v1",
+  "canvas": {
+    "width": 1254,
+    "height": 1254,
+    "format": "png",
+    "coordinateOrigin": "top-left"
+  },
+  "publicBaseUrl": "/assets/nft",
+  "renderOrder": [
+    "backpack",
+    "baseEvolutionOrArmor",
+    "backpackFront",
+    "helmet",
+    "weapon",
+    "damagedArmorEffect"
+  ],
+  "rarities": {
+    "0": "common",
+    "1": "uncommon",
+    "2": "rare",
+    "3": "mythic",
+    "4": "legendary"
+  },
+  "baseEvolutions": {
+    "rookie-miner": {
+      "minimumLevel": 1,
+      "image": "renders/rookie-miner-master-v1.png"
+    },
+    "apprentice-miner": {
+      "minimumLevel": 10,
+      "image": "renders/apprentice-miner-level-10-v1.png"
+    },
+    "crystal-hunter": {
+      "minimumLevel": 25,
+      "image": "renders/crystal-hunter-level-25-v1.png"
+    },
+    "veteran-miner": {
+      "minimumLevel": 35,
+      "image": "renders/veteran-miner-level-35-v1.png"
+    },
+    "vault-raider": {
+      "minimumLevel": 50,
+      "image": "renders/vault-raider-level-50-v1.png"
+    },
+    "elite-miner": {
+      "minimumLevel": 75,
+      "image": "renders/elite-miner-level-75-v1.png"
+    },
+    "mine-legend": {
+      "minimumLevel": 100,
+      "image": "renders/mine-legend-level-100-white-gold-v3.png"
+    }
+  },
+  "starterEquipment": {
+    "weapon": {
+      "name": "Starter Pickaxe",
+      "nft": false,
+      "image": "layers/weapons/starter-pickaxe-held-overlay-v2.png",
+      "transform": {
+        "x": 60,
+        "y": 164,
+        "scale": 0.8158
+      }
+    }
+  },
+  "equipmentDefinitions": {
+    "101": {
+      "slot": "weapon",
+      "rarity": 0,
+      "name": "Riveted Iron Pick",
+      "image": "layers/weapons/common-riveted-iron-pick-held-overlay-v2.png",
+      "cosmeticOnly": true,
+      "transform": { "x": 104, "y": 288, "scale": 0.727 }
+    },
+    "102": {
+      "slot": "weapon",
+      "rarity": 1,
+      "name": "Coppercoil Pick",
+      "image": "layers/weapons/uncommon-coppercoil-pick-held-overlay-v2.png",
+      "cosmeticOnly": true,
+      "transform": { "x": 115, "y": 295, "scale": 0.725 }
+    },
+    "103": {
+      "slot": "weapon",
+      "rarity": 2,
+      "name": "Crystal Fang Pick",
+      "image": "layers/weapons/rare-crystal-fang-pick-held-overlay-v2.png",
+      "cosmeticOnly": true,
+      "transform": { "x": 153, "y": 308, "scale": 0.7114 }
+    },
+    "104": {
+      "slot": "weapon",
+      "rarity": 3,
+      "name": "Voidcore Excavator",
+      "image": "layers/weapons/mythic-voidcore-excavator-held-overlay-v2.png",
+      "cosmeticOnly": true,
+      "transform": { "x": 119, "y": 303, "scale": 0.7158 }
+    },
+    "105": {
+      "slot": "weapon",
+      "rarity": 4,
+      "name": "Mineheart Sunforge Pick",
+      "image": "layers/weapons/legendary-mineheart-sunforge-pick-held-overlay-v2.png",
+      "cosmeticOnly": true,
+      "transform": { "x": 89, "y": 288, "scale": 0.7652 }
+    },
+    "201": {
+      "slot": "backpack",
+      "rarity": 0,
+      "name": "Crystal Hauler",
+      "image": "layers/backpacks/crystal-hauler-overlay-v1.png",
+      "frontImage": "layers/backpacks/crystal-hauler-front-overlay-v1.png",
+      "carryMultiplier": 2,
+      "destroyOnDeath": true,
+      "transform": { "x": 120, "y": 55, "scale": 0.793 },
+      "frontTransform": { "x": 184, "y": 107, "scale": 0.685 }
+    },
+    "301": {
+      "slot": "helmet",
+      "rarity": 0,
+      "name": "Riveted Pit Cap",
+      "image": "layers/helmets/common-riveted-pit-cap-overlay-v1.png",
+      "cosmeticOnly": true,
+      "transform": { "x": 192, "y": 9, "scale": 0.674 }
+    },
+    "302": {
+      "slot": "helmet",
+      "rarity": 1,
+      "name": "Coppercoil Surveyor Cap",
+      "image": "layers/helmets/uncommon-coppercoil-surveyor-cap-overlay-v1.png",
+      "cosmeticOnly": true,
+      "transform": { "x": 271, "y": 1, "scale": 0.549 }
+    },
+    "303": {
+      "slot": "helmet",
+      "rarity": 2,
+      "name": "Crystal Surveyor Helm",
+      "image": "layers/helmets/rare-crystal-surveyor-helm-overlay-v1.png",
+      "cosmeticOnly": true,
+      "transform": { "x": 235, "y": -88, "scale": 0.617 }
+    },
+    "304": {
+      "slot": "helmet",
+      "rarity": 3,
+      "name": "Voidglass Deepseer",
+      "image": "layers/helmets/mythic-voidglass-deepseer-overlay-v1.png",
+      "cosmeticOnly": true,
+      "transform": { "x": 191, "y": 13, "scale": 0.688 }
+    },
+    "305": {
+      "slot": "helmet",
+      "rarity": 4,
+      "name": "Mineheart Sunforge Helm",
+      "image": "layers/helmets/legendary-mineheart-sunforge-helm-overlay-v1.png",
+      "cosmeticOnly": true,
+      "transform": { "x": 222, "y": -18, "scale": 0.619 }
+    },
+    "401": {
+      "slot": "armor",
+      "rarity": 0,
+      "name": "Reinforced Prospector",
+      "maximumHealth": 125,
+      "renderMode": "baseReplacement",
+      "image": "armor-bases/125hp-reinforced-prospector-v1.png"
+    },
+    "402": {
+      "slot": "armor",
+      "rarity": 1,
+      "name": "Copperguard Delver",
+      "maximumHealth": 150,
+      "renderMode": "baseReplacement",
+      "image": "armor-bases/150hp-copperguard-delver-v1.png"
+    },
+    "403": {
+      "slot": "armor",
+      "rarity": 2,
+      "name": "Crystalbreaker Plate",
+      "maximumHealth": 175,
+      "renderMode": "baseReplacement",
+      "image": "armor-bases/175hp-crystalbreaker-plate-v1.png"
+    },
+    "404": {
+      "slot": "armor",
+      "rarity": 3,
+      "name": "Voidvault Bulwark",
+      "maximumHealth": 195,
+      "renderMode": "baseReplacement",
+      "image": "armor-bases/195hp-voidvault-bulwark-v1.png"
+    },
+    "405": {
+      "slot": "armor",
+      "rarity": 4,
+      "name": "Mineheart Aegis",
+      "maximumHealth": 200,
+      "renderMode": "baseReplacement",
+      "image": "armor-bases/200hp-mineheart-aegis-v1.png",
+      "damagedImage": "armor-bases/200hp-mineheart-aegis-damaged-v1.png"
+    }
+  },
+  "damagedArmorEffect": {
+    "enabled": true,
+    "tint": "#ff3b30",
+    "maximumOpacity": 0.18,
+    "flashPeriodMilliseconds": 1200,
+    "armorProvidesPower": false,
+    "repairRequired": true
+  }
+}

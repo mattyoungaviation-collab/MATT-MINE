@@ -137,6 +137,30 @@ async function handleApiRequest({
     sendJson(response, 200, { ok: true, config: service.config() });
     return;
   }
+  const minerMetadataMatch = path.match(/^\/api\/nft\/miners\/(\d+)\.json$/);
+  if (method === 'GET' && minerMetadataMatch) {
+    sendPublicJson(response, 200, await nftService(service).minerMetadata(minerMetadataMatch[1]));
+    return;
+  }
+  const minerImageMatch = path.match(/^\/api\/nft\/miners\/(\d+)\/image\.png$/);
+  if (['GET', 'HEAD'].includes(method) && minerImageMatch) {
+    const image = await nftService(service).minerImage(minerImageMatch[1]);
+    sendPublicImage(request, response, image);
+    return;
+  }
+  const equipmentMetadataMatch = path.match(/^\/api\/nft\/equipment\/(\d+)\.json$/);
+  if (method === 'GET' && equipmentMetadataMatch) {
+    sendPublicJson(response, 200, await nftService(service).equipmentMetadata(equipmentMetadataMatch[1]));
+    return;
+  }
+  if (method === 'GET' && path === '/api/nft/contracts/miners.json') {
+    sendPublicJson(response, 200, nftService(service).minerContractMetadata());
+    return;
+  }
+  if (method === 'GET' && path === '/api/nft/contracts/equipment.json') {
+    sendPublicJson(response, 200, nftService(service).equipmentContractMetadata());
+    return;
+  }
   if (method === 'GET' && path === '/api/payments/public-status') {
     const status = await service.publicPaymentStatus();
     sendJson(response, 200, { ok: true, status });
@@ -757,6 +781,36 @@ function bearerToken(request) {
   const authorization = request.headers.authorization;
   assertApi(typeof authorization === 'string' && authorization.startsWith('Bearer '), 401, 'authorization_required', 'A wallet session is required.');
   return authorization.slice('Bearer '.length);
+}
+
+function nftService(service) {
+  if (!service.nftMetadataService) {
+    throw new ApiError(503, 'nft_metadata_disabled', 'NFT metadata is not enabled on this server.');
+  }
+  return service.nftMetadataService;
+}
+
+function sendPublicJson(response, status, body) {
+  response.writeHead(status, {
+    'content-type': 'application/json; charset=utf-8',
+    'cache-control': 'public, max-age=30, s-maxage=30, stale-while-revalidate=300'
+  });
+  response.end(JSON.stringify(body));
+}
+
+function sendPublicImage(request, response, image) {
+  if (request.headers['if-none-match'] === image.etag) {
+    response.writeHead(304, { etag: image.etag, 'cache-control': 'public, max-age=300' });
+    response.end();
+    return;
+  }
+  response.writeHead(200, {
+    'content-type': image.contentType,
+    'content-length': image.body.length,
+    'cache-control': 'public, max-age=300, stale-while-revalidate=3600',
+    etag: image.etag
+  });
+  response.end(request.method === 'HEAD' ? undefined : image.body);
 }
 
 async function readJson(request, maxBytes) {

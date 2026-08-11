@@ -73,12 +73,26 @@ export default defineConfig({
       chainId: 2020,
       url: process.env.RONIN_RPC_URL || "https://api.roninchain.com/rpc",
       accounts: []
+    },
+    saigon: {
+      type: "http",
+      chainType: "l1",
+      chainId: 202601,
+      url: process.env.SAIGON_RPC_URL || "https://saigon-testnet.roninchain.com/rpc",
+      accounts: [configVariable("NUGG_DEPLOYER_PRIVATE_KEY")]
+    },
+    saigonReadOnly: {
+      type: "http",
+      chainType: "l1",
+      chainId: 202601,
+      url: process.env.SAIGON_RPC_URL || "https://saigon-testnet.roninchain.com/rpc",
+      accounts: []
     }
   },
   verify: {
     sourcify: {
       enabled: true,
-      apiUrl: "https://sourcify.dev/server"
+      apiUrl: "https://sourcify.roninchain.com/server"
     }
   }
 });

@@ -2,6 +2,8 @@
 
 This directory contains the non-upgradeable Ronin Mainnet contracts for the MATT Mine pass, paid runs, swaps, and weekly claims.
 
+The namespaced `src/nft` directory additionally contains the paused-by-default MATT Mine NFT v1 suite for Miners, Equipment, loadouts, chests, run settlement, Crystal redemption, and a dedicated VRF adapter. Its guarded deployment procedure is documented in `docs/NFT_V1_DEPLOYMENT.md`.
+
 No CREATE2 factory, vanity salt, proxy, burn, or replacement MATT token is used. Every deployment is a normal contract creation from a temporary low-balance deployer and every source is submitted to the current Sourcify v2 service for Ronin Mainnet.
 
 ## Contracts

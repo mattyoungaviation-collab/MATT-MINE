@@ -1,0 +1,45 @@
+{
+  "releaseId": "matt-mine-nft-v1",
+  "chainId": 2020,
+  "protocol": {
+    "mattToken": "REPLACE_WITH_MATT_TOKEN_ADDRESS",
+    "crystalToken": "REPLACE_WITH_CRYSTAL_TOKEN_ADDRESS",
+    "vrfCoordinator": "REPLACE_WITH_VRF_COORDINATOR_ADDRESS",
+    "vrfSubscriptionId": "44587871477121098669588994745676805184143715799081698934925948057858200430032",
+    "vrfKeyHash": "REPLACE_WITH_VRF_KEY_HASH"
+  },
+  "roles": {
+    "contractAdmin": "0xF79913cB83Cc9CABD95D0ba9250103fbb939f984",
+    "emergencyPauser": "0x57Dc8DB3a263506a0344eC15B4C623EBb8E589F4",
+    "gameOperator": "0x112C8a89bfAb3f19D7ceADf7433Fd8D253cFe4D3",
+    "gameSigner": "0x61FC35192964Fa4b50D915261419e9D2Ba369708",
+    "redemptionSigner": "0xecc7de9071F271183fE31fF8B1246FfD8C751d0e"
+  },
+  "treasury": {
+    "vault": "0xBacE355D23d378a6E1adD986E53a18Dd12E6EeAc"
+  },
+  "metadata": {
+    "minerBaseUri": "https://matt-mine.onrender.com/api/nft/miners/",
+    "minerContractUri": "https://matt-mine.onrender.com/api/nft/contracts/miners.json",
+    "equipmentBaseUri": "https://matt-mine.onrender.com/api/nft/equipment/",
+    "equipmentContractUri": "https://matt-mine.onrender.com/api/nft/contracts/equipment.json"
+  },
+  "economy": {
+    "repairPriceMattWei": "0",
+    "weaponChestPriceMattWei": "0",
+    "helmetChestPriceMattWei": "0",
+    "commonArmorChestPriceMattWei": "0",
+    "rareArmorChestPriceMattWei": "0",
+    "mythicArmorChestPriceMattWei": "0",
+    "backpackPriceMattWei": "0",
+    "backpackDefinitionId": 201,
+    "minimumCrystalWithdrawalWei": "1000000000000000000000000",
+    "maximumDailyCrystalWithdrawalWei": "3000000000000000000000000"
+  },
+  "vrf": {
+    "requestConfirmations": 3,
+    "coordinatorCallbackGasLimit": 1400000,
+    "consumerCallbackGasLimit": 1000000,
+    "requestTimeoutSeconds": 86400
+  }
+}
