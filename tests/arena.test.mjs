@@ -42,6 +42,7 @@ import {
 } from '../server/arena-service.js';
 import { MemoryDatabase } from '../server/database.js';
 import { MattMineService } from '../server/service.js';
+import { defaultProfile } from '../src/game/storage.js';
 
 const DAY = '2026-07-25';
 const NEXT_DAY = '2026-07-26';
@@ -270,6 +271,27 @@ test('Daily Arena replay uses the exact Competition Studio character snapshot', 
     }
   }), []);
   assert.equal(replayed.maximumHealth, 165);
+});
+
+test('NFT replay uses equipped armor health without adding legacy profile health', () => {
+  const replayed = replayArenaTranscript(buildArenaChallenge('c'.repeat(64), {
+    playerMaxHealth: 175
+  }), [], {
+    mode: 'practice',
+    profile: {
+      ...defaultProfile(),
+      meta: {
+        ...defaultProfile().meta,
+        health: 10
+      }
+    },
+    nftRun: {
+      minerId: 1,
+      runId: 42
+    }
+  });
+
+  assert.equal(replayed.maximumHealth, 175);
 });
 
 test('input-only replay deterministically derives a knockout without browser outcomes', () => {
