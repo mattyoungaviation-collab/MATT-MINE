@@ -12,7 +12,8 @@ import {
   equippedTokenForItem,
   formatTokenUnits,
   splitAbiWords,
-  uintWord
+  uintWord,
+  waitForTokenIdIncrease
 } from '../src/nftLab.js';
 import { validatedNftLabImageUrl, validatedNftLabMetadataUrl } from '../server/http.js';
 
@@ -52,6 +53,18 @@ describe('Saigon NFT Lab ABI helpers', () => {
     ]);
     assert.equal(encodeCall(ABI_SELECTORS.openChest, uintWord(4)), `0x99ae54a9${'4'.padStart(64, '0')}`);
     assert.equal(encodeCall(ABI_SELECTORS.chestPrice, uintWord(3)), `0xdb79e06f${'3'.padStart(64, '0')}`);
+  });
+
+  it('waits for the equipment token minted by the randomness keeper', async () => {
+    const observed = [8n, 8n, 9n];
+    const delays = [];
+    const result = await waitForTokenIdIncrease(
+      async () => observed.shift(),
+      8n,
+      { attempts: 3, delayMs: 1, delay: async (milliseconds) => delays.push(milliseconds) }
+    );
+    assert.equal(result, 9n);
+    assert.deepEqual(delays, [1, 1]);
   });
 
   it('finds occupied single-item slots while allowing queued backpacks', () => {

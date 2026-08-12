@@ -32,6 +32,7 @@ import {
 } from '../server/external-verifiers.js';
 import { PaidCompetitionEligibilityPolicy } from '../server/eligibility.js';
 import { NftMetadataService } from '../server/nft-metadata-service.js';
+import { createSaigonChestKeeperFromEnvironment } from '../server/saigon-chest-keeper.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const packageMetadata = JSON.parse(
@@ -227,6 +228,8 @@ const nftMetadataService = nftMetadataEnabled
       }
     }).init()
   : null;
+const saigonChestKeeper = createSaigonChestKeeperFromEnvironment();
+if (saigonChestKeeper) await saigonChestKeeper.init();
 const service = new CompleteProductionMattMineService(database, {
   appVersion,
   buildCommit: process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || 'unknown',
@@ -277,6 +280,7 @@ server.listen(port, '0.0.0.0', () => {
   console.log(`Paid revive verifier: ${revivePaymentVerifier ? 'EXACT RON TRANSFER ENABLED' : 'disabled'}`);
   console.log(`Advertisement verifier: ${advertisementVerifier ? `SIGNED ${advertisementProvider}` : 'disabled'}`);
   console.log(`NFT metadata: ${nftMetadataService ? `ENABLED (chain ${nftMetadataService.chainId})` : 'disabled'}`);
+  console.log(`Saigon chest keeper: ${saigonChestKeeper ? 'ENABLED' : 'disabled'}`);
   console.log(`Server data: ${database.kind}${databaseUrl ? '' : ` (${dataFile})`}`);
   console.log(`Nugget economy data: ${nuggetEconomyStore.kind}${databaseUrl ? '' : ` (${nuggetEconomyFile})`}`);
 });
@@ -285,6 +289,7 @@ let closing = false;
 function closeServer() {
   if (closing) return;
   closing = true;
+  saigonChestKeeper?.close();
   if (process.env.NODE_ENV === 'test') {
     server.closeAllConnections?.();
     process.exit(0);
