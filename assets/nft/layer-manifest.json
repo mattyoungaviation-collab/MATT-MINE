@@ -111,6 +111,7 @@
       "name": "Crystal Hauler",
       "image": "layers/backpacks/crystal-hauler-overlay-v1.png",
       "frontImage": "layers/backpacks/crystal-hauler-front-overlay-v1.png",
+      "renderRear": false,
       "carryMultiplier": 2,
       "destroyOnDeath": true,
       "transform": { "x": 120, "y": 55, "scale": 0.793 },

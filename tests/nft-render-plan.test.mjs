@@ -30,9 +30,7 @@ describe('NFT render plan', function () {
     assert.equal(plan.base.source, 'equipped-armor');
     assert.equal(plan.base.definitionId, 403);
     assert.equal(plan.base.image, 'https://matt-mine.onrender.com/assets/nft/armor-bases/175hp-crystalbreaker-plate-v1.png');
-    assert.deepEqual(plan.underlays.map(({ slot, definitionId }) => ({ slot, definitionId })), [
-      { slot: 'backpack', definitionId: 201 }
-    ]);
+    assert.deepEqual(plan.underlays, []);
     assert.deepEqual(plan.layers.map(({ slot, definitionId }) => ({ slot, definitionId })), [
       { slot: 'backpack-front', definitionId: 201 },
       { slot: 'helmet', definitionId: 303 },
