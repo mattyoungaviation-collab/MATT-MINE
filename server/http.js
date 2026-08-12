@@ -428,6 +428,12 @@ async function handleApiRequest({
     sendJson(response, 201, { ok: true, run });
     return;
   }
+  if (method === 'POST' && path === '/api/runs/nft-practice/restart') {
+    await readJson(request, maxRequestBytes);
+    const run = await service.restartInterruptedNftPractice(bearerToken(request));
+    sendJson(response, 201, { ok: true, run });
+    return;
+  }
   if (method === 'POST' && path === '/api/runs/finish') {
     const body = await readJson(request, maxRequestBytes);
     const result = await service.finishRun(bearerToken(request), body);

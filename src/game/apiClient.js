@@ -241,6 +241,15 @@ export class MattMineApiClient {
     return response.run;
   }
 
+  async restartInterruptedNftPractice() {
+    const response = await this.request('/api/runs/nft-practice/restart', {
+      method: 'POST',
+      authenticated: true,
+      body: {}
+    });
+    return response.run;
+  }
+
   async finishRun(runId, runToken, result, competitiveCheckpoint = null) {
     return this.request('/api/runs/finish', {
       method: 'POST',

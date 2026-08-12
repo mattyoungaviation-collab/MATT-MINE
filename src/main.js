@@ -107,6 +107,7 @@ let pendingKeybindings = defaultKeybindings();
 let activeServerRun = null;
 let pendingRunFinalization = null;
 let runFinalizationBusy = false;
+let nftPracticeRecoveryBusy = false;
 let paymentStatus = null;
 let publicPaymentStatus = null;
 let walletBusy = false;
@@ -425,6 +426,7 @@ function updateMenu() {
     passActive
   });
   renderArenaMenuStatus();
+  renderInterruptedNftPractice();
   $('#weekly-run-button').hidden = serverPlayer?.expansion?.settings?.weeklyCompetitionEnabled !== true;
   $('#endless-run-button').hidden = serverPlayer?.expansion?.settings?.endlessEnabled !== true;
   $('#beta-run-button').hidden = serverPlayer?.expansion?.betaAvailable !== true;
@@ -435,6 +437,19 @@ function updateMenu() {
   if (connected && !liveDashboardTimer) {
     syncLiveDashboardPolling(document.querySelector('.screen.active')?.id || null);
   }
+}
+
+function renderInterruptedNftPractice() {
+  const panel = $('#interrupted-nft-practice');
+  const button = $('#resume-nft-practice-button');
+  const copy = $('#interrupted-nft-practice-copy');
+  if (!panel || !button || !copy) return;
+  const interrupted = serverPlayer?.interruptedNftPractice;
+  panel.hidden = !interrupted;
+  if (!interrupted) return;
+  copy.textContent = `Miner #${interrupted.minerId} is locked to an interrupted Practice run. Resume safely from Phase 1.`;
+  button.disabled = nftPracticeRecoveryBusy;
+  button.textContent = nftPracticeRecoveryBusy ? 'RESTORING MINERâ€¦' : 'RESUME MINER RUN';
 }
 
 function renderMineBriefings({ connected, freeAccess, passActive, remainingPassDays, paidCredits, paidRunsToday, paidRunPrice }) {
@@ -1284,7 +1299,7 @@ async function declinePracticeRewards() {
   }
 }
 
-async function startRunMode(mode) {
+async function startRunMode(mode, options = {}) {
   const useServer =
     mode === RUN_MODES.FREE ||
     (mode === RUN_MODES.PAID && serverConfig?.paidRunsEnabled === true) ||
@@ -1306,9 +1321,14 @@ async function startRunMode(mode) {
     let issuedRun = null;
     let issuedTranscript = null;
     try {
-      const run = await apiClient.startRun(mode);
+      const run = options.restartInterruptedNftPractice === true
+        ? await apiClient.restartInterruptedNftPractice()
+        : await apiClient.startRun(mode);
       issuedRun = run;
       activeServerRun = run;
+      if (serverPlayer && options.restartInterruptedNftPractice === true) {
+        serverPlayer.interruptedNftPractice = null;
+      }
       activeArenaTranscript = run.verification === 'fixed-step-input-replay'
         ? new ArenaTranscript(apiClient, run, {
             appendEvents: (...args) => apiClient.appendCompetitiveEvents(...args)
@@ -1390,6 +1410,18 @@ async function startRunMode(mode) {
     competitionSnapshot: mine?.slot?.snapshot || tuning?._competitionSnapshot
   });
   updateMenu();
+}
+
+async function resumeInterruptedNftPractice() {
+  if (nftPracticeRecoveryBusy || !serverPlayer?.interruptedNftPractice) return;
+  nftPracticeRecoveryBusy = true;
+  updateMenu();
+  try {
+    await startRunMode(RUN_MODES.PRACTICE, { restartInterruptedNftPractice: true });
+  } finally {
+    nftPracticeRecoveryBusy = false;
+    updateMenu();
+  }
 }
 
 async function purchasePaidRevive() {
@@ -1796,6 +1828,7 @@ mobileWalletConnectCancel.addEventListener('click', () => {
 $('#home-button').addEventListener('click', () => openLaunch(true));
 $('#free-run-button').addEventListener('click', openDailyMine);
 $('#practice-run-button').addEventListener('click', () => void startRunMode(RUN_MODES.PRACTICE));
+$('#resume-nft-practice-button').addEventListener('click', () => void resumeInterruptedNftPractice());
 $('#weekly-run-button').addEventListener('click', () => void startRunMode(RUN_MODES.WEEKLY));
 $('#endless-run-button').addEventListener('click', () => void startRunMode(RUN_MODES.ENDLESS));
 $('#beta-run-button').addEventListener('click', () => void startRunMode(RUN_MODES.BETA));

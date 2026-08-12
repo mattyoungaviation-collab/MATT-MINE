@@ -1569,3 +1569,39 @@ button,
 .competition-legacy-bridge {
   display: none !important;
 }
+
+.interrupted-nft-practice {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid #51e5ff;
+  border-radius: 12px;
+  background: linear-gradient(100deg, rgba(25, 93, 118, .34), rgba(8, 13, 20, .96));
+  box-shadow: 0 0 24px rgba(81, 229, 255, .09);
+}
+
+.interrupted-nft-practice[hidden] { display: none; }
+.interrupted-nft-practice span { display: grid; gap: 3px; }
+.interrupted-nft-practice strong { color: #fff; font: 1000 11px Inter, sans-serif; letter-spacing: .1em; }
+.interrupted-nft-practice small { color: #a7bac5; font: 700 10px/1.4 Inter, sans-serif; }
+.interrupted-nft-practice button {
+  min-height: 42px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 9px;
+  background: #51e5ff;
+  color: #061017;
+  font: 1000 10px Inter, sans-serif;
+  letter-spacing: .08em;
+  cursor: pointer;
+}
+
+.interrupted-nft-practice button:disabled { opacity: .6; cursor: wait; }
+
+@media (max-width: 700px) {
+  .interrupted-nft-practice { grid-template-columns: 1fr; }
+  .interrupted-nft-practice button { width: 100%; }
+}

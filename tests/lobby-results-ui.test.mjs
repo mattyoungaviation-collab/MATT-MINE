@@ -51,3 +51,16 @@ test('the Arena lobby exposes a signed-in recovery action for a stranded active 
   assert.match(apiSource, /\/api\/arena\/runs\/abandon-active/);
   assert.match(httpSource, /service\.abandonActiveArenaRun\(bearerToken\(request\)\)/);
 });
+
+test('the lobby exposes NFT Practice refresh recovery without reusing a lost run token', async () => {
+  const html = await readFile(`${root}index.html`, 'utf8');
+  const source = await readFile(`${root}src/main.js`, 'utf8');
+  const apiSource = await readFile(`${root}src/game/apiClient.js`, 'utf8');
+  const httpSource = await readFile(`${root}server/http.js`, 'utf8');
+
+  assert.match(html, /id="resume-nft-practice-button"/);
+  assert.match(source, /serverPlayer\?\.interruptedNftPractice/);
+  assert.match(source, /restartInterruptedNftPractice: true/);
+  assert.match(apiSource, /\/api\/runs\/nft-practice\/restart/);
+  assert.match(httpSource, /service\.restartInterruptedNftPractice\(bearerToken\(request\)\)/);
+});
