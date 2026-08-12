@@ -31,7 +31,12 @@ export function compileNftRenderPlan(profile, manifest, { publicOrigin = '' } = 
       : armor.definition.image
     : evolution.image;
 
-  const underlays = resolveOrderedLayers(UNDERLAY_ORDER, resolved, manifest, publicOrigin);
+  const underlays = resolveOrderedLayers(
+    UNDERLAY_ORDER,
+    resolved.filter(({ definition }) => definition.renderRear !== false),
+    manifest,
+    publicOrigin
+  );
   const backpackFront = resolveBackpackFront(resolved, manifest, publicOrigin);
   const starterWeapon = resolveStarterWeapon(resolved, manifest, publicOrigin);
   const overlays = [
