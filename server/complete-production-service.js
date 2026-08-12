@@ -40,6 +40,7 @@ import {
   reconcileLinkedAdminControls
 } from './admin-control-links.js';
 import { buildAdminReadiness } from './admin-readiness.js';
+import { SERVER_RUN_MODES } from './constants.js';
 
 const BETA_CAPABILITIES = Object.freeze([
   'jumpDepth', 'jumpRoom', 'triggerBoss', 'spawnBoss', 'setBossPhase',
@@ -339,9 +340,24 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
       this.advertisementVerifier?.publicStatus?.().configured === true;
     expansion.settings.weeklyCompetitionEnabled &&= Boolean(this.competitiveReplayValidator);
     expansion.settings.endlessEnabled &&= Boolean(this.competitiveReplayValidator);
+    const interruptedNftPractice = Object.values(initial.runs || {})
+      .filter((run) =>
+        run.address === player.address &&
+        run.mode === SERVER_RUN_MODES.PRACTICE &&
+        run.status === 'active' &&
+        run.expiresAt > timestamp &&
+        run.nftRun?.minerId
+      )
+      .sort((left, right) => Number(right.startedAt || 0) - Number(left.startedAt || 0))[0];
     return {
       ...player,
       expansion,
+      interruptedNftPractice: interruptedNftPractice ? {
+        runId: interruptedNftPractice.id,
+        minerId: Number(interruptedNftPractice.nftRun.minerId),
+        startedAt: Number(interruptedNftPractice.startedAt || 0),
+        expiresAt: Number(interruptedNftPractice.expiresAt || 0)
+      } : null,
       ...(player.nuggetEconomy ? { nuggetEconomy: {
         ...player.nuggetEconomy,
         pendingPracticeClaims: Object.values(wallet?.practiceClaims || {})
@@ -350,6 +366,59 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
           .map((claim) => structuredClone(claim))
       } } : {})
     };
+  }
+
+  async restartInterruptedNftPractice(token) {
+    assertApi(this.nftGameplayService, 503, 'nft_gameplay_disabled', 'NFT gameplay is not enabled.');
+    const session = await this.authenticate(token);
+    const timestamp = this.now();
+    const snapshot = await this.database.read();
+    const candidate = Object.values(snapshot.runs || {})
+      .filter((run) =>
+        run.address === session.address &&
+        run.mode === SERVER_RUN_MODES.PRACTICE &&
+        run.status === 'active' &&
+        run.expiresAt > timestamp &&
+        run.nftRun?.minerId
+      )
+      .sort((left, right) => Number(right.startedAt || 0) - Number(left.startedAt || 0))[0];
+    assertApi(candidate, 404, 'interrupted_nft_practice_missing', 'No interrupted NFT Practice run was found.');
+    await this.nftGameplayService.cancelRun({
+      address: session.address,
+      minerId: Number(candidate.nftRun.minerId)
+    });
+    const interruptedRunId = candidate.id;
+    const interrupted = await this.database.transact(async (state, transaction) => {
+      const run = Object.values(state.runs || {})
+        .filter((activeRun) =>
+          activeRun.id === interruptedRunId &&
+          activeRun.address === session.address &&
+          activeRun.mode === SERVER_RUN_MODES.PRACTICE &&
+          activeRun.status === 'active' &&
+          activeRun.expiresAt > timestamp &&
+          activeRun.nftRun?.minerId
+        )
+        .sort((left, right) => Number(right.startedAt || 0) - Number(left.startedAt || 0))[0];
+      assertApi(run, 404, 'interrupted_nft_practice_missing', 'No interrupted NFT Practice run was found.');
+      run.status = 'expired';
+      run.finishedAt = timestamp;
+      run.result = null;
+      run.recoveryRestartedAt = timestamp;
+      await transaction?.upsertRun(run);
+      appendAudit(
+        state,
+        'INTERRUPTED_NFT_PRACTICE_RESTARTED',
+        `${session.address}; ${run.id}; Miner #${run.nftRun.minerId}`,
+        timestamp,
+        session.address
+      );
+      return {
+        runId: run.id,
+        minerId: Number(run.nftRun.minerId)
+      };
+    });
+    await this.competitiveReplayValidator?.finalize?.(interrupted.runId, 'expired').catch(() => undefined);
+    return this.startRun(token, SERVER_RUN_MODES.PRACTICE);
   }
 
   async adminWallet(adminKey, address) {
@@ -1399,11 +1468,11 @@ function appendActivity(wallet, action, details, timestamp) {
   wallet.activity = wallet.activity.slice(-500);
 }
 
-function appendAudit(state, action, details, timestamp) {
+function appendAudit(state, action, details, timestamp, actor = 'SERVER_ADMIN') {
   state.audit ||= [];
   state.audit.push({
     id: `audit-${timestamp}-${state.audit.length + 1}`,
-    actor: 'SERVER_ADMIN',
+    actor,
     action,
     details: String(details).slice(0, 500),
     timestamp
