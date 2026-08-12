@@ -6,6 +6,14 @@ export const NFT_LAB_CHAIN = Object.freeze({
   explorerUrl: 'https://saigon-app.roninchain.com'
 });
 
+export const RONIN_MAINNET_CHAIN = Object.freeze({
+  id: 2020,
+  hexId: '0x7e4',
+  name: 'Ronin Mainnet'
+});
+
+export const SELECTED_MINER_STORAGE_KEY = 'matt-mine:selected-nft-miner';
+
 export const NFT_LAB_CONTRACTS = Object.freeze({
   miner: '0x545d5d4c714eB4d2242BBFE82C31fe9a1E5Cff29',
   equipment: '0x73A4Ad9a2b4bfeeE1b98F5D99AaB24B702dEb093',
@@ -61,7 +69,8 @@ const state = {
   equipment: [],
   selectedMinerId: null,
   mattBalance: 0n,
-  busy: false
+  busy: false,
+  returningToMainnet: false
 };
 let rpcRequestId = 0;
 
@@ -256,7 +265,9 @@ function bindProviderEvents() {
     if (state.account) void refreshAll();
     else renderDisconnected();
   });
-  state.provider.on('chainChanged', () => { if (state.account) void refreshAll(); });
+  state.provider.on('chainChanged', () => {
+    if (state.account && !state.returningToMainnet) void refreshAll();
+  });
 }
 
 async function refreshAll() {
@@ -274,7 +285,10 @@ async function refreshAll() {
     state.miners = miners;
     state.equipment = equipment;
     state.mattBalance = mattBalance;
-    if (!miners.some((miner) => miner.id === state.selectedMinerId)) state.selectedMinerId = miners[0]?.id || null;
+    if (!miners.some((miner) => miner.id === state.selectedMinerId)) {
+      const requestedMinerId = preferredMinerId();
+      state.selectedMinerId = miners.find((miner) => miner.id === requestedMinerId)?.id || miners[0]?.id || null;
+    }
     renderAll();
     setStatus(
       miners.length
@@ -445,10 +459,32 @@ function renderAll() {
   void renderStorePrices();
   void renderArmorService();
   renderSettlementState();
+  renderConfirmLoadout();
+}
+
+export function preferredMinerId(search = globalThis.location?.search || '') {
+  const value = new URLSearchParams(search).get('miner');
+  const minerId = Number(value || 0);
+  return Number.isSafeInteger(minerId) && minerId > 0 && minerId <= 1_000 ? minerId : 0;
 }
 
 function selectedMiner() {
   return state.miners.find((miner) => miner.id === state.selectedMinerId) || null;
+}
+
+function renderConfirmLoadout() {
+  const miner = selectedMiner();
+  const button = dom('confirm-loadout-button');
+  const copy = dom('confirm-loadout-copy');
+  const enabled = Boolean(state.account && miner && !miner.loadout.runLocked);
+  button.disabled = state.busy || !enabled;
+  button.dataset.locked = String(!enabled);
+  button.textContent = miner ? `CONFIRM MINER #${miner.id} LOADOUT` : 'CONFIRM LOADOUT';
+  copy.textContent = !miner
+    ? 'Select a Miner and finish equipping its gear.'
+    : miner.loadout.runLocked
+      ? `Miner #${miner.id} is locked in a run and cannot change loadout.`
+      : `Return Miner #${miner.id} to the main game with this on-chain loadout.`;
 }
 
 export function equippedTokenForItem(miner, itemType) {
@@ -484,6 +520,7 @@ function renderMinerList() {
       renderEquipment();
       void renderArmorService();
       renderSettlementState();
+      renderConfirmLoadout();
     });
     list.append(button);
   }
@@ -805,6 +842,33 @@ async function repairSelectedArmor() {
   }
 }
 
+async function confirmSelectedLoadout() {
+  if (state.busy || !state.provider || !state.account) return;
+  const miner = selectedMiner();
+  if (!miner) return setStatus('Select a Miner before confirming its loadout.', 'error');
+  if (miner.loadout.runLocked) return setStatus(`Miner #${miner.id} is currently locked in a run.`, 'error');
+  setBusy(true);
+  state.returningToMainnet = true;
+  setStatus(`Saving Miner #${miner.id} and switching Ronin Wallet back to Mainnetâ€¦`, 'busy');
+  try {
+    sessionStorage.setItem(SELECTED_MINER_STORAGE_KEY, String(miner.id));
+    await state.provider.request({
+      method: 'wallet_switchEthereumChain',
+      params: [{ chainId: RONIN_MAINNET_CHAIN.hexId }]
+    });
+    const chainId = await state.provider.request({ method: 'eth_chainId' });
+    if (BigInt(chainId) !== BigInt(RONIN_MAINNET_CHAIN.id)) {
+      throw new Error(`Switch Ronin Wallet to ${RONIN_MAINNET_CHAIN.name}.`);
+    }
+    location.assign(`/?loadout=confirmed&miner=${miner.id}`);
+  } catch (error) {
+    state.returningToMainnet = false;
+    setStatus(error?.message || 'Could not return Ronin Wallet to Mainnet.', 'error');
+    setBusy(false);
+    renderConfirmLoadout();
+  }
+}
+
 function renderSettlementState() {
   const miner = selectedMiner();
   const copy = dom('settlement-miner-copy');
@@ -821,6 +885,7 @@ function initialize() {
   dom('refresh-button').addEventListener('click', () => void refreshAll());
   dom('buy-backpack-button').addEventListener('click', () => void buyBackpack());
   dom('repair-armor-button').addEventListener('click', () => void repairSelectedArmor());
+  dom('confirm-loadout-button').addEventListener('click', () => void confirmSelectedLoadout());
   document.querySelectorAll('[data-chest-type]').forEach((button) => {
     button.addEventListener('click', () => void openChest(Number(button.dataset.chestType)));
   });
