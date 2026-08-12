@@ -65,6 +65,34 @@ test('NFT gameplay locks the owned Miner and pins armor health plus doubled crys
   assert.deepEqual(calls[0].args, [1n]);
 });
 
+test('NFT gameplay locks the Miner explicitly selected on the character screen', async () => {
+  const calls = [];
+  const operator = privateKeyToAccount(OPERATOR_KEY);
+  const signer = privateKeyToAccount(SIGNER_KEY);
+  const service = new NftGameplayService({
+    enabled: true,
+    chainId: 202601,
+    rpcUrl: 'https://example.invalid',
+    settlementAddress: SETTLEMENT,
+    operatorAddress: operator.address,
+    signerAddress: signer.address,
+    operatorPrivateKey: OPERATOR_KEY,
+    signerPrivateKey: SIGNER_KEY,
+    metadataService: {
+      async minerProfile(id) {
+        if (id === 2) return profile({ minerId: 2 });
+        throw Object.assign(new Error('missing'), { status: 404 });
+      }
+    },
+    publicClient: { async waitForTransactionReceipt() { return { status: 'success' }; } },
+    operatorClient: { async writeContract(call) { calls.push(call); return `0x${'56'.repeat(32)}`; } }
+  });
+
+  const started = await service.beginRun({ address: PLAYER, serverRunId: 'run_selected', minerId: 2 });
+  assert.equal(started.minerId, 2);
+  assert.deepEqual(calls[0].args, [2n]);
+});
+
 test('NFT crystal pickups stop at the active backpack capacity and results carry exact phase state', () => {
   const game = new MattMineGame({ getContext() {} }, defaultProfile(), { headless: true });
   let result;

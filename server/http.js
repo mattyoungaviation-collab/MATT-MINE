@@ -424,7 +424,7 @@ async function handleApiRequest({
   }
   if (method === 'POST' && path === '/api/runs/start') {
     const body = await readJson(request, maxRequestBytes);
-    const run = await service.startRun(bearerToken(request), body.mode);
+    const run = await service.startRun(bearerToken(request), body.mode, { minerId: body.minerId });
     sendJson(response, 201, { ok: true, run });
     return;
   }

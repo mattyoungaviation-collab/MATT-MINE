@@ -84,12 +84,12 @@
               <p class="launch-hero-copy">Enter the mine, secure your score,<br />and extract before time runs out.</p>
               <div class="launch-hero-actions">
                 <button class="launch-primary-cta" type="button" data-launch-action="enter">
-                  <span>PLAY FREE</span>
-                  <small>ONE RANKED RUN EVERY DAY</small>
+                  <span>SELECT CHARACTER</span>
+                  <small>CHOOSE YOUR NFT MINER FIRST</small>
                 </button>
                 <button class="launch-secondary-cta" type="button" data-launch-action="practice">
-                  <span>TRY PRACTICE</span>
-                  <small>NO WALLET REQUIRED</small>
+                  <span>ENTER MINES</span>
+                  <small>CHARACTER &rarr; MINE SELECT</small>
                 </button>
               </div>
               <div class="launch-chain-note">
@@ -361,6 +361,39 @@
               <div class="run-glance-flow"><span><i>▱</i><b>ENTER</b></span><em>›</em><span><i>◆</i><b>MINE</b></span><em>›</em><span><i>⇧</i><b>UPGRADE</b></span><em>›</em><span><i>♛</i><b>GUARDIAN</b></span><em>›</em><span><i>▥</i><b>EXTRACT</b></span></div>
             </article>
             <aside class="goal-card"><span aria-hidden="true">✦</span><h2>YOUR GOAL</h2><p>Secure the highest score you can and get out alive.</p><button class="primary-button" type="button" data-site-action="mines">⛏ CHOOSE YOUR MINE</button></aside>
+          </div>
+        </div>
+      </section>
+
+      <section id="miner-select" class="screen miner-select-screen" aria-labelledby="miner-select-title">
+        <div class="panel wide-panel miner-select-panel">
+          <button id="miner-select-home" class="home-chip" type="button">&larr; MAIN PAGE</button>
+          <header class="miner-select-heading">
+            <div>
+              <p class="eyebrow">STEP 1 OF 2</p>
+              <h2 id="miner-select-title">Select Your Character</h2>
+              <p>Choose the Miner NFT that will carry your XP, equipment, armor state, and MATT Crystals into the mine.</p>
+            </div>
+            <span class="dashboard-live-pill">LIVE ON-CHAIN LOADOUT</span>
+          </header>
+          <div class="miner-select-layout">
+            <div id="miner-select-grid" class="miner-select-grid" aria-label="Owned Miner NFTs"></div>
+            <aside id="selected-miner-card" class="selected-miner-card">
+              <div class="selected-miner-render">
+                <img id="selected-miner-image" alt="Selected MATT Mine Miner" hidden />
+                <span id="selected-miner-empty">CONNECT RONIN<br />TO LOAD MINERS</span>
+              </div>
+              <div class="selected-miner-copy">
+                <span>SELECTED CHARACTER</span>
+                <h3 id="selected-miner-name">NO MINER SELECTED</h3>
+                <div id="selected-miner-stats" class="selected-miner-stats"></div>
+              </div>
+              <div class="miner-select-actions">
+                <a id="select-loadout-button" class="primary-button miner-garage-link" href="./nft-lab.html">SELECT LOADOUT</a>
+                <button id="enter-mines-button" class="primary-button gold-button" type="button" disabled>ENTER MINES</button>
+              </div>
+              <small>Manage equipment, buy chests, queue backpacks, and repair armor in the NFT Garage.</small>
+            </aside>
           </div>
         </div>
       </section>

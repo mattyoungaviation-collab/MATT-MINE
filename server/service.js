@@ -297,7 +297,11 @@ export class MattMineService {
     player.entitlements.paidRunsEnabled = this.mainnetTransactionsEnabled;
     const hydrated = await this.hydratePlayerScores(player);
     if (this.nftMetadataService) {
-      hydrated.nftMiner = await this.nftMetadataService.playerMiner(session.address);
+      const miners = typeof this.nftMetadataService.playerMiners === 'function'
+        ? await this.nftMetadataService.playerMiners(session.address)
+        : [await this.nftMetadataService.playerMiner(session.address)].filter(Boolean);
+      hydrated.nftMiners = miners;
+      hydrated.nftMiner = miners[0] || null;
     }
     return hydrated;
   }

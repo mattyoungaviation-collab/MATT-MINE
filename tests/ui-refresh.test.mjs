@@ -12,6 +12,7 @@ test('approved UI refresh exposes every player dashboard and unique control id',
   assert.deepEqual(duplicates, []);
   for (const id of [
     'site-nav', 'site-account-button', 'site-account-label',
+    'miner-select', 'miner-select-grid', 'select-loadout-button', 'enter-mines-button',
     'how-to-play', 'how-to-title', 'launch-mine-select-title',
     'launch-nugget-button', 'daily-mine', 'start-daily-run-button',
     'pass-mine', 'start-pass-mine-button', 'buy-pass-credit-button',
@@ -27,6 +28,7 @@ test('approved UI refresh exposes every player dashboard and unique control id',
   assert.match(html, /data-site-action="store"/);
   assert.match(html, /data-launch-action="daily"/);
   assert.match(html, /data-launch-action="pass-mine"/);
+  assert.match(html, /id="select-loadout-button"[^>]*>SELECT LOADOUT</);
   assert.match(html, /class="leaderboard-tab arena-leaderboard-tab" data-board="arena"/);
   assert.match(html, /src\/ui-refresh\.css/);
 });
@@ -45,6 +47,8 @@ test('UI controls are wired to existing run, Pass, leaderboard, loadout, and sho
   assert.match(source, /#profile-manage-loadout-button'[\s\S]*openCosmetics\(\)/);
   assert.match(source, /action === 'how-to-play'[\s\S]*showScreen\('how-to-play'\)/);
   assert.match(source, /action === 'store'[\s\S]*mattmine:open-nugget-shop/);
+  assert.match(source, /openMinerSelect\(\)/);
+  assert.match(source, /apiClient\.startRun\(mode, selectedNftMinerId\)/);
   assert.match(source, /renderLeaderboardPodium\(rows\)/);
   assert.match(source, /mode === ARENA_LEADERBOARD_MODE/);
   assert.match(source, /await refreshArena\(true\)/);

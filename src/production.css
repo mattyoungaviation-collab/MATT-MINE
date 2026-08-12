@@ -1601,6 +1601,48 @@ button,
 
 .interrupted-nft-practice button:disabled { opacity: .6; cursor: wait; }
 
+.miner-select-screen { overflow-y: auto; align-items: start; padding-top: 92px; }
+.miner-select-panel { position: relative; width: min(1260px, calc(100vw - 48px)); padding: 28px; border-color: #665416; background: radial-gradient(circle at 75% 20%, rgba(255,207,55,.08), transparent 30%), #070b0e; }
+.miner-select-panel .home-chip { position: static; margin-bottom: 20px; }
+.miner-select-heading { display: flex; justify-content: space-between; gap: 30px; align-items: end; padding-bottom: 22px; border-bottom: 1px solid #2a3035; }
+.miner-select-heading h2 { margin: 0; color: #fff; font: 1000 clamp(34px, 5vw, 68px)/.95 Impact, sans-serif; text-transform: uppercase; }
+.miner-select-heading p:last-child { max-width: 680px; margin: 12px 0 0; color: #aab6bd; font: 700 13px/1.55 Inter, sans-serif; }
+.miner-select-layout { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(310px, .65fr); gap: 20px; padding-top: 20px; }
+.miner-select-grid { display: grid; grid-template-columns: repeat(2, minmax(220px, 1fr)); gap: 14px; align-content: start; }
+.miner-select-option { display: grid; grid-template-columns: 130px 1fr; align-items: center; gap: 15px; min-height: 150px; padding: 10px; color: #fff; border: 1px solid #2c353b; background: #0d1216; text-align: left; }
+.miner-select-option:hover, .miner-select-option.active { border-color: #47eee3; box-shadow: inset 0 0 0 1px #47eee3; transform: translateY(-2px); }
+.miner-select-option img { width: 130px; height: 130px; object-fit: cover; background: #10243f; image-rendering: pixelated; }
+.miner-select-option span { display: grid; gap: 8px; }
+.miner-select-option small { color: #47eee3; font: 900 9px Inter, sans-serif; letter-spacing: .12em; }
+.miner-select-option strong { font: 1000 19px/1 Impact, sans-serif; text-transform: uppercase; }
+.miner-select-option b { color: #ffcf37; font: 900 11px Inter, sans-serif; }
+.miner-select-empty { padding: 30px; border: 1px dashed #48525a; color: #fff; }
+.miner-select-empty span { display: block; margin-top: 10px; color: #9caab2; }
+.selected-miner-card { display: grid; align-content: start; gap: 14px; padding: 16px; border: 1px solid #574c23; background: #0d1113; }
+.selected-miner-render { position: relative; aspect-ratio: 1; display: grid; place-items: center; overflow: hidden; border: 1px solid #2e3f49; background: #10243f; color: #597287; text-align: center; font: 1000 15px/1.4 monospace; }
+.selected-miner-render::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(transparent 50%, rgba(0,0,0,.1) 50%); background-size: 100% 4px; }
+.selected-miner-render img { width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; }
+.selected-miner-copy > span { color: #47eee3; font: 900 9px Inter, sans-serif; letter-spacing: .14em; }
+.selected-miner-copy h3 { margin: 7px 0 12px; color: #fff; font: 1000 22px Impact, sans-serif; }
+.selected-miner-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; }
+.selected-miner-stats span { display: grid; gap: 4px; padding: 9px; border: 1px solid #253039; background: #080c0f; }
+.selected-miner-stats small { color: #84949e; font: 800 8px Inter, sans-serif; }
+.selected-miner-stats strong { color: #fff; font: 1000 13px Inter, sans-serif; }
+.miner-garage-link { display: grid; place-items: center; text-decoration: none; }
+.miner-select-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.miner-select-actions > * { min-height: 48px; }
+.selected-miner-card > small { color: #89979f; font: 700 10px/1.45 Inter, sans-serif; text-align: center; }
+
+@media (max-width: 820px) {
+  .miner-select-screen { padding: 78px 10px 18px; }
+  .miner-select-panel { width: 100%; padding: 16px; }
+  .miner-select-heading, .miner-select-layout { grid-template-columns: 1fr; display: grid; }
+  .miner-select-grid { grid-template-columns: 1fr; }
+  .miner-select-option { grid-template-columns: 90px 1fr; min-height: 110px; }
+  .miner-select-option img { width: 90px; height: 90px; }
+  .miner-select-actions { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 700px) {
   .interrupted-nft-practice { grid-template-columns: 1fr; }
   .interrupted-nft-practice button { width: 100%; }

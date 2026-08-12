@@ -152,7 +152,7 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     return super.adminGameTuning(adminKey);
   }
 
-  async startRun(token, mode) {
+  async startRun(token, mode, input = {}) {
     if (['weekly', 'endless'].includes(String(mode || '').toLowerCase()) && !this.competitiveReplayValidator) {
       throw new ApiError(
         503,
@@ -169,7 +169,8 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
         await this.releaseExpiredNftRuns(session.address, started.runId);
         nftRun = await this.nftGameplayService.beginRun({
           address: session.address,
-          serverRunId: started.runId
+          serverRunId: started.runId,
+          minerId: selectedMinerId(input.minerId)
         });
         if (nftRun) {
           started.tuning = {
@@ -1334,6 +1335,11 @@ function completedPhaseMask(result = {}) {
   const completedDepths = result.extracted === true ? depth : Math.max(0, depth - 1);
   for (let index = 0; index < completedDepths; index += 1) mask |= 1 << index;
   return mask;
+}
+
+function selectedMinerId(value) {
+  const minerId = Number(value || 0);
+  return Number.isSafeInteger(minerId) && minerId > 0 && minerId <= 1_000 ? minerId : 0;
 }
 
 export function recordNftCrystalBank(wallet, input = {}) {
