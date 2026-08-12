@@ -109,6 +109,7 @@ let pendingRunFinalization = null;
 let runFinalizationBusy = false;
 let nftPracticeRecoveryBusy = false;
 let selectedNftMinerId = 0;
+const SELECTED_MINER_STORAGE_KEY = 'matt-mine:selected-nft-miner';
 let paymentStatus = null;
 let publicPaymentStatus = null;
 let walletBusy = false;
@@ -1505,6 +1506,9 @@ function renderMinerSelect() {
   const enter = $('#enter-mines-button');
   enter.disabled = !selected || selected.gameplay?.runLocked === true;
   enter.textContent = selected?.gameplay?.runLocked ? 'MINER IS IN A RUN' : 'ENTER MINES';
+  const loadout = $('#select-loadout-button');
+  loadout.href = selected ? `./nft-lab.html?miner=${selected.minerId}` : './nft-lab.html';
+  loadout.setAttribute('aria-disabled', String(!selected));
 }
 
 function evolutionName(miner) {
@@ -3797,6 +3801,10 @@ async function bootstrapServer() {
       saveProfile(profile);
       game.setProfile(profile);
       await refreshPaymentStatus(true);
+      const storedMinerId = Number(sessionStorage.getItem(SELECTED_MINER_STORAGE_KEY) || 0);
+      if (ownedNftMiners().some((miner) => miner.minerId === storedMinerId)) {
+        selectedNftMinerId = storedMinerId;
+      }
     }
     await refreshArena(true);
     await mountMineHub(apiClient);
@@ -3808,7 +3816,14 @@ async function bootstrapServer() {
   adminButton.hidden = !isLocalPreview;
   adminButton.parentElement?.classList.toggle('public-menu', !isLocalPreview);
   updateMenu();
+  const loadoutConfirmed = new URLSearchParams(globalThis.location?.search || '').get('loadout') === 'confirmed';
   if (serverPlayer?.identity?.requiresSetup) openMinerProfile(true);
+  else if (serverPlayer && loadoutConfirmed) {
+    sessionStorage.removeItem(SELECTED_MINER_STORAGE_KEY);
+    history.replaceState({}, '', '/');
+    await openMinerSelect();
+    toast(`Miner #${selectedNftMinerId} loadout confirmed · Ronin Mainnet restored`);
+  }
   await startCompetitionStudioTest();
 }
 

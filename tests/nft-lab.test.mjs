@@ -11,6 +11,7 @@ import {
   encodeCall,
   equippedTokenForItem,
   formatTokenUnits,
+  preferredMinerId,
   splitAbiWords,
   uintWord,
   waitForTokenIdIncrease
@@ -41,6 +42,12 @@ describe('Saigon NFT Lab ABI helpers', () => {
   it('formats test MATT prices without floating point loss', () => {
     assert.equal(formatTokenUnits(5_000_000_000_000_000_000n), '5');
     assert.equal(formatTokenUnits(350_000_000_000_000_000n), '0.35');
+  });
+
+  it('preserves the Miner selected on the main character screen', () => {
+    assert.equal(preferredMinerId('?miner=2'), 2);
+    assert.equal(preferredMinerId('?miner=0'), 0);
+    assert.equal(preferredMinerId('?miner=not-a-token'), 0);
   });
 
   it('maps all five chest products to the deployed chest ABI', () => {
