@@ -33,6 +33,7 @@ import {
 import { PaidCompetitionEligibilityPolicy } from '../server/eligibility.js';
 import { NftMetadataService } from '../server/nft-metadata-service.js';
 import { createSaigonChestKeeperFromEnvironment } from '../server/saigon-chest-keeper.js';
+import { createNftGameplayServiceFromEnvironment } from '../server/nft-gameplay-service.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const packageMetadata = JSON.parse(
@@ -228,6 +229,8 @@ const nftMetadataService = nftMetadataEnabled
       }
     }).init()
   : null;
+const nftGameplayService = createNftGameplayServiceFromEnvironment(nftMetadataService);
+if (nftGameplayService) await nftGameplayService.init();
 const saigonChestKeeper = createSaigonChestKeeperFromEnvironment();
 if (saigonChestKeeper) await saigonChestKeeper.init();
 const service = new CompleteProductionMattMineService(database, {
@@ -255,6 +258,7 @@ const service = new CompleteProductionMattMineService(database, {
   nuggetPaymentsEnabled: mainnetTransactionsEnabled && nuggetPaymentsRequested,
   competitiveReplayValidator,
   nftMetadataService,
+  nftGameplayService,
   ...(revivePaymentVerifier && competitiveReplayValidator ? {
     revivePaymentVerifier,
     reviveEligibilityValidator: {
@@ -280,6 +284,7 @@ server.listen(port, '0.0.0.0', () => {
   console.log(`Paid revive verifier: ${revivePaymentVerifier ? 'EXACT RON TRANSFER ENABLED' : 'disabled'}`);
   console.log(`Advertisement verifier: ${advertisementVerifier ? `SIGNED ${advertisementProvider}` : 'disabled'}`);
   console.log(`NFT metadata: ${nftMetadataService ? `ENABLED (chain ${nftMetadataService.chainId})` : 'disabled'}`);
+  console.log(`NFT gameplay: ${nftGameplayService ? 'ENABLED (Saigon vertical slice)' : 'disabled'}`);
   console.log(`Saigon chest keeper: ${saigonChestKeeper ? 'ENABLED' : 'disabled'}`);
   console.log(`Server data: ${database.kind}${databaseUrl ? '' : ` (${dataFile})`}`);
   console.log(`Nugget economy data: ${nuggetEconomyStore.kind}${databaseUrl ? '' : ` (${nuggetEconomyFile})`}`);

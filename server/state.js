@@ -50,6 +50,8 @@ export function defaultWalletState(address, timestamp = Date.now()) {
     identity: normalizeIdentity(),
     profile: defaultProfile(),
     nuggetLedger: [],
+    nftCrystalBalance: 0,
+    nftCrystalLedger: [],
     practiceClaims: {},
     passProgress: defaultPassProgress(),
     passInventory: defaultPassInventory(),
@@ -260,6 +262,8 @@ function normalizeWallets(input) {
           bankedNuggets: migration.balance
         },
         nuggetLedger: normalizeNuggetLedger(migration.ledger, normalizedAddress),
+        nftCrystalBalance: safeBoundedInteger(wallet.nftCrystalBalance, Number.MAX_SAFE_INTEGER),
+        nftCrystalLedger: normalizeNftCrystalLedger(wallet.nftCrystalLedger, normalizedAddress),
         practiceClaims: normalizePracticeClaims(wallet.practiceClaims, safeTimestamp(wallet.updatedAt)),
         passProgress: normalizePassProgress(wallet.passProgress),
         passInventory: normalizePassInventory(wallet.passInventory),
@@ -347,6 +351,22 @@ function normalizeActivity(input) {
     id: typeof entry.id === 'string' ? entry.id.slice(0, 100) : '',
     action: typeof entry.action === 'string' ? entry.action.slice(0, 80) : 'UNKNOWN',
     details: typeof entry.details === 'string' ? entry.details.slice(0, 500) : '',
+    timestamp: safeTimestamp(entry.timestamp)
+  }));
+}
+
+function normalizeNftCrystalLedger(input, walletAddress) {
+  if (!Array.isArray(input)) return [];
+  return input.filter(isRecord).slice(-10_000).map((entry) => ({
+    id: typeof entry.id === 'string' ? entry.id.slice(0, 120) : '',
+    walletAddress,
+    runId: typeof entry.runId === 'string' ? entry.runId.slice(0, 120) : '',
+    type: entry.type === 'REDEMPTION' ? 'REDEMPTION' : 'RUN_BANK',
+    amount: safeBoundedInteger(entry.amount, Number.MAX_SAFE_INTEGER),
+    balance: safeBoundedInteger(entry.balance, Number.MAX_SAFE_INTEGER),
+    transactionHash: typeof entry.transactionHash === 'string' && /^0x[a-fA-F0-9]{64}$/.test(entry.transactionHash)
+      ? entry.transactionHash.toLowerCase()
+      : '',
     timestamp: safeTimestamp(entry.timestamp)
   }));
 }

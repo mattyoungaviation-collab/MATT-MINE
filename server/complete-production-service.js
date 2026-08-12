@@ -1,5 +1,7 @@
+import { createHash } from 'node:crypto';
 import { ProductionMattMineService } from './production-service.js';
-import { ApiError } from './errors.js';
+import { ApiError, assertApi } from './errors.js';
+import { validateRunResult } from './service.js';
 import {
   NUGGET_LEDGER_TYPES,
   applyNuggetLedgerDelta,
@@ -158,6 +160,57 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
       );
     }
     const started = await super.startRun(token, mode);
+    const replayVerifiedMode = this.competitiveReplayValidator?.publicStatus?.().modes?.includes(started.mode);
+    if (this.nftGameplayService && replayVerifiedMode) {
+      let nftRun = null;
+      try {
+        const session = await this.authenticate(token);
+        await this.releaseExpiredNftRuns(session.address, started.runId);
+        nftRun = await this.nftGameplayService.beginRun({
+          address: session.address,
+          serverRunId: started.runId
+        });
+        if (nftRun) {
+          started.tuning = {
+            ...started.tuning,
+            playerMaxHealth: nftRun.profile.gameplay.maximumHealth,
+            nftCrystalCarryLimit: nftRun.crystalCarryLimit,
+            nftMinerProfile: nftRun.profile
+          };
+          await this.database.transact((state) => {
+            const run = state.runs?.[started.runId];
+            if (run) {
+              run.nftRun = {
+                minerId: nftRun.minerId,
+                runId: nftRun.runId,
+                beginTransactionHash: nftRun.beginTransactionHash,
+                crystalCarryLimit: nftRun.crystalCarryLimit
+              };
+              run.tuning = structuredClone(started.tuning);
+            }
+          });
+          started.nftRun = {
+            minerId: nftRun.minerId,
+            runId: nftRun.runId,
+            beginTransactionHash: nftRun.beginTransactionHash,
+            crystalCarryLimit: nftRun.crystalCarryLimit,
+            profile: nftRun.profile
+          };
+        }
+      } catch (error) {
+        if (nftRun) {
+          await this.nftGameplayService.cancelRun({
+            address: (await this.authenticate(token)).address,
+            minerId: nftRun.minerId
+          }).catch(() => undefined);
+        }
+        await super.abandonRun(token, {
+          runId: started.runId,
+          runToken: started.runToken
+        }).catch(() => undefined);
+        throw error;
+      }
+    }
     const reviveInfrastructureReady =
       this.revivePaymentVerifier?.publicStatus?.().configured === true &&
       Boolean(this.reviveEligibilityValidator);
@@ -191,12 +244,42 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
       started.reviveInvulnerabilitySeconds = reviveSnapshot.invulnerabilitySeconds;
     }
     if (this.competitiveReplayValidator?.publicStatus?.().modes?.includes(started.mode)) {
-      const state = await this.database.read();
-      const run = state.runs?.[started.runId];
-      started.checkpoint = await this.competitiveReplayValidator.register(run, started.runToken);
-      started.verification = 'fixed-step-input-replay';
+      try {
+        const state = await this.database.read();
+        const run = state.runs?.[started.runId];
+        started.checkpoint = await this.competitiveReplayValidator.register(run, started.runToken);
+        started.verification = 'fixed-step-input-replay';
+      } catch (error) {
+        if (started.nftRun && this.nftGameplayService) {
+          await this.nftGameplayService.cancelRun({
+            address: (await this.authenticate(token)).address,
+            minerId: started.nftRun.minerId
+          }).catch(() => undefined);
+        }
+        await super.abandonRun(token, {
+          runId: started.runId,
+          runToken: started.runToken
+        }).catch(() => undefined);
+        throw error;
+      }
     }
     return started;
+  }
+
+  async releaseExpiredNftRuns(address, exceptRunId = '') {
+    const state = await this.database.read();
+    const stale = Object.values(state.runs || {}).filter((run) =>
+      run.id !== exceptRunId &&
+      run.address === address &&
+      run.status !== 'active' &&
+      run.nftRun?.minerId
+    );
+    for (const run of stale) {
+      await this.nftGameplayService.cancelRun({
+        address,
+        minerId: run.nftRun.minerId
+      });
+    }
   }
 
   async startArenaRun(token, input = {}) {
@@ -1029,6 +1112,38 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
       verifiedPayload = { ...payload, result: verified.result };
     }
     const result = await super.finishRun(token, verifiedPayload);
+    let nftSettlement = null;
+    if (pendingRun?.nftRun && this.nftGameplayService) {
+      const verifiedResult = result?.run?.result || validateRunResult(
+        verifiedPayload?.result || {},
+        pendingRun,
+        this.now()
+      );
+      nftSettlement = await this.nftGameplayService.settleRun({
+        address: pendingRun.address,
+        serverRunId: pendingRun.id,
+        minerId: pendingRun.nftRun.minerId,
+        result: verifiedResult,
+        currentLevel: Number(pendingRun.tuning?.nftMinerProfile?.progression?.level || 1),
+        completedPhases: completedPhaseMask(verifiedResult)
+      });
+      await this.database.transact((state) => {
+        const wallet = state.wallets?.[pendingRun.address];
+        if (!wallet) return;
+        recordNftCrystalBank(wallet, {
+          address: pendingRun.address,
+          runId: pendingRun.id,
+          amount: nftSettlement.crystalsBanked,
+          transactionHash: nftSettlement.transactionHash,
+          timestamp: this.now()
+        });
+      });
+    }
+    if (nftSettlement) {
+      result.nftSettlement = nftSettlement;
+      result.practiceClaim = null;
+      result.nftCrystals = (await this.me(token)).nftCrystals;
+    }
     const runId = String(payload?.runId || '');
     if (
       pendingRun &&
@@ -1098,8 +1213,27 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     });
 
     return corrected
-      ? { ...result, profile: corrected }
+      ? { ...result, profile: corrected, ...(nftSettlement ? { nftSettlement } : {}) }
       : result;
+  }
+
+  async abandonRun(token, payload) {
+    const pendingRun = (await this.database.read()).runs?.[String(payload?.runId || '')];
+    if (pendingRun?.nftRun && this.nftGameplayService) {
+      const session = await this.authenticate(token);
+      assertApi(pendingRun.address === session.address, 403, 'run_owner_mismatch', 'This run belongs to another wallet.');
+      const suppliedTokenHash = createHash('sha256').update(String(payload?.runToken || '')).digest('hex');
+      assertApi(pendingRun.tokenHash === suppliedTokenHash, 401, 'run_token_rejected', 'The run token is invalid.');
+      await this.nftGameplayService.cancelRun({
+        address: pendingRun.address,
+        minerId: pendingRun.nftRun.minerId
+      });
+    }
+    const abandoned = await super.abandonRun(token, payload);
+    if (this.competitiveReplayValidator && pendingRun) {
+      await this.competitiveReplayValidator.finalize(pendingRun.id, 'expired').catch(() => undefined);
+    }
+    return abandoned;
   }
 
   async pruneExpiredPaymentReservations() {
@@ -1122,6 +1256,38 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
       }
     });
   }
+}
+
+function completedPhaseMask(result = {}) {
+  if (Number.isSafeInteger(result.completedPhases)) return result.completedPhases;
+  const depth = Math.max(1, Math.min(5, Math.floor(Number(result.depth) || 1)));
+  let mask = 0;
+  const completedDepths = result.extracted === true ? depth : Math.max(0, depth - 1);
+  for (let index = 0; index < completedDepths; index += 1) mask |= 1 << index;
+  return mask;
+}
+
+export function recordNftCrystalBank(wallet, input = {}) {
+  wallet.nftCrystalLedger ||= [];
+  const runId = String(input.runId || '').slice(0, 120);
+  const id = `nft-run-bank:${runId}`;
+  // NFT-enabled Practice replaces the legacy nugget claim with MATT Crystals.
+  if (wallet.practiceClaims?.[runId]) delete wallet.practiceClaims[runId];
+  if (wallet.nftCrystalLedger.some((entry) => entry.id === id)) return false;
+  const amount = Math.max(0, Math.floor(Number(input.amount || 0)));
+  wallet.nftCrystalBalance = Math.max(0, Math.floor(Number(wallet.nftCrystalBalance || 0))) + amount;
+  wallet.nftCrystalLedger.push({
+    id,
+    walletAddress: String(input.address || wallet.address || '').toLowerCase(),
+    runId,
+    type: 'RUN_BANK',
+    amount,
+    balance: wallet.nftCrystalBalance,
+    transactionHash: typeof input.transactionHash === 'string' ? input.transactionHash : '',
+    timestamp: Math.max(0, Math.floor(Number(input.timestamp || Date.now())))
+  });
+  wallet.nftCrystalLedger = wallet.nftCrystalLedger.slice(-10_000);
+  return true;
 }
 
 function publicExpansion(wallet, config) {

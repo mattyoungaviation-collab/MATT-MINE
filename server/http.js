@@ -204,6 +204,12 @@ async function handleApiRequest({
     sendPublicImage(request, response, image);
     return;
   }
+  const minerSpriteMatch = path.match(/^\/api\/nft\/miners\/(\d+)\/sprite\.png$/);
+  if (['GET', 'HEAD'].includes(method) && minerSpriteMatch) {
+    const image = await nftService(service).minerSprite(minerSpriteMatch[1]);
+    sendPublicImage(request, response, image);
+    return;
+  }
   const equipmentMetadataMatch = path.match(/^\/api\/nft\/equipment\/(\d+)\.json$/);
   if (method === 'GET' && equipmentMetadataMatch) {
     sendPublicJson(response, 200, await nftService(service).equipmentMetadata(equipmentMetadataMatch[1]));
