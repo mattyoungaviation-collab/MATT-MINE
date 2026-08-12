@@ -17,7 +17,11 @@ export const stateMethods = {
     const tuning = this.runContext?.tuning || {};
     const character = this.runContext?.character || {};
     const characterHealthScale = Number(character.baseHealth || 100) / 100;
-    const maxHealth = ((tuning.playerMaxHealth || CONFIG.basePlayerHealth) + (meta.health || 0) * 8) * characterHealthScale;
+    const nftHealth = this.runContext?.nftRun
+      ? Math.max(1, Number(tuning.playerMaxHealth || CONFIG.basePlayerHealth))
+      : 0;
+    const maxHealth = nftHealth ||
+      ((tuning.playerMaxHealth || CONFIG.basePlayerHealth) + (meta.health || 0) * 8) * characterHealthScale;
     this.run = {
       depth: this.runContext?.startingDepth || 1,
       rawNuggets: 0,
@@ -25,6 +29,7 @@ export const stateMethods = {
       kills: 0,
       oreBroken: 0,
       crystals: 0,
+      crystalsCollected: 0,
       bossKilled: false,
       bossReady: false,
       bossSpawned: false,
@@ -544,7 +549,13 @@ export const stateMethods = {
           this.run.rawNuggets += pickup.value;
         }
         if (pickup.type === 'crystal') {
+          const carryLimit = Number(this.runContext?.tuning?.nftCrystalCarryLimit || Number.MAX_SAFE_INTEGER);
+          if (this.run.crystalsCollected >= carryLimit) {
+            this.addFloater(this.player.x, this.player.y - 52, 'CRYSTAL PACK FULL', '#ffcf73');
+            continue;
+          }
           this.run.crystals += 1;
+          this.run.crystalsCollected += 1;
           this.audio.play('crystal');
           this.addFloater(this.player.x, this.player.y - 52, 'MATT CRYSTAL', CONFIG.colors.crystal);
         }
@@ -597,7 +608,9 @@ export const stateMethods = {
       kills: this.run.kills,
       oreBroken: this.run.oreBroken,
       elapsed: this.run.elapsed,
-      bossTelemetry: structuredClone(this.run.bossTelemetry)
+      bossTelemetry: structuredClone(this.run.bossTelemetry),
+      crystalsCarried: Math.max(0, Math.floor(this.run.crystalsCollected || 0)),
+      completedPhases: completedPhaseMask(this.run.depth, extracted)
     });
   },
   backToMenu() {
@@ -667,3 +680,12 @@ export const stateMethods = {
     });
   }
 };
+
+function completedPhaseMask(depth, extracted) {
+  const completedDepths = extracted
+    ? Math.max(1, Math.min(5, Math.floor(Number(depth) || 1)))
+    : Math.max(0, Math.min(5, Math.floor(Number(depth) || 1) - 1));
+  let mask = 0;
+  for (let index = 0; index < completedDepths; index += 1) mask |= 1 << index;
+  return mask;
+}

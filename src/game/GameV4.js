@@ -9,7 +9,7 @@ import {
 import { seededRandom, withRandomSource } from './utils.js';
 import { endlessScale } from './expansionConfig.js';
 
-const DETERMINISTIC_SERVER_MODES = new Set(['arena', 'free', 'paid', 'weekly', 'endless']);
+const DETERMINISTIC_SERVER_MODES = new Set(['arena', 'practice', 'free', 'paid', 'weekly', 'endless']);
 
 /**
  * v0.4 adds deterministic ranked-run seeds and economy metadata while
@@ -72,8 +72,21 @@ export class MattMineGame extends V3MattMineGame {
           )
         : 0,
       reviveInvulnerabilitySeconds: Math.max(0, Number(context.reviveInvulnerabilitySeconds || 3)),
+      nftRun: context.nftRun && typeof context.nftRun === 'object'
+        ? structuredClone(context.nftRun)
+        : null,
       tuning: runtimeTuning
     };
+    if (!this.headless) {
+      delete this.visualAssets.nftMiner;
+      const minerId = Number(this.runContext.nftRun?.minerId || 0);
+      if (Number.isSafeInteger(minerId) && minerId > 0 && typeof globalThis.Image === 'function') {
+        const image = new globalThis.Image();
+        image.decoding = 'async';
+        image.src = `/api/nft/miners/${minerId}/sprite.png`;
+        this.visualAssets.nftMiner = image;
+      }
+    }
     this.baseRunTuning = structuredClone(this.runContext.tuning);
     this.arenaAccumulator = 0;
     this.arenaFinishRecorded = false;

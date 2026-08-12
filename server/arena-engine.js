@@ -27,7 +27,7 @@ export const ARENA_COMMANDS = Object.freeze([
   'decline',
   'time_limit'
 ]);
-export const COMPETITIVE_REPLAY_MODES = Object.freeze(['free', 'paid', 'weekly', 'endless']);
+export const COMPETITIVE_REPLAY_MODES = Object.freeze(['practice', 'free', 'paid', 'weekly', 'endless']);
 
 const NOOP_AUDIO = Object.freeze({
   startMusic() {},
@@ -227,6 +227,8 @@ export function replayArenaTranscript(challenge, inputEvents, options = {}) {
     kills: Math.max(0, Math.floor(finalResult?.kills || game.run?.kills || 0)),
     oreBroken: Math.max(0, Math.floor(finalResult?.oreBroken || game.run?.oreBroken || 0)),
     bossTelemetry: finalResult?.bossTelemetry || null,
+    crystalsCarried: Math.max(0, Math.floor(finalResult?.crystalsCarried || game.run?.crystalsCollected || 0)),
+    completedPhases: Math.max(0, Math.min(0x1f, Math.floor(finalResult?.completedPhases || 0))),
     maximumHealth: Math.max(1, Number(game.player?.maxHealth || 100)),
     eventCount: inputEvents.length,
     timeLimitReached: finalResult?.timeLimitReached === true,

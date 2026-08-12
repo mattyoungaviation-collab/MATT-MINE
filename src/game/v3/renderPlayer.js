@@ -19,6 +19,36 @@ const ROSTER_WEAPON_ROWS = Object.freeze({
   dynamite: 3
 });
 
+function drawNftMiner(game, ctx, player, movement, visualAngle) {
+  const image = game.visualAssets?.nftMiner;
+  if (!game.runContext?.nftRun || !imageIsReady(image)) return false;
+
+  const moving = movement > 22;
+  const attacking = player.swingTimer > 0;
+  const facesRight = Math.cos(visualAngle) >= 0;
+  const stepBob = moving
+    ? Math.abs(Math.sin(game.run.elapsed * (player.dashTimer > 0 ? 12 : 7) * Math.PI)) * 2.4
+    : Math.sin(game.run.elapsed * 3.2) * 0.9;
+  const actionDuration = player.weapon === 'dynamite' ? 0.24 : player.weapon === 'blaster' ? 0.14 : 0.16;
+  const actionProgress = attacking
+    ? Math.max(0, Math.min(1, 1 - player.swingTimer / actionDuration))
+    : 0;
+  const lunge = attacking ? Math.sin(actionProgress * Math.PI) * 5 : 0;
+
+  ctx.save();
+  ctx.translate(Math.cos(visualAngle) * lunge, -stepBob + Math.sin(visualAngle) * lunge);
+  ctx.scale(facesRight ? 1 : -1, 1);
+  ctx.imageSmoothingEnabled = false;
+  ctx.filter = player.hitFlash > 0
+    ? 'sepia(1) saturate(6) hue-rotate(310deg) brightness(1.15)'
+    : player.dashTimer > 0
+      ? 'brightness(1.12)'
+      : 'none';
+  ctx.drawImage(image, -55, -114, 110, 132);
+  ctx.restore();
+  return true;
+}
+
 export const PLAYABLE_CHARACTER_SPRITES = Object.freeze({
   ronke: Object.freeze({
     asset: 'ronkeCharacter',
@@ -142,6 +172,19 @@ export const renderPlayerMethods = {
     const visualAngle = player.swingTimer > 0 || !moving
       ? player.angle
       : Math.atan2(player.vy, player.vx);
+    if (drawNftMiner(this, ctx, player, movement, visualAngle)) {
+      ctx.restore();
+      if (player.weapon === 'pickaxe' && player.swingTimer > 0) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(245,209,66,0.5)';
+        ctx.lineWidth = 10;
+        ctx.beginPath();
+        ctx.arc(player.x, player.y, player.attackRange * 0.84, player.angle - 0.72, player.angle + 0.72);
+        ctx.stroke();
+        ctx.restore();
+      }
+      return;
+    }
     if (drawRosterCharacter(this, ctx, player, movement, visualAngle)) {
       ctx.restore();
       if (player.weapon === 'pickaxe' && player.swingTimer > 0) {

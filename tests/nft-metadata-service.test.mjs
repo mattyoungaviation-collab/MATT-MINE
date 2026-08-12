@@ -79,6 +79,16 @@ describe('NFT metadata service', function () {
     assert.ok(image.body.length < 1_000_000);
     assert.match(image.etag, /^"[a-f0-9]{64}"$/);
     assert.equal((await service.minerImage(1)).body, image.body);
+
+    const sprite = await service.minerSprite(1);
+    const spriteImage = sharp(sprite.body);
+    const spriteInfo = await spriteImage.metadata();
+    const spriteStats = await spriteImage.stats();
+    assert.equal(spriteInfo.width, 512);
+    assert.equal(spriteInfo.height, 512);
+    assert.equal(spriteInfo.hasAlpha, true);
+    assert.equal(spriteStats.channels[3].min, 0);
+    assert.equal(spriteStats.channels[3].max, 255);
   });
 
   it('builds equipment and collection metadata from the locked definition manifest', async function () {
@@ -116,6 +126,11 @@ describe('NFT metadata service', function () {
     assert.equal(imageResponse.headers.get('content-type'), 'image/png');
     assert.match(imageResponse.headers.get('etag'), /^"[a-f0-9]{64}"$/);
     assert.ok((await imageResponse.arrayBuffer()).byteLength > 100_000);
+
+    const spriteResponse = await fetch(`${origin}/api/nft/miners/1/sprite.png`);
+    assert.equal(spriteResponse.status, 200);
+    assert.equal(spriteResponse.headers.get('content-type'), 'image/png');
+    assert.ok((await spriteResponse.arrayBuffer()).byteLength > 10_000);
 
     const cachedResponse = await fetch(`${origin}/api/nft/miners/1/image.png`, {
       headers: { 'if-none-match': imageResponse.headers.get('etag') }

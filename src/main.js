@@ -908,7 +908,9 @@ async function submitServerRun(serverRun, result) {
         kills: Math.max(0, Math.floor(result.kills || 0)),
         oreBroken: Math.max(0, Math.floor(result.oreBroken || 0)),
         elapsed: Math.max(0, Number(result.elapsed || 0)),
-        bossTelemetry: result.bossTelemetry || null
+        bossTelemetry: result.bossTelemetry || null,
+        crystalsCarried: Math.max(0, Math.floor(result.crystalsCarried || 0)),
+        completedPhases: Math.max(0, Math.min(0x1f, Math.floor(result.completedPhases || 0)))
       }, competitiveCheckpoint),
       { onRetry: showDatabaseReconnect }
     );
@@ -937,6 +939,10 @@ async function submitServerRun(serverRun, result) {
         serverPlayer.scores[serverRun.mode] = playerScore;
       }
     }
+    if (accepted.nftSettlement) {
+      if (serverPlayer) serverPlayer.nftMiner = accepted.nftSettlement.profile;
+      if (serverPlayer && accepted.nftCrystals) serverPlayer.nftCrystals = accepted.nftCrystals;
+    }
     if (paymentStatus && accepted.passProgress) paymentStatus.passProgress = accepted.passProgress;
     applyPassInventory(accepted.passInventory);
     const boardName = serverRun.mode === RUN_MODES.FREE
@@ -959,6 +965,12 @@ async function submitServerRun(serverRun, result) {
       <span>Weekly ${boardName} score: ${formatNumber(leaderboard.playerScore)}${passXpCopy}${unlockedCopy}</span>
       <small>Entitlement, Pass status, one-time run token, telemetry limits, secured-loot rule, and duplicate submission checks passed.</small>
     `;
+    if (accepted.nftSettlement) {
+      const settlement = accepted.nftSettlement;
+      $('#economy-result').innerHTML += `
+        <small>NFT MINER #${settlement.minerId} · ${settlement.outcome.toUpperCase()} · ${formatNumber(settlement.crystalsBanked)} MATT CRYSTALS BANKED · +${settlement.xpBanked} XP</small>
+      `;
+    }
     if (serverRun.mode === RUN_MODES.PRACTICE) {
       activePracticeClaim = accepted.practiceClaim || null;
       renderPracticeClaimPanel(activePracticeClaim, result);
@@ -1328,7 +1340,8 @@ async function startRunMode(mode) {
         competitionSnapshot: run.competitionSnapshot,
         allowPaidRevive: run.paidReviveEligible === true,
         reviveLimitPerRun: run.reviveLimitPerRun,
-        reviveInvulnerabilitySeconds: run.reviveInvulnerabilitySeconds
+        reviveInvulnerabilitySeconds: run.reviveInvulnerabilitySeconds,
+        nftRun: run.nftRun || null
       });
       if (run.tuning?._minePassBenefits?.active === true) {
         toast('Mine Pass active · 2× XP and nuggets');

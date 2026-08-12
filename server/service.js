@@ -72,6 +72,7 @@ export class MattMineService {
     this.rewardManager = options.rewardManager || null;
     this.arenaService = options.arenaService || null;
     this.nftMetadataService = options.nftMetadataService || null;
+    this.nftGameplayService = options.nftGameplayService || null;
     this.arenaLeaderboardRequests = new Map();
     this.mainnetTransactionsEnabled =
       options.mainnetTransactionsEnabled === true && Boolean(this.paymentVerifier);
@@ -121,7 +122,12 @@ export class MattMineService {
         ? this.arenaService.publicConfig()
         : { enabled: false },
       nft: this.nftMetadataService
-        ? this.nftMetadataService.publicStatus()
+        ? {
+            ...this.nftMetadataService.publicStatus(),
+            gameplay: this.nftGameplayService
+              ? this.nftGameplayService.publicStatus()
+              : { enabled: false }
+          }
         : { enabled: false },
       eligibility: this.eligibilityPolicy
         ? this.eligibilityPolicy.publicStatus()
@@ -289,7 +295,11 @@ export class MattMineService {
     const state = await this.database.read();
     const player = publicWalletSnapshot(state, session.address, this.now());
     player.entitlements.paidRunsEnabled = this.mainnetTransactionsEnabled;
-    return this.hydratePlayerScores(player);
+    const hydrated = await this.hydratePlayerScores(player);
+    if (this.nftMetadataService) {
+      hydrated.nftMiner = await this.nftMetadataService.playerMiner(session.address);
+    }
+    return hydrated;
   }
 
   async setPlayerIdentity(token, input = {}) {
@@ -2360,6 +2370,21 @@ export function validateRunResult(input, run, timestamp) {
   const wallElapsed = Math.max(0, (timestamp - run.startedAt) / 1000);
   const verifiedReviveCount = Array.isArray(run.revives) ? run.revives.length : 0;
   const bossTelemetry = normalizeBossTelemetry(input.bossTelemetry, elapsed, verifiedReviveCount + 1);
+  const expectedCompletedPhases = completedPhaseMask(depth, extracted);
+  const crystalsCarried = strictInteger(input.crystalsCarried || 0, 'crystalsCarried', 0, 1_000_000);
+  const completedPhases = input.completedPhases === undefined
+    ? expectedCompletedPhases
+    : strictInteger(input.completedPhases, 'completedPhases', 0, 0x1f);
+  if (run.nftRun) {
+    assertApi(
+      completedPhases === expectedCompletedPhases,
+      422,
+      'phase_completion_mismatch',
+      'Completed phases do not match the verified run depth and outcome.'
+    );
+  }
+  const carryLimit = Number(run.tuning?.nftCrystalCarryLimit || Number.MAX_SAFE_INTEGER);
+  assertApi(crystalsCarried <= carryLimit, 422, 'crystal_carry_limit', 'Carried crystals exceed the active NFT capacity.');
 
   assertApi(elapsed <= wallElapsed + 15, 422, 'elapsed_time_impossible', 'Reported gameplay time exceeds the server run window.');
   assertApi(kills <= 25 + Math.ceil(elapsed * 8), 422, 'kill_rate_impossible', 'Enemy count exceeds the accepted run rate.');
@@ -2383,8 +2408,17 @@ export function validateRunResult(input, run, timestamp) {
     kills,
     oreBroken,
     elapsed: Math.round(elapsed * 1000) / 1000,
-    bossTelemetry
+    bossTelemetry,
+    crystalsCarried,
+    completedPhases
   };
+}
+
+function completedPhaseMask(depth, extracted) {
+  const completedDepths = extracted ? depth : Math.max(0, depth - 1);
+  let mask = 0;
+  for (let index = 0; index < completedDepths; index += 1) mask |= 1 << index;
+  return mask;
 }
 
 function normalizeBossTelemetry(input, elapsed, maximumPlayerDeaths = 1) {
@@ -2524,6 +2558,11 @@ function publicWalletSnapshot(state, address, timestamp) {
     address,
     identity: publicIdentity(wallet),
     profile: structuredClone(wallet.profile),
+    nftCrystals: {
+      banked: Math.max(0, Number(wallet.nftCrystalBalance || 0)),
+      withdrawalEnabled: false,
+      token: 'MATT Crystal'
+    },
     passProgress: publicPassProgress(wallet),
     passInventory: publicPassInventory(wallet),
     keybindings: structuredClone(wallet.keybindings),

@@ -30,7 +30,13 @@ export const pickupMethods = {
           this.run.rawNuggets += pickup.value;
         }
         if (pickup.type === 'crystal') {
+          const carryLimit = Number(this.runContext?.tuning?.nftCrystalCarryLimit || Number.MAX_SAFE_INTEGER);
+          if (Number(this.run.crystalsCollected || 0) >= carryLimit) {
+            this.addFloater(this.player.x, this.player.y - 52, 'CRYSTAL PACK FULL', '#ffcf73');
+            continue;
+          }
           this.run.crystals += 1;
+          this.run.crystalsCollected = Math.max(0, Number(this.run.crystalsCollected || 0)) + 1;
           this.audio.play('crystal');
           this.addFloater(this.player.x, this.player.y - 52, 'MATT CRYSTAL', CONFIG.colors.crystal);
         }

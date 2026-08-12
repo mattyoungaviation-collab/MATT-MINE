@@ -61,6 +61,7 @@ export class NftMetadataService {
     });
     this.manifest = null;
     this.imageCache = new Map();
+    this.spriteCache = new Map();
   }
 
   async init() {
@@ -126,6 +127,25 @@ export class NftMetadataService {
     return result;
   }
 
+  async minerSprite(minerIdInput) {
+    this.assertEnabled();
+    const profile = await this.minerProfile(minerIdInput);
+    const plan = compileNftRenderPlan(profile, this.manifest);
+    const revision = `sprite-${renderRevision(profile, plan)}`;
+    const cached = this.spriteCache.get(revision);
+    if (cached) return cached;
+    const body = await renderPlanToSpritePng(plan, this.root);
+    const result = Object.freeze({
+      body,
+      contentType: 'image/png',
+      etag: `"${createHash('sha256').update(body).digest('hex')}"`,
+      revision
+    });
+    if (this.spriteCache.size >= 50) this.spriteCache.delete(this.spriteCache.keys().next().value);
+    this.spriteCache.set(revision, result);
+    return result;
+  }
+
   async equipmentMetadata(tokenIdInput) {
     this.assertEnabled();
     const tokenId = tokenIdValue(tokenIdInput, 'equipment token ID');
@@ -175,6 +195,21 @@ export class NftMetadataService {
     const minerId = tokenIdValue(minerIdInput, 'Miner token ID');
     const state = await this.chainReader.miner(minerId);
     return compileMinerNftProfile({ minerId, ...state });
+  }
+
+  async playerMiner(addressInput) {
+    this.assertEnabled();
+    const owner = getAddress(addressInput);
+    for (let minerId = 1; minerId <= 1_000; minerId += 1) {
+      try {
+        const profile = await this.minerProfile(minerId);
+        if (getAddress(profile.owner) === owner) return profile;
+      } catch (error) {
+        if (error?.status === 404 || error?.code === 'nft_not_found') break;
+        throw error;
+      }
+    }
+    return null;
   }
 
   assertEnabled() {
@@ -251,23 +286,7 @@ export class ViemNftChainReader {
 }
 
 async function renderPlanToPng(plan, root) {
-  const basePath = localAssetPath(root, plan.base.image);
-  const composites = [];
-  for (const layer of [...plan.underlays, ...plan.layers]) {
-    composites.push(await transformedLayer(root, layer, plan.canvas));
-  }
-  if (plan.effect) {
-    composites.push({
-      input: Buffer.from(`<svg width="${plan.canvas.width}" height="${plan.canvas.height}"><rect width="100%" height="100%" fill="${plan.effect.tint}" fill-opacity="${plan.effect.maximumOpacity}"/></svg>`),
-      left: 0,
-      top: 0
-    });
-  }
-  const composed = await sharp(basePath)
-    .resize(plan.canvas.width, plan.canvas.height, { fit: 'fill', kernel: sharp.kernel.nearest })
-    .composite(composites)
-    .raw()
-    .toBuffer({ resolveWithObject: true });
+  const composed = await composeRenderPlan(plan, root);
   const body = await sharp(composed.data, {
     raw: {
       width: composed.info.width,
@@ -282,6 +301,90 @@ async function renderPlanToPng(plan, root) {
     throw new Error(`Ronin Market NFT image exceeds ${MARKET_IMAGE_MAX_BYTES} bytes.`);
   }
   return body;
+}
+
+async function renderPlanToSpritePng(plan, root) {
+  const composed = await composeRenderPlan(plan, root);
+  const width = composed.info.width;
+  const height = composed.info.height;
+  const channels = composed.info.channels;
+  const rgba = Buffer.alloc(width * height * 4);
+  for (let pixel = 0; pixel < width * height; pixel += 1) {
+    const source = pixel * channels;
+    const target = pixel * 4;
+    rgba[target] = composed.data[source];
+    rgba[target + 1] = composed.data[source + 1];
+    rgba[target + 2] = composed.data[source + 2];
+    rgba[target + 3] = channels >= 4 ? composed.data[source + 3] : 255;
+  }
+  removeConnectedNavyBackground(rgba, width, height);
+  return sharp(rgba, { raw: { width, height, channels: 4 } })
+    .trim({ background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .resize(512, 512, {
+      fit: 'contain',
+      position: 'bottom',
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+      kernel: sharp.kernel.nearest
+    })
+    .png({ compressionLevel: 9, palette: true, quality: 100, effort: 10 })
+    .toBuffer();
+}
+
+async function composeRenderPlan(plan, root) {
+  const basePath = localAssetPath(root, plan.base.image);
+  const composites = [];
+  for (const layer of [...plan.underlays, ...plan.layers]) {
+    composites.push(await transformedLayer(root, layer, plan.canvas));
+  }
+  if (plan.effect) {
+    composites.push({
+      input: Buffer.from(`<svg width="${plan.canvas.width}" height="${plan.canvas.height}"><rect width="100%" height="100%" fill="${plan.effect.tint}" fill-opacity="${plan.effect.maximumOpacity}"/></svg>`),
+      left: 0,
+      top: 0
+    });
+  }
+  return sharp(basePath)
+    .resize(plan.canvas.width, plan.canvas.height, { fit: 'fill', kernel: sharp.kernel.nearest })
+    .composite(composites)
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+}
+
+function removeConnectedNavyBackground(rgba, width, height) {
+  const visited = new Uint8Array(width * height);
+  const queue = new Uint32Array(width * height);
+  let head = 0;
+  let tail = 0;
+  const enqueue = (pixel) => {
+    if (visited[pixel]) return;
+    const offset = pixel * 4;
+    if (!isNavyBackground(rgba[offset], rgba[offset + 1], rgba[offset + 2])) return;
+    visited[pixel] = 1;
+    queue[tail] = pixel;
+    tail += 1;
+  };
+  for (let x = 0; x < width; x += 1) {
+    enqueue(x);
+    enqueue((height - 1) * width + x);
+  }
+  for (let y = 1; y < height - 1; y += 1) {
+    enqueue(y * width);
+    enqueue(y * width + width - 1);
+  }
+  while (head < tail) {
+    const pixel = queue[head];
+    head += 1;
+    rgba[pixel * 4 + 3] = 0;
+    const x = pixel % width;
+    if (x > 0) enqueue(pixel - 1);
+    if (x + 1 < width) enqueue(pixel + 1);
+    if (pixel >= width) enqueue(pixel - width);
+    if (pixel + width < width * height) enqueue(pixel + width);
+  }
+}
+
+function isNavyBackground(red, green, blue) {
+  return red < 85 && green < 100 && blue < 135 && blue >= green * 1.02 && blue >= red * 1.15;
 }
 
 async function transformedLayer(root, layer, canvas) {

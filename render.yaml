@@ -55,6 +55,18 @@ services:
         value: "0xc06b131C160701150Cea5b2C22dB3c6d7f451309"
       - key: MATT_MINE_NFT_RANDOMNESS_ADDRESS
         value: "0x13B2CC4744657bbc75a1f7588A1Ca8e397E69521"
+      - key: MATT_MINE_NFT_GAMEPLAY_ENABLED
+        sync: false
+      - key: MATT_MINE_NFT_CRYSTAL_CARRY_LIMIT
+        value: "10"
+      - key: MATT_MINE_NFT_GAME_OPERATOR_ADDRESS
+        value: "0x112C8a89bfAb3f19D7ceADf7433Fd8D253cFe4D3"
+      - key: MATT_MINE_NFT_GAME_SIGNER_ADDRESS
+        value: "0x61FC35192964Fa4b50D915261419e9D2Ba369708"
+      - key: MATT_MINE_NFT_GAME_OPERATOR_PRIVATE_KEY
+        sync: false
+      - key: MATT_MINE_NFT_GAME_SIGNER_PRIVATE_KEY
+        sync: false
       # Saigon-only keeper. Enable only after its dedicated address and private
       # key are stored in Render; 0xF799 retains contract ownership.
       - key: MATT_MINE_NFT_SAIGON_KEEPER_ENABLED
