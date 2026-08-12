@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#07111f" />
+    <title>MATT Mine NFT Lab</title>
+    <link rel="stylesheet" href="./src/nft-lab.css" />
+  </head>
+  <body>
+    <main class="nft-lab-shell">
+      <header class="lab-header">
+        <a class="lab-brand" href="./" aria-label="Back to MATT Mine">
+          <span class="brand-crystal">M</span>
+          <span><strong>MATT MINE</strong><small>NFT SYSTEM</small></span>
+        </a>
+        <div class="lab-actions">
+          <span class="network-pill">SAIGON · 202601</span>
+          <button id="refresh-button" class="ghost-button" type="button" disabled>REFRESH</button>
+          <button id="connect-button" class="primary-button" type="button">CONNECT RONIN</button>
+        </div>
+      </header>
+
+      <section class="lab-hero">
+        <div>
+          <p class="eyebrow">DIRECT-CHAIN LOADOUT CONTROL</p>
+          <h1>Your miner.<br /><span>Your gear.</span></h1>
+          <p class="hero-copy">Read and manage MATT Mine NFTs directly from Saigon. No marketplace index required.</p>
+        </div>
+        <div class="chain-readout">
+          <span>CONNECTED WALLET</span>
+          <strong id="wallet-address">NOT CONNECTED</strong>
+          <small id="wallet-network">Waiting for Ronin Wallet</small>
+          <small id="matt-balance">TEST MATT --</small>
+        </div>
+      </section>
+
+      <section id="status-panel" class="status-panel" aria-live="polite">
+        <span class="status-light"></span>
+        <p id="status-copy">Connect the test-player wallet to load Miner #1 and Miner #2.</p>
+      </section>
+
+      <section class="lab-grid">
+        <article class="panel miner-stage">
+          <div class="panel-heading">
+            <div><span>ACTIVE CHARACTER</span><h2 id="active-miner-name">NO MINER SELECTED</h2></div>
+            <span id="active-miner-level" class="level-chip">LEVEL --</span>
+          </div>
+          <div class="miner-display">
+            <div class="pixel-frame">
+              <img id="active-miner-image" alt="Selected MATT Mine Miner" hidden />
+              <div id="active-miner-empty" class="empty-render">CONNECT<br />TO LOAD</div>
+            </div>
+            <dl id="active-miner-traits" class="trait-grid"></dl>
+          </div>
+          <div id="miner-list" class="miner-list" aria-label="Owned miners"></div>
+        </article>
+
+        <article class="panel loadout-panel">
+          <div class="panel-heading">
+            <div><span>ON-CHAIN STATE</span><h2>ACTIVE LOADOUT</h2></div>
+            <span id="run-lock-chip" class="state-chip">UNLOCKED</span>
+          </div>
+          <div id="loadout-slots" class="loadout-slots"></div>
+          <div class="armor-service">
+            <div><strong>ARMOR SERVICE</strong><small id="armor-service-copy">Equip damaged armor to enable repair.</small></div>
+            <button id="repair-armor-button" class="gold-button transaction-action" type="button" disabled>REPAIR · 0.35 TEST MATT</button>
+          </div>
+        </article>
+      </section>
+
+      <section class="panel chest-panel">
+        <div class="panel-heading">
+          <div><span>REAL SAIGON TRANSACTIONS</span><h2>EQUIPMENT CHESTS</h2></div>
+          <span class="state-chip">RANDOM MINT</span>
+        </div>
+        <div id="chest-store" class="chest-store">
+          <article class="chest-card" data-chest="weapon">
+            <span>WEAPON</span><strong>Pickaxe Chest</strong><small>Cosmetic · common through legendary</small>
+            <button class="chest-button transaction-action" data-chest-type="0" type="button" disabled>OPEN · 2 TEST MATT</button>
+          </article>
+          <article class="chest-card" data-chest="helmet">
+            <span>HELMET</span><strong>Helmet Chest</strong><small>Cosmetic · common through legendary</small>
+            <button class="chest-button transaction-action" data-chest-type="1" type="button" disabled>OPEN · 2 TEST MATT</button>
+          </article>
+          <article class="chest-card armor" data-chest="armor-common">
+            <span>ARMOR</span><strong>Common Armor</strong><small>Guaranteed 125 maximum HP</small>
+            <button class="chest-button transaction-action" data-chest-type="2" type="button" disabled>OPEN · 2 TEST MATT</button>
+          </article>
+          <article class="chest-card armor" data-chest="armor-rare">
+            <span>ARMOR</span><strong>Rare Armor</strong><small>125 HP with improved odds for 150+</small>
+            <button class="chest-button transaction-action" data-chest-type="3" type="button" disabled>OPEN · 5 TEST MATT</button>
+          </article>
+          <article class="chest-card mythic" data-chest="armor-mythic">
+            <span>ARMOR</span><strong>Mythic Armor</strong><small>Guaranteed 150 maximum HP or better</small>
+            <button class="chest-button transaction-action" data-chest-type="4" type="button" disabled>OPEN · 15 TEST MATT</button>
+          </article>
+          <article class="chest-card backpack" data-chest="backpack">
+            <span>UTILITY</span><strong>2x Crystal Backpack</strong><small>Destroyed on death · queued backups promote automatically</small>
+            <button id="buy-backpack-button" class="chest-button transaction-action" type="button" disabled>BUY · 5 TEST MATT</button>
+          </article>
+        </div>
+        <p class="randomness-note">Chest payment creates an on-chain randomness request. The NFT appears in inventory after the Saigon randomness provider fulfills it.</p>
+      </section>
+
+      <section class="panel inventory-panel">
+        <div class="panel-heading">
+          <div><span>CONNECTED WALLET + EQUIPPED CUSTODY</span><h2>EQUIPMENT INVENTORY</h2></div>
+          <span id="equipment-count" class="state-chip">0 ITEMS</span>
+        </div>
+        <div id="equipment-list" class="equipment-list">
+          <p class="inventory-empty">Connect Ronin Wallet to scan the Equipment contract.</p>
+        </div>
+      </section>
+
+      <section class="panel settlement-panel">
+        <div class="panel-heading">
+          <div><span>PROTECTED GAMEPLAY PATH</span><h2>RUN SETTLEMENT</h2></div>
+          <span class="state-chip secure-chip">SERVER SIGNED</span>
+        </div>
+        <div class="settlement-grid">
+          <article><span>01</span><strong>BEGIN RUN</strong><small>The Game Operator locks the selected Miner and its loadout.</small></article>
+          <article><span>02</span><strong>EXTRACTION</strong><small>All carried crystals bank; phase XP applies; equipped armor remains healthy.</small></article>
+          <article><span>03</span><strong>DEATH</strong><small>XP gain is zero; active backpack burns; armor becomes damaged; the next backpack promotes.</small></article>
+        </div>
+        <div class="settlement-lock">
+          <strong id="settlement-miner-copy">SELECT A MINER</strong>
+          <small>Death and extraction cannot be forged by a player wallet. They require the configured MATT Game Operator and MATT Run Signer.</small>
+        </div>
+      </section>
+
+      <footer class="lab-footer">
+        <span>TESTNET CONTROL SURFACE</span>
+        <a href="https://saigon-app.roninchain.com/address/0x545d5d4c714eB4d2242BBFE82C31fe9a1E5Cff29" target="_blank" rel="noreferrer">VIEW MINER CONTRACT ↗</a>
+      </footer>
+    </main>
+    <script type="module" src="./src/nftLab.js"></script>
+  </body>
+</html>
