@@ -147,6 +147,7 @@ export function replayArenaTranscript(challenge, inputEvents, options = {}) {
       {},
     weeklyStage: options.weeklyStage || null,
     endlessSnapshot: options.endlessSnapshot || null,
+    nftRun: options.nftRun || null,
     roundDurationMs: replayMode === 'arena' ? challenge.maxTicks : 0,
     allowPaidRevive: options.allowPaidRevive === true,
     reviveLimitPerRun:
