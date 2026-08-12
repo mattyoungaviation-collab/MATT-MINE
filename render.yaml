@@ -58,7 +58,7 @@ services:
       # Saigon-only keeper. Enable only after its dedicated address and private
       # key are stored in Render; 0xF799 retains contract ownership.
       - key: MATT_MINE_NFT_SAIGON_KEEPER_ENABLED
-        value: "false"
+        sync: false
       - key: MATT_MINE_NFT_SAIGON_KEEPER_POLL_MS
         value: "5000"
       - key: MATT_MINE_NFT_SAIGON_KEEPER_ADDRESS
