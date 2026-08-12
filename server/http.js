@@ -82,6 +82,62 @@ async function handleApiRequest({
     sendJson(response, 200, { ok: true, service: 'matt-mine', ...health, version: 17 });
     return;
   }
+  if (method === 'GET' && path === '/api/nft-lab/metadata') {
+    const metadataUrl = validatedNftLabMetadataUrl(requestUrl.searchParams.get('url'));
+    let upstream;
+    try {
+      upstream = await fetch(metadataUrl, {
+        headers: { accept: 'application/json' },
+        signal: AbortSignal.timeout(10_000)
+      });
+    } catch {
+      throw new ApiError(502, 'nft_metadata_upstream_unreachable', 'The public NFT metadata host could not be reached.');
+    }
+    assertApi(upstream.ok, 502, 'nft_metadata_upstream_failed', `NFT metadata returned HTTP ${upstream.status}.`);
+    const contentLength = Number(upstream.headers.get('content-length') || 0);
+    assertApi(!contentLength || contentLength <= 256 * 1024, 502, 'nft_metadata_too_large', 'NFT metadata exceeds 256 KB.');
+    const text = await upstream.text();
+    assertApi(Buffer.byteLength(text) <= 256 * 1024, 502, 'nft_metadata_too_large', 'NFT metadata exceeds 256 KB.');
+    let metadata;
+    try {
+      metadata = JSON.parse(text);
+    } catch {
+      throw new ApiError(502, 'nft_metadata_invalid_json', 'NFT metadata did not return valid JSON.');
+    }
+    sendPublicJson(response, 200, metadata);
+    return;
+  }
+  if (method === 'GET' && path === '/api/nft-lab/image') {
+    const imageUrl = validatedNftLabImageUrl(requestUrl.searchParams.get('url'));
+    let upstream;
+    try {
+      upstream = await fetch(imageUrl, {
+        headers: { accept: 'image/png' },
+        signal: AbortSignal.timeout(20_000)
+      });
+    } catch {
+      throw new ApiError(502, 'nft_image_upstream_unreachable', 'The public NFT image host could not be reached.');
+    }
+    assertApi(upstream.ok, 502, 'nft_image_upstream_failed', `NFT image returned HTTP ${upstream.status}.`);
+    assertApi(
+      String(upstream.headers.get('content-type') || '').toLowerCase().startsWith('image/png'),
+      502,
+      'nft_image_type_invalid',
+      'NFT image did not return a PNG.'
+    );
+    const contentLength = Number(upstream.headers.get('content-length') || 0);
+    assertApi(!contentLength || contentLength <= 1024 * 1024, 502, 'nft_image_too_large', 'NFT image exceeds 1 MB.');
+    const body = Buffer.from(await upstream.arrayBuffer());
+    assertApi(body.length <= 1024 * 1024, 502, 'nft_image_too_large', 'NFT image exceeds 1 MB.');
+    response.writeHead(200, {
+      'content-type': 'image/png',
+      'content-length': body.length,
+      'cache-control': 'public, max-age=300',
+      'cross-origin-resource-policy': 'same-origin'
+    });
+    response.end(body);
+    return;
+  }
   if (method === 'POST' && path === '/api/admin/auth/session') {
     const session = await service.createAdminSession(bearerToken(request));
     setAdminCookie(response, session.token, session.expiresAt);
@@ -693,6 +749,47 @@ async function handleApiRequest({
   throw new ApiError(404, 'api_not_found', 'The requested API route does not exist.');
 }
 
+export function validatedNftLabMetadataUrl(value) {
+  let url;
+  try {
+    url = new URL(String(value || ''));
+  } catch {
+    throw new ApiError(400, 'nft_metadata_url_invalid', 'NFT metadata URL is invalid.');
+  }
+  assertApi(
+    url.origin === 'https://matt-mine.onrender.com'
+      && /^\/api\/nft\/(miners|equipment)\/[1-9][0-9]*\.json$/.test(url.pathname),
+    400,
+    'nft_metadata_url_forbidden',
+    'Only public MATT Mine Miner and Equipment metadata may be proxied.'
+  );
+  const revision = url.searchParams.get('v');
+  assertApi(!revision || /^[1-9][0-9]*$/.test(revision), 400, 'nft_metadata_revision_invalid', 'NFT metadata revision is invalid.');
+  url.search = revision ? `?v=${revision}` : '';
+  return url.href;
+}
+
+export function validatedNftLabImageUrl(value) {
+  let url;
+  try {
+    url = new URL(String(value || ''));
+  } catch {
+    throw new ApiError(400, 'nft_image_url_invalid', 'NFT image URL is invalid.');
+  }
+  const dynamicImage = /^\/api\/nft\/(miners|equipment)\/[1-9][0-9]*\/image\.png$/.test(url.pathname);
+  const staticLayer = /^\/assets\/nft\/[a-z0-9/_-]+\.png$/i.test(url.pathname);
+  assertApi(
+    url.origin === 'https://matt-mine.onrender.com' && (dynamicImage || staticLayer),
+    400,
+    'nft_image_url_forbidden',
+    'Only public MATT Mine NFT PNGs may be proxied.'
+  );
+  const revision = url.searchParams.get('v');
+  assertApi(!revision || /^[a-f0-9]{8,64}$/i.test(revision), 400, 'nft_image_revision_invalid', 'NFT image revision is invalid.');
+  url.search = revision ? `?v=${revision}` : '';
+  return url.href;
+}
+
 async function serveStatic(request, response, pathname, root) {
   assertApi(['GET', 'HEAD'].includes(request.method || 'GET'), 405, 'method_not_allowed', 'Static files only support GET and HEAD.');
   const decoded = decodeURIComponent(pathname);
@@ -724,9 +821,14 @@ async function serveStatic(request, response, pathname, root) {
     : ['.png', '.svg', '.ico', '.mp3', '.pdf'].includes(extension)
       ? 'public, max-age=86400'
       : 'no-cache';
+  const publicNftAsset = requestedPath.replace(/\\/g, '/').startsWith('assets/nft/');
   response.writeHead(200, {
     'content-type': MIME_TYPES[extension] || 'application/octet-stream',
-    'cache-control': cacheControl
+    'cache-control': cacheControl,
+    ...(publicNftAsset ? {
+      'access-control-allow-origin': '*',
+      'cross-origin-resource-policy': 'cross-origin'
+    } : {})
   });
   response.end(request.method === 'HEAD' ? undefined : body);
 }
@@ -793,7 +895,9 @@ function nftService(service) {
 function sendPublicJson(response, status, body) {
   response.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
-    'cache-control': 'public, max-age=30, s-maxage=30, stale-while-revalidate=300'
+    'cache-control': 'public, max-age=30, s-maxage=30, stale-while-revalidate=300',
+    'access-control-allow-origin': '*',
+    'cross-origin-resource-policy': 'cross-origin'
   });
   response.end(JSON.stringify(body));
 }
@@ -808,7 +912,9 @@ function sendPublicImage(request, response, image) {
     'content-type': image.contentType,
     'content-length': image.body.length,
     'cache-control': 'public, max-age=300, stale-while-revalidate=3600',
-    etag: image.etag
+    etag: image.etag,
+    'access-control-allow-origin': '*',
+    'cross-origin-resource-policy': 'cross-origin'
   });
   response.end(request.method === 'HEAD' ? undefined : image.body);
 }
@@ -881,7 +987,7 @@ function applySecurityHeaders(response) {
   response.setHeader('permissions-policy', 'camera=(), microphone=(), geolocation=()');
   response.setHeader(
     'content-security-policy',
-    "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com https://fonts.reown.com; connect-src 'self' https://rpc.walletconnect.com https://rpc.walletconnect.org https://relay.walletconnect.com https://relay.walletconnect.org wss://relay.walletconnect.com wss://relay.walletconnect.org https://pulse.walletconnect.com https://pulse.walletconnect.org https://api.web3modal.com https://api.web3modal.org https://keys.walletconnect.com https://keys.walletconnect.org https://notify.walletconnect.com https://notify.walletconnect.org https://echo.walletconnect.com https://echo.walletconnect.org https://push.walletconnect.com https://push.walletconnect.org wss://www.walletlink.org https://cca-lite.coinbase.com; frame-src 'self' https://verify.walletconnect.com https://verify.walletconnect.org https://secure.walletconnect.com https://secure.walletconnect.org; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+    "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com https://fonts.reown.com; connect-src 'self' https://matt-mine.onrender.com https://saigon-testnet.roninchain.com https://ipfs.io https://rpc.walletconnect.com https://rpc.walletconnect.org https://relay.walletconnect.com https://relay.walletconnect.org wss://relay.walletconnect.com wss://relay.walletconnect.org https://pulse.walletconnect.com https://pulse.walletconnect.org https://api.web3modal.com https://api.web3modal.org https://keys.walletconnect.com https://keys.walletconnect.org https://notify.walletconnect.com https://notify.walletconnect.org https://echo.walletconnect.com https://echo.walletconnect.org https://push.walletconnect.com https://push.walletconnect.org wss://www.walletlink.org https://cca-lite.coinbase.com; frame-src 'self' https://verify.walletconnect.com https://verify.walletconnect.org https://secure.walletconnect.com https://secure.walletconnect.org; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
   );
 }
 
