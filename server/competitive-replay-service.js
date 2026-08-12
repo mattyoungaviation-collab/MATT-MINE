@@ -286,6 +286,7 @@ function replayOptions(run, requireTerminal, currentStateRun = run) {
     characterId: run.characterId,
     character: run.character,
     profile: run.playerProfile,
+    nftRun: run.nftRun || null,
     weeklyStage: run.weeklyStage,
     endlessSnapshot: run.endlessSnapshot,
     allowPaidRevive: run.paidReviveEligible === true,
