@@ -198,18 +198,24 @@ export class NftMetadataService {
   }
 
   async playerMiner(addressInput) {
+    const miners = await this.playerMiners(addressInput);
+    return miners[0] || null;
+  }
+
+  async playerMiners(addressInput) {
     this.assertEnabled();
     const owner = getAddress(addressInput);
+    const miners = [];
     for (let minerId = 1; minerId <= 1_000; minerId += 1) {
       try {
         const profile = await this.minerProfile(minerId);
-        if (getAddress(profile.owner) === owner) return profile;
+        if (getAddress(profile.owner) === owner) miners.push(profile);
       } catch (error) {
         if (error?.status === 404 || error?.code === 'nft_not_found') break;
         throw error;
       }
     }
-    return null;
+    return miners;
   }
 
   assertEnabled() {

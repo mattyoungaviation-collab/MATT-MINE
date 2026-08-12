@@ -108,6 +108,7 @@ let activeServerRun = null;
 let pendingRunFinalization = null;
 let runFinalizationBusy = false;
 let nftPracticeRecoveryBusy = false;
+let selectedNftMinerId = 0;
 let paymentStatus = null;
 let publicPaymentStatus = null;
 let walletBusy = false;
@@ -180,7 +181,7 @@ function showScreen(id = null) {
       (action === 'leaderboards' && id === 'leaderboards') ||
       (action === 'pass' && (id === 'mine-pass' || id === 'pass-mine' || id === 'pass-cosmetics')) ||
       (action === 'store' && id === 'nugget-shop') ||
-      (action === 'account' && id === 'miner-profile');
+      (action === 'account' && (id === 'miner-profile' || id === 'miner-select'));
     button.classList.toggle('active', active);
   }
   syncLiveDashboardPolling(id);
@@ -190,7 +191,7 @@ function syncLiveDashboardPolling(screenId) {
   clearInterval(liveDashboardTimer);
   liveDashboardTimer = null;
   const liveScreens = new Set([
-    'launch', 'menu', 'daily-mine', 'pass-mine', 'miner-profile',
+    'launch', 'miner-select', 'menu', 'daily-mine', 'pass-mine', 'miner-profile',
     'mine-pass', 'daily-arena', 'leaderboards'
   ]);
   if (!serverPlayer || !liveScreens.has(screenId)) return;
@@ -762,7 +763,7 @@ async function saveMinerIdentity() {
     if (wallet.player) wallet.player.identity = result.identity;
     pendingAvatarDataUrl = '';
     updateMenu();
-    showScreen('menu');
+    void openMinerSelect();
     toast(`Welcome to the mine, ${result.identity.name}.`);
   } catch (error) {
     $('#profile-status').textContent = error.message;
@@ -956,6 +957,13 @@ async function submitServerRun(serverRun, result) {
     }
     if (accepted.nftSettlement) {
       if (serverPlayer) serverPlayer.nftMiner = accepted.nftSettlement.profile;
+      if (serverPlayer && Array.isArray(serverPlayer.nftMiners)) {
+        serverPlayer.nftMiners = serverPlayer.nftMiners.map((miner) =>
+          miner.minerId === accepted.nftSettlement.profile?.minerId
+            ? accepted.nftSettlement.profile
+            : miner
+        );
+      }
       if (serverPlayer && accepted.nftCrystals) serverPlayer.nftCrystals = accepted.nftCrystals;
     }
     if (paymentStatus && accepted.passProgress) paymentStatus.passProgress = accepted.passProgress;
@@ -1323,7 +1331,7 @@ async function startRunMode(mode, options = {}) {
     try {
       const run = options.restartInterruptedNftPractice === true
         ? await apiClient.restartInterruptedNftPractice()
-        : await apiClient.startRun(mode);
+        : await apiClient.startRun(mode, selectedNftMinerId);
       issuedRun = run;
       activeServerRun = run;
       if (serverPlayer && options.restartInterruptedNftPractice === true) {
@@ -1410,6 +1418,111 @@ async function startRunMode(mode, options = {}) {
     competitionSnapshot: mine?.slot?.snapshot || tuning?._competitionSnapshot
   });
   updateMenu();
+}
+
+async function openMinerSelect() {
+  if (!serverPlayer) {
+    const connected = await connectWallet();
+    if (!connected) return;
+  }
+  const miners = ownedNftMiners();
+  if (!miners.some((miner) => miner.minerId === selectedNftMinerId)) {
+    selectedNftMinerId = miners[0]?.minerId || 0;
+  }
+  renderMinerSelect();
+  showScreen('miner-select');
+}
+
+function ownedNftMiners() {
+  if (Array.isArray(serverPlayer?.nftMiners)) return serverPlayer.nftMiners;
+  return serverPlayer?.nftMiner ? [serverPlayer.nftMiner] : [];
+}
+
+function renderMinerSelect() {
+  const grid = $('#miner-select-grid');
+  if (!grid) return;
+  const miners = ownedNftMiners();
+  grid.replaceChildren();
+  if (!miners.length) {
+    const empty = document.createElement('article');
+    empty.className = 'miner-select-empty';
+    const title = document.createElement('strong');
+    title.textContent = 'NO MINER NFT FOUND';
+    const note = document.createElement('span');
+    note.textContent = 'This wallet needs a MATT Mine Miner before entering NFT-powered mines.';
+    empty.append(title, note);
+    grid.append(empty);
+  }
+  for (const miner of miners) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `miner-select-option${miner.minerId === selectedNftMinerId ? ' active' : ''}`;
+    const image = document.createElement('img');
+    image.src = minerImageUrl(miner);
+    image.alt = '';
+    const copy = document.createElement('span');
+    const token = document.createElement('small');
+    token.textContent = `MINER NFT #${miner.minerId}`;
+    const evolution = document.createElement('strong');
+    evolution.textContent = evolutionName(miner);
+    const level = document.createElement('b');
+    level.textContent = `LEVEL ${miner.progression?.level || 1}`;
+    copy.append(token, evolution, level);
+    button.append(image, copy);
+    button.addEventListener('click', () => {
+      selectedNftMinerId = miner.minerId;
+      renderMinerSelect();
+    });
+    grid.append(button);
+  }
+
+  const selected = miners.find((miner) => miner.minerId === selectedNftMinerId) || null;
+  const image = $('#selected-miner-image');
+  const empty = $('#selected-miner-empty');
+  image.hidden = !selected;
+  empty.hidden = Boolean(selected);
+  if (selected) image.src = minerImageUrl(selected);
+  $('#selected-miner-name').textContent = selected ? `MATT MINE MINER #${selected.minerId}` : 'NO MINER SELECTED';
+  const stats = $('#selected-miner-stats');
+  stats.replaceChildren();
+  if (selected) {
+    const values = [
+      ['LEVEL', selected.progression?.level || 1],
+      ['HEALTH', selected.gameplay?.maximumHealth || 100],
+      ['CRYSTAL CARRY', `${selected.gameplay?.crystalCarryMultiplier || 1}x`],
+      ['ARMOR', selected.equipped?.armor ? selected.gameplay?.armorEffective ? 'ACTIVE' : 'DAMAGED' : 'NONE']
+    ];
+    for (const [label, value] of values) {
+      const row = document.createElement('span');
+      const name = document.createElement('small');
+      name.textContent = label;
+      const result = document.createElement('strong');
+      result.textContent = String(value);
+      row.append(name, result);
+      stats.append(row);
+    }
+  }
+  const enter = $('#enter-mines-button');
+  enter.disabled = !selected || selected.gameplay?.runLocked === true;
+  enter.textContent = selected?.gameplay?.runLocked ? 'MINER IS IN A RUN' : 'ENTER MINES';
+}
+
+function evolutionName(miner) {
+  return ['ROOKIE MINER', 'APPRENTICE MINER', 'CRYSTAL HUNTER', 'VETERAN MINER', 'VAULT RAIDER', 'ELITE MINER', 'MINE LEGEND'][miner?.progression?.evolution || 0] || 'MATT MINE MINER';
+}
+
+function minerImageUrl(miner) {
+  const equipment = miner?.equipped || {};
+  const revision = [
+    miner?.progression?.level || 1,
+    miner?.progression?.bankedXp || 0,
+    equipment.weapon || 0,
+    equipment.backpack || 0,
+    equipment.helmet || 0,
+    equipment.armor || 0,
+    miner?.gameplay?.armorEffective === false ? 'damaged' : 'active'
+  ].join('-');
+  return `/api/nft/miners/${miner.minerId}/image.png?v=${encodeURIComponent(revision)}`;
 }
 
 async function resumeInterruptedNftPractice() {
@@ -1735,36 +1848,23 @@ window.__MATT_MINE_API__ = apiClient;
 for (const button of document.querySelectorAll('[data-launch-action]')) {
   button.addEventListener('click', () => {
     const action = button.dataset.launchAction;
+    if (['enter', 'daily', 'pass-mine', 'practice', 'arena'].includes(action)) {
+      void openMinerSelect();
+      return;
+    }
     if (action === 'how-to-play') {
       showScreen('how-to-play');
-      return;
-    }
-    if (action === 'daily') {
-      openDailyMine();
-      return;
-    }
-    if (action === 'pass-mine') {
-      openPassMine();
-      return;
-    }
-    if (action === 'practice') {
-      void startRunMode(RUN_MODES.PRACTICE);
       return;
     }
     if (action === 'pass') {
       openPass();
       return;
     }
-    if (action === 'arena') {
-      void openArena();
-      return;
-    }
     if (action === 'leaderboards') {
       openLeaderboards(RUN_MODES.FREE);
       return;
     }
-    showScreen('menu');
-    updateMenu();
+    void openMinerSelect();
   });
 }
 
@@ -1777,8 +1877,7 @@ for (const button of document.querySelectorAll('[data-site-action]')) {
     if (action === 'pass') return openPass();
     if (action === 'store') return window.dispatchEvent(new CustomEvent('mattmine:open-nugget-shop'));
     if (action === 'mines') {
-      showScreen('menu');
-      return updateMenu();
+      return void openMinerSelect();
     }
     if (action === 'account') {
       if (serverPlayer) return openMinerProfile(false);
@@ -1826,6 +1925,11 @@ mobileWalletConnectCancel.addEventListener('click', () => {
 });
 
 $('#home-button').addEventListener('click', () => openLaunch(true));
+$('#miner-select-home').addEventListener('click', () => openLaunch(true));
+$('#enter-mines-button').addEventListener('click', () => {
+  showScreen('menu');
+  updateMenu();
+});
 $('#free-run-button').addEventListener('click', openDailyMine);
 $('#practice-run-button').addEventListener('click', () => void startRunMode(RUN_MODES.PRACTICE));
 $('#resume-nft-practice-button').addEventListener('click', () => void resumeInterruptedNftPractice());

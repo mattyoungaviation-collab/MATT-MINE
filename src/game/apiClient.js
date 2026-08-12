@@ -232,11 +232,11 @@ export class MattMineApiClient {
     });
   }
 
-  async startRun(mode) {
+  async startRun(mode, minerId = 0) {
     const response = await this.request('/api/runs/start', {
       method: 'POST',
       authenticated: true,
-      body: { mode }
+      body: { mode, ...(minerId ? { minerId } : {}) }
     });
     return response.run;
   }

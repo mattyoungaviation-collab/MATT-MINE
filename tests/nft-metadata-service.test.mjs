@@ -56,6 +56,31 @@ async function createService() {
 }
 
 describe('NFT metadata service', function () {
+  it('returns every Miner owned by a wallet for character selection', async function () {
+    const service = new NftMetadataService({
+      enabled: true,
+      root: ROOT,
+      publicOrigin: 'https://matt-mine.onrender.com',
+      chainId: 202601,
+      addresses: ADDRESSES,
+      chainReader: {
+        async miner(minerId) {
+          if (minerId > 2) throw Object.assign(new Error('missing'), { status: 404 });
+          return {
+            owner: OWNER,
+            progression: { bankedXp: 0, level: minerId, evolution: 0, prestigeXp: 0 },
+            loadout: { weapon: 0, backpackHead: 0, backpackTail: 0, helmet: 0, armor: 0, backpackCount: 0, runLocked: false },
+            equipment: {}
+          };
+        }
+      }
+    });
+    await service.init();
+    const miners = await service.playerMiners(OWNER);
+    assert.deepEqual(miners.map(({ minerId }) => minerId), [1, 2]);
+    assert.equal((await service.playerMiner(OWNER)).minerId, 1);
+  });
+
   it('builds wallet metadata and a composited Miner PNG with the starter pickaxe', async function () {
     const service = await createService();
     const metadata = await service.minerMetadata(1);
