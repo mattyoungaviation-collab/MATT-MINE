@@ -55,6 +55,16 @@ services:
         value: "0xc06b131C160701150Cea5b2C22dB3c6d7f451309"
       - key: MATT_MINE_NFT_RANDOMNESS_ADDRESS
         value: "0x13B2CC4744657bbc75a1f7588A1Ca8e397E69521"
+      # Saigon-only keeper. Enable only after its dedicated address and private
+      # key are stored in Render; 0xF799 retains contract ownership.
+      - key: MATT_MINE_NFT_SAIGON_KEEPER_ENABLED
+        value: "false"
+      - key: MATT_MINE_NFT_SAIGON_KEEPER_POLL_MS
+        value: "5000"
+      - key: MATT_MINE_NFT_SAIGON_KEEPER_ADDRESS
+        sync: false
+      - key: MATT_MINE_NFT_SAIGON_KEEPER_PRIVATE_KEY
+        sync: false
       - key: MATT_MINE_ADMIN_WALLETS
         sync: false
       - key: MATT_MINE_ADMIN_KEY

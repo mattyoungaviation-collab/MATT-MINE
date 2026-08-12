@@ -24,7 +24,8 @@
     "check-nft:saigon": "hardhat run --build-profile production scripts/check-nft-saigon.js --network saigonReadOnly",
     "verify-nft:saigon": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-nft-saigon.ps1",
     "bootstrap-nft-rehearsal:saigon": "hardhat run --build-profile production scripts/bootstrap-nft-saigon-rehearsal.js --network saigon",
-    "check-nft-rehearsal:saigon": "hardhat run --build-profile production scripts/check-nft-saigon-rehearsal.js --network saigonReadOnly"
+    "check-nft-rehearsal:saigon": "hardhat run --build-profile production scripts/check-nft-saigon-rehearsal.js --network saigonReadOnly",
+    "activate-chest-keeper:saigon": "hardhat run --build-profile production scripts/activate-saigon-chest-keeper.js --network saigon"
   },
   "dependencies": {
     "@openzeppelin/contracts": "5.4.0"

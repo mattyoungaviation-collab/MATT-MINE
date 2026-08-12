@@ -120,6 +120,18 @@ export function formatTokenUnits(value, decimals = 18, maximumFractionDigits = 4
   return fraction ? `${whole}.${fraction}` : whole.toString();
 }
 
+export async function waitForTokenIdIncrease(readNextTokenId, baseline, options = {}) {
+  const attempts = Number(options.attempts || 12);
+  const delayMs = Number(options.delayMs || 2_500);
+  const delay = options.delay || ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)));
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const nextTokenId = BigInt(await readNextTokenId());
+    if (nextTokenId > BigInt(baseline)) return nextTokenId;
+    if (attempt + 1 < attempts) await delay(delayMs);
+  }
+  return BigInt(baseline);
+}
+
 function normalizeAddress(value) {
   const address = String(value || '').toLowerCase();
   if (!/^0x[0-9a-f]{40}$/.test(address)) throw new Error(`Invalid EVM address: ${value || 'empty'}`);
@@ -708,12 +720,16 @@ async function openChest(chestType) {
       encodeCall(ABI_SELECTORS.openChest, uintWord(product.type)),
       `open ${product.label}`
     );
-    const afterNextTokenId = decodeAbiUint(await callContract(NFT_LAB_CONTRACTS.equipment, ABI_SELECTORS.nextTokenId));
+    setStatus(`${product.label} paid. Waiting for the Saigon mint...`, 'busy');
+    const afterNextTokenId = await waitForTokenIdIncrease(
+      async () => decodeAbiUint(await callContract(NFT_LAB_CONTRACTS.equipment, ABI_SELECTORS.nextTokenId)),
+      beforeNextTokenId
+    );
     await refreshAll();
     setStatus(
       afterNextTokenId > beforeNextTokenId
         ? `${product.label} fulfilled. The new equipment NFT is now in inventory.`
-        : `${product.label} randomness requested in ${hash.slice(0, 10)}…. Refresh after the provider fulfills it.`,
+        : `${product.label} randomness request ${hash.slice(0, 10)}… is still queued. It will appear automatically when fulfilled.`,
       'success'
     );
   } catch (error) {
