@@ -23,6 +23,16 @@ const MIME_TYPES = Object.freeze({
 
 const RETIRED_ARENA_RULES_PATH = 'legal/matt-mine-arena-rules-v0.01.pdf';
 const PUBLIC_ARENA_RULES_PATH = '/legal/matt-mine-arena-rules-v0.01.txt';
+const NFT_LAB_SAIGON_RPC_URL = 'https://saigon-testnet.roninchain.com/rpc';
+const NFT_LAB_RPC_METHODS = new Set(['eth_call', 'eth_getTransactionReceipt']);
+const NFT_LAB_RPC_CONTRACTS = new Set([
+  '0x545d5d4c714eb4d2242bbfe82c31fe9a1e5cff29',
+  '0x73a4ad9a2b4bfee1b98f5d99aab24b702deb093',
+  '0x6cf168cdd198d0d111fae2286ae6dcd86fa960d8',
+  '0x52f66358ae951638a794777f3cc3448513d5be37',
+  '0x08d6fe054a75a59b7abd4942d890f56f8e1896b2',
+  '0x108afaadb3edd4cb10206b297db0f3c9f9611769'
+]);
 
 export function createMattMineHttpServer({ root, service, maxRequestBytes = MAX_REQUEST_BYTES }) {
   const staticRoot = resolve(root);
@@ -61,7 +71,11 @@ async function handleApiRequest({
 }) {
   const clientKey = request.socket.remoteAddress || 'unknown';
   const stricter = requestUrl.pathname === '/api/auth/challenge';
-  rateLimiter.consume(`${clientKey}:${stricter ? 'challenge' : 'api'}`, stricter ? 12 : 240, stricter ? 10 * 60_000 : 60_000);
+  const nftLabRpc = requestUrl.pathname === '/api/nft-lab/rpc';
+  const limiterName = stricter ? 'challenge' : nftLabRpc ? 'nft-lab-rpc' : 'api';
+  const limiterCount = stricter ? 12 : nftLabRpc ? 1_500 : 240;
+  const limiterWindow = stricter ? 10 * 60_000 : 60_000;
+  rateLimiter.consume(`${clientKey}:${limiterName}`, limiterCount, limiterWindow);
   if (requestUrl.pathname === '/api/profile/identity' || requestUrl.pathname === '/api/profile/avatar') {
     rateLimiter.consume(`${clientKey}:profile-media`, 12, 10 * 60_000);
   }
@@ -80,6 +94,31 @@ async function handleApiRequest({
   if (method === 'GET' && path === '/api/health') {
     const health = await service.health();
     sendJson(response, 200, { ok: true, service: 'matt-mine', ...health, version: 17 });
+    return;
+  }
+  if (method === 'POST' && path === '/api/nft-lab/rpc') {
+    const body = await readJson(request, Math.min(maxRequestBytes, 16 * 1024));
+    const rpcRequest = validatedNftLabRpcRequest(body);
+    let upstream;
+    try {
+      upstream = await fetch(NFT_LAB_SAIGON_RPC_URL, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify(rpcRequest),
+        signal: AbortSignal.timeout(10_000)
+      });
+    } catch {
+      throw new ApiError(502, 'nft_rpc_upstream_unreachable', 'The Saigon RPC could not be reached.');
+    }
+    assertApi(upstream.ok, 502, 'nft_rpc_upstream_failed', `Saigon RPC returned HTTP ${upstream.status}.`);
+    let payload;
+    try {
+      payload = await upstream.json();
+    } catch {
+      throw new ApiError(502, 'nft_rpc_invalid_json', 'The Saigon RPC returned invalid JSON.');
+    }
+    assertApi(payload && typeof payload === 'object' && !Array.isArray(payload), 502, 'nft_rpc_invalid_response', 'The Saigon RPC returned an invalid response.');
+    sendJson(response, 200, { jsonrpc: '2.0', id: rpcRequest.id, ...(payload.error ? { error: payload.error } : { result: payload.result }) });
     return;
   }
   if (method === 'GET' && path === '/api/nft-lab/metadata') {
@@ -759,6 +798,30 @@ async function handleApiRequest({
   }
 
   throw new ApiError(404, 'api_not_found', 'The requested API route does not exist.');
+}
+
+export function validatedNftLabRpcRequest(value) {
+  const method = String(value?.method || '');
+  const id = Number(value?.id);
+  const params = value?.params;
+  assertApi(NFT_LAB_RPC_METHODS.has(method), 400, 'nft_rpc_method_forbidden', 'Only approved Saigon NFT read methods may be proxied.');
+  assertApi(Number.isSafeInteger(id) && id >= 0, 400, 'nft_rpc_id_invalid', 'The Saigon RPC request ID is invalid.');
+  assertApi(Array.isArray(params), 400, 'nft_rpc_params_invalid', 'The Saigon RPC parameters are invalid.');
+
+  if (method === 'eth_call') {
+    const call = params[0];
+    assertApi(params.length === 2 && params[1] === 'latest', 400, 'nft_rpc_block_invalid', 'NFT contract reads must use the latest Saigon block.');
+    assertApi(call && typeof call === 'object' && !Array.isArray(call), 400, 'nft_rpc_call_invalid', 'The NFT contract read is invalid.');
+    const to = String(call.to || '').toLowerCase();
+    const data = String(call.data || '');
+    assertApi(NFT_LAB_RPC_CONTRACTS.has(to), 400, 'nft_rpc_contract_forbidden', 'Only MATT Mine Saigon NFT contracts may be read.');
+    assertApi(/^0x[0-9a-f]+$/i.test(data) && data.length % 2 === 0 && data.length <= 8_194, 400, 'nft_rpc_data_invalid', 'The NFT contract calldata is invalid.');
+    return { jsonrpc: '2.0', id, method, params: [{ to, data }, 'latest'] };
+  }
+
+  const hash = String(params[0] || '').toLowerCase();
+  assertApi(params.length === 1 && /^0x[0-9a-f]{64}$/.test(hash), 400, 'nft_rpc_hash_invalid', 'The Saigon transaction hash is invalid.');
+  return { jsonrpc: '2.0', id, method, params: [hash] };
 }
 
 export function validatedNftLabMetadataUrl(value) {

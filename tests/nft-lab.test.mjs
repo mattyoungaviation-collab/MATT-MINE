@@ -16,7 +16,7 @@ import {
   uintWord,
   waitForTokenIdIncrease
 } from '../src/nftLab.js';
-import { validatedNftLabImageUrl, validatedNftLabMetadataUrl } from '../server/http.js';
+import { validatedNftLabImageUrl, validatedNftLabMetadataUrl, validatedNftLabRpcRequest } from '../server/http.js';
 
 describe('Saigon NFT Lab ABI helpers', () => {
   it('encodes Miner and Loadout calls without a browser dependency', () => {
@@ -48,6 +48,31 @@ describe('Saigon NFT Lab ABI helpers', () => {
     assert.equal(preferredMinerId('?miner=2'), 2);
     assert.equal(preferredMinerId('?miner=0'), 0);
     assert.equal(preferredMinerId('?miner=not-a-token'), 0);
+  });
+
+  it('keeps Saigon RPC reads on the same-origin server proxy', () => {
+    assert.deepEqual(
+      validatedNftLabRpcRequest({
+        jsonrpc: '2.0',
+        id: 7,
+        method: 'eth_call',
+        params: [{ to: '0x545d5d4c714eB4d2242BBFE82C31fe9a1E5Cff29', data: ABI_SELECTORS.nextTokenId }, 'latest']
+      }),
+      {
+        jsonrpc: '2.0',
+        id: 7,
+        method: 'eth_call',
+        params: [{ to: '0x545d5d4c714eb4d2242bbfe82c31fe9a1e5cff29', data: ABI_SELECTORS.nextTokenId }, 'latest']
+      }
+    );
+    assert.throws(
+      () => validatedNftLabRpcRequest({ id: 8, method: 'eth_sendTransaction', params: [] }),
+      /Only approved Saigon NFT read methods/
+    );
+    assert.throws(
+      () => validatedNftLabRpcRequest({ id: 9, method: 'eth_call', params: [{ to: '0x1DAb596D0121C250a24B00137E84170FA6874be6', data: '0x12345678' }, 'latest'] }),
+      /Only MATT Mine Saigon NFT contracts/
+    );
   });
 
   it('maps all five chest products to the deployed chest ABI', () => {
