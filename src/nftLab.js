@@ -179,12 +179,12 @@ async function callContract(to, data) {
 }
 
 async function publicRpc(method, params) {
-  const response = await fetch(NFT_LAB_CHAIN.rpcUrl, {
+  const response = await fetch('/api/nft-lab/rpc', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ jsonrpc: '2.0', id: ++rpcRequestId, method, params })
   });
-  if (!response.ok) throw new Error(`Saigon RPC returned HTTP ${response.status}.`);
+  if (!response.ok) throw new Error(`MATT Mine Saigon RPC returned HTTP ${response.status}.`);
   const payload = await response.json();
   if (payload.error) throw new Error(payload.error.message || `Saigon RPC ${method} failed.`);
   return payload.result;
