@@ -41,8 +41,12 @@ if (
 const crystal = new ethers.Contract(config.protocol.crystalToken, [
   "function MINTER_ROLE() view returns (bytes32)",
   "function hasRole(bytes32,address) view returns (bool)",
-  "function grantRole(bytes32,address)"
+  "function owner() view returns (address)",
+  "function grantMinter(address)"
 ], admin);
+if (getAddress(await crystal.owner()) !== NFT_V2_ROOT) {
+  throw new Error("0xF799 is not the MATT Crystal owner and cannot authorize the V2 payout contracts.");
+}
 const coordinator = new ethers.Contract(config.protocol.vrfCoordinator, [
   "function getSubscription(uint256 subId) view returns (uint96 balance,uint96 nativeBalance,uint64 reqCount,address subOwner,address[] consumers)",
   "function addConsumer(uint256 subId,address consumer)"
@@ -58,8 +62,8 @@ for (const adapter of adapters) {
 const minterRole = await crystal.MINTER_ROLE();
 for (const target of [bank.target, passive.target]) {
   if (!(await crystal.hasRole(minterRole, target))) {
-    try { await crystal.grantRole.staticCall(minterRole, target); }
-    catch (error) { throw new Error(`0xF799 cannot grant Crystal MINTER_ROLE to ${target}. Restore the Crystal AccessControl admin before activation. ${error.shortMessage || error.message}`); }
+    try { await crystal.grantMinter.staticCall(target); }
+    catch (error) { throw new Error(`0xF799 cannot authorize ${target} as a Crystal minter through the token owner's grantMinter function. ${error.shortMessage || error.message}`); }
   }
 }
 for (const [label, address] of [["Game/Config Operator", config.activationRoles.gameOperator], ["Keeper", config.activationRoles.keeper]]) {
@@ -73,7 +77,7 @@ for (const adapter of adapters) {
   }
 }
 for (const target of [bank.target, passive.target]) {
-  if (!(await crystal.hasRole(minterRole, target))) await send(`Grant Crystal MINTER_ROLE to ${target}`, () => crystal.grantRole(minterRole, target));
+  if (!(await crystal.hasRole(minterRole, target))) await send(`Authorize Crystal minter ${target}`, () => crystal.grantMinter(target));
 }
 
 await grant(miner, await miner.PAUSER_ROLE(), config.activationRoles.emergencyPauser, "Miner emergency pauser");

@@ -6,6 +6,7 @@ import { ApiError, assertApi } from './errors.js';
 import { normalizeOrigin } from './auth-message.js';
 import { isTransientPostgresError } from './postgres-resilience.js';
 import { observeHttpRequest } from './observability.js';
+import { nftRpcUrlFromEnvironment } from './nft-rpc-url.js';
 
 const MIME_TYPES = Object.freeze({
   '.html': 'text/html; charset=utf-8',
@@ -23,15 +24,15 @@ const MIME_TYPES = Object.freeze({
 
 const RETIRED_ARENA_RULES_PATH = 'legal/matt-mine-arena-rules-v0.01.pdf';
 const PUBLIC_ARENA_RULES_PATH = '/legal/matt-mine-arena-rules-v0.01.txt';
-const NFT_LAB_SAIGON_RPC_URL = 'https://saigon-testnet.roninchain.com/rpc';
+const NFT_LAB_MAINNET_RPC_URL = nftRpcUrlFromEnvironment();
 const NFT_LAB_RPC_METHODS = new Set(['eth_call', 'eth_getTransactionReceipt']);
 const NFT_LAB_RPC_CONTRACTS = new Set([
-  '0x545d5d4c714eb4d2242bbfe82c31fe9a1e5cff29',
-  '0x73a4ad9a2b4bfee1b98f5d99aab24b702deb093',
-  '0x6cf168cdd198d0d111fae2286ae6dcd86fa960d8',
-  '0x52f66358ae951638a794777f3cc3448513d5be37',
-  '0x08d6fe054a75a59b7abd4942d890f56f8e1896b2',
-  '0x108afaadb3edd4cb10206b297db0f3c9f9611769'
+  '0xbbabe35b943e3ba911b53c2b39447cf181fe565a',
+  '0x415cf1dea47f3d4bab830f78b82e12d6eeced612',
+  '0xb88c219c792cfa07749e0e5d939dbbbf1e62c7b5',
+  '0x693525e7fd76949834cad56d67d469baad6687f6',
+  '0x21bee81adc4c87e3ea4686dd8a38a64c8ea5b95c',
+  '0xa5450417bdca0bdfb058ffe41205400ffda1174d'
 ]);
 
 export function createMattMineHttpServer({ root, service, maxRequestBytes = MAX_REQUEST_BYTES }) {
@@ -101,23 +102,23 @@ async function handleApiRequest({
     const rpcRequest = validatedNftLabRpcRequest(body);
     let upstream;
     try {
-      upstream = await fetch(NFT_LAB_SAIGON_RPC_URL, {
+      upstream = await fetch(NFT_LAB_MAINNET_RPC_URL, {
         method: 'POST',
         headers: { 'content-type': 'application/json', accept: 'application/json' },
         body: JSON.stringify(rpcRequest),
         signal: AbortSignal.timeout(10_000)
       });
     } catch {
-      throw new ApiError(502, 'nft_rpc_upstream_unreachable', 'The Saigon RPC could not be reached.');
+      throw new ApiError(502, 'nft_rpc_upstream_unreachable', 'The Ronin Mainnet RPC could not be reached.');
     }
-    assertApi(upstream.ok, 502, 'nft_rpc_upstream_failed', `Saigon RPC returned HTTP ${upstream.status}.`);
+    assertApi(upstream.ok, 502, 'nft_rpc_upstream_failed', `Ronin Mainnet RPC returned HTTP ${upstream.status}.`);
     let payload;
     try {
       payload = await upstream.json();
     } catch {
-      throw new ApiError(502, 'nft_rpc_invalid_json', 'The Saigon RPC returned invalid JSON.');
+      throw new ApiError(502, 'nft_rpc_invalid_json', 'The Ronin Mainnet RPC returned invalid JSON.');
     }
-    assertApi(payload && typeof payload === 'object' && !Array.isArray(payload), 502, 'nft_rpc_invalid_response', 'The Saigon RPC returned an invalid response.');
+    assertApi(payload && typeof payload === 'object' && !Array.isArray(payload), 502, 'nft_rpc_invalid_response', 'The Ronin Mainnet RPC returned an invalid response.');
     sendJson(response, 200, { jsonrpc: '2.0', id: rpcRequest.id, ...(payload.error ? { error: payload.error } : { result: payload.result }) });
     return;
   }
@@ -837,23 +838,23 @@ export function validatedNftLabRpcRequest(value) {
   const method = String(value?.method || '');
   const id = Number(value?.id);
   const params = value?.params;
-  assertApi(NFT_LAB_RPC_METHODS.has(method), 400, 'nft_rpc_method_forbidden', 'Only approved Saigon NFT read methods may be proxied.');
-  assertApi(Number.isSafeInteger(id) && id >= 0, 400, 'nft_rpc_id_invalid', 'The Saigon RPC request ID is invalid.');
-  assertApi(Array.isArray(params), 400, 'nft_rpc_params_invalid', 'The Saigon RPC parameters are invalid.');
+  assertApi(NFT_LAB_RPC_METHODS.has(method), 400, 'nft_rpc_method_forbidden', 'Only approved Ronin Mainnet NFT read methods may be proxied.');
+  assertApi(Number.isSafeInteger(id) && id >= 0, 400, 'nft_rpc_id_invalid', 'The Ronin Mainnet RPC request ID is invalid.');
+  assertApi(Array.isArray(params), 400, 'nft_rpc_params_invalid', 'The Ronin Mainnet RPC parameters are invalid.');
 
   if (method === 'eth_call') {
     const call = params[0];
-    assertApi(params.length === 2 && params[1] === 'latest', 400, 'nft_rpc_block_invalid', 'NFT contract reads must use the latest Saigon block.');
+    assertApi(params.length === 2 && params[1] === 'latest', 400, 'nft_rpc_block_invalid', 'NFT contract reads must use the latest Ronin Mainnet block.');
     assertApi(call && typeof call === 'object' && !Array.isArray(call), 400, 'nft_rpc_call_invalid', 'The NFT contract read is invalid.');
     const to = String(call.to || '').toLowerCase();
     const data = String(call.data || '');
-    assertApi(NFT_LAB_RPC_CONTRACTS.has(to), 400, 'nft_rpc_contract_forbidden', 'Only MATT Mine Saigon NFT contracts may be read.');
+    assertApi(NFT_LAB_RPC_CONTRACTS.has(to), 400, 'nft_rpc_contract_forbidden', 'Only the activated MATT Mine Mainnet NFT contracts may be read.');
     assertApi(/^0x[0-9a-f]+$/i.test(data) && data.length % 2 === 0 && data.length <= 8_194, 400, 'nft_rpc_data_invalid', 'The NFT contract calldata is invalid.');
     return { jsonrpc: '2.0', id, method, params: [{ to, data }, 'latest'] };
   }
 
   const hash = String(params[0] || '').toLowerCase();
-  assertApi(params.length === 1 && /^0x[0-9a-f]{64}$/.test(hash), 400, 'nft_rpc_hash_invalid', 'The Saigon transaction hash is invalid.');
+  assertApi(params.length === 1 && /^0x[0-9a-f]{64}$/.test(hash), 400, 'nft_rpc_hash_invalid', 'The Ronin Mainnet transaction hash is invalid.');
   return { jsonrpc: '2.0', id, method, params: [hash] };
 }
 
@@ -866,7 +867,7 @@ export function validatedNftLabMetadataUrl(value) {
   }
   assertApi(
     url.origin === 'https://matt-mine.onrender.com'
-      && /^\/api\/nft\/(miners|equipment)\/[1-9][0-9]*\.json$/.test(url.pathname),
+      && /^\/api\/nft\/(?:v2\/)?(miners|equipment)\/[1-9][0-9]*\.json$/.test(url.pathname),
     400,
     'nft_metadata_url_forbidden',
     'Only public MATT Mine Miner and Equipment metadata may be proxied.'
@@ -884,7 +885,7 @@ export function validatedNftLabImageUrl(value) {
   } catch {
     throw new ApiError(400, 'nft_image_url_invalid', 'NFT image URL is invalid.');
   }
-  const dynamicImage = /^\/api\/nft\/(miners|equipment)\/[1-9][0-9]*\/image\.png$/.test(url.pathname);
+  const dynamicImage = /^\/api\/nft\/(?:v2\/)?(miners|equipment)\/[1-9][0-9]*\/image\.png$/.test(url.pathname);
   const staticLayer = /^\/assets\/nft\/[a-z0-9/_-]+\.png$/i.test(url.pathname);
   assertApi(
     url.origin === 'https://matt-mine.onrender.com' && (dynamicImage || staticLayer),

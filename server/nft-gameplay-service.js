@@ -9,6 +9,7 @@ import {
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { ApiError, assertApi } from './errors.js';
+import { nftRpcUrlFromEnvironment } from './nft-rpc-url.js';
 
 const SETTLEMENT_ABI = parseAbi([
   'function OPERATOR_ROLE() view returns (bytes32)',
@@ -437,7 +438,7 @@ export function createNftGameplayServiceFromEnvironment(metadataService, environ
   return new NftGameplayService({
     enabled,
     chainId: Number(environment.MATT_MINE_NFT_CHAIN_ID || 2020),
-    rpcUrl: environment.MATT_MINE_NFT_RPC_URL || 'https://api.roninchain.com/rpc',
+    rpcUrl: nftRpcUrlFromEnvironment(environment),
     settlementAddress: environment.MATT_MINE_NFT_SETTLEMENT_ADDRESS,
     loadoutAddress: environment.MATT_MINE_NFT_LOADOUT_ADDRESS,
     operatorAddress: environment.MATT_MINE_NFT_GAME_OPERATOR_ADDRESS,

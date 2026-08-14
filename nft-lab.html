@@ -15,7 +15,7 @@
           <span><strong>MATT MINE</strong><small>NFT SYSTEM</small></span>
         </a>
         <div class="lab-actions">
-          <span class="network-pill">SAIGON · 202601</span>
+          <span class="network-pill">RONIN MAINNET · 2020</span>
           <button id="refresh-button" class="ghost-button" type="button" disabled>REFRESH</button>
           <button id="connect-button" class="primary-button" type="button">CONNECT RONIN</button>
         </div>
@@ -25,19 +25,19 @@
         <div>
           <p class="eyebrow">DIRECT-CHAIN LOADOUT CONTROL</p>
           <h1>Your miner.<br /><span>Your gear.</span></h1>
-          <p class="hero-copy">Read and manage MATT Mine NFTs directly from Saigon. No marketplace index required.</p>
+          <p class="hero-copy">Read and manage the activated MATT Mine V2 NFTs directly from Ronin Mainnet. No marketplace index required.</p>
         </div>
         <div class="chain-readout">
           <span>CONNECTED WALLET</span>
           <strong id="wallet-address">NOT CONNECTED</strong>
           <small id="wallet-network">Waiting for Ronin Wallet</small>
-          <small id="matt-balance">TEST MATT --</small>
+          <small id="matt-balance">MATT --</small>
         </div>
       </section>
 
       <section id="status-panel" class="status-panel" aria-live="polite">
         <span class="status-light"></span>
-        <p id="status-copy">Connect the test-player wallet to load Miner #1 and Miner #2.</p>
+        <p id="status-copy">Connect the Ronin Mainnet wallet that owns your Miner NFT.</p>
       </section>
 
       <section class="lab-grid">
@@ -68,43 +68,43 @@
           </div>
           <div class="armor-service">
             <div><strong>ARMOR SERVICE</strong><small id="armor-service-copy">Equip damaged armor to enable repair.</small></div>
-            <button id="repair-armor-button" class="gold-button transaction-action" type="button" disabled>REPAIR · 0.35 TEST MATT</button>
+            <button id="repair-armor-button" class="gold-button transaction-action" type="button" disabled>REPAIR · LOADING</button>
           </div>
         </article>
       </section>
 
       <section class="panel chest-panel">
         <div class="panel-heading">
-          <div><span>REAL SAIGON TRANSACTIONS</span><h2>EQUIPMENT CHESTS</h2></div>
+          <div><span>REAL RONIN MAINNET TRANSACTIONS</span><h2>V2 EQUIPMENT CHESTS</h2></div>
           <span class="state-chip">RANDOM MINT</span>
         </div>
         <div id="chest-store" class="chest-store">
-          <article class="chest-card" data-chest="weapon">
-            <span>WEAPON</span><strong>Pickaxe Chest</strong><small>Cosmetic · common through legendary</small>
-            <button class="chest-button transaction-action" data-chest-type="0" type="button" disabled>OPEN · 2 TEST MATT</button>
+          <article class="chest-card armor" data-chest="armor">
+            <span>ARMOR</span><strong>Armor Chest</strong><small>Shield HP · damaged armor gives no protection</small>
+            <button class="chest-button transaction-action" data-chest-slot="0" type="button" disabled>OPEN · LOADING</button>
+          </article>
+          <article class="chest-card" data-chest="pickaxe">
+            <span>PICKAXE</span><strong>Pickaxe Chest</strong><small>Fixed pickaxe attack bonus</small>
+            <button class="chest-button transaction-action" data-chest-slot="1" type="button" disabled>OPEN · LOADING</button>
+          </article>
+          <article class="chest-card" data-chest="blaster">
+            <span>BLASTER</span><strong>Blaster Chest</strong><small>Fixed blaster attack bonus</small>
+            <button class="chest-button transaction-action" data-chest-slot="2" type="button" disabled>OPEN · LOADING</button>
+          </article>
+          <article class="chest-card" data-chest="dynamite">
+            <span>DYNAMITE</span><strong>Dynamite Chest</strong><small>Fixed dynamite attack bonus</small>
+            <button class="chest-button transaction-action" data-chest-slot="3" type="button" disabled>OPEN · LOADING</button>
           </article>
           <article class="chest-card" data-chest="helmet">
-            <span>HELMET</span><strong>Helmet Chest</strong><small>Cosmetic · common through legendary</small>
-            <button class="chest-button transaction-action" data-chest-type="1" type="button" disabled>OPEN · 2 TEST MATT</button>
-          </article>
-          <article class="chest-card armor" data-chest="armor-common">
-            <span>ARMOR</span><strong>Common Armor</strong><small>Guaranteed 125 maximum HP</small>
-            <button class="chest-button transaction-action" data-chest-type="2" type="button" disabled>OPEN · 2 TEST MATT</button>
-          </article>
-          <article class="chest-card armor" data-chest="armor-rare">
-            <span>ARMOR</span><strong>Rare Armor</strong><small>125 HP with improved odds for 150+</small>
-            <button class="chest-button transaction-action" data-chest-type="3" type="button" disabled>OPEN · 5 TEST MATT</button>
-          </article>
-          <article class="chest-card mythic" data-chest="armor-mythic">
-            <span>ARMOR</span><strong>Mythic Armor</strong><small>Guaranteed 150 maximum HP or better</small>
-            <button class="chest-button transaction-action" data-chest-type="4" type="button" disabled>OPEN · 15 TEST MATT</button>
+            <span>HELMET</span><strong>Helmet Chest</strong><small>Fixed maximum-health bonus</small>
+            <button class="chest-button transaction-action" data-chest-slot="4" type="button" disabled>OPEN · LOADING</button>
           </article>
           <article class="chest-card backpack" data-chest="backpack">
-            <span>UTILITY</span><strong>2x Crystal Backpack</strong><small>Destroyed on death · queued backups promote automatically</small>
-            <button id="buy-backpack-button" class="chest-button transaction-action" type="button" disabled>BUY · 5 TEST MATT</button>
+            <span>UTILITY</span><strong>Backpack Chest</strong><small>Fixed carry bonus · equipped backpack burns on death</small>
+            <button class="chest-button transaction-action" data-chest-slot="5" type="button" disabled>OPEN · LOADING</button>
           </article>
         </div>
-        <p class="randomness-note">Chest payment creates an on-chain randomness request. The NFT appears in inventory after the Saigon randomness provider fulfills it.</p>
+        <p class="randomness-note">Chest payment creates a Ronin VRF request. The randomly minted V2 Equipment NFT appears after fulfillment.</p>
       </section>
 
       <section class="panel inventory-panel">
@@ -125,7 +125,7 @@
         <div class="settlement-grid">
           <article><span>01</span><strong>BEGIN RUN</strong><small>The Game Operator locks the selected Miner and its loadout.</small></article>
           <article><span>02</span><strong>EXTRACTION</strong><small>All carried crystals bank; phase XP applies; equipped armor remains healthy.</small></article>
-          <article><span>03</span><strong>DEATH</strong><small>XP gain is zero; active backpack burns; armor becomes damaged; the next backpack promotes.</small></article>
+          <article><span>03</span><strong>DEATH</strong><small>Session XP is lost; the equipped backpack burns; equipped armor becomes damaged.</small></article>
         </div>
         <div class="settlement-lock">
           <strong id="settlement-miner-copy">SELECT A MINER</strong>
@@ -134,8 +134,8 @@
       </section>
 
       <footer class="lab-footer">
-        <span>TESTNET CONTROL SURFACE</span>
-        <a href="https://saigon-app.roninchain.com/address/0x545d5d4c714eB4d2242BBFE82C31fe9a1E5Cff29" target="_blank" rel="noreferrer">VIEW MINER CONTRACT ↗</a>
+        <span>RONIN MAINNET V2 CONTROL SURFACE</span>
+        <a href="https://explorer.roninchain.com/address/0xBbaBE35B943E3Ba911B53C2b39447cF181fE565A" target="_blank" rel="noreferrer">VIEW MINER CONTRACT ↗</a>
       </footer>
     </main>
     <script type="module" src="./src/nftLab.js"></script>

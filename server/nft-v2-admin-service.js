@@ -11,6 +11,7 @@ import {
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { ApiError } from './errors.js';
+import { nftRpcUrlFromEnvironment } from './nft-rpc-url.js';
 
 const CONFIG_ABI_LINES = [
   'function CONFIG_ROLE() view returns (bytes32)',
@@ -187,7 +188,7 @@ export function createNftV2AdminServiceFromEnvironment(gameplayService, environm
   return new NftV2AdminService({
     enabled: true,
     chainId: Number(environment.MATT_MINE_NFT_CHAIN_ID || 2020),
-    rpcUrl: environment.MATT_MINE_NFT_RPC_URL || 'https://api.roninchain.com/rpc',
+    rpcUrl: nftRpcUrlFromEnvironment(environment),
     addresses: {
       loadout: environment.MATT_MINE_NFT_LOADOUT_ADDRESS,
       bank: environment.MATT_MINE_NFT_CRYSTAL_BANK_ADDRESS,

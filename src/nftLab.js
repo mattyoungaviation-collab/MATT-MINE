@@ -1,26 +1,20 @@
 export const NFT_LAB_CHAIN = Object.freeze({
-  id: 202601,
-  hexId: '0x31769',
-  name: 'Saigon Testnet',
-  rpcUrl: 'https://saigon-testnet.roninchain.com/rpc',
-  explorerUrl: 'https://saigon-app.roninchain.com'
-});
-
-export const RONIN_MAINNET_CHAIN = Object.freeze({
   id: 2020,
   hexId: '0x7e4',
-  name: 'Ronin Mainnet'
+  name: 'Ronin Mainnet',
+  rpcUrl: 'https://api.roninchain.com/rpc',
+  explorerUrl: 'https://explorer.roninchain.com'
 });
 
 export const SELECTED_MINER_STORAGE_KEY = 'matt-mine:selected-nft-miner';
 
 export const NFT_LAB_CONTRACTS = Object.freeze({
-  miner: '0x545d5d4c714eB4d2242BBFE82C31fe9a1E5Cff29',
-  equipment: '0x73A4Ad9a2b4bfeeE1b98F5D99AaB24B702dEb093',
-  loadout: '0x6cf168cdD198D0d111faE2286aE6dcD86FA960d8',
-  chest: '0x52f66358ae951638a794777F3cc3448513d5be37',
-  settlement: '0x08d6FE054A75a59b7Abd4942D890f56f8e1896B2',
-  matt: '0x108AFAaDB3EDD4Cb10206B297Db0f3C9f9611769'
+  miner: '0xBbaBE35B943E3Ba911B53C2b39447cF181fE565A',
+  equipment: '0x415cF1DeA47f3d4BAb830F78B82e12D6EeceD612',
+  loadout: '0xb88C219C792cFa07749E0E5D939DbbbF1E62C7b5',
+  chest: '0x693525e7fD76949834cad56d67D469bAAd6687F6',
+  settlement: '0x21BEe81AdC4c87e3Ea4686DD8a38a64c8Ea5b95c',
+  matt: '0xa5450417BDCa0BDfB058ffE41205400FfDA1174d'
 });
 
 export const ABI_SELECTORS = Object.freeze({
@@ -32,34 +26,35 @@ export const ABI_SELECTORS = Object.freeze({
   getApproved: '0x081812fc',
   approve: '0x095ea7b3',
   equip: '0x28257532',
-  unequip: '0xdcef5b44',
+  unequip: '0xcdb6dd5c',
+  isRunLocked: '0x2259acda',
+  bonusFor: '0x213b4056',
   allowance: '0xdd62ed3e',
   balanceOf: '0x70a08231',
-  purchaseBackpack: '0x409f3250',
-  backpackPrice: '0x847a4b43',
-  nextBackpack: '0xdd02da77',
   openChest: '0x99ae54a9',
   chestPrice: '0xdb79e06f',
   repairPrice: '0x48d54bba',
-  repairArmor: '0x9981f16d',
-  effectiveHitPoints: '0xd45da70f'
+  repairArmor: '0x9981f16d'
 });
 
 export const CHEST_PRODUCTS = Object.freeze([
-  Object.freeze({ type: 0, key: 'weapon', label: 'Pickaxe Chest', fallbackPrice: 2n * 10n ** 18n }),
-  Object.freeze({ type: 1, key: 'helmet', label: 'Helmet Chest', fallbackPrice: 2n * 10n ** 18n }),
-  Object.freeze({ type: 2, key: 'armor-common', label: 'Common Armor', fallbackPrice: 2n * 10n ** 18n }),
-  Object.freeze({ type: 3, key: 'armor-rare', label: 'Rare Armor', fallbackPrice: 5n * 10n ** 18n }),
-  Object.freeze({ type: 4, key: 'armor-mythic', label: 'Mythic Armor', fallbackPrice: 15n * 10n ** 18n })
+  Object.freeze({ slot: 0, key: 'armor', label: 'Armor Chest', fallbackPrice: 2_500_000n * 10n ** 18n }),
+  Object.freeze({ slot: 1, key: 'pickaxe', label: 'Pickaxe Chest', fallbackPrice: 1_000_000n * 10n ** 18n }),
+  Object.freeze({ slot: 2, key: 'blaster', label: 'Blaster Chest', fallbackPrice: 1_000_000n * 10n ** 18n }),
+  Object.freeze({ slot: 3, key: 'dynamite', label: 'Dynamite Chest', fallbackPrice: 1_000_000n * 10n ** 18n }),
+  Object.freeze({ slot: 4, key: 'helmet', label: 'Helmet Chest', fallbackPrice: 1_000_000n * 10n ** 18n }),
+  Object.freeze({ slot: 5, key: 'backpack', label: 'Backpack Chest', fallbackPrice: 2_500_000n * 10n ** 18n })
 ]);
 
-const ITEM_TYPES = ['Weapon', 'Backpack', 'Helmet', 'Armor'];
+const ITEM_TYPES = ['Armor', 'Pickaxe', 'Blaster', 'Dynamite', 'Helmet', 'Backpack'];
 const RARITIES = ['Common', 'Uncommon', 'Rare', 'Mythic', 'Legendary'];
 const SLOT_KEYS = [
-  { key: 'weapon', label: 'WEAPON' },
-  { key: 'backpackHead', label: 'ACTIVE BACKPACK' },
+  { key: 'armor', label: 'ARMOR' },
+  { key: 'pickaxe', label: 'PICKAXE' },
+  { key: 'blaster', label: 'BLASTER' },
+  { key: 'dynamite', label: 'DYNAMITE' },
   { key: 'helmet', label: 'HELMET' },
-  { key: 'armor', label: 'ARMOR' }
+  { key: 'backpack', label: 'BACKPACK' }
 ];
 
 const state = {
@@ -69,8 +64,7 @@ const state = {
   equipment: [],
   selectedMinerId: null,
   mattBalance: 0n,
-  busy: false,
-  returningToMainnet: false
+  busy: false
 };
 let rpcRequestId = 0;
 
@@ -184,9 +178,9 @@ async function publicRpc(method, params) {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ jsonrpc: '2.0', id: ++rpcRequestId, method, params })
   });
-  if (!response.ok) throw new Error(`MATT Mine Saigon RPC returned HTTP ${response.status}.`);
+  if (!response.ok) throw new Error(`MATT Mine Mainnet RPC returned HTTP ${response.status}.`);
   const payload = await response.json();
-  if (payload.error) throw new Error(payload.error.message || `Saigon RPC ${method} failed.`);
+  if (payload.error) throw new Error(payload.error.message || `Ronin Mainnet RPC ${method} failed.`);
   return payload.result;
 }
 
@@ -197,7 +191,7 @@ async function sendTransaction(to, data, label) {
     params: [{ from: state.account, to, data, value: '0x0' }]
   });
   if (!/^0x[0-9a-f]{64}$/i.test(hash || '')) throw new Error('Ronin Wallet did not return a transaction hash.');
-  setStatus(`${label} submitted. Waiting for Saigon confirmation…`, 'busy');
+  setStatus(`${label} submitted. Waiting for Ronin Mainnet confirmation…`, 'busy');
   await waitForReceipt(hash);
   return hash;
 }
@@ -214,7 +208,7 @@ async function waitForReceipt(hash, attempts = 60) {
   throw new Error(`Transaction is still pending: ${hash}`);
 }
 
-async function switchToSaigon() {
+async function switchToMainnet() {
   try {
     await state.provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: NFT_LAB_CHAIN.hexId }] });
   } catch (error) {
@@ -244,7 +238,7 @@ async function connectWallet() {
     const accounts = await state.provider.request({ method: 'eth_requestAccounts' });
     if (!Array.isArray(accounts) || !accounts[0]) throw new Error('Ronin Wallet did not provide an account.');
     state.account = normalizeAddress(accounts[0]);
-    await switchToSaigon();
+    await switchToMainnet();
     bindProviderEvents();
     await refreshAll();
   } catch (error) {
@@ -265,17 +259,15 @@ function bindProviderEvents() {
     if (state.account) void refreshAll();
     else renderDisconnected();
   });
-  state.provider.on('chainChanged', () => {
-    if (state.account && !state.returningToMainnet) void refreshAll();
-  });
+  state.provider.on('chainChanged', () => { if (state.account) void refreshAll(); });
 }
 
 async function refreshAll() {
   if (!state.provider || !state.account) return;
   setBusy(true);
-  setStatus('Reading Miner and Equipment contracts directly from Saigon…', 'busy');
+  setStatus('Reading the activated Miner and Equipment contracts from Ronin Mainnet…', 'busy');
   try {
-    await switchToSaigon();
+    await switchToMainnet();
     const [miners, mattBalance] = await Promise.all([
       loadOwnedMiners(),
       callContract(NFT_LAB_CONTRACTS.matt, encodeCall(ABI_SELECTORS.balanceOf, addressWord(state.account)))
@@ -293,7 +285,7 @@ async function refreshAll() {
     setStatus(
       miners.length
         ? `Loaded ${miners.length} Miner NFT${miners.length === 1 ? '' : 's'} and ${equipment.length} equipment item${equipment.length === 1 ? '' : 's'} directly from chain.`
-        : `No Miner NFTs found for ${shortAddress(state.account)}. Switch Ronin Wallet to the 0x1DAb…4be6 test-player account.`,
+        : `No Miner NFTs found for ${shortAddress(state.account)} on Ronin Mainnet.`,
       miners.length ? 'success' : 'error'
     );
   } catch (error) {
@@ -306,7 +298,10 @@ async function refreshAll() {
 
 async function loadOwnedMiners() {
   const nextId = Number(decodeAbiUint(await callContract(NFT_LAB_CONTRACTS.miner, ABI_SELECTORS.nextTokenId)));
-  const candidates = Array.from({ length: Math.max(0, nextId - 1) }, (_, index) => index + 1);
+  const requestedMinerId = preferredMinerId();
+  const candidates = requestedMinerId
+    ? [requestedMinerId].filter((id) => id < nextId)
+    : Array.from({ length: Math.max(0, nextId - 1) }, (_, index) => index + 1);
   const scanErrors = [];
   const miners = await Promise.all(candidates.map(async (id) => {
     try {
@@ -315,9 +310,10 @@ async function loadOwnedMiners() {
         encodeCall(ABI_SELECTORS.ownerOf, uintWord(id))
       ));
       if (!sameAddress(owner, state.account)) return null;
-      const [uriValue, loadoutValue] = await Promise.all([
+      const [uriValue, loadoutValue, runLockedValue] = await Promise.all([
         callContract(NFT_LAB_CONTRACTS.miner, encodeCall(ABI_SELECTORS.tokenURI, uintWord(id))),
-        callContract(NFT_LAB_CONTRACTS.loadout, encodeCall(ABI_SELECTORS.loadoutOf, uintWord(id)))
+        callContract(NFT_LAB_CONTRACTS.loadout, encodeCall(ABI_SELECTORS.loadoutOf, uintWord(id))),
+        callContract(NFT_LAB_CONTRACTS.miner, encodeCall(ABI_SELECTORS.isRunLocked, uintWord(id)))
       ]);
       const metadata = await fetchMetadata(decodeAbiString(uriValue));
       const loadoutWords = splitAbiWords(loadoutValue);
@@ -327,17 +323,15 @@ async function loadOwnedMiners() {
         tokenUri: decodeAbiString(uriValue),
         metadata,
         loadout: {
-          weapon: Number(BigInt(`0x${loadoutWords[0]}`)),
-          backpackHead: Number(BigInt(`0x${loadoutWords[1]}`)),
-          backpackTail: Number(BigInt(`0x${loadoutWords[2]}`)),
-          helmet: Number(BigInt(`0x${loadoutWords[3]}`)),
-          armor: Number(BigInt(`0x${loadoutWords[4]}`)),
-          backpackCount: Number(BigInt(`0x${loadoutWords[5]}`)),
-          runLocked: BigInt(`0x${loadoutWords[6]}`) !== 0n,
-          backpackOrder: []
+          armor: Number(BigInt(`0x${loadoutWords[0]}`)),
+          pickaxe: Number(BigInt(`0x${loadoutWords[1]}`)),
+          blaster: Number(BigInt(`0x${loadoutWords[2]}`)),
+          dynamite: Number(BigInt(`0x${loadoutWords[3]}`)),
+          helmet: Number(BigInt(`0x${loadoutWords[4]}`)),
+          backpack: Number(BigInt(`0x${loadoutWords[5]}`)),
+          runLocked: decodeAbiUint(runLockedValue) !== 0n
         }
       };
-      miner.loadout.backpackOrder = await loadBackpackOrder(miner.loadout.backpackHead, miner.loadout.backpackCount);
       return miner;
     } catch (error) {
       scanErrors.push(`Miner #${id}: ${error?.message || error}`);
@@ -349,19 +343,6 @@ async function loadOwnedMiners() {
   return owned;
 }
 
-async function loadBackpackOrder(head, count) {
-  const order = [];
-  let tokenId = head;
-  while (tokenId && order.length < count && order.length < 1_000) {
-    order.push(tokenId);
-    tokenId = Number(decodeAbiUint(await callContract(
-      NFT_LAB_CONTRACTS.loadout,
-      encodeCall(ABI_SELECTORS.nextBackpack, uintWord(tokenId))
-    )));
-  }
-  return order;
-}
-
 async function loadRelevantEquipment(ownedMiners) {
   const nextId = Number(decodeAbiUint(await callContract(NFT_LAB_CONTRACTS.equipment, ABI_SELECTORS.nextTokenId)));
   const ownedMinerIds = new Set(ownedMiners.map((miner) => miner.id));
@@ -369,20 +350,21 @@ async function loadRelevantEquipment(ownedMiners) {
   const scanErrors = [];
   const equipment = await Promise.all(candidates.map(async (id) => {
     try {
-      const [ownerValue, dataValue, uriValue] = await Promise.all([
+      const [ownerValue, dataValue, uriValue, bonusValue] = await Promise.all([
         callContract(NFT_LAB_CONTRACTS.equipment, encodeCall(ABI_SELECTORS.ownerOf, uintWord(id))),
         callContract(NFT_LAB_CONTRACTS.equipment, encodeCall(ABI_SELECTORS.equipmentData, uintWord(id))),
-        callContract(NFT_LAB_CONTRACTS.equipment, encodeCall(ABI_SELECTORS.tokenURI, uintWord(id)))
+        callContract(NFT_LAB_CONTRACTS.equipment, encodeCall(ABI_SELECTORS.tokenURI, uintWord(id))),
+        callContract(NFT_LAB_CONTRACTS.equipment, encodeCall(ABI_SELECTORS.bonusFor, uintWord(id)))
       ]);
       const owner = decodeAbiAddress(ownerValue);
       const words = splitAbiWords(dataValue);
       const data = {
         definitionId: Number(BigInt(`0x${words[0]}`)),
-        armorHp: Number(BigInt(`0x${words[1]}`)),
-        itemType: Number(BigInt(`0x${words[2]}`)),
+        equippedToMiner: Number(BigInt(`0x${words[1]}`)),
+        slot: Number(BigInt(`0x${words[2]}`)),
         rarity: Number(BigInt(`0x${words[3]}`)),
         damaged: BigInt(`0x${words[4]}`) !== 0n,
-        equippedToMiner: Number(BigInt(`0x${words[5]}`))
+        bonus: Number(decodeAbiUint(bonusValue))
       };
       if (!sameAddress(owner, state.account) && !ownedMinerIds.has(data.equippedToMiner)) return null;
       return {
@@ -438,7 +420,7 @@ function displayImageUrl(url) {
 function renderConnection() {
   dom('wallet-address').textContent = state.account || 'NOT CONNECTED';
   dom('wallet-network').textContent = state.account ? `${NFT_LAB_CHAIN.name} · ${NFT_LAB_CHAIN.id}` : 'Waiting for Ronin Wallet';
-  dom('matt-balance').textContent = state.account ? `${formatTokenUnits(state.mattBalance)} TEST MATT` : 'TEST MATT --';
+  dom('matt-balance').textContent = state.account ? `${formatTokenUnits(state.mattBalance)} MATT` : 'MATT --';
   dom('connect-button').textContent = state.account ? shortAddress(state.account) : 'CONNECT RONIN';
   dom('refresh-button').disabled = state.busy || !state.account;
 }
@@ -449,7 +431,7 @@ function renderDisconnected() {
   state.mattBalance = 0n;
   renderAll();
   renderConnection();
-  setStatus('Connect the test-player wallet to load Miner #1 and Miner #2.');
+  setStatus('Connect the Ronin Mainnet wallet that owns your Miner NFT.');
 }
 
 function renderAll() {
@@ -489,11 +471,9 @@ function renderConfirmLoadout() {
 
 export function equippedTokenForItem(miner, itemType) {
   if (!miner?.loadout) return 0;
-  if (Number(itemType) === 0) return miner.loadout.weapon || 0;
-  if (Number(itemType) === 1) return 0;
-  if (Number(itemType) === 2) return miner.loadout.helmet || 0;
-  if (Number(itemType) === 3) return miner.loadout.armor || 0;
-  throw new Error(`Unknown equipment item type: ${itemType}`);
+  const slot = SLOT_KEYS[Number(itemType)];
+  if (!slot) throw new Error(`Unknown equipment slot: ${itemType}`);
+  return miner.loadout[slot.key] || 0;
 }
 
 function renderMinerList() {
@@ -548,7 +528,7 @@ function renderSelectedMiner() {
   image.src = displayImageUrl(miner.metadata.image);
   image.hidden = false;
   empty.hidden = true;
-  for (const traitName of ['Evolution', 'Banked XP', 'Maximum Health', 'Crystal Carry', 'Armor State']) {
+  for (const traitName of ['Evolution', 'Banked XP', 'Maximum Health', 'Crystal Carry Capacity', 'Armor State']) {
     const row = document.createElement('div');
     row.className = 'trait-row';
     const term = document.createElement('dt');
@@ -575,8 +555,8 @@ function renderLoadout(miner) {
     name.textContent = equipment?.metadata?.name || (tokenId ? `EQUIPMENT #${tokenId}` : 'EMPTY');
     const detail = document.createElement('small');
     detail.textContent = tokenId
-      ? `${RARITIES[equipment?.rarity] || 'Unknown'} · TOKEN #${tokenId}${equipment?.damaged ? ' · DAMAGED' : ''}${slot.key === 'backpackHead' && miner.loadout.backpackCount > 1 ? ` · ${miner.loadout.backpackCount - 1} QUEUED` : ''}`
-      : slot.key === 'weapon' ? 'Starter pickaxe remains active' : 'No NFT equipped';
+      ? `${RARITIES[equipment?.rarity] || 'Unknown'} · TOKEN #${tokenId} · BONUS +${equipment?.bonus || 0}${equipment?.damaged ? ' · DAMAGED' : ''}`
+      : slot.key === 'pickaxe' ? 'Base pickaxe attack remains active' : 'No NFT equipped';
     card.append(label, name, detail);
     container.append(card);
   }
@@ -605,7 +585,7 @@ function renderEquipment() {
     const name = document.createElement('strong');
     name.textContent = item.metadata.name;
     const details = document.createElement('small');
-    details.textContent = `${RARITIES[item.rarity] || 'Unknown'} ${ITEM_TYPES[item.itemType] || 'Equipment'} · TOKEN #${item.id}${item.damaged ? ' · DAMAGED' : ''}`;
+    details.textContent = `${RARITIES[item.rarity] || 'Unknown'} ${ITEM_TYPES[item.slot] || 'Equipment'} · TOKEN #${item.id} · BONUS +${item.bonus}${item.damaged ? ' · DAMAGED' : ''}`;
     const stateCopy = document.createElement('small');
     stateCopy.textContent = item.equippedToMiner ? `EQUIPPED TO MINER #${item.equippedToMiner}` : `OWNED BY ${shortAddress(item.owner)}`;
     const action = document.createElement('button');
@@ -616,7 +596,7 @@ function renderEquipment() {
       : !miner || miner.loadout.runLocked;
     action.dataset.locked = String(locked);
     action.disabled = state.busy || locked;
-    const occupiedTokenId = !item.equippedToMiner && miner ? equippedTokenForItem(miner, item.itemType) : 0;
+    const occupiedTokenId = !item.equippedToMiner && miner ? equippedTokenForItem(miner, item.slot) : 0;
     action.textContent = item.equippedToMiner
       ? 'UNEQUIP'
       : miner
@@ -644,18 +624,17 @@ async function mutateLoadout(item) {
   setBusy(true);
   try {
     if (item.equippedToMiner) {
-      const previousBackpack = item.itemType === 1 ? backpackPredecessor(miner, item.id) : 0;
       await sendTransaction(
         NFT_LAB_CONTRACTS.loadout,
-        encodeCall(ABI_SELECTORS.unequip, uintWord(miner.id), uintWord(item.id), uintWord(previousBackpack)),
+        encodeCall(ABI_SELECTORS.unequip, uintWord(miner.id), uintWord(item.slot)),
         `unequip Equipment #${item.id}`
       );
     } else {
-      const occupiedTokenId = equippedTokenForItem(miner, item.itemType);
+      const occupiedTokenId = equippedTokenForItem(miner, item.slot);
       if (occupiedTokenId) {
         await sendTransaction(
           NFT_LAB_CONTRACTS.loadout,
-          encodeCall(ABI_SELECTORS.unequip, uintWord(miner.id), uintWord(occupiedTokenId), uintWord(0)),
+          encodeCall(ABI_SELECTORS.unequip, uintWord(miner.id), uintWord(item.slot)),
           `unequip Equipment #${occupiedTokenId} before replacement`
         );
       }
@@ -685,36 +664,22 @@ async function mutateLoadout(item) {
   }
 }
 
-function backpackPredecessor(miner, tokenId) {
-  const index = miner.loadout.backpackOrder.indexOf(tokenId);
-  if (index < 0) throw new Error(`Backpack #${tokenId} is not in Miner #${miner.id}'s queue.`);
-  return index === 0 ? 0 : miner.loadout.backpackOrder[index - 1];
-}
-
 async function renderStorePrices() {
-  const chestButtons = [...document.querySelectorAll('[data-chest-type]')];
+  const chestButtons = [...document.querySelectorAll('[data-chest-slot]')];
   await Promise.all(chestButtons.map(async (button) => {
-    const chestType = Number(button.dataset.chestType);
-    const product = CHEST_PRODUCTS.find((candidate) => candidate.type === chestType);
+    const chestSlot = Number(button.dataset.chestSlot);
+    const product = CHEST_PRODUCTS.find((candidate) => candidate.slot === chestSlot);
     let price = product?.fallbackPrice || 0n;
     try {
       price = decodeAbiUint(await callContract(
         NFT_LAB_CONTRACTS.chest,
-        encodeCall(ABI_SELECTORS.chestPrice, uintWord(chestType))
+        encodeCall(ABI_SELECTORS.chestPrice, uintWord(chestSlot))
       ));
     } catch {}
-    button.textContent = `OPEN · ${formatTokenUnits(price)} TEST MATT`;
+    button.textContent = `OPEN · ${formatTokenUnits(price)} MATT`;
     button.dataset.locked = String(!state.account);
     button.disabled = state.busy || !state.account;
   }));
-  const backpackButton = dom('buy-backpack-button');
-  let backpackPrice = 5n * 10n ** 18n;
-  try {
-    backpackPrice = decodeAbiUint(await callContract(NFT_LAB_CONTRACTS.chest, ABI_SELECTORS.backpackPrice));
-  } catch {}
-  backpackButton.textContent = `BUY · ${formatTokenUnits(backpackPrice)} TEST MATT`;
-  backpackButton.dataset.locked = String(!state.account);
-  backpackButton.disabled = state.busy || !state.account;
 }
 
 async function ensureMattApproval(spender, price, label) {
@@ -728,25 +693,25 @@ async function ensureMattApproval(spender, price, label) {
   const allowance = decodeAbiUint(allowanceValue);
   const balance = decodeAbiUint(balanceValue);
   if (balance < price) {
-    throw new Error(`This wallet needs ${formatTokenUnits(price)} test MATT but has ${formatTokenUnits(balance)}.`);
+    throw new Error(`This wallet needs ${formatTokenUnits(price)} MATT but has ${formatTokenUnits(balance)}.`);
   }
   if (allowance < price) {
     await sendTransaction(
       NFT_LAB_CONTRACTS.matt,
       encodeCall(ABI_SELECTORS.approve, addressWord(spender), uintWord(price)),
-      `${formatTokenUnits(price)} test MATT for ${label}`
+      `${formatTokenUnits(price)} MATT for ${label}`
     );
   }
 }
 
-async function openChest(chestType) {
+async function openChest(chestSlot) {
   if (state.busy || !state.account) return;
-  const product = CHEST_PRODUCTS.find((candidate) => candidate.type === Number(chestType));
-  if (!product) return setStatus(`Unknown chest type ${chestType}.`, 'error');
+  const product = CHEST_PRODUCTS.find((candidate) => candidate.slot === Number(chestSlot));
+  if (!product) return setStatus(`Unknown chest slot ${chestSlot}.`, 'error');
   setBusy(true);
   try {
     const [priceValue, nextTokenValue] = await Promise.all([
-      callContract(NFT_LAB_CONTRACTS.chest, encodeCall(ABI_SELECTORS.chestPrice, uintWord(product.type))),
+      callContract(NFT_LAB_CONTRACTS.chest, encodeCall(ABI_SELECTORS.chestPrice, uintWord(product.slot))),
       callContract(NFT_LAB_CONTRACTS.equipment, ABI_SELECTORS.nextTokenId)
     ]);
     const price = decodeAbiUint(priceValue);
@@ -754,10 +719,10 @@ async function openChest(chestType) {
     await ensureMattApproval(NFT_LAB_CONTRACTS.chest, price, product.label);
     const hash = await sendTransaction(
       NFT_LAB_CONTRACTS.chest,
-      encodeCall(ABI_SELECTORS.openChest, uintWord(product.type)),
+      encodeCall(ABI_SELECTORS.openChest, uintWord(product.slot)),
       `open ${product.label}`
     );
-    setStatus(`${product.label} paid. Waiting for the Saigon mint...`, 'busy');
+    setStatus(`${product.label} paid. Waiting for Ronin VRF to mint the equipment…`, 'busy');
     const afterNextTokenId = await waitForTokenIdIncrease(
       async () => decodeAbiUint(await callContract(NFT_LAB_CONTRACTS.equipment, ABI_SELECTORS.nextTokenId)),
       beforeNextTokenId
@@ -776,34 +741,17 @@ async function openChest(chestType) {
   }
 }
 
-async function buyBackpack() {
-  if (state.busy || !state.account) return;
-  setBusy(true);
-  try {
-    const priceValue = await callContract(NFT_LAB_CONTRACTS.chest, ABI_SELECTORS.backpackPrice);
-    const price = decodeAbiUint(priceValue);
-    await ensureMattApproval(NFT_LAB_CONTRACTS.chest, price, 'one backpack');
-    await sendTransaction(NFT_LAB_CONTRACTS.chest, ABI_SELECTORS.purchaseBackpack, 'purchase one backpack');
-    await refreshAll();
-    setStatus('Backpack minted directly to the connected wallet. It is ready to equip.', 'success');
-  } catch (error) {
-    setStatus(error?.message || 'Backpack purchase failed.', 'error');
-  } finally {
-    setBusy(false);
-  }
-}
-
 async function renderArmorService() {
   const miner = selectedMiner();
   const armor = miner?.loadout?.armor
     ? state.equipment.find((item) => item.id === miner.loadout.armor)
     : null;
   const button = dom('repair-armor-button');
-  let price = 35n * 10n ** 16n;
+  let price = 500_000n * 10n ** 18n;
   try {
     price = decodeAbiUint(await callContract(NFT_LAB_CONTRACTS.loadout, ABI_SELECTORS.repairPrice));
   } catch {}
-  button.textContent = `REPAIR · ${formatTokenUnits(price)} TEST MATT`;
+  button.textContent = `REPAIR · ${formatTokenUnits(price)} MATT`;
   const enabled = Boolean(state.account && miner && armor?.damaged && !miner.loadout.runLocked);
   button.dataset.locked = String(!enabled);
   button.disabled = state.busy || !enabled;
@@ -812,8 +760,8 @@ async function renderArmorService() {
     : !armor
       ? 'No armor equipped. Equip an armor NFT first.'
       : armor.damaged
-        ? `${armor.metadata.name} is damaged and currently provides no extra health.`
-        : `${armor.metadata.name} is healthy at ${armor.armorHp} maximum HP.`;
+        ? `${armor.metadata.name} is damaged and currently provides no shield.`
+        : `${armor.metadata.name} is healthy and provides +${armor.bonus} shield HP.`;
 }
 
 async function repairSelectedArmor() {
@@ -834,7 +782,7 @@ async function repairSelectedArmor() {
       `repair Armor #${armor.id}`
     );
     await refreshAll();
-    setStatus(`Armor #${armor.id} repaired. Miner #${miner.id} has its full armor health again.`, 'success');
+    setStatus(`Armor #${armor.id} repaired. Miner #${miner.id} has its armor shield again.`, 'success');
   } catch (error) {
     setStatus(error?.message || 'Armor repair failed.', 'error');
   } finally {
@@ -848,22 +796,12 @@ async function confirmSelectedLoadout() {
   if (!miner) return setStatus('Select a Miner before confirming its loadout.', 'error');
   if (miner.loadout.runLocked) return setStatus(`Miner #${miner.id} is currently locked in a run.`, 'error');
   setBusy(true);
-  state.returningToMainnet = true;
-  setStatus(`Saving Miner #${miner.id} and switching Ronin Wallet back to Mainnetâ€¦`, 'busy');
+  setStatus(`Saving Miner #${miner.id} as the active Mainnet loadout…`, 'busy');
   try {
     sessionStorage.setItem(SELECTED_MINER_STORAGE_KEY, String(miner.id));
-    await state.provider.request({
-      method: 'wallet_switchEthereumChain',
-      params: [{ chainId: RONIN_MAINNET_CHAIN.hexId }]
-    });
-    const chainId = await state.provider.request({ method: 'eth_chainId' });
-    if (BigInt(chainId) !== BigInt(RONIN_MAINNET_CHAIN.id)) {
-      throw new Error(`Switch Ronin Wallet to ${RONIN_MAINNET_CHAIN.name}.`);
-    }
     location.assign(`/?loadout=confirmed&miner=${miner.id}`);
   } catch (error) {
-    state.returningToMainnet = false;
-    setStatus(error?.message || 'Could not return Ronin Wallet to Mainnet.', 'error');
+    setStatus(error?.message || 'Could not save the selected Mainnet loadout.', 'error');
     setBusy(false);
     renderConfirmLoadout();
   }
@@ -877,17 +815,16 @@ function renderSettlementState() {
     return;
   }
   const armor = miner.loadout.armor ? state.equipment.find((item) => item.id === miner.loadout.armor) : null;
-  copy.textContent = `MINER #${miner.id} · ${miner.loadout.runLocked ? 'RUN LOCKED' : 'READY'} · ${miner.loadout.backpackCount} BACKPACK${miner.loadout.backpackCount === 1 ? '' : 'S'} · ARMOR ${armor ? armor.damaged ? 'DAMAGED' : 'HEALTHY' : 'NONE'}`;
+  copy.textContent = `MINER #${miner.id} · ${miner.loadout.runLocked ? 'RUN LOCKED' : 'READY'} · BACKPACK ${miner.loadout.backpack ? 'EQUIPPED' : 'NONE'} · ARMOR ${armor ? armor.damaged ? 'DAMAGED' : 'HEALTHY' : 'NONE'}`;
 }
 
 function initialize() {
   dom('connect-button').addEventListener('click', connectWallet);
   dom('refresh-button').addEventListener('click', () => void refreshAll());
-  dom('buy-backpack-button').addEventListener('click', () => void buyBackpack());
   dom('repair-armor-button').addEventListener('click', () => void repairSelectedArmor());
   dom('confirm-loadout-button').addEventListener('click', () => void confirmSelectedLoadout());
-  document.querySelectorAll('[data-chest-type]').forEach((button) => {
-    button.addEventListener('click', () => void openChest(Number(button.dataset.chestType)));
+  document.querySelectorAll('[data-chest-slot]').forEach((button) => {
+    button.addEventListener('click', () => void openChest(Number(button.dataset.chestSlot)));
   });
   renderAll();
   renderConnection();

@@ -35,6 +35,7 @@ import { NftMetadataService } from '../server/nft-metadata-service.js';
 import { createSaigonChestKeeperFromEnvironment } from '../server/saigon-chest-keeper.js';
 import { createNftGameplayServiceFromEnvironment } from '../server/nft-gameplay-service.js';
 import { createNftV2AdminServiceFromEnvironment } from '../server/nft-v2-admin-service.js';
+import { nftRpcUrlFromEnvironment } from '../server/nft-rpc-url.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const packageMetadata = JSON.parse(
@@ -215,13 +216,14 @@ const advertisementVerifier =
       })
     : null;
 const nftMetadataEnabled = process.env.MATT_MINE_NFT_ENABLED === 'true';
+const nftRpcUrl = nftRpcUrlFromEnvironment();
 const nftMetadataService = nftMetadataEnabled
   ? await new NftMetadataService({
       enabled: true,
       root,
       publicOrigin: process.env.MATT_MINE_NFT_PUBLIC_BASE_URL || process.env.MATT_MINE_PUBLIC_ORIGIN,
       chainId: Number(process.env.MATT_MINE_NFT_CHAIN_ID || 2020),
-      rpcUrl: process.env.MATT_MINE_NFT_RPC_URL || 'https://api.roninchain.com/rpc',
+      rpcUrl: nftRpcUrl,
       timeoutMs: Number(process.env.MATT_MINE_RPC_TIMEOUT_MS || 10_000),
       addresses: {
         miner: process.env.MATT_MINE_NFT_MINER_ADDRESS,
@@ -230,7 +232,7 @@ const nftMetadataService = nftMetadataEnabled
       }
     }).init()
   : null;
-const nftGameplayService = createNftGameplayServiceFromEnvironment(nftMetadataService);
+const nftGameplayService = createNftGameplayServiceFromEnvironment(nftMetadataService, process.env, { rpcUrl: nftRpcUrl });
 if (nftGameplayService) {
   const savedProtocol = (await database.read()).nftV2Protocol || {};
   const savedVersions = savedProtocol.mapVersions || {};
@@ -241,7 +243,7 @@ if (nftGameplayService) {
   for (const [mode, versionId] of Object.entries(savedVersions)) nftGameplayService.setMapVersion(mode, versionId);
   await nftGameplayService.init();
 }
-const nftV2AdminService = createNftV2AdminServiceFromEnvironment(nftGameplayService);
+const nftV2AdminService = createNftV2AdminServiceFromEnvironment(nftGameplayService, process.env, { rpcUrl: nftRpcUrl });
 if (nftV2AdminService) await nftV2AdminService.init();
 const saigonChestKeeper = createSaigonChestKeeperFromEnvironment();
 if (saigonChestKeeper) await saigonChestKeeper.init();

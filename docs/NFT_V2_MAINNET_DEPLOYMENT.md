@@ -65,27 +65,38 @@ powershell.exe -NoExit -ExecutionPolicy Bypass -File ".\contracts\scripts\run-nf
 
 All exact constructor arguments and implementations are submitted to Ronin Sourcify, followed by the complete read-only on-chain check. The suite remains paused.
 
-## Stage 4 — activation readiness
+## Stage 4 — marketplace inventory and activation
 
-Activation is intentionally blocked until all of these are true:
+Ronin Launchpad did not support this collection's custom Miner contract, so the fixed supply was minted directly to the dedicated marketplace inventory wallet:
 
-- Ronin Launchpad provides the final Miner minter address.
+```powershell
+powershell.exe -NoExit -ExecutionPolicy Bypass -File ".\contracts\scripts\run-nft-v2-mainnet-inventory-mint.ps1"
+```
+
+That guarded procedure minted Miners `#1` through `#1000` to `0x1DAb596D0121C250a24B00137E84170FA6874be6`, re-paused Miner after the controlled mint, and left Equipment and gameplay untouched. The 1,000-Miner maximum supply is now fully issued; no Launchpad minter is required.
+
+Activation required all of these checks to pass:
+
 - The VRF subscription is funded and remains owned by `0xF799`.
-- The existing Crystal token’s AccessControl administrator can grant `MINTER_ROLE` to the new Crystal Bank and Passive Rewards proxies.
+- The existing Crystal token owner can authorize the new Crystal Bank and Passive Rewards proxies through the token's owner-only `grantMinter(address)` function.
 - Game/Config Operator `0x112C8a89bfAb3f19D7ceADf7433Fd8D253cFe4D3` has at least `0.05 RON`.
 - Passive Keeper `0xecc7de9071F271183fE31fF8B1246FfD8C751d0e` has at least `0.05 RON`.
 - Reward Signer `0x61FC35192964Fa4b50D915261419e9D2Ba369708` remains separate from the transaction-sending operator.
 - The deployment manifest status is `verified_paused`.
 
-The current read-only audit found that `0xF799` owns the Crystal proxy but does not presently hold its `DEFAULT_ADMIN_ROLE`; a simulated `grantRole` reverts. This does **not** block the safe paused deployment. It does block activation and is checked before the activation script can broadcast its first transaction.
+The Crystal token intentionally separates ownership from the generic AccessControl administrator. Activation uses its owner-only `grantMinter(address)` function, so `0xF799` does not need `DEFAULT_ADMIN_ROLE` to authorize the two V2 payout contracts.
 
-After the authority is restored and the Launchpad address is final:
+The activation wrapper performs a no-write rehearsal first. Only an exact second confirmation assigns external roles, revokes routine `0xF799` roles, authorizes the Crystal payout modules, and unpauses the suite:
 
 ```powershell
 powershell.exe -NoExit -ExecutionPolicy Bypass -File ".\contracts\scripts\run-nft-v2-mainnet-activate.ps1"
 ```
 
-The wrapper performs a no-write activation rehearsal first. Only an exact second confirmation assigns external roles, revokes routine `0xF799` roles, and unpauses the suite.
+The deployment manifest now records `activated`. Confirm the live state at any time without a signer or transaction:
+
+```powershell
+npm run contracts:check-nft-v2-live:ronin
+```
 
 ## Server activation order
 

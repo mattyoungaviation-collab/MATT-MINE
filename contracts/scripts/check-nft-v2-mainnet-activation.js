@@ -45,8 +45,12 @@ if (
 const crystal = new Contract(config.protocol.crystalToken, [
   "function MINTER_ROLE() view returns (bytes32)",
   "function hasRole(bytes32,address) view returns (bool)",
-  "function grantRole(bytes32,address)"
+  "function owner() view returns (address)",
+  "function grantMinter(address)"
 ], admin);
+if (getAddress(await crystal.owner()) !== NFT_V2_ROOT) {
+  throw new Error("0xF799 is not the MATT Crystal owner and cannot authorize the V2 payout contracts.");
+}
 const coordinator = new Contract(config.protocol.vrfCoordinator, [
   "function getSubscription(uint256 subId) view returns (uint96 balance,uint96 nativeBalance,uint64 reqCount,address subOwner,address[] consumers)",
   "function addConsumer(uint256 subId,address consumer)"
@@ -64,9 +68,9 @@ const minterRole = await crystal.MINTER_ROLE();
 for (const target of [bank.target, passive.target]) {
   if (!(await crystal.hasRole(minterRole, target))) {
     try {
-      await crystal.grantRole.staticCall(minterRole, target);
+      await crystal.grantMinter.staticCall(target);
     } catch (error) {
-      throw new Error(`0xF799 cannot grant Crystal MINTER_ROLE to ${target}. Restore the Crystal AccessControl admin before activation. ${error.shortMessage || error.message}`);
+      throw new Error(`0xF799 cannot authorize ${target} as a Crystal minter through the token owner's grantMinter function. ${error.shortMessage || error.message}`);
     }
   }
 }

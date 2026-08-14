@@ -31,8 +31,8 @@ services:
         sync: false
       - key: MATT_MINE_RPC_TIMEOUT_MS
         value: "10000"
-      # NFT V2 addresses are populated from the verified deployment manifest.
-      # Gameplay remains disabled until roles are separated and every module is checked.
+      # Activated Ronin Mainnet NFT V2 release. Private operator/signer keys
+      # remain dashboard secrets; all addresses and map versions are public.
       - key: MATT_MINE_NFT_ENABLED
         value: "false"
       - key: MATT_MINE_NFT_CONTRACT_VERSION
@@ -42,27 +42,27 @@ services:
       - key: MATT_MINE_NFT_CHAIN_ID
         value: "2020"
       - key: MATT_MINE_NFT_RPC_URL
-        value: "https://api.roninchain.com/rpc"
+        sync: false
       - key: MATT_MINE_NFT_MINER_ADDRESS
-        sync: false
+        value: "0xBbaBE35B943E3Ba911B53C2b39447cF181fE565A"
       - key: MATT_MINE_NFT_EQUIPMENT_ADDRESS
-        sync: false
+        value: "0x415cF1DeA47f3d4BAb830F78B82e12D6EeceD612"
       - key: MATT_MINE_NFT_LOADOUT_ADDRESS
-        sync: false
+        value: "0xb88C219C792cFa07749E0E5D939DbbbF1E62C7b5"
       - key: MATT_MINE_NFT_CHEST_ADDRESS
-        sync: false
+        value: "0x693525e7fD76949834cad56d67D469bAAd6687F6"
       - key: MATT_MINE_NFT_SETTLEMENT_ADDRESS
-        sync: false
+        value: "0x21BEe81AdC4c87e3Ea4686DD8a38a64c8Ea5b95c"
       - key: MATT_MINE_NFT_CRYSTAL_BANK_ADDRESS
-        sync: false
+        value: "0x8C640Cd91Ea6616cDD07B8323492E76e5c9ffE78"
       - key: MATT_MINE_NFT_PASSIVE_REWARDS_ADDRESS
-        sync: false
+        value: "0xC5cf71e8000017e099fb39b24149544e1F40b0E0"
       - key: MATT_MINE_NFT_CHEST_RANDOMNESS_ADDRESS
-        sync: false
+        value: "0x74746f7853e84302255B49421A6A3AF5808c8AA6"
       - key: MATT_MINE_NFT_PASSIVE_RANDOMNESS_ADDRESS
-        sync: false
+        value: "0x652eD370383a7B5bf3c1c19e2145780bcb9A92F8"
       - key: MATT_MINE_NFT_MAP_VERSIONS_JSON
-        sync: false
+        value: '{"arena":"0x5fa5b85dfd9794c50d1de87c83b8cc2b28e4c454c4d64ce7280876984fd526f0","paid":"0x4d86497b3e3385412a206bebed747aa621db1d38766608d19e69f2eb7185385c"}'
       - key: MATT_MINE_NFT_GAMEPLAY_ENABLED
         sync: false
       - key: MATT_MINE_NFT_GAME_OPERATOR_ADDRESS

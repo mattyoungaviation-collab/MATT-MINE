@@ -66,6 +66,11 @@ describe('Saigon chest keeper', () => {
 
   it('stays disabled unless explicitly enabled with the dedicated key', () => {
     assert.equal(createSaigonChestKeeperFromEnvironment({}), null);
+    assert.equal(createSaigonChestKeeperFromEnvironment({
+      MATT_MINE_NFT_SAIGON_KEEPER_ENABLED: 'true',
+      MATT_MINE_NFT_CONTRACT_VERSION: '2',
+      MATT_MINE_NFT_CHAIN_ID: '2020'
+    }), null);
     assert.throws(
       () => createSaigonChestKeeperFromEnvironment({
         MATT_MINE_NFT_SAIGON_KEEPER_ENABLED: 'true',
