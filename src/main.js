@@ -30,6 +30,7 @@ import {
   weeklyUserScore
 } from './game/economy.js';
 import { formatNumber } from './game/utils.js';
+import { nftGameplayTraits } from './game/nftTraits.js';
 import {
   PASS_CHEST_BONUS_NUGGETS,
   PASS_CHEST_ID,
@@ -152,6 +153,9 @@ const wallet = new RoninWalletAdapter({
 const ui = {
   healthText: $('#health-text'),
   healthFill: $('#health-fill'),
+  shieldRow: $('#shield-row'),
+  shieldText: $('#shield-text'),
+  shieldFill: $('#shield-fill'),
   levelText: $('#level-text'),
   xpText: $('#xp-text'),
   xpFill: $('#xp-fill'),
@@ -1470,12 +1474,27 @@ function renderMinerSelect() {
   const stats = $('#selected-miner-stats');
   stats.replaceChildren();
   if (selected) {
-    const values = [
-      ['LEVEL', selected.progression?.level || 1],
-      ['HEALTH', selected.gameplay?.maximumHealth || 100],
-      ['CRYSTAL CARRY', `${selected.gameplay?.crystalCarryMultiplier || 1}x`],
-      ['ARMOR', selected.equipped?.armor ? selected.gameplay?.armorEffective ? 'ACTIVE' : 'DAMAGED' : 'NONE']
-    ];
+    const traits = nftGameplayTraits({ nftRun: { profile: selected } });
+    const values = traits
+      ? [
+          ['LEVEL', traits.level],
+          ['HEALTH', traits.maximumHealth],
+          ['ARMOR SHIELD', traits.armorShield],
+          ['PICKAXE', traits.pickaxeAttack],
+          ['BLASTER', traits.blasterAttack],
+          ['DYNAMITE', traits.dynamiteAttack],
+          ['HEAL', traits.healAmount],
+          ['CRYSTAL CARRY', traits.carryCapacity.toLocaleString()],
+          ['DEATH RETENTION', `${(traits.deathRetentionBps / 100).toFixed(0)}%`],
+          ['CRYSTALS / HOUR', traits.crystalsPerHour],
+          ['EARNING', minerEarningLabel(selected, traits)]
+        ]
+      : [
+          ['LEVEL', selected.progression?.level || 1],
+          ['HEALTH', selected.gameplay?.maximumHealth || 100],
+          ['CRYSTAL CARRY', `${selected.gameplay?.crystalCarryMultiplier || 1}x`],
+          ['ARMOR', selected.equipped?.armor ? selected.gameplay?.armorEffective ? 'ACTIVE' : 'DAMAGED' : 'NONE']
+        ];
     for (const [label, value] of values) {
       const row = document.createElement('span');
       const name = document.createElement('small');
@@ -1492,6 +1511,13 @@ function renderMinerSelect() {
   const loadout = $('#select-loadout-button');
   loadout.href = selected ? `./nft-lab.html?miner=${selected.minerId}` : './nft-lab.html';
   loadout.setAttribute('aria-disabled', String(!selected));
+}
+
+function minerEarningLabel(miner, traits) {
+  const value = miner?.gameplay?.earningStatus ?? miner?.earningStatus;
+  if (typeof value === 'string' && value.trim()) return value.replaceAll('_', ' ').toUpperCase();
+  if (typeof value === 'number') return ['NOT ELIGIBLE', 'ACTIVE', 'INACTIVE'][value] || 'NOT ELIGIBLE';
+  return traits.level === 100 && traits.crystalsPerHour > 0 ? 'ACTIVE' : 'NOT ELIGIBLE';
 }
 
 function evolutionName(miner) {
@@ -1632,6 +1658,12 @@ const game = new MattMineGame(canvas, profile, {
   onHud(stats) {
     ui.healthText.textContent = `${Math.ceil(stats.health)} / ${Math.round(stats.maxHealth)}`;
     ui.healthFill.style.width = `${Math.max(0, (stats.health / stats.maxHealth) * 100)}%`;
+    const hasShield = Number(stats.maxShield || 0) > 0;
+    ui.shieldRow.hidden = !hasShield;
+    if (hasShield) {
+      ui.shieldText.textContent = `${Math.ceil(stats.shield || 0)} / ${Math.round(stats.maxShield)}`;
+      ui.shieldFill.style.width = `${Math.max(0, (Number(stats.shield || 0) / stats.maxShield) * 100)}%`;
+    }
     ui.levelText.textContent = stats.level;
     ui.xpText.textContent = `${Math.floor(stats.xp)} / ${stats.nextXp} XP`;
     ui.xpFill.style.width = `${Math.min(100, (stats.xp / stats.nextXp) * 100)}%`;
@@ -3345,7 +3377,7 @@ function renderShop() {
 function modeLabel(mode, rewardWeight = 0) {
   if (mode === RUN_MODES.FREE) return 'FREE RANKED · 1×';
   if (mode === RUN_MODES.PAID) return `PASS RANKED · ${rewardWeight || 2}×`;
-  if (mode === 'arena') return 'MATT DAILY ARENA';
+  if (mode === 'arena') return 'MATT ARENA';
   return 'PRACTICE · NO XP · NO CRYSTALS';
 }
 

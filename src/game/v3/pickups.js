@@ -1,5 +1,6 @@
 import { CONFIG } from '../config.js';
 import { angleTo, distance } from '../utils.js';
+import { nftCarryCapacity, nftHealAmount } from '../nftTraits.js';
 
 export const pickupMethods = {
   updatePickups(dt) {
@@ -19,8 +20,9 @@ export const pickupMethods = {
 
       if (dist < pickup.radius + this.player.radius + 5) {
         if (pickup.type === 'health') {
-          this.player.health = Math.min(this.player.maxHealth, this.player.health + Math.max(1, pickup.value || 30));
-          this.addFloater(this.player.x, this.player.y - 52, 'HEALTH', '#ff8193');
+          const amount = nftHealAmount(this.runContext, Math.max(1, pickup.value || 30));
+          this.player.health = Math.min(this.player.maxHealth, this.player.health + amount);
+          this.addFloater(this.player.x, this.player.y - 52, `+${Math.round(amount)} HEALTH`, '#ff8193');
           this.audio.play('crystal');
         } else if (pickup.type === 'upgrade') {
           this.gainXp(Math.max(this.player.nextXp, 1));
@@ -30,7 +32,7 @@ export const pickupMethods = {
           this.run.rawNuggets += pickup.value;
         }
         if (pickup.type === 'crystal') {
-          const carryLimit = Number(this.runContext?.tuning?.nftCrystalCarryLimit || Number.MAX_SAFE_INTEGER);
+          const carryLimit = nftCarryCapacity(this.runContext);
           if (Number(this.run.crystalsCollected || 0) >= carryLimit) {
             this.addFloater(this.player.x, this.player.y - 52, 'CRYSTAL PACK FULL', '#ffcf73');
             continue;

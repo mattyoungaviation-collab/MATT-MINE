@@ -30,7 +30,8 @@ export const blasterBalanceMethods = {
         : 1;
     const spread = tuning.blasterVolleySpread ?? CONFIG.blasterVolleySpread;
     const speed = tuning.blasterProjectileSpeed ?? 760;
-    const damage = this.player.damage * this.player.blasterDamageScale * perProjectileMultiplier;
+    const baseDamage = this.player.blasterBaseDamage || this.player.damage;
+    const damage = baseDamage * this.player.blasterDamageScale * perProjectileMultiplier;
 
     for (let index = 0; index < count; index += 1) {
       const offset = count === 1

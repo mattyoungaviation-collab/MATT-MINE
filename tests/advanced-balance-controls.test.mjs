@@ -45,6 +45,7 @@ test('command-center tuning exposes the requested Blaster, armor, beta, and per-
     'blasterFocusedCoreBonus',
     'blasterVolleyTwoDamageMultiplier',
     'blasterVolleyThreeDamageMultiplier',
+    'dynamiteDamageMultiplier',
     'armorUpgradePerLevel',
     'armorMaximum',
     'ignorePermanentUpgrades',

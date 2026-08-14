@@ -110,14 +110,14 @@ test('production service updates knockout retention and character prices without
   await service.updateAdminExpansion(
     'admin-command-center-test',
     {
-      settings: { deathRetentionFree: 73 },
+      settings: { deathRetentionPaid: 73 },
       characters: { axie: { nuggetPrice: 654_321 } }
     },
     'Linked expansion test'
   );
   state = await database.read();
   const economy = await nuggetEconomyStore.read();
-  assert.equal(state.gameTuning.free.deathKeepFraction, 0.73);
+  assert.equal(state.gameTuning.paid.deathKeepFraction, 0.73);
   assert.equal(state.expansionConfig.characters.axie.nuggetPrice, 654_321);
   assert.equal(economy.config.characterUnlockPrices.axie, 654_321);
   assert.equal(linkedAdminControlSnapshot(state, economy.config).consistent, true);

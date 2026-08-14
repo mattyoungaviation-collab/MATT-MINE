@@ -5,6 +5,7 @@ import {
 } from '../config.js';
 import { pickUnique } from '../utils.js';
 import { stateMethods } from './state.js';
+import { nftGameplayTraits } from '../nftTraits.js';
 
 const LEGACY_META_SCALE = Object.freeze({
   health: 8,
@@ -23,7 +24,8 @@ export const balanceControlMethods = {
       ? tuning._playerProfile
       : browserProfile;
     const originalMeta = runProfile?.meta || {};
-    const ignorePermanent = tuning.ignorePermanentUpgrades === true;
+    const nftTraits = nftGameplayTraits(this.runContext);
+    const ignorePermanent = tuning.ignorePermanentUpgrades === true || Boolean(nftTraits);
     const meta = ignorePermanent
       ? zeroMeta(originalMeta)
       : effectiveMeta(originalMeta, tuning);
@@ -42,10 +44,12 @@ export const balanceControlMethods = {
     const permanentArmor = ignorePermanent
       ? 0
       : Number(originalMeta.armor || 0) * (tuning.permanentArmorPerRank ?? .008);
-    this.player.armor = Math.min(
-      tuning.armorMaximum ?? .45,
-      Math.max(0, permanentArmor + Number(this.runContext?.character?.armor || 0))
-    );
+    this.player.armor = nftTraits
+      ? 0
+      : Math.min(
+          tuning.armorMaximum ?? .45,
+          Math.max(0, permanentArmor + Number(this.runContext?.character?.armor || 0))
+        );
 
     const permanentBlaster = ignorePermanent
       ? 0
@@ -53,7 +57,7 @@ export const balanceControlMethods = {
     this.player.blasterDamageScale =
       (tuning.blasterDamageMultiplier ?? CONFIG.blasterDamageScale) *
       (1 + Math.max(0, permanentBlaster)) *
-      Number(this.runContext?.character?.blasterDamage || 1);
+      Number(nftTraits ? 1 : this.runContext?.character?.blasterDamage || 1);
   },
 
   gainXp(amount) {

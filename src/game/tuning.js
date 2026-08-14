@@ -97,6 +97,7 @@ export const GAME_TUNING_SCHEMA = Object.freeze([
   number('blasterVolleySpread', 'Blaster', 'Volley spread', CONFIG.blasterVolleySpread, 0, 1.2, .01),
 
   number('dynamiteDamage', 'Dynamite', 'Explosion damage', CONFIG.dynamiteDamage, 1, 500),
+  number('dynamiteDamageMultiplier', 'Dynamite', 'Damage multiplier', 1, .05, 10, .05, 'Scales the selected Miner NFT Dynamite Attack. Legacy non-NFT runs use the configured explosion damage as their base.'),
   number('dynamiteThrowRange', 'Dynamite', 'Throw range', CONFIG.dynamiteRange, 50, 800, 10),
   number('dynamiteBlastRadius', 'Dynamite', 'Blast radius', 170, 50, 500, 5),
   number('dynamiteStartAmmo', 'Dynamite', 'Starting ammo', CONFIG.dynamiteStartAmmo, 0, 50),

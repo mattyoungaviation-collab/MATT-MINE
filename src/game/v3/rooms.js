@@ -2,6 +2,7 @@ import { CONFIG } from '../config.js';
 import { pointInLayout, roomAt } from '../layout.js';
 import { clamp } from '../utils.js';
 import { roomRequiresLock } from '../combat.js';
+import { nftGameplayTraits } from '../nftTraits.js';
 
 export const roomsMethods = {
   awakenGuardian(room) {
@@ -73,9 +74,17 @@ export const roomsMethods = {
     const room = this.layout.rooms.find((entry) => entry.id === roomId);
     if (!this.player.unlockedWeapons.dynamite) this.unlockWeapon('dynamite', 3);
     else this.player.dynamiteAmmo += 2;
-    this.player.health = Math.min(this.player.maxHealth, this.player.health + 12);
+    const roomHeal = nftGameplayTraits(this.runContext) ? 0 : 12;
+    if (roomHeal > 0) {
+      this.player.health = Math.min(this.player.maxHealth, this.player.health + roomHeal);
+    }
     this.audio.play('roomClear');
-    this.addFloater(this.player.x, this.player.y - 52, '+ DYNAMITE  + HEALTH', '#ffe083');
+    this.addFloater(
+      this.player.x,
+      this.player.y - 52,
+      roomHeal > 0 ? '+ DYNAMITE  + HEALTH' : '+ DYNAMITE',
+      '#ffe083'
+    );
     this.hooks.onToast?.(`${room?.name || 'Room'} cleared`);
   },
   checkRoomClear(roomId) {

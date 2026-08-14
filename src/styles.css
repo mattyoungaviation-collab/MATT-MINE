@@ -251,6 +251,10 @@ h1 span { color: var(--yellow); }
 .bar { width: 100%; height: 9px; margin-top: 8px; overflow: hidden; border-radius: 999px; background: rgba(255,255,255,0.1); }
 .bar-fill { height: 100%; width: 0; border-radius: inherit; transition: width 100ms linear; }
 .health-fill { background: linear-gradient(90deg, #d6324c, #ff6d7e); }
+.shield-row { margin-top: 9px; }
+.shield-row .label-row { color: #a8ddff; font-size: 9px; }
+.shield-row .bar { height: 7px; margin-top: 5px; }
+.shield-fill { background: linear-gradient(90deg, #2878c8, #65d8ff); }
 .xp-fill { background: linear-gradient(90deg, #3ba7ff, #65e1ff); }
 .depth-badge { text-align: center; color: var(--muted); font-size: 11px; font-weight: 850; letter-spacing: 0.1em; }
 .depth-badge strong { display: block; margin-top: 2px; color: #ffffff; font-size: 28px; }
