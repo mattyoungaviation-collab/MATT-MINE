@@ -1312,7 +1312,6 @@ async function startRunMode(mode, options = {}) {
   const useServer =
     mode === RUN_MODES.FREE ||
     (mode === RUN_MODES.PAID && serverConfig?.paidRunsEnabled === true) ||
-    (mode === RUN_MODES.PRACTICE && serverPlayer) ||
     [RUN_MODES.BETA, RUN_MODES.WEEKLY, RUN_MODES.ENDLESS].includes(mode);
   activePracticeClaim = null;
   resultScreenMode = null;
@@ -3288,7 +3287,7 @@ function economyResultMarkup(mode, result, recorded) {
     return '<strong>SERVER VERIFICATION PENDING</strong><span>The local result will not enter the leaderboard unless the server accepts it.</span>';
   }
   if (mode === RUN_MODES.PRACTICE) {
-    return '<strong>Practice complete</strong><span>No MATT reward and no leaderboard score. Practice remains unlimited.</span>';
+    return '<strong>Practice complete</strong><span>No XP, no MATT Crystals, and no leaderboard score. Practice remains unlimited.</span>';
   }
   if (!recorded.ok) {
     return `<strong>Ranked score rejected</strong><span>${escapeHtml(recorded.error)}</span>`;
@@ -3364,7 +3363,7 @@ function modeLabel(mode, rewardWeight = 0) {
   if (mode === RUN_MODES.FREE) return 'FREE RANKED · 1×';
   if (mode === RUN_MODES.PAID) return `PASS RANKED · ${rewardWeight || 2}×`;
   if (mode === 'arena') return 'MATT DAILY ARENA';
-  return 'PRACTICE · NO REWARD';
+  return 'PRACTICE · NO XP · NO CRYSTALS';
 }
 
 function renderAudioSettings() {

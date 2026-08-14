@@ -514,7 +514,7 @@ function defaultSlotRules(slotId) {
     attemptLimit: slotId === 'practice' || slotId === 'arena' ? 0 : slotId === 'pass' ? 10 : 1,
     safeStartSeconds: 4,
     leaderboardTitle: `${COMPETITION_SLOTS.find((slot) => slot.id === slotId)?.name || 'Mine'} Leaderboard`,
-    rewardLabel: slotId === 'practice' ? 'No rewards' : 'Server-verified rewards',
+    rewardLabel: slotId === 'practice' ? 'No XP · No Crystals' : 'Server-verified rewards',
     instructions: 'Beat the Guardian, bank the most nuggets, and return to the lift.'
   };
 }

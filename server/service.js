@@ -18,12 +18,12 @@ import {
   MIN_RANKED_RUN_WINDOW_MS,
   RONIN_CHAINS,
   RUN_TTL_MS,
-  PRACTICE_CLAIM_TTL_MS,
   SERVER_RUN_MODES,
   SESSION_TTL_MS
 } from './constants.js';
 import { buildSignInMessage, normalizeOrigin } from './auth-message.js';
 import { ApiError, assertApi } from './errors.js';
+import { PRACTICE_PLAY_POLICY } from './nft-play-policy.js';
 import { validateAvatarDataUrl, validateUsername } from './identity.js';
 import { MATT_MINE_LAUNCH_PRICES } from './payment-verifier.js';
 import { isTransientPostgresError } from './postgres-resilience.js';
@@ -118,6 +118,7 @@ export class MattMineService {
       realPaymentsEnabled: this.mainnetTransactionsEnabled,
       mattClaimsEnabled: Boolean(this.rewardManager),
       mainnetTransactionsEnabled: this.mainnetTransactionsEnabled,
+      practice: PRACTICE_PLAY_POLICY,
       arena: this.arenaService
         ? this.arenaService.publicConfig()
         : { enabled: false },
@@ -757,6 +758,9 @@ export class MattMineService {
         'Select an enabled character owned by this wallet.'
       );
       const baseTuning = structuredClone(state.gameTuning[normalizedMode] || state.gameTuning.practice);
+      if (normalizedMode === SERVER_RUN_MODES.PRACTICE) {
+        baseTuning.practicePolicy = { ...PRACTICE_PLAY_POLICY };
+      }
       // Pin the authoritative profile used when the run is issued. This keeps
       // browser gameplay and deterministic replay aligned after Admin changes
       // a logged-in player's permanent ranks.
@@ -902,9 +906,12 @@ export class MattMineService {
       run.status = 'finished';
       run.finishedAt = timestamp;
       run.result = result;
-      let practiceClaim = null;
-      if (run.mode === SERVER_RUN_MODES.PRACTICE) {
-        practiceClaim = upsertPracticeClaim(wallet, run, result, timestamp);
+      const practiceClaim = null;
+      if (run.mode === SERVER_RUN_MODES.PRACTICE && wallet.practiceClaims?.[runId]) {
+        // Keep the public Practice lane permanently rewardless. Historical
+        // claims can still be resolved through their original records, but a
+        // newly finished Practice run can never create one.
+        delete wallet.practiceClaims[runId];
       } else if ([SERVER_RUN_MODES.FREE, SERVER_RUN_MODES.PAID].includes(run.mode)) {
         const _ledgerUpdate = applyNuggetLedgerDelta(wallet, result.banked, {
           type: NUGGET_LEDGER_TYPES.RUN_EXTRACTION,
@@ -2880,7 +2887,7 @@ function appendCompetitionSnapshotId(snapshotIds, slotId, snapshotId) {
 
 function mineOperationCapabilities(mine) {
   return {
-    practice: ['entries', 'results', 'payments', 'rewards'],
+    practice: ['entries', 'results'],
     arena: ['entries', 'results', 'payments', 'rewards'],
     daily: ['entries', 'results', 'rewards'],
     pass: ['entries', 'results', 'payments', 'rewards'],
@@ -2996,35 +3003,6 @@ function safeTokenEqual(left, right) {
   const leftBuffer = Buffer.from(String(left));
   const rightBuffer = Buffer.from(String(right));
   return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
-}
-
-function upsertPracticeClaim(wallet, run, result, timestamp) {
-  const runId = String(run.id || run.runId || '').slice(0, 120);
-  const projectedNuggets = safeInteger(result.projected, 0, true);
-  const createdAt = safeInteger(timestamp, Date.now());
-  const existing = wallet.practiceClaims?.[runId];
-  if (existing) {
-    existing.projectedNuggets = projectedNuggets;
-    existing.status = existing.status === 'discarded' ? 'discarded' : existing.status || 'pending';
-    if (!existing.createdAt) existing.createdAt = createdAt;
-    if (!existing.expiresAt) existing.expiresAt = createdAt + PRACTICE_CLAIM_TTL_MS;
-    return {
-      ...existing,
-      runId
-    };
-  }
-  const claim = {
-    runId,
-    status: 'pending',
-    createdAt,
-    expiresAt: createdAt + PRACTICE_CLAIM_TTL_MS,
-    projectedNuggets,
-    settledAt: 0,
-    transactionHash: ''
-  };
-  wallet.practiceClaims ||= {};
-  wallet.practiceClaims[runId] = claim;
-  return { ...claim };
 }
 
 function findPracticeClaimByTransactionHash(practiceClaims, transactionHash) {

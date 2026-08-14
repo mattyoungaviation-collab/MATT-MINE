@@ -60,7 +60,7 @@ function renderEconomy(economy) {
   ].join('');
 
   setChecked('#economy-purchases-enabled', config.purchasesEnabled);
-  setChecked('#economy-practice-enabled', config.practiceClaimsEnabled);
+  setChecked('#economy-practice-enabled', false);
   setChecked('#economy-ads-enabled', config.advertisementRewardsEnabled);
   setChecked('#economy-asset-matt', config.allowedAssets.MATT);
   setChecked('#economy-asset-ron', config.allowedAssets.RON);
@@ -107,7 +107,7 @@ async function saveEconomy(event) {
   }));
   const patch = {
     purchasesEnabled: document.querySelector('#economy-purchases-enabled').checked,
-    practiceClaimsEnabled: document.querySelector('#economy-practice-enabled').checked,
+    practiceClaimsEnabled: false,
     advertisementRewardsEnabled: document.querySelector('#economy-ads-enabled').checked,
     nuggetsPerMatt: Number(document.querySelector('#economy-nuggets-per-matt').value),
     displayedUsdPerMillion: Number(document.querySelector('#economy-usd-reference').value),

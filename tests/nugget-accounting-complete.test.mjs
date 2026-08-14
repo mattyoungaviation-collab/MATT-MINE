@@ -100,7 +100,7 @@ test('knockout rewards keep the same balance while append-only entries classify 
   assert.equal(repeated.wallets[account.address.toLowerCase()].nuggetLedger.length, 3);
 });
 
-test('authenticated player data exposes only pending server Practice claims to the wallet UI', async () => {
+test('public Practice runs never create wallet rewards or pending claims', async () => {
   const harness = createHarness();
   const session = await signIn(harness);
   const run = await harness.service.startRun(session.token, SERVER_RUN_MODES.PRACTICE);
@@ -120,7 +120,5 @@ test('authenticated player data exposes only pending server Practice claims to t
   });
   const player = await harness.service.me(session.token);
   assert.equal(player.profile.bankedNuggets, 0);
-  assert.equal(player.nuggetEconomy.pendingPracticeClaims.length, 1);
-  assert.equal(player.nuggetEconomy.pendingPracticeClaims[0].runId, run.runId);
-  assert.equal(player.nuggetEconomy.pendingPracticeClaims[0].projectedNuggets, 2_000);
+  assert.deepEqual(player.nuggetEconomy.pendingPracticeClaims, []);
 });

@@ -13,9 +13,9 @@ const account = privateKeyToAccount(
   `0x${createHash('sha256').update('matt-mine-refresh-recovery-player').digest('hex')}`
 );
 
-function minerProfile(runLocked = false) {
+function minerProfile(runLocked = false, minerId = 1) {
   return {
-    minerId: 1,
+    minerId,
     owner: account.address,
     progression: { bankedXp: 0, level: 1, evolution: 0, prestigeXp: 0 },
     equipped: { weapon: 0, backpack: 2, helmet: 0, armor: 4, queuedBackpacks: 0 },
@@ -29,7 +29,7 @@ function minerProfile(runLocked = false) {
   };
 }
 
-function createHarness() {
+function createHarness({ ownsMiner = true } = {}) {
   let randomCounter = 0;
   let locked = false;
   const cancellations = [];
@@ -37,6 +37,10 @@ function createHarness() {
   const database = new MemoryDatabase();
   const nftGameplayService = {
     publicStatus: () => ({ enabled: true, chainId: 202601 }),
+    async playerMiner(_address, requestedMinerId = 0) {
+      if (!ownsMiner) return null;
+      return minerProfile(false, requestedMinerId || 1);
+    },
     async beginRun({ serverRunId }) {
       locked = true;
       return {
@@ -55,7 +59,7 @@ function createHarness() {
     }
   };
   const competitiveReplayValidator = {
-    publicStatus: () => ({ modes: [SERVER_RUN_MODES.PRACTICE] }),
+    publicStatus: () => ({ modes: [SERVER_RUN_MODES.PRACTICE, SERVER_RUN_MODES.FREE] }),
     async register() {
       return { throughSeq: 0, throughTick: 0, transcriptHash: 'genesis', signature: 'start' };
     },
@@ -88,34 +92,29 @@ async function signIn(service) {
   return service.verifyChallenge({ address: account.address, nonce: challenge.nonce, signature });
 }
 
-test('a refreshed wallet can see and safely restart its interrupted NFT Practice run', async () => {
+test('signed-in Practice remains public and never locks or mutates a Miner NFT', async () => {
   const harness = createHarness();
   const session = await signIn(harness.service);
-  const interrupted = await harness.service.startRun(session.token, SERVER_RUN_MODES.PRACTICE);
+  const practice = await harness.service.startRun(session.token, SERVER_RUN_MODES.PRACTICE);
 
   const afterRefresh = await harness.service.me(session.token);
-  assert.deepEqual(afterRefresh.interruptedNftPractice, {
-    runId: interrupted.runId,
-    minerId: 1,
-    startedAt: START,
-    expiresAt: interrupted.expiresAt
+  assert.equal(afterRefresh.interruptedNftPractice, null);
+  assert.equal(practice.mode, SERVER_RUN_MODES.PRACTICE);
+  assert.equal(practice.nftRun, undefined);
+  assert.deepEqual(practice.practicePolicy, {
+    public: true,
+    walletRequired: false,
+    minerRequired: false,
+    xpEnabled: false,
+    crystalsEnabled: false,
+    label: 'ANYONE CAN PLAY · NO XP · NO CRYSTALS'
   });
-
-  const restarted = await harness.service.restartInterruptedNftPractice(session.token);
-  assert.notEqual(restarted.runId, interrupted.runId);
-  assert.equal(restarted.mode, SERVER_RUN_MODES.PRACTICE);
-  assert.equal(restarted.nftRun.minerId, 1);
-  assert.deepEqual(harness.cancellations, [1]);
-  assert.deepEqual(harness.finalized, [[interrupted.runId, 'expired']]);
+  assert.deepEqual(harness.cancellations, []);
 
   const state = await harness.database.read();
-  assert.equal(state.runs[interrupted.runId].status, 'expired');
-  assert.equal(state.runs[interrupted.runId].result, null);
-  assert.equal(state.runs[restarted.runId].status, 'active');
+  assert.equal(state.runs[practice.runId].status, 'active');
+  assert.equal(state.runs[practice.runId].nftRun, undefined);
   assert.equal(state.wallets[account.address.toLowerCase()].profile.totalRuns, 0);
-
-  const recovered = await harness.service.me(session.token);
-  assert.equal(recovered.interruptedNftPractice.runId, restarted.runId);
 });
 
 test('refresh recovery is unavailable without an active NFT Practice run', async () => {
@@ -125,4 +124,20 @@ test('refresh recovery is unavailable without an active NFT Practice run', async
     () => harness.service.restartInterruptedNftPractice(session.token),
     (error) => error.code === 'interrupted_nft_practice_missing'
   );
+});
+
+test('reward-bearing mines reject a wallet without a selected owned Miner before consuming its run', async () => {
+  const harness = createHarness({ ownsMiner: false });
+  const session = await signIn(harness.service);
+  await harness.service.setPlayerIdentity(session.token, { name: 'GateTester' });
+
+  await assert.rejects(
+    () => harness.service.startRun(session.token, SERVER_RUN_MODES.FREE, { minerId: 1 }),
+    (error) => error.code === 'miner_nft_required'
+  );
+
+  const player = await harness.service.me(session.token);
+  assert.equal(player.entitlements.freeRunAvailable, true);
+  const state = await harness.database.read();
+  assert.equal(Object.keys(state.runs).length, 0);
 });

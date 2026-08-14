@@ -41,6 +41,7 @@ import {
 } from './admin-control-links.js';
 import { buildAdminReadiness } from './admin-readiness.js';
 import { SERVER_RUN_MODES } from './constants.js';
+import { PRACTICE_PLAY_POLICY, requiresMinerNft } from './nft-play-policy.js';
 
 const BETA_CAPABILITIES = Object.freeze([
   'jumpDepth', 'jumpRoom', 'triggerBoss', 'spawnBoss', 'setBossPhase',
@@ -153,16 +154,38 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
   }
 
   async startRun(token, mode, input = {}) {
-    if (['weekly', 'endless'].includes(String(mode || '').toLowerCase()) && !this.competitiveReplayValidator) {
+    const normalizedMode = String(mode || '').toLowerCase();
+    if (['weekly', 'endless'].includes(normalizedMode) && !this.competitiveReplayValidator) {
       throw new ApiError(
         503,
         'competitive_replay_validator_missing',
         'This competition remains disabled until deterministic server replay validation is configured.'
       );
     }
+    const nftGateActive = Boolean(this.nftGameplayService) && requiresMinerNft(normalizedMode);
+    if (nftGateActive) {
+      const replayModes = this.competitiveReplayValidator?.publicStatus?.().modes || [];
+      assertApi(
+        replayModes.includes(normalizedMode),
+        503,
+        'nft_replay_required',
+        'This NFT mine remains closed until deterministic server replay verification is active.'
+      );
+      const session = await this.authenticate(token);
+      const selected = await this.nftGameplayService.playerMiner(
+        session.address,
+        selectedMinerId(input.minerId)
+      );
+      assertApi(
+        selected,
+        403,
+        'miner_nft_required',
+        'Select a MATT Mine Miner NFT owned by this wallet before entering a reward-bearing mine.'
+      );
+    }
     const started = await super.startRun(token, mode);
     const replayVerifiedMode = this.competitiveReplayValidator?.publicStatus?.().modes?.includes(started.mode);
-    if (this.nftGameplayService && replayVerifiedMode) {
+    if (nftGateActive && replayVerifiedMode) {
       let nftRun = null;
       try {
         const session = await this.authenticate(token);
@@ -212,6 +235,9 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
         }).catch(() => undefined);
         throw error;
       }
+    }
+    if (started.mode === SERVER_RUN_MODES.PRACTICE) {
+      started.practicePolicy = { ...PRACTICE_PLAY_POLICY };
     }
     const reviveInfrastructureReady =
       this.revivePaymentVerifier?.publicStatus?.().configured === true &&

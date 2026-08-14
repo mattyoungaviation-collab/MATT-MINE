@@ -704,7 +704,7 @@ function mineNextAction(mine, controls) {
   if (controls.rewardsPaused) return 'Play is open, but payouts and claims are stopped. Review obligations before resuming.';
   if (mine.id === 'daily') return 'Mine is live. Monitor active runs; use the payout desk after the weekly board closes.';
   if (mine.id === 'weekly') return 'Mine is live. Monitor active runs and pause New runs first when closing.';
-  if (mine.id === 'practice') return 'Mine is live. Monitor active runs and paid Practice reward claims.';
+  if (mine.id === 'practice') return 'Public demo is live. Maps and balance remain Admin-authored; XP and Crystal rewards are permanently disabled.';
   if (mine.id === 'arena') return 'Arena is live. Monitor entries here and settle the full pool from Daily Arena after close.';
   return 'Mine is live. Monitor active runs and paid credits; pause New runs first when closing.';
 }

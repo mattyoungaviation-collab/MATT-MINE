@@ -249,7 +249,7 @@
             <label>Filter this page<input id="tuning-search" type="search" placeholder="Blaster, armor, Depth 5…"></label>
           </div>
         </div>
-        <div class="notice">Saved changes apply immediately to new runs in this lobby, including MATT Arena. Runs already in progress keep their pinned rules. Contract custody, confirmed payments, and finished scores remain protected.</div>
+        <div class="notice">Saved changes apply immediately to new runs in this lobby, including MATT Arena. Practice is the public no-wallet demo and always awards zero XP and zero Crystals, while still using every Admin-authored map, enemy, weapon, health, room, and modifier setting. Runs already in progress keep their pinned rules.</div>
         <p id="tuning-result-count" class="result-count"></p>
         <form id="tuning-form">
           <div id="tuning-fields" class="tuning-groups"></div>
@@ -269,10 +269,10 @@
         <div id="nugget-economy-metrics" class="metrics"></div>
         <form id="nugget-economy-form">
           <details class="panel structured-card" open>
-            <summary><strong>Release gates</strong><span>5 controls</span></summary>
+            <summary><strong>Release gates</strong><span>4 controls</span></summary>
             <div class="toggle-grid">
               <label class="toggle">Nugget purchases<input id="economy-purchases-enabled" type="checkbox"></label>
-              <label class="toggle">Paid Practice claims<input id="economy-practice-enabled" type="checkbox"></label>
+              <input id="economy-practice-enabled" type="checkbox" hidden disabled aria-hidden="true">
               <label class="toggle linked-field"><span class="toggle-copy">Advertisement rewards<span class="link-chip">Linked · Modes &amp; Characters</span></span><input id="economy-ads-enabled" type="checkbox" data-linked-control="advertisement-rewards-enabled"></label>
               <label class="toggle">Accept MATT<input id="economy-asset-matt" type="checkbox"></label>
               <label class="toggle">Accept RON<input id="economy-asset-ron" type="checkbox"></label>
@@ -292,8 +292,8 @@
             </div>
           </details>
 
-          <details class="panel structured-card">
-            <summary><strong>Practice claim price</strong><span>2 controls</span></summary>
+          <details class="panel structured-card" hidden>
+            <summary><strong>Retired Practice claim price</strong><span>Not used</span></summary>
             <div class="tuning-grid">
               <label class="tuning-field">Payment asset<select id="economy-practice-asset"><option value="MATT">MATT</option><option value="RON">RON</option></select></label>
               <label class="tuning-field">Token amount<input id="economy-practice-amount" type="number" min="0" step="0.000000000000000001"></label>

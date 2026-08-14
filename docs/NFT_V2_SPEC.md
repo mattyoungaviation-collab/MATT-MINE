@@ -167,6 +167,14 @@ Equipment uses five fixed rarity tiers: Common, Uncommon, Rare, Mythic, and Lege
 | Armor | $5 |
 | Backpack | $5 |
 
+## Public Practice boundary
+
+- Practice is always available to every visitor and requires neither a wallet nor a Miner NFT.
+- Practice awards exactly zero Miner XP and zero MATT Crystals and never locks, damages, burns, repairs, or otherwise mutates an NFT.
+- Practice uses the same Admin-authored map builder, combat tuning, enemies, bosses, rooms, weapons, health pickups, modifiers, and live-version publishing system as the other mines.
+- The Practice screen and results must always state **ANYONE CAN PLAY · NO XP · NO CRYSTALS**.
+- Every reward-bearing mine requires a selected Miner NFT owned by the signed-in wallet.
+
 ## Runs and active locks
 
 - A player selects a Miner, equipment, and mine, then signs an EIP-712 run-start authorization.

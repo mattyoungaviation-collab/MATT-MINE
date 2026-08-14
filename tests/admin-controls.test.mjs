@@ -238,6 +238,15 @@ test('mine operations reject controls that have no real flow to pause', async ()
 
 test('game tuning is lobby-specific, audited, and applies immediately to every new run', async () => {
   const harness = serviceHarness();
+  const practice = await harness.service.updateAdminGameTuning(
+    'admin-secret',
+    'practice',
+    { playerMaxHealth: 135, enemyDamageMultiplier: 1.25 },
+    'Tune the public Practice demo'
+  );
+  assert.equal(practice.preset.playerMaxHealth, 135);
+  assert.equal(practice.preset.enemyDamageMultiplier, 1.25);
+
   const free = await harness.service.updateAdminGameTuning(
     'admin-secret',
     'free',
@@ -257,9 +266,10 @@ test('game tuning is lobby-specific, audited, and applies immediately to every n
   const state = await harness.database.read();
   assert.equal(state.gameTuning.arena.bossHealthMultiplier, 2.5);
   assert.equal(Object.hasOwn(state, 'arenaTuningSchedule'), false);
+  assert.equal((await harness.service.publicGameTuning('practice')).preset.playerMaxHealth, 135);
   assert.equal((await harness.service.publicGameTuning('free')).preset.playerMaxHealth, 175);
   const audit = await harness.service.adminAudit('admin-secret', { action: 'GAME_TUNING_UPDATED' });
-  assert.equal(audit.entries.length, 2);
+  assert.equal(audit.entries.length, 3);
   assert.ok(audit.entries.every((entry) => entry.details.includes('effective immediately for new runs')));
 });
 
@@ -506,6 +516,10 @@ test('admin HTTP routes reject missing credentials and apply audited controls', 
   assert.equal(mineOverview.status, 200);
   const minePayload = await mineOverview.json();
   assert.equal(minePayload.mines.find((mine) => mine.id === 'practice').controls.entriesPaused, true);
+  assert.deepEqual(
+    minePayload.mines.find((mine) => mine.id === 'practice').availableControls,
+    ['entries', 'results']
+  );
   assert.deepEqual(
     minePayload.mines.find((mine) => mine.id === 'daily').availableControls,
     ['entries', 'results', 'rewards']
