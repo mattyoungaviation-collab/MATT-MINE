@@ -444,7 +444,8 @@ export function createNftGameplayServiceFromEnvironment(metadataService, environ
     operatorAddress: environment.MATT_MINE_NFT_GAME_OPERATOR_ADDRESS,
     signerAddress: environment.MATT_MINE_NFT_REWARD_SIGNER_ADDRESS,
     operatorPrivateKey: environment.MATT_MINE_NFT_GAME_OPERATOR_PRIVATE_KEY,
-    signerPrivateKey: environment.MATT_MINE_NFT_REWARD_SIGNER_PRIVATE_KEY,
+    signerPrivateKey: environment.MATT_MINE_NFT_REWARD_SIGNER_PRIVATE_KEY
+      || environment.MATT_MINE_NFT_GAME_SIGNER_PRIVATE_KEY,
     mapVersions: parseMapVersions(environment.MATT_MINE_NFT_MAP_VERSIONS_JSON),
     metadataService,
     ...options
