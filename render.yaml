@@ -24,7 +24,7 @@ services:
           name: matt-mine-db
           property: connectionString
       - key: MATT_MINE_PUBLIC_ORIGIN
-        sync: false
+        value: "https://mattmine.com"
       - key: VITE_WALLETCONNECT_PROJECT_ID
         sync: false
       - key: RONIN_RPC_URLS
@@ -38,7 +38,7 @@ services:
       - key: MATT_MINE_NFT_CONTRACT_VERSION
         value: "2"
       - key: MATT_MINE_NFT_PUBLIC_BASE_URL
-        value: "https://matt-mine.onrender.com"
+        value: "https://mattmine.com"
       - key: MATT_MINE_NFT_CHAIN_ID
         value: "2020"
       - key: MATT_MINE_NFT_RPC_URL
