@@ -36,6 +36,8 @@
     "deploy-nft-v2:ronin": "hardhat run --build-profile production scripts/deploy-nft-v2-mainnet.js --network roninNftV2",
     "check-nft-v2:ronin": "hardhat run --build-profile production scripts/check-nft-v2-mainnet.js --network roninReadOnly",
     "verify-nft-v2:ronin": "hardhat run --build-profile production scripts/verify-nft-v2-mainnet.js --network roninReadOnly",
+    "check-nft-v2-inventory:ronin": "hardhat run --build-profile production scripts/check-nft-v2-mainnet-inventory.js --network roninReadOnly",
+    "premint-nft-v2-inventory:ronin": "hardhat run --build-profile production scripts/premint-nft-v2-mainnet-inventory.js --network roninNftV2",
     "check-nft-v2-activation:ronin": "hardhat run --build-profile production scripts/check-nft-v2-mainnet-activation.js --network roninNftV2",
     "activate-nft-v2:ronin": "hardhat run --build-profile production scripts/activate-nft-v2-mainnet.js --network roninNftV2"
   },

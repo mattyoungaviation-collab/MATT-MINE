@@ -11,8 +11,6 @@ import {
 
 const CONFIRMATION = "ACTIVATE_MATT_MINE_NFT_V2_ON_RONIN_MAINNET";
 if (process.env.MATT_MINE_NFT_V2_MAINNET_ACTIVATION !== CONFIRMATION) throw new Error(`Set MATT_MINE_NFT_V2_MAINNET_ACTIVATION=${CONFIRMATION}.`);
-const launchpadMinter = getAddress(process.env.MATT_MINE_NFT_V2_LAUNCHPAD_MINTER_ADDRESS || "0x0000000000000000000000000000000000000000");
-if (launchpadMinter === "0x0000000000000000000000000000000000000000") throw new Error("Set the approved Ronin Launchpad minter address.");
 const { ethers } = await network.create();
 const config = loadNftV2MainnetConfig();
 await validateNftV2MainnetNetwork(ethers, config);
@@ -23,7 +21,9 @@ const deploymentPath = process.env.MATT_MINE_NFT_V2_MAINNET_DEPLOYMENT_PATH
   : resolve(dirname(NFT_V2_MAINNET_CONFIG_PATH), "..", "deployments", "nft-v2-ronin.json");
 if (!existsSync(deploymentPath)) throw new Error(`Missing ${deploymentPath}.`);
 const manifest = JSON.parse(readFileSync(deploymentPath, "utf8"));
-if (manifest.status !== "verified_paused") throw new Error("Verify every V2 contract before activation.");
+if (manifest.status !== "market_inventory_minted_paused") {
+  throw new Error("Pre-mint all 1,000 Miners to the marketplace inventory wallet before activation.");
+}
 const transactions = [];
 const at = (artifact, label) => ethers.getContractAt(artifact, manifest.contracts[label].address, admin);
 const miner = await at("MattV2Miner", "Miner");
@@ -33,6 +33,11 @@ const bank = await at("MattV2CrystalBank", "CrystalBankProxy");
 const passive = await at("MattV2PassiveRewards", "PassiveRewardsProxy");
 const settlement = await at("MattV2GameSettlement", "GameSettlementProxy");
 const chest = await at("MattV2Chest", "ChestProxy");
+const salesWallet = getAddress(manifest.marketInventory?.salesWallet || "");
+if (
+  await miner.nextTokenId() !== 1_001n || await miner.balanceOf(salesWallet) !== 1_000n
+  || getAddress(await miner.ownerOf(1n)) !== salesWallet || getAddress(await miner.ownerOf(1_000n)) !== salesWallet
+) throw new Error("Marketplace inventory ownership is incomplete.");
 const crystal = new ethers.Contract(config.protocol.crystalToken, [
   "function MINTER_ROLE() view returns (bytes32)",
   "function hasRole(bytes32,address) view returns (bool)",
@@ -71,7 +76,6 @@ for (const target of [bank.target, passive.target]) {
   if (!(await crystal.hasRole(minterRole, target))) await send(`Grant Crystal MINTER_ROLE to ${target}`, () => crystal.grantRole(minterRole, target));
 }
 
-await grant(miner, await miner.MINTER_ROLE(), launchpadMinter, "Launchpad Miner mint role");
 await grant(miner, await miner.PAUSER_ROLE(), config.activationRoles.emergencyPauser, "Miner emergency pauser");
 await grant(equipment, await equipment.PAUSER_ROLE(), config.activationRoles.emergencyPauser, "Equipment emergency pauser");
 await grant(loadout, await loadout.PAUSER_ROLE(), config.activationRoles.emergencyPauser, "Loadout emergency pauser");
@@ -104,6 +108,7 @@ manifest.activatedAt = new Date().toISOString();
 manifest.activationTransactions = transactions;
 save();
 console.log("MATT Mine NFT V2 is activated with separated routine roles.");
+console.log(`All 1,000 pre-minted Miners remain in marketplace inventory ${salesWallet}.`);
 
 async function grant(contract, role, account, label) { await sendIf(!(await contract.hasRole(role, account)), label, () => contract.grantRole(role, account)); }
 async function revoke(contract, role, account, label) { await sendIf(await contract.hasRole(role, account), label, () => contract.revokeRole(role, account)); }

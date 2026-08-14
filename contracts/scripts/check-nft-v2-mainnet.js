@@ -23,7 +23,13 @@ const configHash = keccak256(toUtf8Bytes(JSON.stringify(jsonSafe(config))));
 if (
   manifest.scope !== "MattMineNftV2Ronin" || manifest.releaseId !== NFT_V2_MAINNET_RELEASE_ID
   || manifest.chainId !== config.chainId || manifest.configHash !== configHash
-  || !["deployed_configured_paused_requires_external_activation", "verified_paused"].includes(manifest.status)
+  || ![
+    "deployed_configured_paused_requires_external_activation",
+    "verified_paused",
+    "market_inventory_minting",
+    "market_inventory_partial_paused",
+    "market_inventory_minted_paused"
+  ].includes(manifest.status)
 ) throw new Error("Manifest does not match the exact approved V2 mainnet release.");
 for (const [label, record] of Object.entries(manifest.contracts)) {
   if ((await ethers.provider.getCode(record.address)) === "0x") throw new Error(`${label} has no code.`);
@@ -45,7 +51,20 @@ for (const [label, contract] of Object.entries({ miner, equipment, loadout, bank
   if (getAddress(await contract.defaultAdmin()) !== config.roles.rootAdmin) throw new Error(`${label} admin mismatch.`);
 }
 if (await timelock.UPGRADE_DELAY() !== 172_800n || getAddress(await timelock.owner()) !== config.roles.rootAdmin) throw new Error("Upgrade Timelock mismatch.");
-if (await miner.MAX_SUPPLY() !== 1_000n || await miner.nextTokenId() !== 1n || await equipment.nextTokenId() !== 1n) throw new Error("Collection cap or fresh-supply guard mismatch.");
+if (await miner.MAX_SUPPLY() !== 1_000n || await equipment.nextTokenId() !== 1n) throw new Error("Collection cap or Equipment supply guard mismatch.");
+const nextMinerId = await miner.nextTokenId();
+if (manifest.status === "verified_paused" || manifest.status === "deployed_configured_paused_requires_external_activation") {
+  if (nextMinerId !== 1n) throw new Error("Fresh Miner supply guard mismatch.");
+} else {
+  const salesWallet = getAddress(manifest.marketInventory?.salesWallet || "");
+  const mintedQuantity = nextMinerId - 1n;
+  if (mintedQuantity < 0n || mintedQuantity > 1_000n || await miner.balanceOf(salesWallet) !== mintedQuantity) {
+    throw new Error("Marketplace inventory supply guard mismatch.");
+  }
+  if (manifest.status === "market_inventory_minted_paused" && nextMinerId !== 1_001n) {
+    throw new Error("Marketplace inventory is not completely minted.");
+  }
+}
 for (const [proxyLabel, implementationLabel] of [
   ["CrystalBankProxy", "CrystalBankImplementation"],
   ["PassiveRewardsProxy", "PassiveRewardsImplementation"],
@@ -111,5 +130,5 @@ for (const [mode, map] of Object.entries(config.maps)) {
 }
 if (getAddress(await settlement.rewardSigner()) !== config.roles.rootAdmin || !(await settlement.hasRole(await settlement.OPERATOR_ROLE(), config.roles.rootAdmin))) throw new Error("Bootstrap Settlement roles mismatch.");
 console.log("Ronin Mainnet NFT V2 safe-bootstrap deployment verified on-chain.");
-console.log("All fourteen contracts have code, all seven gameplay modules remain paused, both collections are empty, and every cap, proxy, map, price, role, and dependency matches.");
+console.log("All fourteen contracts have code, all seven gameplay modules remain paused, collection supply matches the manifest, and every cap, proxy, map, price, role, and dependency matches.");
 console.log("External VRF subscription consumers, Crystal minters, dedicated roles, source verification, and activation intentionally remain next.");

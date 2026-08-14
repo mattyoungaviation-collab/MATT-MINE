@@ -9,7 +9,6 @@ import {
   validateNftV2MainnetNetwork
 } from "./lib/nft-v2-mainnet.js";
 
-const launchpadMinter = addressFromEnvironment("MATT_MINE_NFT_V2_LAUNCHPAD_MINTER_ADDRESS");
 const { ethers } = await network.create();
 const config = loadNftV2MainnetConfig();
 await validateNftV2MainnetNetwork(ethers, config);
@@ -22,7 +21,9 @@ const deploymentPath = process.env.MATT_MINE_NFT_V2_MAINNET_DEPLOYMENT_PATH
   : resolve(dirname(NFT_V2_MAINNET_CONFIG_PATH), "..", "deployments", "nft-v2-ronin.json");
 if (!existsSync(deploymentPath)) throw new Error(`Missing ${deploymentPath}.`);
 const manifest = JSON.parse(readFileSync(deploymentPath, "utf8"));
-if (manifest.status !== "verified_paused") throw new Error("The complete V2 suite must be verified and paused first.");
+if (manifest.status !== "market_inventory_minted_paused") {
+  throw new Error("All 1,000 Miners must be pre-minted to the marketplace inventory wallet first.");
+}
 
 const at = (artifact, label) => ethers.getContractAt(artifact, manifest.contracts[label].address, admin);
 const miner = await at("MattV2Miner", "Miner");
@@ -35,6 +36,11 @@ const chest = await at("MattV2Chest", "ChestProxy");
 for (const contract of [miner, equipment, loadout, bank, passive, settlement, chest]) {
   if (!(await contract.paused())) throw new Error(`${contract.target} must remain paused before activation.`);
 }
+const salesWallet = getAddress(manifest.marketInventory?.salesWallet || "");
+if (
+  await miner.nextTokenId() !== 1_001n || await miner.balanceOf(salesWallet) !== 1_000n
+  || getAddress(await miner.ownerOf(1n)) !== salesWallet || getAddress(await miner.ownerOf(1_000n)) !== salesWallet
+) throw new Error("Marketplace inventory ownership is incomplete.");
 
 const crystal = new Contract(config.protocol.crystalToken, [
   "function MINTER_ROLE() view returns (bytes32)",
@@ -73,15 +79,5 @@ for (const [label, address] of [
 if (await ethers.provider.getBalance(NFT_V2_ROOT) < parseEther("1")) throw new Error("0xF799 needs at least 1 RON for activation transactions.");
 
 console.log("NFT V2 activation readiness passed without broadcasting a transaction.");
-console.log(`Launchpad minter: ${launchpadMinter}`);
-console.log("VRF ownership, Crystal mint authority, dedicated-wallet fuel, paused state, source verification, and manifest status are ready.");
-
-function addressFromEnvironment(name) {
-  try {
-    const value = getAddress(process.env[name] || "");
-    if (value === ethers.ZeroAddress) throw new Error();
-    return value;
-  } catch {
-    throw new Error(`Set ${name} to the final approved Ronin Launchpad minter address.`);
-  }
-}
+console.log(`Marketplace inventory wallet: ${salesWallet}`);
+console.log("All 1,000 Miners, VRF ownership, Crystal mint authority, dedicated-wallet fuel, paused state, source verification, and manifest status are ready.");
