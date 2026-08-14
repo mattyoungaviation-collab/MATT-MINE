@@ -1,0 +1,12 @@
+title = "MATT Mine secret scanning policy"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Published Ronin Mainnet protocol identifiers"
+regexes = [
+  '''(?i)^0xa5450417bdca0bdfb058ffe41205400ffda1174d$''',
+  '''(?i)^0x2d2034e55900d285dc05d30a0c14846d7a30285b$''',
+  '''(?i)^0x01753ec79fbf37f6332977d62f25c6d701b11bac255d7e79674fd2886622b0cc$'''
+]
