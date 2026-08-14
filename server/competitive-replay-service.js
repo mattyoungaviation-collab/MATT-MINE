@@ -16,7 +16,7 @@ import { ApiError, assertApi } from './errors.js';
 const CLOCK_TOLERANCE_MS = 15_000;
 // Practice is the unlimited MATT Mine gameplay lane. It uses the same
 // authoritative replay as ranked modes before NFT state can change.
-const REPLAY_MODES = new Set(['practice', 'free', 'paid', 'weekly', 'endless']);
+const REPLAY_MODES = new Set(['practice', 'paid']);
 
 export class CompetitiveReplayService {
   constructor(options = {}) {
@@ -166,7 +166,8 @@ export class CompetitiveReplayService {
       replay: {
         version: 'matt-competitive-input-v1',
         eventCount: replayed.eventCount,
-        transcriptHash: transcript.transcriptHash
+        transcriptHash: transcript.transcriptHash,
+        runtime: replayed.runtime || null
       }
     };
   }

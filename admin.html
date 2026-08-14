@@ -38,7 +38,7 @@
         <span class="nav-label">Game</span>
         <button data-tab="studio"><span>Competition Studio</span><small>Maps &amp; schedules</small></button>
         <button data-tab="tuning"><span>Game Balance</span><small>Per-lobby tuning</small></button>
-        <button data-tab="expansion"><span>Modes &amp; Characters</span><small>Features &amp; roster</small></button>
+        <button data-tab="expansion"><span>Features &amp; Practice</span><small>Gates, controllers &amp; roster</small></button>
         <span class="nav-label">Economy</span>
         <button data-tab="nugget-economy"><span>Nugget Economy</span><small>Prices &amp; packages</small></button>
         <button data-tab="arena"><span>MATT Arena</span><small>Pool &amp; settlement</small></button>
@@ -85,10 +85,10 @@
 
       <section id="tab-expansion" class="tab">
         <div class="section-heading">
-          <div><p class="eyebrow">MODES &amp; CHARACTERS</p><h2>Features and playable roster</h2><p>Release gates, special modes, rewards, controllers, and character stats.</p></div>
+          <div><p class="eyebrow">FEATURES &amp; PRACTICE ROSTER</p><h2>Server features and legacy characters</h2><p>Release gates, rewards, controllers, and Practice-only character stats.</p></div>
           <label class="search-field">Filter this page<input id="expansion-search" type="search" placeholder="Chest, revive, controller, character…"></label>
         </div>
-        <div class="notice">Production switches unlock only when their server verifier is ready. Competitive settings apply only before a stage opens.</div>
+        <div class="notice">Production switches unlock only when their server verifier is ready. Arena and Pass use the selected V2 Miner NFT instead of legacy character stats. Practice is the public no-wallet demo and always awards zero XP and zero Crystals. Retired Daily, Seven-Day, Endless, and Practice-ad reward controls are not exposed.</div>
         <div id="production-readiness" class="grid four"></div>
         <p id="expansion-result-count" class="result-count"></p>
         <form id="expansion-form">
@@ -242,14 +242,14 @@
 
       <section id="tab-tuning" class="tab">
         <div class="section-heading">
-          <div><p class="eyebrow">GAME BALANCE</p><h2>Per-lobby tuning</h2><p>Every combat, enemy, boss, room, weapon, and scoring value.</p></div>
+          <div><p class="eyebrow">GAME BALANCE</p><h2>Effective per-mine tuning</h2><p>Only controls that can change the selected mine are shown.</p></div>
           <div class="filter-bar">
             <label>Mine<select id="tuning-lobby"><option value="practice">Practice Mine</option><option value="arena">MATT Arena</option><option value="paid">Pass Mine</option></select></label>
             <label>Category<select id="tuning-category"><option value="">All categories</option></select></label>
             <label>Filter this page<input id="tuning-search" type="search" placeholder="Blaster, armor, Depth 5…"></label>
           </div>
         </div>
-        <div class="notice">Saved changes apply immediately to new runs in this lobby, including MATT Arena. Practice is the public no-wallet demo and always awards zero XP and zero Crystals, while still using every Admin-authored map, enemy, weapon, health, room, and modifier setting. Runs already in progress keep their pinned rules.</div>
+        <div class="notice">Competition Studio owns maps, creature placement, Guardian phases, and starting loadouts. In Arena and Pass, the selected V2 Miner NFT owns base Health, Shield Armor, Pickaxe Attack, Blaster Attack, Dynamite Attack, Heal, carry capacity, and death retention. Game Balance shows the remaining controls that actually affect the selected mine. Changes apply to new runs; active runs and server replays keep their pinned rules.</div>
         <p id="tuning-result-count" class="result-count"></p>
         <form id="tuning-form">
           <div id="tuning-fields" class="tuning-groups"></div>
@@ -273,7 +273,7 @@
             <div class="toggle-grid">
               <label class="toggle">Nugget purchases<input id="economy-purchases-enabled" type="checkbox"></label>
               <input id="economy-practice-enabled" type="checkbox" hidden disabled aria-hidden="true">
-              <label class="toggle linked-field"><span class="toggle-copy">Advertisement rewards<span class="link-chip">Linked · Modes &amp; Characters</span></span><input id="economy-ads-enabled" type="checkbox" data-linked-control="advertisement-rewards-enabled"></label>
+              <label class="toggle linked-field"><span class="toggle-copy">Advertisement rewards<span class="link-chip">Linked · Features &amp; Practice</span></span><input id="economy-ads-enabled" type="checkbox" data-linked-control="advertisement-rewards-enabled"></label>
               <label class="toggle">Accept MATT<input id="economy-asset-matt" type="checkbox"></label>
               <label class="toggle">Accept RON<input id="economy-asset-ron" type="checkbox"></label>
             </div>

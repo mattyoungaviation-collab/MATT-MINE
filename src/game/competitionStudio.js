@@ -161,9 +161,9 @@ export function normalizeCompetitionDraft(input, forcedSlotId = '') {
     depths,
     map: depths[0].map,
     enemyPlanMode: source.enemyPlanMode === 'generated' ? 'generated' : 'authored',
-    guardianAiMode: source.guardianAiMode === 'legacy' ? 'legacy' : 'advanced',
+    guardianAiMode: slotId === 'arena' && source.guardianAiMode === 'legacy' ? 'legacy' : 'advanced',
     monsterTuning: normalizeCompetitionMonsterTuning(source.monsterTuning),
-    loadout: normalizeLoadout(source.loadout),
+    loadout: normalizeLoadout(source.loadout, slotId),
     rules: normalizeRules(source.rules, slotId)
   };
 }
@@ -492,8 +492,9 @@ function defaultLoadout() {
   };
 }
 
-function normalizeLoadout(input) {
+function normalizeLoadout(input, slotId = 'practice') {
   const source = isRecord(input) ? input : {};
+  const nftGated = slotId === 'arena' || slotId === 'pass';
   const weapons = ['pickaxe', 'dynamite', 'blaster'];
   const availableWeapons = Array.isArray(source.availableWeapons)
     ? [...new Set(source.availableWeapons.filter((weapon) => weapons.includes(weapon)))]
@@ -501,16 +502,18 @@ function normalizeLoadout(input) {
   if (!availableWeapons.includes('pickaxe')) availableWeapons.unshift('pickaxe');
   const requestedCharacterId = cleanId(source.characterId || 'matt');
   return {
-    characterId: CHARACTER_IDS.includes(requestedCharacterId) ? requestedCharacterId : 'matt',
+    characterId: nftGated
+      ? 'matt'
+      : CHARACTER_IDS.includes(requestedCharacterId) ? requestedCharacterId : 'matt',
     startingWeapon: availableWeapons.includes(source.startingWeapon) ? source.startingWeapon : 'pickaxe',
     availableWeapons,
-    startingHealth: boundedNumber(source.startingHealth, 1, 1000, 100),
+    startingHealth: nftGated ? 100 : boundedNumber(source.startingHealth, 1, 1000, 100),
     startingDynamite: boundedInteger(source.startingDynamite, 0, 99, 0),
     blasterEnergy: boundedNumber(source.blasterEnergy, 1, 1000, 115),
-    permanentUpgrades: source.permanentUpgrades !== false,
+    permanentUpgrades: nftGated ? false : source.permanentUpgrades !== false,
     runUpgrades: source.runUpgrades !== false,
     maximumDrones: boundedInteger(source.maximumDrones, 0, 4, 4),
-    paidRevive: source.paidRevive === true
+    paidRevive: slotId !== 'practice' && source.paidRevive === true
   };
 }
 
@@ -530,7 +533,9 @@ function normalizeRules(input, slotId) {
   const defaults = defaultSlotRules(slotId);
   return {
     scoring: ['best', 'cumulative'].includes(source.scoring) ? source.scoring : defaults.scoring,
-    attemptLimit: boundedInteger(source.attemptLimit, 0, 1000, defaults.attemptLimit),
+    attemptLimit: slotId === 'pass'
+      ? boundedInteger(source.attemptLimit, 0, 1000, defaults.attemptLimit)
+      : 0,
     safeStartSeconds: boundedNumber(source.safeStartSeconds, 0, 30, defaults.safeStartSeconds),
     leaderboardTitle: cleanText(source.leaderboardTitle || defaults.leaderboardTitle, 70),
     rewardLabel: cleanText(source.rewardLabel || defaults.rewardLabel, 100),

@@ -2,9 +2,19 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { MattMineGame } from '../src/game/GameV4.js';
+import { RUN_UPGRADES } from '../src/game/config.js';
 import { defaultProfile } from '../src/game/storage.js';
 import { normalizeGameTuning } from '../src/game/tuning.js';
-import { nftCarryCapacity, nftGameplayTraits } from '../src/game/nftTraits.js';
+import {
+  gameplayRuntimeSnapshot,
+  nftCarryCapacity,
+  nftGameplayTraits
+} from '../src/game/nftTraits.js';
+import {
+  buildArenaChallenge,
+  buildCompetitiveChallenge,
+  replayArenaTranscript
+} from '../server/arena-engine.js';
 
 const NOOP_AUDIO = {
   startMusic() {}, stopMusic() {}, resume() {}, play() {}, startBoss() {}, stopBoss() {}
@@ -157,4 +167,64 @@ test('V2 carry and retention normalize from the selected Miner snapshot', () => 
   const context = { nftRun: v2Run(), tuning: { nftCrystalCarryLimit: 10 } };
   assert.deepEqual(nftGameplayTraits(context), { version: 2, ...TRAITS });
   assert.equal(nftCarryCapacity(context), TRAITS.carryCapacity);
+});
+
+test('V2 runs scale every in-run XP source once and never offer legacy Rock Armor', () => {
+  const game = gameFor({ xpMultiplier: 2 });
+  game.player.xp = 0;
+  game.player.nextXp = 1_000;
+  game.gainXp(13);
+  assert.equal(game.player.xp, 26);
+  assert.equal(game.availableRunUpgrades(RUN_UPGRADES).some((upgrade) => upgrade.id === 'armor'), false);
+
+  game.state = 'levelup';
+  game.pendingUpgradeIds = ['armor'];
+  game.chooseRunUpgrade('armor');
+  assert.equal(game.player.armor, 0);
+});
+
+test('Pass replay consumes the same persisted V2 profile and Admin modifiers as the browser', () => {
+  const browser = gameFor({
+    playerSpeed: 333,
+    scoreMultiplier: 1.7,
+    nuggetMultiplier: 2.2,
+    xpMultiplier: 1.4,
+    passXpMultiplier: 1.8,
+    depthScoreMultiplier: 1.3,
+    killPointValue: 17,
+    bossPointValue: 91
+  });
+  const persistedTuning = {
+    ...browser.runContext.tuning,
+    nftMinerProfile: structuredClone(v2Run().profile)
+  };
+  const challenge = buildCompetitiveChallenge({
+    mode: 'paid',
+    seed: 'NFT-V2-PASS-REPLAY',
+    tuning: persistedTuning
+  });
+  const replayed = replayArenaTranscript(challenge, [], {
+    mode: 'paid',
+    nftRun: { minerId: 1 }
+  });
+  assert.deepEqual(replayed.runtime, gameplayRuntimeSnapshot(browser));
+});
+
+test('MATT Arena replay consumes the V2 profile pinned inside its signed tuning receipt', () => {
+  const tuning = emptySpawnPlan({
+    ...normalizeGameTuning().arena,
+    playerSpeed: 321,
+    pickaxeDamageMultiplier: 1.15,
+    blasterDamageMultiplier: .82,
+    dynamiteDamageMultiplier: 1.35,
+    _nftRun: v2Run()
+  });
+  const browser = new MattMineGame(null, defaultProfile(), { headless: true, audio: NOOP_AUDIO });
+  browser.startRun({ mode: 'arena', seed: 'b'.repeat(64), tuning });
+  const replayed = replayArenaTranscript(
+    buildArenaChallenge('b'.repeat(64), tuning),
+    [],
+    { mode: 'arena' }
+  );
+  assert.deepEqual(replayed.runtime, gameplayRuntimeSnapshot(browser));
 });

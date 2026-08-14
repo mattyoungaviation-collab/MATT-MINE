@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 import { MemoryDatabase } from '../server/database.js';
-import { CompleteProductionMattMineService } from '../server/complete-production-service.js';
+import {
+  CompleteProductionMattMineService,
+  arenaStudioAllowsPaidRevives
+} from '../server/complete-production-service.js';
 import {
   EXPANSION_SCHEMA,
   defaultControllerProfile,
@@ -144,6 +147,29 @@ test('expansion schema rejects unknown and unsafe settings while preserving veri
   const admin = await service.adminExpansion('admin-test-key');
   assert.equal(admin.schema.some((entry) => entry.category === 'Weekly Competition'), false);
   assert.equal(admin.schema.some((entry) => entry.category === 'Endless Mode'), false);
+  assert.equal(admin.schema.some((entry) => entry.id === 'advertisementPracticeEligible'), false);
+});
+
+test('Admin controller defaults initialize new wallets and remain player-overridable', async () => {
+  const { service } = harness();
+  await service.updateAdminExpansion('admin-test-key', {
+    settings: {
+      controllerDeadZone: .27,
+      controllerAimSensitivity: 1.45,
+      controllerVibration: false
+    }
+  }, 'Set controller defaults for new players');
+  const token = await login(service, OTHER);
+  const player = await service.me(token);
+  assert.equal(player.expansion.controller.deadZone, .27);
+  assert.equal(player.expansion.controller.aimSensitivity, 1.45);
+  assert.equal(player.expansion.controller.vibration, false);
+
+  const updated = await service.updateControllerProfile(token, {
+    ...player.expansion.controller,
+    deadZone: .12
+  });
+  assert.equal(updated.controller.deadZone, .12);
 });
 
 test('Pass chest awards the configured 250,000 through the server ledger exactly once', async () => {
@@ -405,6 +431,15 @@ test('revive state preserves the run and rejects duplicate or finalized payments
   assert.equal(restored.reviveCount, 1);
   assert.equal(run.status, 'active');
   assert.throws(() => createPendingRevive({ ...run, status: 'awaiting-revive' }, config, START + 2), /limit/);
+});
+
+test('MATT Arena paid revive requires both global approval and its published Studio switch', () => {
+  const enabledSnapshot = { loadout: { paidRevive: true } };
+  const disabledSnapshot = { loadout: { paidRevive: false } };
+  assert.equal(arenaStudioAllowsPaidRevives(enabledSnapshot, { paidRevivesEnabled: true }, true), true);
+  assert.equal(arenaStudioAllowsPaidRevives(disabledSnapshot, { paidRevivesEnabled: true }, true), false);
+  assert.equal(arenaStudioAllowsPaidRevives(enabledSnapshot, { paidRevivesEnabled: false }, true), false);
+  assert.equal(arenaStudioAllowsPaidRevives(enabledSnapshot, { paidRevivesEnabled: true }, false), false);
 });
 
 test('Arena revive payment is authoritative, retry-safe, and recorded exactly once', async () => {

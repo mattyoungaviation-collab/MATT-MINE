@@ -19,12 +19,12 @@ test.describe('Ronin mobile play', () => {
     expect(walletBox?.height).toBeGreaterThanOrEqual(44);
 
     const practice = page.locator('[data-launch-action="practice"].launch-secondary-cta');
-    const dailyCard = page.locator('.launch-daily-card');
+    const mineGrid = page.locator('.launch-mine-card-grid');
     const practiceBox = await practice.boundingBox();
-    const dailyCardBox = await dailyCard.boundingBox();
+    const mineGridBox = await mineGrid.boundingBox();
     expect(practiceBox).not.toBeNull();
-    expect(dailyCardBox).not.toBeNull();
-    expect(practiceBox.y + practiceBox.height).toBeLessThan(dailyCardBox.y);
+    expect(mineGridBox).not.toBeNull();
+    expect(practiceBox.y + practiceBox.height).toBeLessThan(mineGridBox.y);
 
     await practice.click();
     await expect(page.locator('#mobile-orientation-gate')).toHaveCount(0);

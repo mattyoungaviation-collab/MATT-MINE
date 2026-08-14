@@ -61,7 +61,9 @@ export function bossTuningSchema(number, toggle) {
     const phaseDefaults = PHASE_DEFAULTS[phase];
     const category = `Boss Phase ${phase}`;
     const phaseFields = [
-      number(`bossPhase${phase}HealthThreshold`, category, 'Health threshold', phaseDefaults.healthThreshold, phase === 1 ? 1 : 0.05, 1, .01, 'Health fraction where this phase begins. Phase 1 remains 1. Phase 2 must stay above Phase 3.'),
+      ...(phase === 1 ? [] : [
+        number(`bossPhase${phase}HealthThreshold`, category, 'Health threshold', phaseDefaults.healthThreshold, 0.05, 1, .01, 'Health fraction where this phase begins. Phase 2 must stay above Phase 3.')
+      ]),
       number(`bossPhase${phase}AttackSpeedMultiplier`, category, 'Attack-speed multiplier', phaseDefaults.attackSpeedMultiplier, .1, 5, .05, 'Scales how quickly the phase may choose its next attack.'),
       number(`bossPhase${phase}DamageMultiplier`, category, 'Damage multiplier', phaseDefaults.damageMultiplier, 0, 5, .05, 'Scales all Guardian damage in this phase.'),
       number(`bossPhase${phase}GlobalCooldown`, category, 'Global attack cooldown', phaseDefaults.globalCooldown, .15, 12, .05, 'Minimum pause after any Guardian attack.'),
@@ -75,18 +77,31 @@ export function bossTuningSchema(number, toggle) {
       const defaults = phaseAttackDefaults(phase, attack);
       const prefix = `bossPhase${phase}${capitalize(attack)}`;
       const attackCategory = `Boss Phase ${phase} · ${capitalize(attack)}`;
-      return [
+      const shared = [
         toggle(`${prefix}Enabled`, attackCategory, 'Enabled', defaults.enabled, `Allows ${attack} to enter the deterministic phase scheduler.`),
         number(`${prefix}Cooldown`, attackCategory, 'Individual cooldown', defaults.cooldown, .1, 60, .05, `Minimum interval between ${attack} uses by the same Guardian.`),
-        number(`${prefix}Damage`, attackCategory, 'Damage multiplier', defaults.damage, 0, 5, .01, 'Multiplier applied to the Guardian base damage.'),
-        number(`${prefix}ProjectileSpeed`, attackCategory, 'Projectile speed', defaults.projectileSpeed, 0, 1800, 10, 'Ignored by attacks that do not create projectiles.'),
-        number(`${prefix}ProjectileCount`, attackCategory, 'Projectile or summon count', defaults.projectileCount, 0, 30, 1, 'Bolts for projectile attacks or requested reinforcements for Summon.'),
-        number(`${prefix}Spread`, attackCategory, 'Spread radians', defaults.spread, 0, 6.2832, .01, 'Angular spread. Radial uses a complete circle.'),
-        number(`${prefix}Range`, attackCategory, 'Range', defaults.range, 0, 1400, 10, 'Slam radius or maximum projectile travel distance.'),
         number(`${prefix}Windup`, attackCategory, 'Warning / wind-up seconds', defaults.windup, 0, 4, .05, 'Readable delay recorded for presentation and scheduler timing.'),
         number(`${prefix}Duration`, attackCategory, 'Attack duration seconds', defaults.duration, .05, 8, .05, 'Time reserved by the attack before another action can begin.'),
         number(`${prefix}Weight`, attackCategory, 'Selection weight', defaults.weight, 0, 100, .1, 'Relative deterministic selection frequency when the attack is ready.')
       ];
+      const damaging = attack === 'summon' ? [] : [
+        number(`${prefix}Damage`, attackCategory, 'Damage multiplier', defaults.damage, 0, 5, .01, 'Multiplier applied to the Guardian base damage.')
+      ];
+      const projectile = attack === 'volley' || attack === 'radial' ? [
+        number(`${prefix}ProjectileSpeed`, attackCategory, 'Projectile speed', defaults.projectileSpeed, 0, 1800, 10),
+        number(`${prefix}ProjectileCount`, attackCategory, 'Projectile count', defaults.projectileCount, 0, 30, 1),
+        ...(attack === 'volley' ? [
+          number(`${prefix}Spread`, attackCategory, 'Spread radians', defaults.spread, 0, 6.2832, .01)
+        ] : []),
+        number(`${prefix}Range`, attackCategory, 'Projectile range', defaults.range, 0, 1400, 10)
+      ] : [];
+      const slam = attack === 'slam' ? [
+        number(`${prefix}Range`, attackCategory, 'Slam radius', defaults.range, 0, 1400, 10)
+      ] : [];
+      const summon = attack === 'summon' ? [
+        number(`${prefix}ProjectileCount`, attackCategory, 'Requested reinforcements', defaults.projectileCount, 0, 30, 1, 'Limited by the phase maximum-active-summons control.')
+      ] : [];
+      return [...shared, ...damaging, ...projectile, ...slam, ...summon];
     });
     return [...phaseFields, ...attackFields];
   });

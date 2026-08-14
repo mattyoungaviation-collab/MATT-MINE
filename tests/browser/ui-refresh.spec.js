@@ -1,8 +1,83 @@
 import { expect, test } from '@playwright/test';
 
+const NFT_TEST_ADDRESS = `0x${'3'.repeat(40)}`;
+
+async function installSignedInMiner(page) {
+  await page.addInitScript(({ address }) => {
+    window.ronin = {
+      provider: {
+        async request({ method }) {
+          if (method === 'eth_requestAccounts') return [address];
+          if (method === 'eth_chainId') return '0x7e4';
+          if (method === 'personal_sign') return `0x${'b'.repeat(130)}`;
+          throw new Error(`Unexpected wallet request: ${method}`);
+        },
+        on() {},
+        removeListener() {}
+      }
+    };
+  }, { address: NFT_TEST_ADDRESS });
+  await page.route('**/api/auth/challenge', (route) => route.fulfill({
+    status: 201,
+    contentType: 'application/json',
+    body: JSON.stringify({ ok: true, challenge: { nonce: 'c'.repeat(24), message: 'Sign in to MATT Mine' } })
+  }));
+  await page.route('**/api/auth/verify', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      ok: true,
+      session: {
+        token: 'd'.repeat(64),
+        address: NFT_TEST_ADDRESS,
+        profile: { bankedNuggets: 0, bestDepth: 0, bestScore: 0, totalRuns: 0, meta: {} },
+        identity: { name: 'V2 Browser Miner', requiresSetup: false },
+        entitlements: { freeRunAvailable: true },
+        suspended: false,
+        nftMiners: [{
+          minerId: 1,
+          contractVersion: 'v2',
+          progression: { level: 1, evolution: 0 },
+          traits: {
+            maximumHealth: 50,
+            armorShield: 0,
+            pickaxeAttack: 15,
+            blasterAttack: 5,
+            dynamiteAttack: 20,
+            healAmount: 10,
+            carryCapacity: 750,
+            deathRetentionBps: 1000,
+            crystalsPerHour: 0
+          },
+          gameplay: { runLocked: false, earningStatus: 'not_eligible' },
+          equipped: {}
+        }]
+      }
+    })
+  }));
+}
+
+async function enterNftMineMenu(page) {
+  await page.locator('[data-launch-action="enter"].launch-primary-cta').click();
+  await expect(page.locator('#miner-select')).toHaveClass(/active/);
+  await expect(page.locator('#selected-miner-name')).toHaveText('MATT MINE MINER #1');
+  await expect(page.locator('#select-loadout-button')).toBeVisible();
+  await expect(page.locator('#enter-mines-button')).toBeEnabled();
+  await page.locator('#enter-mines-button').click();
+  await expect(page.locator('#menu')).toHaveClass(/active/);
+}
+
+async function openMineFromHub(page, slotId, expectedName) {
+  await page.locator(`[data-mine-slot="${slotId}"]`).click();
+  await expect(page.locator('#mine-detail')).toHaveClass(/active/);
+  await expect(page.locator('#mine-detail [data-mine-name]')).toHaveText(expectedName);
+  await page.locator('#mine-detail [data-mine-enter]').click();
+}
+
 test('desktop player navigation opens every redesigned public surface', async ({ page }) => {
   const runtimeErrors = [];
   page.on('pageerror', (error) => runtimeErrors.push(error.message));
+  await installSignedInMiner(page);
   await page.goto('/');
 
   await expect(page.locator('.launch-home-store')).toBeVisible();
@@ -12,19 +87,12 @@ test('desktop player navigation opens every redesigned public surface', async ({
   await page.locator('#nugget-shop-close').click();
   await expect(page.locator('#launch')).toHaveClass(/active/);
 
-  await page.locator('[data-launch-action="enter"].launch-primary-cta').click();
-  await expect(page.locator('#menu')).toHaveClass(/active/);
+  await enterNftMineMenu(page);
+  await expect(page.locator('[data-mine-slot="practice"]')).toContainText('Practice Mine');
+  await expect(page.locator('[data-mine-slot="arena"]')).toContainText('MATT Arena');
+  await expect(page.locator('[data-mine-slot="pass"]')).toContainText('Pass Mine');
 
-  await page.locator('[data-mine-slot="daily"]').click();
-  await expect(page.locator('#mine-detail')).toHaveClass(/active/);
-  await page.locator('#mine-detail [data-mine-enter]').click();
-  await expect(page.locator('#daily-mine')).toHaveClass(/active/);
-  await expect(page.locator('#daily-mine-title')).toHaveText('Daily Mine');
-  await page.locator('#daily-back-button').click();
-
-  await page.locator('[data-mine-slot="pass"]').click();
-  await expect(page.locator('#mine-detail')).toHaveClass(/active/);
-  await page.locator('#mine-detail [data-mine-enter]').click();
+  await openMineFromHub(page, 'pass', 'Pass Mine');
   await expect(page.locator('#pass-mine')).toHaveClass(/active/);
   await expect(page.locator('#pass-mine-title')).toHaveText('Pass Mine');
   await page.locator('#pass-mine-back-button').click();
@@ -39,7 +107,8 @@ test('desktop player navigation opens every redesigned public surface', async ({
   await page.locator('#site-nav [data-site-action="home"]').click();
   await expect(page.locator('#launch')).toHaveClass(/active/);
 
-  await page.locator('.launch-mine-card.arena').click();
+  await enterNftMineMenu(page);
+  await openMineFromHub(page, 'arena', 'MATT Arena');
   await expect(page.locator('#daily-arena')).toHaveClass(/active/);
   await page.locator('#daily-arena [data-close]').click();
   await expect(page.locator('#menu')).toHaveClass(/active/);
@@ -76,10 +145,10 @@ test('profile tabs, store return path, and shared color accents remain usable', 
 });
 
 test('desktop leaderboard and Arena use the viewport without clipping tables', async ({ page }) => {
+  await installSignedInMiner(page);
   await page.setViewportSize({ width: 1536, height: 1024 });
   await page.goto('/');
-  await page.locator('[data-launch-action="enter"].launch-primary-cta').click();
-  await page.locator('#leaderboards-button').click();
+  await page.locator('#launch [data-launch-action="leaderboards"]').first().click();
 
   const leaderboardLayout = await page.locator('#leaderboards > .economy-panel').evaluate((panel) => ({
     width: panel.getBoundingClientRect().width,
@@ -90,7 +159,8 @@ test('desktop leaderboard and Arena use the viewport without clipping tables', a
   expect(leaderboardLayout.maxHeight).toBe('none');
 
   await page.locator('#site-nav [data-site-action="home"]').click();
-  await page.locator('.launch-mine-card.arena').click();
+  await enterNftMineMenu(page);
+  await openMineFromHub(page, 'arena', 'MATT Arena');
   const arenaTable = await page.locator('#daily-arena .arena-table-wrap').evaluate((table) => ({
     maxHeight: getComputedStyle(table).maxHeight,
     overflowY: getComputedStyle(table).overflowY
@@ -137,8 +207,7 @@ test('desktop Arena leaderboard renders the live daily Arena dataset', async ({ 
   }));
 
   await page.goto('/');
-  await page.locator('[data-launch-action="enter"].launch-primary-cta').click();
-  await page.locator('#leaderboards-button').click();
+  await page.locator('#launch [data-launch-action="leaderboards"]').first().click();
   await page.locator('[data-board="arena"]').click();
 
   await expect(page.locator('[data-board="arena"]')).toHaveClass(/active/);

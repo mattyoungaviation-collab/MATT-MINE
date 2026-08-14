@@ -7,6 +7,7 @@ coverage/
 generated/
 playwright-report/
 test-results/
+debug.log
 contracts/artifacts/
 contracts/cache/
 contracts/coverage/

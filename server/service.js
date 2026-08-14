@@ -2,11 +2,13 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { getAddress, verifyMessage } from 'viem';
 import { META_UPGRADES, metaUpgradeCost } from '../src/game/config.js';
 import {
+  ADMIN_GAME_TUNING_SCHEMA,
   ACTIVE_GAMEPLAY_LOBBIES,
-  GAME_TUNING_SCHEMA,
-  normalizeTuningPatch
+  normalizeTuningPatch,
+  tuningSettingAppliesToLobby
 } from '../src/game/tuning.js';
 import { normalizeKeybindings } from '../src/game/keybindings.js';
+import { normalizeControllerProfile } from '../src/game/expansionConfig.js';
 import { passLevel, utcDayKey, utcWeekKey } from '../src/game/economy.js';
 import {
   COSMETIC_SLOTS,
@@ -271,7 +273,7 @@ export class MattMineService {
       const current = state.challenges[nonce];
       assertApi(current && current.expiresAt > timestamp, 401, 'challenge_used', 'The sign-in challenge was already used.');
       delete state.challenges[nonce];
-      if (!state.wallets[normalizedAddress]) state.wallets[normalizedAddress] = defaultWalletState(normalizedAddress, timestamp);
+      if (!state.wallets[normalizedAddress]) state.wallets[normalizedAddress] = walletWithServerDefaults(state, normalizedAddress, timestamp);
       state.sessions[tokenHash] = {
         tokenHash,
         address: normalizedAddress,
@@ -1457,7 +1459,7 @@ export class MattMineService {
     const normalizedReason = normalizeAdminReason(reason);
     const timestamp = this.now();
     return this.database.transact((state) => {
-      if (!state.wallets[normalizedAddress]) state.wallets[normalizedAddress] = defaultWalletState(normalizedAddress, timestamp);
+      if (!state.wallets[normalizedAddress]) state.wallets[normalizedAddress] = walletWithServerDefaults(state, normalizedAddress, timestamp);
       state.wallets[normalizedAddress].suspended = suspended;
       state.wallets[normalizedAddress].updatedAt = timestamp;
       addAudit(state, 'SERVER_ADMIN', suspended ? 'WALLET_SUSPENDED' : 'WALLET_RESTORED', `${normalizedAddress}: ${normalizedReason}`, timestamp);
@@ -1558,7 +1560,7 @@ export class MattMineService {
     const state = await this.database.read();
     return {
       lobbies: ACTIVE_GAMEPLAY_LOBBIES,
-      schema: GAME_TUNING_SCHEMA,
+      schema: ADMIN_GAME_TUNING_SCHEMA,
       presets: Object.fromEntries(ACTIVE_GAMEPLAY_LOBBIES.map((lobby) => [
         lobby,
         structuredClone(state.gameTuning[lobby])
@@ -1584,6 +1586,13 @@ export class MattMineService {
       throw new ApiError(422, 'tuning_invalid', error.message);
     }
     assertApi(Object.keys(patch).length > 0, 400, 'tuning_patch_empty', 'Change at least one setting.');
+    const unavailable = Object.keys(patch).filter((id) => !tuningSettingAppliesToLobby(id, lobby));
+    assertApi(
+      unavailable.length === 0,
+      422,
+      'tuning_setting_not_applicable',
+      `${unavailable.join(', ')} cannot affect ${lobby}. Use Competition Studio or the selected Miner NFT trait instead.`
+    );
     const timestamp = this.now();
     return this.database.transact((state) => {
       const before = state.gameTuning[lobby];
@@ -2941,6 +2950,17 @@ function pruneSecurityRecords(state, timestamp) {
 function requireWallet(state, address) {
   const wallet = state.wallets[address];
   assertApi(wallet, 401, 'wallet_missing', 'The authenticated wallet profile was not found.');
+  return wallet;
+}
+
+function walletWithServerDefaults(state, address, timestamp) {
+  const wallet = defaultWalletState(address, timestamp);
+  const settings = state.expansionConfig?.settings || {};
+  wallet.expansion.controller = normalizeControllerProfile({
+    deadZone: settings.controllerDeadZone,
+    aimSensitivity: settings.controllerAimSensitivity,
+    vibration: settings.controllerVibration
+  });
   return wallet;
 }
 

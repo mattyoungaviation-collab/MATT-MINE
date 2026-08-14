@@ -5,6 +5,7 @@ import {
   decodeArenaControlState
 } from '../src/game/arenaControls.js';
 import { MattMineGame } from '../src/game/GameV4.js';
+import { gameplayRuntimeSnapshot } from '../src/game/nftTraits.js';
 import { defaultProfile, normalizeProfile } from '../src/game/storage.js';
 import { assertApi } from './errors.js';
 
@@ -231,6 +232,7 @@ export function replayArenaTranscript(challenge, inputEvents, options = {}) {
     crystalsCarried: Math.max(0, Math.floor(finalResult?.crystalsCarried || game.run?.crystalsCollected || 0)),
     completedPhases: Math.max(0, Math.min(0x1f, Math.floor(finalResult?.completedPhases || 0))),
     maximumHealth: Math.max(1, Number(game.player?.maxHealth || 100)),
+    runtime: gameplayRuntimeSnapshot(game),
     eventCount: inputEvents.length,
     timeLimitReached: finalResult?.timeLimitReached === true,
     awaitingRevive: game.state === 'awaitingrevive'

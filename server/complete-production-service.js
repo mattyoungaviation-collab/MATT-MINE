@@ -41,6 +41,7 @@ import {
 } from './admin-control-links.js';
 import { buildAdminReadiness } from './admin-readiness.js';
 import { SERVER_RUN_MODES } from './constants.js';
+import { resolveCompetitionSnapshot } from '../src/game/competitionStudio.js';
 import {
   PRACTICE_PLAY_POLICY,
   isRetiredRunMode,
@@ -59,6 +60,7 @@ const BETA_CAPABILITIES = Object.freeze([
 const RETIRED_EXPANSION_SETTING_IDS = new Set([
   'deathRetentionFree',
   'advertisementFreeEligible',
+  'advertisementPracticeEligible',
   'weeklyCompetitionEnabled',
   'weeklyActiveDayCount',
   'weeklyLockedCharacter',
@@ -258,7 +260,8 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
                 minerId: nftRun.minerId,
                 runId: nftRun.runId,
                 beginTransactionHash: nftRun.beginTransactionHash,
-                crystalCarryLimit: nftRun.crystalCarryLimit
+                crystalCarryLimit: nftRun.crystalCarryLimit,
+                profile: structuredClone(nftRun.profile)
               };
               run.tuning = structuredClone(started.tuning);
             }
@@ -383,6 +386,11 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     );
     const state = await this.database.read();
     const settings = state.expansionConfig.settings;
+    const arenaSnapshot = resolveCompetitionSnapshot(
+      state.competitionStudio,
+      'arena',
+      this.now()
+    );
     const reviveInfrastructureReady =
       this.revivePaymentVerifier?.publicStatus?.().configured === true &&
       typeof this.arenaService?.validatePaidReviveDeath === 'function';
@@ -392,8 +400,11 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
         minerId,
         profile: minerProfile
       },
-      paidRevivesEnabled:
-        reviveInfrastructureReady && settings.paidRevivesEnabled === true,
+      paidRevivesEnabled: arenaStudioAllowsPaidRevives(
+        arenaSnapshot,
+        settings,
+        reviveInfrastructureReady
+      ),
       reviveLimitPerRun: settings.reviveLimitPerRun,
       reviveInvulnerabilitySeconds: settings.reviveInvulnerabilitySeconds
     });
@@ -1432,6 +1443,12 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
       }
     });
   }
+}
+
+export function arenaStudioAllowsPaidRevives(snapshot, settings = {}, infrastructureReady = false) {
+  return infrastructureReady === true &&
+    settings.paidRevivesEnabled === true &&
+    snapshot?.loadout?.paidRevive === true;
 }
 
 function completedPhaseMask(result = {}) {

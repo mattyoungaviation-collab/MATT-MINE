@@ -250,19 +250,19 @@ test('game tuning is lobby-specific, audited, and applies immediately to every n
   const practice = await harness.service.updateAdminGameTuning(
     'admin-secret',
     'practice',
-    { playerMaxHealth: 135, enemyDamageMultiplier: 1.25 },
+    { playerSpeed: 335, enemyDamageMultiplier: 1.25 },
     'Tune the public Practice demo'
   );
-  assert.equal(practice.preset.playerMaxHealth, 135);
+  assert.equal(practice.preset.playerSpeed, 335);
   assert.equal(practice.preset.enemyDamageMultiplier, 1.25);
 
   const pass = await harness.service.updateAdminGameTuning(
     'admin-secret',
     'paid',
-    { playerMaxHealth: 175 },
-    'Raise Pass Mine survivability'
+    { playerSpeed: 345 },
+    'Tune Pass Mine movement'
   );
-  assert.equal(pass.preset.playerMaxHealth, 175);
+  assert.equal(pass.preset.playerSpeed, 345);
   assert.equal(pass.effectiveAt, START);
 
   const arena = await harness.service.updateAdminGameTuning(
@@ -275,8 +275,17 @@ test('game tuning is lobby-specific, audited, and applies immediately to every n
   const state = await harness.database.read();
   assert.equal(state.gameTuning.arena.bossHealthMultiplier, 2.5);
   assert.equal(Object.hasOwn(state, 'arenaTuningSchedule'), false);
-  assert.equal((await harness.service.publicGameTuning('practice')).preset.playerMaxHealth, 135);
-  assert.equal((await harness.service.publicGameTuning('paid')).preset.playerMaxHealth, 175);
+  assert.equal((await harness.service.publicGameTuning('practice')).preset.playerSpeed, 335);
+  assert.equal((await harness.service.publicGameTuning('paid')).preset.playerSpeed, 345);
+  await assert.rejects(
+    () => harness.service.updateAdminGameTuning(
+      'admin-secret',
+      'paid',
+      { playerMaxHealth: 175 },
+      'This is owned by the selected Miner NFT'
+    ),
+    (error) => error.code === 'tuning_setting_not_applicable'
+  );
   await assert.rejects(
     () => harness.service.publicGameTuning('free'),
     (error) => error.code === 'tuning_lobby_unknown'

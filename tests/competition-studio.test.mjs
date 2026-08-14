@@ -52,7 +52,7 @@ test('Competition Studio map files preserve a complete editable five-depth mine 
   assert.equal(imported.draft.depths[2].map.rooms[1].width, 1.75);
   assert.equal(imported.draft.depths[2].map.objects.find((object) => object.type === 'slime').quantity, 11);
   assert.equal(imported.draft.monsterTuning.depth3SlimeHealth, 321);
-  assert.equal(imported.draft.loadout.permanentUpgrades, true);
+  assert.equal(imported.draft.loadout.permanentUpgrades, false);
   assert.match(competitionMapFileName(file), /^matt-mine-arena-crystal-gauntlet-47-2026-07-28T18-00-00\.mattmine\.json$/);
 });
 
@@ -115,6 +115,38 @@ test('Competition Studio preserves names, exact layouts, authored placement, and
   assert.equal(normalized.monsterTuning.depth3SlimeHealth, 345);
   assert.equal(normalized.monsterTuning.depth3SlimeSlimeBurstSpeed, 3.5);
   assert.equal(normalized.monsterTuning.depth3BossPhase2VolleyProjectileCount, 11);
+});
+
+test('Competition Studio normalizes controls to the mine flows that can consume them', () => {
+  const studio = defaultCompetitionStudio(NOW);
+  const practice = structuredClone(studio.slots.practice.draft);
+  practice.guardianAiMode = 'legacy';
+  practice.rules.attemptLimit = 12;
+  practice.loadout.paidRevive = true;
+  const normalizedPractice = normalizeCompetitionDraft(practice, 'practice');
+  assert.equal(normalizedPractice.guardianAiMode, 'advanced');
+  assert.equal(normalizedPractice.rules.attemptLimit, 0);
+  assert.equal(normalizedPractice.loadout.paidRevive, false);
+
+  const arena = structuredClone(studio.slots.arena.draft);
+  arena.guardianAiMode = 'legacy';
+  arena.rules.attemptLimit = 12;
+  arena.loadout.characterId = 'orc';
+  arena.loadout.startingHealth = 999;
+  arena.loadout.permanentUpgrades = true;
+  const normalizedArena = normalizeCompetitionDraft(arena, 'arena');
+  assert.equal(normalizedArena.guardianAiMode, 'legacy');
+  assert.equal(normalizedArena.rules.attemptLimit, 0);
+  assert.equal(normalizedArena.loadout.characterId, 'matt');
+  assert.equal(normalizedArena.loadout.startingHealth, 100);
+  assert.equal(normalizedArena.loadout.permanentUpgrades, false);
+
+  const pass = structuredClone(studio.slots.pass.draft);
+  pass.guardianAiMode = 'legacy';
+  pass.rules.attemptLimit = 12;
+  const normalizedPass = normalizeCompetitionDraft(pass, 'pass');
+  assert.equal(normalizedPass.guardianAiMode, 'advanced');
+  assert.equal(normalizedPass.rules.attemptLimit, 12);
 });
 
 test('state migration adds safe Competition Studio drafts without disturbing legacy data', () => {
@@ -270,7 +302,7 @@ test('draft edits stay private until Admin applies them and published versions c
   const live = await service.publicMineSlot('pass');
   assert.equal(live.slot.snapshot.id, published.snapshot.id);
   assert.equal(live.slot.snapshot.name, 'Admin Live Crystal Mine');
-  assert.equal(live.slot.snapshot.loadout.characterId, 'orc');
+  assert.equal(live.slot.snapshot.loadout.characterId, 'matt');
   assert.equal(live.slot.snapshot.loadout.startingWeapon, 'blaster');
   assert.equal(live.slot.snapshot.depths[0].map.name, 'Admin Exact Depth One');
 

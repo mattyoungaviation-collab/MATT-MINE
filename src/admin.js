@@ -227,9 +227,6 @@ async function loadTuning(force = false) {
     state.tuningDrafts = Object.fromEntries(
       Object.entries(state.tuning.presets).map(([lobby, preset]) => [lobby, structuredClone(preset)])
     );
-    const categories = [...new Set(state.tuning.schema.map((entry) => entry.category))];
-    $('#tuning-category').innerHTML = '<option value="">All categories</option>' +
-      categories.map((category) => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`).join('');
     rebuildControlIndex();
   }
   renderTuning();
@@ -238,10 +235,14 @@ async function loadTuning(force = false) {
 function renderTuning() {
   if (!state.tuning) return;
   const lobby = $('#tuning-lobby').value;
+  const applicable = state.tuning.schema.filter((entry) =>
+    !Array.isArray(entry.lobbies) || entry.lobbies.includes(lobby)
+  );
+  syncTuningCategories(applicable);
   const preset = state.tuningDrafts[lobby] || state.tuning.presets[lobby];
   const needle = $('#tuning-search').value.trim().toLowerCase();
   const categoryFilter = $('#tuning-category').value;
-  const visible = state.tuning.schema.filter((entry) =>
+  const visible = applicable.filter((entry) =>
     (!categoryFilter || entry.category === categoryFilter) &&
     (!needle || `${entry.id} ${entry.category} ${entry.label} ${entry.description || ''}`.toLowerCase().includes(needle))
   );
@@ -250,19 +251,37 @@ function renderTuning() {
     map.get(entry.category).push(entry);
     return map;
   }, new Map());
-  $('#tuning-result-count').textContent = `${visible.length.toLocaleString()} of ${state.tuning.schema.length.toLocaleString()} settings · ${words(lobby)} lobby`;
+  const hidden = state.tuning.schema.length - applicable.length;
+  $('#tuning-result-count').textContent = `${visible.length.toLocaleString()} of ${applicable.length.toLocaleString()} effective settings · ${mineLabel(lobby)}${hidden ? ` · ${hidden.toLocaleString()} settings owned by Studio, NFTs, or another mine hidden` : ''}`;
   $('#tuning-fields').innerHTML = [...groups].map(([category, entries], index) => `<details class="panel structured-card" ${needle || categoryFilter || index < 2 ? 'open' : ''}>
     <summary><strong>${escapeHtml(category)}</strong><span>${entries.length} controls</span></summary>
     <div class="tuning-grid">${entries.map((entry) => {
       const linked = linkedControlForTuning(lobby, entry.id);
       return `<label class="tuning-field ${linked ? 'linked-field' : ''}">${escapeHtml(entry.label)}
       ${linked ? `<span class="link-chip">Linked · ${escapeHtml(linked.linkedTo)}</span>` : ''}
+      ${entry.lobbies?.length !== state.tuning.lobbies.length ? `<span class="link-chip">${escapeHtml(entry.lobbies.map(mineLabel).join(', '))} only</span>` : ''}
       ${entry.type === 'boolean'
         ? `<input data-tuning="${entry.id}" ${linked ? `data-linked-control="${linked.id}"` : ''} type="checkbox" ${preset[entry.id] ? 'checked' : ''}>`
         : `<input data-tuning="${entry.id}" ${linked ? `data-linked-control="${linked.id}"` : ''} type="number" min="${entry.min}" max="${entry.max}" step="${entry.step || 'any'}" value="${preset[entry.id]}">`}
       ${entry.description ? `<small>${escapeHtml(entry.description)}</small>` : ''}</label>`;
     }).join('')}</div>
   </details>`).join('');
+}
+
+function syncTuningCategories(definitions) {
+  const select = $('#tuning-category');
+  const current = select.value;
+  const categories = [...new Set(definitions.map((entry) => entry.category))];
+  select.innerHTML = '<option value="">All categories</option>' +
+    categories.map((category) => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`).join('');
+  select.value = categories.includes(current) ? current : '';
+}
+
+function mineLabel(lobby) {
+  if (lobby === 'practice') return 'Practice Mine';
+  if (lobby === 'arena') return 'MATT Arena';
+  if (lobby === 'paid') return 'Pass Mine';
+  return words(lobby);
 }
 
 $('#tuning-lobby').addEventListener('change', renderTuning);
@@ -282,7 +301,11 @@ $('#tuning-form').addEventListener('submit', async (event) => {
   const lobby = $('#tuning-lobby').value;
   const original = state.tuning.presets[lobby];
   const draft = state.tuningDrafts[lobby];
-  const patch = Object.fromEntries(Object.entries(draft).filter(([key, value]) => original[key] !== value));
+  const applicableIds = new Set(state.tuning.schema
+    .filter((entry) => !Array.isArray(entry.lobbies) || entry.lobbies.includes(lobby))
+    .map((entry) => entry.id));
+  const patch = Object.fromEntries(Object.entries(draft)
+    .filter(([key, value]) => applicableIds.has(key) && original[key] !== value));
   if (!Object.keys(patch).length) {
     showAlert('No Game Balance values changed.');
     return;
@@ -358,7 +381,7 @@ function renderExpansion() {
     .filter(([id, character]) => !needle || `${id} ${Object.entries(character).flat().join(' ')}`.toLowerCase().includes(needle))
     .map(([id, character]) => `<details class="panel structured-card" ${needle ? 'open' : ''}>
     <summary><strong>${escapeHtml(character.name)}</strong><span>${character.enabled ? 'Enabled' : 'Disabled'}</span></summary>
-    <div class="tuning-grid">${Object.entries(character).map(([key, value]) => characterField(id, key, value)).join('')}</div>
+    <div class="tuning-grid">${Object.entries(character).filter(([key]) => key !== 'passive').map(([key, value]) => characterField(id, key, value)).join('')}</div>
   </details>`).join('');
   $('#expansion-fields').innerHTML = `${settingCards}<div class="section-heading"><div><p class="eyebrow">PLAYABLE ROSTER</p><h2>Characters</h2></div></div>${characters}`;
 }
@@ -399,16 +422,19 @@ $('#expansion-fields').addEventListener('input', (event) => {
 });
 $('#expansion-form').addEventListener('submit', async (event) => {
   event.preventDefault();
-  const settings = objectDiff(state.expansion.config.settings, state.expansionDraft.settings);
+  const activeSettingIds = new Set(state.expansion.schema.map((entry) => entry.id));
+  const settings = Object.fromEntries(Object.entries(
+    objectDiff(state.expansion.config.settings, state.expansionDraft.settings)
+  ).filter(([id]) => activeSettingIds.has(id)));
   const characters = Object.fromEntries(Object.entries(state.expansionDraft.characters).flatMap(([id, character]) => {
     const changes = objectDiff(state.expansion.config.characters[id] || {}, character);
     return Object.keys(changes).length ? [[id, changes]] : [];
   }));
   if (!Object.keys(settings).length && !Object.keys(characters).length) {
-    showAlert('No Modes & Characters values changed.');
+    showAlert('No Features & Practice values changed.');
     return;
   }
-  if (!await confirmAction('Save Modes & Characters settings?', 'Every field is schema validated, linked controls move together, and the reason is audit logged.')) return;
+  if (!await confirmAction('Save Features & Practice settings?', 'Every field is schema validated, linked controls move together, and the reason is audit logged.')) return;
   const result = await api('/api/admin/expansion', {
     method: 'PUT',
     body: { patch: { settings, characters }, reason: $('#expansion-reason').value }
@@ -421,7 +447,7 @@ $('#expansion-form').addEventListener('submit', async (event) => {
     window.mattMineAdminEconomy?.load?.()
   ]);
   renderExpansion();
-  showAlert('Modes & Characters settings validated, synchronized, saved, and audited.');
+  showAlert('Features & Practice settings validated, synchronized, saved, and audited.');
 });
 
 $('#export-expansion').addEventListener('click', () => {
@@ -432,7 +458,11 @@ $('#export-expansion').addEventListener('click', () => {
 $('#reset-expansion').addEventListener('click', async () => {
   if (!state.expansion?.defaults) return;
   if (!await confirmAction('Load safe expansion defaults?', 'This only stages the defaults in the form. Enter a reason and press Save to apply them.')) return;
-  state.expansionDraft = structuredClone(state.expansion.defaults);
+  state.expansionDraft = structuredClone(state.expansion.config);
+  for (const definition of state.expansion.schema) {
+    state.expansionDraft.settings[definition.id] = state.expansion.defaults.settings[definition.id];
+  }
+  state.expansionDraft.characters = structuredClone(state.expansion.defaults.characters);
   renderExpansion();
   showAlert('Safe defaults loaded for review. No server setting changed yet.');
 });
@@ -1126,9 +1156,14 @@ async function openControlSearchResult(result) {
   if (result.id.startsWith('tuning:')) {
     if (!state.tuning) await loadTuning();
     const definition = state.tuning.schema.find((entry) => `tuning:${entry.id}` === result.id);
+    const currentLobby = $('#tuning-lobby').value;
+    if (definition?.lobbies?.length && !definition.lobbies.includes(currentLobby)) {
+      $('#tuning-lobby').value = definition.lobbies[0];
+    }
+    await activateTab(result.tab);
     $('#tuning-category').value = definition?.category || '';
     $('#tuning-search').value = definition?.label || result.label;
-    await activateTab(result.tab);
+    renderTuning();
     $('#tuning-fields').scrollIntoView({ behavior: 'smooth', block: 'start' });
   } else if (result.id.startsWith('expansion:')) {
     if (!state.expansion) await loadExpansion();

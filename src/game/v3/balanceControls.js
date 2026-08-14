@@ -61,7 +61,8 @@ export const balanceControlMethods = {
   },
 
   gainXp(amount) {
-    this.player.xp += amount;
+    const multiplier = Math.max(0, Number(this.runContext?.tuning?.xpMultiplier ?? 1));
+    this.player.xp += Math.round(Math.max(0, Number(amount) || 0) * multiplier);
     if (this.player.xp < this.player.nextXp) return;
 
     this.player.xp -= this.player.nextXp;
@@ -95,6 +96,7 @@ export const balanceControlMethods = {
     const upgrade = [...RUN_UPGRADES, ...BLASTER_RUN_UPGRADES].find((entry) => entry.id === id);
     if (
       tuning.disableRunUpgrades === true ||
+      (id === 'armor' && Boolean(nftGameplayTraits(this.runContext))) ||
       !upgrade ||
       this.state !== 'levelup' ||
       !Array.isArray(this.pendingUpgradeIds) ||
@@ -188,12 +190,14 @@ export const balanceControlMethods = {
 
   availableRunUpgrades(pool) {
     const tuning = this.runContext?.tuning || {};
+    const nftTraits = nftGameplayTraits(this.runContext);
     if (tuning.disableRunUpgrades === true) return [];
     if (pool === BLASTER_RUN_UPGRADES && tuning.disableBlasterUpgrades === true) return [];
     const counts = this.player?.runUpgradeCounts || {};
     const maximumBeams = Math.max(1, Math.floor(tuning.blasterBeams ?? 3));
     return pool.filter((upgrade) => {
       if ((counts[upgrade.id] || 0) >= (upgrade.max ?? Number.POSITIVE_INFINITY)) return false;
+      if (upgrade.id === 'armor' && nftTraits) return false;
       if (upgrade.id === 'armor' && this.player.armor >= (tuning.armorMaximum ?? .45) - Number.EPSILON) return false;
       if (upgrade.id === 'blastervolley' && this.player.blasterVolley >= maximumBeams) return false;
       return true;

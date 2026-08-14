@@ -324,7 +324,7 @@ export const stateMethods = {
       hp,
       maxHp: hp,
       nuggets: Math.round(type.nuggets * (rich ? 2 : 1) * treasureMultiplier * (tuning[`${type.id}ValueMultiplier`] ?? 1) * (tuning.nuggetMultiplier ?? 1)),
-      xp: Math.round(type.xp * (rich ? 1.35 : 1) * treasureMultiplier * (tuning.xpMultiplier ?? 1)),
+      xp: Math.round(type.xp * (rich ? 1.35 : 1) * treasureMultiplier),
       color: type.color,
       rotation: randomRange(0, Math.PI * 2),
       hitFlash: 0,

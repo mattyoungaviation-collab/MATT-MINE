@@ -108,18 +108,18 @@ export function buildAdminControlIndex({ tuningSchema = [], expansionSchema = []
       `expansion:${definition.id}`,
       definition.label,
       definition.description || `${definition.category} feature control.`,
-      `Modes & Characters · ${definition.category}`
+      `Features & Practice · ${definition.category}`
     ),
     search: definition.label
   }));
   const roster = Object.entries(characters).flatMap(([characterId, character]) =>
-    Object.keys(character || {}).map((field) => ({
+    Object.keys(character || {}).filter((field) => field !== 'passive').map((field) => ({
       ...entry(
         'expansion',
         `character:${characterId}:${field}`,
         `${character.name || words(characterId)} · ${words(field)}`,
         `Playable roster setting for ${character.name || words(characterId)}.`,
-        'Modes & Characters · Playable roster'
+        'Features & Practice · Playable roster'
       ),
       search: character.name || words(characterId)
     }))
@@ -154,7 +154,7 @@ export function searchAdminControls(index, query, limit = 12) {
 export function linkedControlForTuning(lobby, settingId) {
   if (settingId !== 'deathKeepFraction') return null;
   const link = RETENTION_CONTROL_LINKS.find((entry) => entry.lobby === lobby);
-  return link ? { id: link.id, label: link.label, linkedTo: 'Modes & Characters' } : null;
+  return link ? { id: link.id, label: link.label, linkedTo: 'Features & Practice' } : null;
 }
 
 export function linkedControlForExpansion(settingId) {
