@@ -2,7 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { privateKeyToAccount } from 'viem/accounts';
-import { NftV2AdminService } from '../server/nft-v2-admin-service.js';
+import {
+  createNftV2AdminServiceFromEnvironment,
+  NftV2AdminService
+} from '../server/nft-v2-admin-service.js';
 
 const KEY = `0x${createHash('sha256').update('matt-mine-v2-config-operator').digest('hex')}`;
 const OPERATOR = privateKeyToAccount(KEY).address;
@@ -13,6 +16,21 @@ const ADDRESSES = {
   settlement: '0x4444444444444444444444444444444444444444'
 };
 const ROLE = `0x${'55'.repeat(32)}`;
+
+test('production admin controls reuse the game-operator secret when the config alias is unset', () => {
+  const service = createNftV2AdminServiceFromEnvironment({}, {
+    MATT_MINE_NFT_ADMIN_CONTROLS_ENABLED: 'true',
+    MATT_MINE_NFT_CHAIN_ID: '2020',
+    MATT_MINE_NFT_RPC_URL: 'https://example.invalid',
+    MATT_MINE_NFT_LOADOUT_ADDRESS: ADDRESSES.loadout,
+    MATT_MINE_NFT_CRYSTAL_BANK_ADDRESS: ADDRESSES.bank,
+    MATT_MINE_NFT_CHEST_ADDRESS: ADDRESSES.chest,
+    MATT_MINE_NFT_SETTLEMENT_ADDRESS: ADDRESSES.settlement,
+    MATT_MINE_NFT_CONFIG_OPERATOR_ADDRESS: OPERATOR,
+    MATT_MINE_NFT_GAME_OPERATOR_PRIVATE_KEY: KEY
+  });
+  assert.ok(service instanceof NftV2AdminService);
+});
 
 function serviceHarness() {
   const writes = [];

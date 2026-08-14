@@ -2,7 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { privateKeyToAccount } from 'viem/accounts';
-import { NftGameplayService } from '../server/nft-gameplay-service.js';
+import {
+  createNftGameplayServiceFromEnvironment,
+  NftGameplayService
+} from '../server/nft-gameplay-service.js';
 import {
   completedPhaseCount,
   recordNftCrystalBank
@@ -23,6 +26,25 @@ const MAP_VERSION = `0x${'aa'.repeat(32)}`;
 const LOADOUT_HASH = `0x${'bb'.repeat(32)}`;
 const RUN_ID = `0x${'cc'.repeat(32)}`;
 const PLAYER_SIGNATURE = `0x${'11'.repeat(65)}`;
+
+test('production gameplay accepts the existing legacy game-signer secret name', () => {
+  const operator = privateKeyToAccount(OPERATOR_KEY);
+  const signer = privateKeyToAccount(SIGNER_KEY);
+  const service = createNftGameplayServiceFromEnvironment({}, {
+    MATT_MINE_NFT_GAMEPLAY_ENABLED: 'true',
+    MATT_MINE_NFT_CONTRACT_VERSION: '2',
+    MATT_MINE_NFT_CHAIN_ID: '2020',
+    MATT_MINE_NFT_RPC_URL: 'https://example.invalid',
+    MATT_MINE_NFT_SETTLEMENT_ADDRESS: SETTLEMENT,
+    MATT_MINE_NFT_LOADOUT_ADDRESS: LOADOUT,
+    MATT_MINE_NFT_GAME_OPERATOR_ADDRESS: operator.address,
+    MATT_MINE_NFT_REWARD_SIGNER_ADDRESS: signer.address,
+    MATT_MINE_NFT_GAME_OPERATOR_PRIVATE_KEY: OPERATOR_KEY,
+    MATT_MINE_NFT_GAME_SIGNER_PRIVATE_KEY: SIGNER_KEY,
+    MATT_MINE_NFT_MAP_VERSIONS_JSON: JSON.stringify({ arena: MAP_VERSION, paid: MAP_VERSION })
+  });
+  assert.ok(service instanceof NftGameplayService);
+});
 
 function profile(overrides = {}) {
   return {

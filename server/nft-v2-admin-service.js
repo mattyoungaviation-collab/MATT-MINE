@@ -196,7 +196,8 @@ export function createNftV2AdminServiceFromEnvironment(gameplayService, environm
       settlement: environment.MATT_MINE_NFT_SETTLEMENT_ADDRESS
     },
     operatorAddress: environment.MATT_MINE_NFT_CONFIG_OPERATOR_ADDRESS,
-    privateKey: environment.MATT_MINE_NFT_CONFIG_OPERATOR_PRIVATE_KEY,
+    privateKey: environment.MATT_MINE_NFT_CONFIG_OPERATOR_PRIVATE_KEY
+      || environment.MATT_MINE_NFT_GAME_OPERATOR_PRIVATE_KEY,
     gameplayService,
     ...options
   });
