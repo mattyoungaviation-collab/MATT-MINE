@@ -34,7 +34,7 @@ services:
       # Activated Ronin Mainnet NFT V2 release. Private operator/signer keys
       # remain dashboard secrets; all addresses and map versions are public.
       - key: MATT_MINE_NFT_ENABLED
-        value: "false"
+        value: "true"
       - key: MATT_MINE_NFT_CONTRACT_VERSION
         value: "2"
       - key: MATT_MINE_NFT_PUBLIC_BASE_URL
