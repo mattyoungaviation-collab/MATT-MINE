@@ -1,3 +1,6 @@
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { formatEther, formatUnits, getAddress, getCreateAddress } from "ethers";
 import { network } from "hardhat";
 import {
@@ -93,6 +96,7 @@ const deployments = [
 ];
 
 let totalGasWithHeadroom = 0n;
+const estimates = [];
 for (let index = 0; index < deployments.length; index += 1) {
   const [name, constructorArgs] = deployments[index];
   const factory = await ethers.getContractFactory(name, deployer);
@@ -100,6 +104,7 @@ for (let index = 0; index < deployments.length; index += 1) {
   const estimatedGas = await ethers.provider.estimateGas({ ...transaction, from: deployerAddress });
   const gasWithHeadroom = (estimatedGas * 120n + 99n) / 100n;
   totalGasWithHeadroom += gasWithHeadroom;
+  estimates.push({ name, address: Object.values(addresses)[index], estimatedGas: estimatedGas.toString(), plannedGas: gasWithHeadroom.toString() });
   console.log(`${name}: ${Object.values(addresses)[index]} | estimated gas ${estimatedGas} | planned ${gasWithHeadroom}`);
 }
 
@@ -109,6 +114,23 @@ if (balance < requiredBalance) {
   throw new Error(`NFT deployer has ${formatEther(balance)} RON; at least ${formatEther(requiredBalance)} RON is required for the 3x gas buffer.`);
 }
 
+const outputPath = resolve(dirname(fileURLToPath(import.meta.url)), "..", "deployments", "nft-ronin-deployer-preflight.json");
+mkdirSync(dirname(outputPath), { recursive: true });
+writeFileSync(outputPath, `${JSON.stringify({
+  schemaVersion: 1,
+  checkedAt: new Date().toISOString(),
+  chainId: Number(RONIN_CHAIN_ID),
+  deployer: deployerAddress,
+  balanceRon: formatEther(balance),
+  pendingNonce,
+  gasPriceGwei: formatUnits(feeData.gasPrice, "gwei"),
+  estimatedCostRon: formatEther(estimatedCost),
+  requiredBalanceRon: formatEther(requiredBalance),
+  predictedContracts: addresses,
+  estimates,
+  transactionBroadcast: false
+}, null, 2)}\n`, "utf8");
+
 console.log("Ronin Mainnet NFT deployment signer is ready.");
 console.log(`Address: ${deployerAddress}`);
 console.log(`Balance: ${formatEther(balance)} RON`);
@@ -116,4 +138,5 @@ console.log(`Pending nonce: ${pendingNonce}`);
 console.log(`Gas price: ${formatUnits(feeData.gasPrice, "gwei")} gwei`);
 console.log(`Estimated seven-contract deployment cost: ${formatEther(estimatedCost)} RON`);
 console.log(`Required 3x gas buffer: ${formatEther(requiredBalance)} RON`);
+console.log(`Checkpoint: ${outputPath}`);
 console.log("No transaction was broadcast.");
