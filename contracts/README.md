@@ -1,5 +1,26 @@
 # MATT Mine contracts
 
+## NFT V2 Ronin Mainnet
+
+NFT V2 is a separate fourteen-contract deployment. Its reviewed configuration,
+paused deployment, source verification, read-only verification, and later
+activation are intentionally split into separate commands. Do not use the
+legacy `ronin.json` workflow for NFT V2.
+
+Start with the complete operator runbook:
+
+- `docs/NFT_V2_MAINNET_DEPLOYMENT.md`
+- `docs/NFT_V2_RELEASE_READINESS.md`
+
+The first deployment-day command is:
+
+```powershell
+powershell.exe -NoExit -ExecutionPolicy Bypass -File ".\contracts\scripts\run-nft-v2-mainnet-preflight.ps1"
+```
+
+It is read-only. The deployment wrapper remains separately confirmation-gated,
+nonce-locked, restart-safe, and deploys every contract paused.
+
 This directory contains the non-upgradeable Ronin Mainnet contracts for the MATT Mine pass, paid runs, swaps, and weekly claims.
 
 The namespaced `src/nft` directory additionally contains the paused-by-default MATT Mine NFT v1 suite for Miners, Equipment, loadouts, chests, run settlement, Crystal redemption, and a dedicated VRF adapter. Its guarded deployment procedure is documented in `docs/NFT_V1_DEPLOYMENT.md`.

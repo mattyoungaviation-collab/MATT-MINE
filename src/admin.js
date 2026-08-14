@@ -19,6 +19,7 @@ const state = {
   expansion: null,
   expansionDraft: null,
   mineOperations: null,
+  nftV2: null,
   controlIndex: [],
   activeTab: 'overview',
   overviewTimer: null
@@ -73,6 +74,7 @@ async function activateTab(name) {
   if (name === 'tuning') await loadTuning();
   if (name === 'expansion') await loadExpansion();
   if (name === 'nugget-economy') await window.mattMineAdminEconomy?.load?.();
+  if (name === 'nft-v2') await loadNftV2Protocol();
   if (name === 'operations') await loadMineOperations();
   if (name === 'arena') await loadArenaAdmin();
   if (name === 'audit') await loadAudit();
@@ -267,6 +269,130 @@ function renderTuning() {
     }).join('')}</div>
   </details>`).join('');
 }
+
+const NFT_V2_SLOTS = ['armor', 'pickaxe', 'blaster', 'dynamite', 'helmet', 'backpack'];
+
+async function loadNftV2Protocol() {
+  try {
+    const data = await api('/api/admin/nft-v2/protocol');
+    state.nftV2 = data;
+    renderNftV2Protocol();
+  } catch (error) {
+    state.nftV2 = null;
+    $('#nft-v2-status').classList.add('warning');
+    $('#nft-v2-status').textContent = error.code === 'nft_v2_admin_disabled'
+      ? 'Safe before deployment: on-chain NFT V2 controls are disabled until verified contracts and the dedicated Config Operator are activated.'
+      : error.message;
+  }
+}
+
+function renderNftV2Protocol() {
+  const data = state.nftV2;
+  if (!data) return;
+  const protocol = data.protocol;
+  $('#nft-v2-status').classList.remove('warning');
+  $('#nft-v2-status').textContent = `Connected to Ronin chain ${data.status.chainId} · Config Operator ${short(data.status.operator)} · values below were read directly from the contracts.`;
+  const pausedFragment = document.createDocumentFragment();
+  for (const [name, paused] of Object.entries(protocol.paused || {})) {
+    const card = document.createElement('div');
+    card.className = 'metric';
+    const label = document.createElement('span');
+    label.textContent = words(name);
+    const value = document.createElement('strong');
+    value.textContent = paused ? 'PAUSED' : 'LIVE';
+    card.append(label, value);
+    pausedFragment.append(card);
+  }
+  $('#nft-v2-paused').replaceChildren(pausedFragment);
+  $('#nft-v2-repair').value = protocol.repairPriceRaw;
+  $('#nft-v2-withdraw-min').value = protocol.withdrawal.minimumRaw;
+  $('#nft-v2-withdraw-wallet').value = protocol.withdrawal.walletDailyRaw;
+  $('#nft-v2-withdraw-global').value = protocol.withdrawal.globalDailyRaw;
+  const priceFragment = document.createDocumentFragment();
+  for (const slot of NFT_V2_SLOTS) {
+    const label = document.createElement('label');
+    label.className = 'tuning-field';
+    label.append(document.createTextNode(words(slot)));
+    const input = document.createElement('input');
+    input.dataset.nftV2Chest = slot;
+    input.inputMode = 'numeric';
+    input.pattern = '[0-9]+';
+    input.value = protocol.chestPrices[slot];
+    input.required = true;
+    label.append(input);
+    priceFragment.append(label);
+  }
+  $('#nft-v2-chest-prices').replaceChildren(priceFragment);
+  const routeFragment = document.createDocumentFragment();
+  for (const mode of ['arena', 'paid']) {
+    const item = document.createElement('div');
+    item.className = 'kv';
+    const label = document.createElement('span');
+    label.textContent = mineLabel(mode);
+    const value = document.createElement('span');
+    value.textContent = protocol.activeMapVersions?.[mode] || 'No active on-chain version';
+    item.append(label, value);
+    routeFragment.append(item);
+  }
+  $('#nft-v2-map-routes').replaceChildren(routeFragment);
+}
+
+$('#refresh-nft-v2').addEventListener('click', loadNftV2Protocol);
+
+$('#nft-v2-economy-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (!await confirmAction('Send NFT V2 economy transactions?', 'These values change on Ronin Mainnet after the dedicated Config Operator transactions confirm.')) return;
+  await api('/api/admin/nft-v2/economy', {
+    method: 'PUT',
+    body: {
+      repairPriceRaw: $('#nft-v2-repair').value,
+      withdrawal: {
+        minimumRaw: $('#nft-v2-withdraw-min').value,
+        walletDailyRaw: $('#nft-v2-withdraw-wallet').value,
+        globalDailyRaw: $('#nft-v2-withdraw-global').value
+      },
+      chestPrices: Object.fromEntries([...document.querySelectorAll('[data-nft-v2-chest]')].map((input) => [input.dataset.nftV2Chest, input.value])),
+      reason: $('#nft-v2-economy-reason').value
+    }
+  });
+  $('#nft-v2-economy-reason').value = '';
+  await loadNftV2Protocol();
+  showAlert('NFT V2 economy transactions confirmed on Ronin.');
+});
+
+$('#nft-v2-map-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (!await confirmAction('Approve this NFT V2 map?', 'The version becomes the active route for all new runs in the selected mine after confirmation.')) return;
+  const result = await api('/api/admin/nft-v2/maps/approve', {
+    method: 'POST',
+    body: {
+      mode: $('#nft-v2-map-mode').value,
+      mapId: $('#nft-v2-map-id').value,
+      contentHash: $('#nft-v2-content-hash').value,
+      mineableCrystalUnits: Number($('#nft-v2-mineable').value),
+      conversionRateRaw: $('#nft-v2-conversion').value,
+      maximumPayoutRaw: $('#nft-v2-max-payout').value,
+      runTimeoutSeconds: Number($('#nft-v2-timeout').value),
+      reason: $('#nft-v2-map-reason').value
+    }
+  });
+  $('#nft-v2-map-reason').value = '';
+  $('#nft-v2-retire-version').value = result.versionId;
+  await loadNftV2Protocol();
+  showAlert(`Map ${result.versionId} is approved and active for new runs.`);
+});
+
+$('#nft-v2-retire-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (!await confirmAction('Permanently retire this map version?', 'This cannot be undone. Active runs may settle, but no new runs can use it.')) return;
+  await api('/api/admin/nft-v2/maps/retire', {
+    method: 'POST',
+    body: { versionId: $('#nft-v2-retire-version').value, reason: $('#nft-v2-retire-reason').value }
+  });
+  $('#nft-v2-retire-reason').value = '';
+  await loadNftV2Protocol();
+  showAlert('NFT V2 map version retired on Ronin.');
+});
 
 function syncTuningCategories(definitions) {
   const select = $('#tuning-category');

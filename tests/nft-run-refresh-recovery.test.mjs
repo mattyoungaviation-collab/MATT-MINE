@@ -152,3 +152,46 @@ test('retired run modes cannot be reopened by legacy server settings', async () 
   }
   assert.equal(Object.keys((await harness.database.read()).runs).length, 0);
 });
+
+test('a Pass Mine credit is restored when the NFT transaction definitely never starts', async () => {
+  const harness = createHarness();
+  const runId = `run_${'a'.repeat(24)}`;
+  const address = account.address.toLowerCase();
+  await harness.database.transact((state) => {
+    state.runs[runId] = {
+      id: runId,
+      address,
+      mode: SERVER_RUN_MODES.PAID,
+      status: 'active',
+      startedAt: START,
+      expiresAt: START + 60_000,
+      result: null
+    };
+    state.paidEntitlements.credit = {
+      key: 'credit',
+      transactionHash: `0x${'9'.repeat(64)}`,
+      logIndex: 0,
+      blockNumber: '1',
+      address,
+      entitlementId: '1',
+      ronPaid: '1',
+      mattBought: '0',
+      currentPoolMatt: '0',
+      futureRewardsMatt: '0',
+      reserveMatt: '0',
+      confirmedAt: START - 1,
+      consumedAt: START,
+      usedRunId: runId
+    };
+  });
+
+  await harness.service.rollbackUnstartedPaidNftRun(address, runId);
+  const state = await harness.database.read();
+  assert.equal(state.runs[runId].status, 'expired');
+  assert.equal(state.paidEntitlements.credit.consumedAt, 0);
+  assert.equal(state.paidEntitlements.credit.usedRunId, '');
+  assert.equal(
+    state.audit.at(-1).action,
+    'NFT_V2_START_ROLLED_BACK'
+  );
+});

@@ -232,33 +232,33 @@ async function handleApiRequest({
     sendJson(response, 200, { ok: true, config: service.config() });
     return;
   }
-  const minerMetadataMatch = path.match(/^\/api\/nft\/miners\/(\d+)\.json$/);
+  const minerMetadataMatch = path.match(/^\/api\/nft\/(?:v2\/)?miners\/(\d+)\.json$/);
   if (method === 'GET' && minerMetadataMatch) {
     sendPublicJson(response, 200, await nftService(service).minerMetadata(minerMetadataMatch[1]));
     return;
   }
-  const minerImageMatch = path.match(/^\/api\/nft\/miners\/(\d+)\/image\.png$/);
+  const minerImageMatch = path.match(/^\/api\/nft\/(?:v2\/)?miners\/(\d+)\/image\.png$/);
   if (['GET', 'HEAD'].includes(method) && minerImageMatch) {
     const image = await nftService(service).minerImage(minerImageMatch[1]);
     sendPublicImage(request, response, image);
     return;
   }
-  const minerSpriteMatch = path.match(/^\/api\/nft\/miners\/(\d+)\/sprite\.png$/);
+  const minerSpriteMatch = path.match(/^\/api\/nft\/(?:v2\/)?miners\/(\d+)\/sprite\.png$/);
   if (['GET', 'HEAD'].includes(method) && minerSpriteMatch) {
     const image = await nftService(service).minerSprite(minerSpriteMatch[1]);
     sendPublicImage(request, response, image);
     return;
   }
-  const equipmentMetadataMatch = path.match(/^\/api\/nft\/equipment\/(\d+)\.json$/);
+  const equipmentMetadataMatch = path.match(/^\/api\/nft\/(?:v2\/)?equipment\/(\d+)\.json$/);
   if (method === 'GET' && equipmentMetadataMatch) {
     sendPublicJson(response, 200, await nftService(service).equipmentMetadata(equipmentMetadataMatch[1]));
     return;
   }
-  if (method === 'GET' && path === '/api/nft/contracts/miners.json') {
+  if (method === 'GET' && ['/api/nft/contracts/miners.json', '/api/nft/v2/contracts/miners.json'].includes(path)) {
     sendPublicJson(response, 200, nftService(service).minerContractMetadata());
     return;
   }
-  if (method === 'GET' && path === '/api/nft/contracts/equipment.json') {
+  if (method === 'GET' && ['/api/nft/contracts/equipment.json', '/api/nft/v2/contracts/equipment.json'].includes(path)) {
     sendPublicJson(response, 200, nftService(service).equipmentContractMetadata());
     return;
   }
@@ -463,8 +463,18 @@ async function handleApiRequest({
   }
   if (method === 'POST' && path === '/api/runs/start') {
     const body = await readJson(request, maxRequestBytes);
-    const run = await service.startRun(bearerToken(request), body.mode, { minerId: body.minerId });
+    const run = await service.startRun(bearerToken(request), body.mode, {
+      minerId: body.minerId,
+      authorization: body.authorization,
+      playerSignature: body.playerSignature
+    });
     sendJson(response, 201, { ok: true, run });
+    return;
+  }
+  if (method === 'POST' && path === '/api/nft/v2/runs/authorization') {
+    const body = await readJson(request, maxRequestBytes);
+    const authorization = await service.prepareNftRunAuthorization(bearerToken(request), body);
+    sendJson(response, 200, { ok: true, authorization });
     return;
   }
   if (method === 'POST' && path === '/api/runs/nft-practice/restart') {
@@ -645,6 +655,29 @@ async function handleApiRequest({
   }
   if (method === 'GET' && path === '/api/admin/game-tuning') {
     const result = await service.adminGameTuning(request.headers['x-matt-admin-key']);
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
+  if (method === 'GET' && path === '/api/admin/nft-v2/protocol') {
+    const result = await service.adminNftV2Protocol(request.headers['x-matt-admin-key']);
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
+  if (method === 'PUT' && path === '/api/admin/nft-v2/economy') {
+    const body = await readJson(request, maxRequestBytes);
+    const result = await service.updateAdminNftV2Economy(request.headers['x-matt-admin-key'], body);
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
+  if (method === 'POST' && path === '/api/admin/nft-v2/maps/approve') {
+    const body = await readJson(request, maxRequestBytes);
+    const result = await service.approveAdminNftV2Map(request.headers['x-matt-admin-key'], body);
+    sendJson(response, 201, { ok: true, ...result });
+    return;
+  }
+  if (method === 'POST' && path === '/api/admin/nft-v2/maps/retire') {
+    const body = await readJson(request, maxRequestBytes);
+    const result = await service.retireAdminNftV2Map(request.headers['x-matt-admin-key'], body);
     sendJson(response, 200, { ok: true, ...result });
     return;
   }
@@ -951,7 +984,7 @@ function clearAdminCookie(response) {
 }
 
 function requiresAdminStepUp(path) {
-  return /\/suspension$|\/awards$|\/contracts\/prepare$|\/rewards\/drafts\/[^/]+\/approve$|\/competition-studio\/[^/]+\/(publish|versions\/[^/]+\/activate)$/.test(path);
+  return /\/suspension$|\/awards$|\/contracts\/prepare$|\/nft-v2\/(economy|maps\/(approve|retire))$|\/rewards\/drafts\/[^/]+\/approve$|\/competition-studio\/[^/]+\/(publish|versions\/[^/]+\/activate)$/.test(path);
 }
 
 function bearerToken(request) {

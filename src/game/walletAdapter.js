@@ -112,6 +112,35 @@ export class RoninWalletAdapter {
     });
   }
 
+  async signNftRunAuthorization(prepared) {
+    if (!this.player) throw new Error('Sign in with Ronin Wallet before approving a Miner run.');
+    await this.ensureProvider();
+    const typedData = prepared?.typedData;
+    if (!typedData?.domain || typedData.primaryType !== 'RunAuthorization' || !typedData.message) {
+      throw new Error('The server did not provide a valid Miner run approval.');
+    }
+    const accounts = await this.provider.request({ method: 'eth_requestAccounts' });
+    const address = Array.isArray(accounts) ? accounts[0] : '';
+    if (address.toLowerCase() !== this.player.address?.toLowerCase()) {
+      throw new Error('Ronin Wallet is on a different account.');
+    }
+    const chainId = parseChainId(await this.provider.request({ method: 'eth_chainId' }));
+    if (chainId !== Number(typedData.domain.chainId)) {
+      await this.provider.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: `0x${Number(typedData.domain.chainId).toString(16)}` }]
+      });
+    }
+    const playerSignature = await this.provider.request({
+      method: 'eth_signTypedData_v4',
+      params: [address, JSON.stringify(typedData)]
+    });
+    if (!/^0x[0-9a-f]{130}$/i.test(String(playerSignature || ''))) {
+      throw new Error('Ronin Wallet did not return a valid Miner run approval.');
+    }
+    return { authorization: prepared.authorization, playerSignature };
+  }
+
   async sendPreparedTransactions(transactions, options = {}) {
     const prepared = Array.isArray(transactions) ? transactions : [transactions];
     if (!prepared.length || prepared.length > 3) {

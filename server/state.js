@@ -39,6 +39,7 @@ export function defaultServerState() {
     weeklyCompetition: { weeks: {} },
     endlessCompetition: { seasons: {} },
     competitionStudio: defaultCompetitionStudio(),
+    nftV2Protocol: defaultNftV2Protocol(),
     operations: defaultOperations(),
     audit: []
   };
@@ -85,6 +86,7 @@ export function normalizeServerState(input = {}) {
     weeklyCompetition: normalizeCompetitionStore(source.weeklyCompetition, 'weeks'),
     endlessCompetition: normalizeCompetitionStore(source.endlessCompetition, 'seasons'),
     competitionStudio: normalizeCompetitionStudio(source.competitionStudio),
+    nftV2Protocol: normalizeNftV2Protocol(source.nftV2Protocol),
     operations: normalizeOperations(source.operations),
     audit: Array.isArray(source.audit)
       ? source.audit.filter(isRecord).slice(-2_000).map((entry) => ({ ...entry }))
@@ -353,6 +355,21 @@ function normalizeActivity(input) {
     details: typeof entry.details === 'string' ? entry.details.slice(0, 500) : '',
     timestamp: safeTimestamp(entry.timestamp)
   }));
+}
+
+export function defaultNftV2Protocol() {
+  return { mapVersions: {}, updatedAt: 0 };
+}
+
+function normalizeNftV2Protocol(input) {
+  const source = isRecord(input) ? input : {};
+  const mapVersions = isRecord(source.mapVersions) ? source.mapVersions : {};
+  return {
+    mapVersions: Object.fromEntries(['arena', 'paid']
+      .filter((mode) => /^0x[a-fA-F0-9]{64}$/.test(String(mapVersions[mode] || '')))
+      .map((mode) => [mode, String(mapVersions[mode]).toLowerCase()])),
+    updatedAt: safeTimestamp(source.updatedAt)
+  };
 }
 
 function normalizeNftCrystalLedger(input, walletAddress) {

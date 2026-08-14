@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, it } from 'node:test';
 import sharp from 'sharp';
 import { createMattMineHttpServer } from '../server/http.js';
-import { NftMetadataService } from '../server/nft-metadata-service.js';
+import { NftMetadataService, ViemNftChainReader } from '../server/nft-metadata-service.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OWNER = '0x1DAb596D0121C250a24B00137E84170FA6874be6';
@@ -13,6 +13,27 @@ const ADDRESSES = Object.freeze({
   equipment: '0x73A4Ad9a2b4bfeeE1b98F5D99AaB24B702dEb093',
   loadout: '0x6cf168cdD198D0d111faE2286aE6dcD86FA960d8'
 });
+
+function minerState(level = 1) {
+  return {
+    owner: OWNER,
+    version: 2,
+    traits: {
+      bankedXp: 0, baseHealth: 50, pickaxeAttack: 15, blasterAttack: 5,
+      dynamiteAttack: 20, healAmount: 10, baseCarryCapacity: 750,
+      deathRetentionBps: 1000, level, evolution: 0, crystalsPerHour: 0,
+      lastVerifiedPlay: 0, activeUntil: 0, cphAssignedAt: 0,
+      earningStatus: 0, runLocked: false
+    },
+    effectiveTraits: {
+      maximumHealth: 50, armorShield: 0, pickaxeAttack: 15, blasterAttack: 5,
+      dynamiteAttack: 20, healAmount: 10, carryCapacity: 750,
+      deathRetentionBps: 1000, level, crystalsPerHour: 0
+    },
+    loadout: { armor: 0, pickaxe: 0, blaster: 0, dynamite: 0, helmet: 0, backpack: 0 },
+    equipment: {}
+  };
+}
 
 async function createService() {
   return new NftMetadataService({
@@ -24,31 +45,18 @@ async function createService() {
     chainReader: {
       async miner(minerId) {
         assert.equal(minerId, 1);
-        return {
-          owner: OWNER,
-          progression: { bankedXp: 0, level: 1, evolution: 0, prestigeXp: 0 },
-          loadout: {
-            weapon: 0,
-            backpackHead: 0,
-            backpackTail: 0,
-            helmet: 0,
-            armor: 0,
-            backpackCount: 0,
-            runLocked: false
-          },
-          equipment: {}
-        };
+        return minerState();
       },
       async equipment(tokenId) {
         assert.equal(tokenId, 7);
         return {
           owner: OWNER,
-          definitionId: 103,
-          armorHp: 0,
-          itemType: 0,
+          definitionId: 1102,
+          slot: 1,
           rarity: 2,
           damaged: false,
-          equippedToMiner: 0
+          equippedToMiner: 0,
+          bonus: 5
         };
       }
     }
@@ -56,6 +64,31 @@ async function createService() {
 }
 
 describe('NFT metadata service', function () {
+  it('indexes up to 1,000 minted Miners in bounded Ronin multicalls instead of sequential profile reads', async function () {
+    const batches = [];
+    const reader = new ViemNftChainReader({
+      chainId: 2020,
+      rpcUrl: 'https://example.invalid',
+      addresses: ADDRESSES,
+      client: {
+        async readContract({ functionName }) {
+          if (functionName === 'balanceOf') return 2n;
+          if (functionName === 'nextTokenId') return 202n;
+          throw new Error(`Unexpected ${functionName}`);
+        },
+        async multicall({ contracts }) {
+          batches.push(contracts.length);
+          return contracts.map(({ args }) => ({
+            status: 'success',
+            result: [7n, 201n].includes(args[0]) ? OWNER : '0x0000000000000000000000000000000000000001'
+          }));
+        }
+      }
+    });
+    assert.deepEqual(await reader.minerIdsForOwner(OWNER), [7, 201]);
+    assert.deepEqual(batches, [100, 100, 1]);
+  });
+
   it('returns every Miner owned by a wallet for character selection', async function () {
     const service = new NftMetadataService({
       enabled: true,
@@ -66,12 +99,7 @@ describe('NFT metadata service', function () {
       chainReader: {
         async miner(minerId) {
           if (minerId > 2) throw Object.assign(new Error('missing'), { status: 404 });
-          return {
-            owner: OWNER,
-            progression: { bankedXp: 0, level: minerId, evolution: 0, prestigeXp: 0 },
-            loadout: { weapon: 0, backpackHead: 0, backpackTail: 0, helmet: 0, armor: 0, backpackCount: 0, runLocked: false },
-            equipment: {}
-          };
+          return minerState(minerId);
         }
       }
     });
@@ -86,13 +114,13 @@ describe('NFT metadata service', function () {
     const metadata = await service.minerMetadata(1);
     assert.equal(metadata.name, 'MATT Mine Miner #1');
     assert.equal('properties' in metadata, false);
-    assert.match(metadata.image, /^https:\/\/matt-mine\.onrender\.com\/api\/nft\/miners\/1\/image\.png\?v=[a-f0-9]{16}$/);
+    assert.match(metadata.image, /^https:\/\/matt-mine\.onrender\.com\/api\/nft\/v2\/miners\/1\/image\.png\?v=[a-f0-9]{16}$/);
     assert.deepEqual(metadata.attributes.slice(0, 2), [
       { trait_type: 'Level', value: 1 },
       { trait_type: 'Evolution', value: 'Rookie Miner' }
     ]);
-    assert.deepEqual(metadata.attributes.find(({ trait_type }) => trait_type === 'Weapon'), {
-      trait_type: 'Weapon',
+    assert.deepEqual(metadata.attributes.find(({ trait_type }) => trait_type === 'Pickaxe'), {
+      trait_type: 'Pickaxe',
       value: 'Starter Pickaxe'
     });
 
@@ -119,12 +147,12 @@ describe('NFT metadata service', function () {
   it('builds equipment and collection metadata from the locked definition manifest', async function () {
     const service = await createService();
     const equipment = await service.equipmentMetadata(7);
-    assert.equal(equipment.name, 'Crystal Fang Pick #7');
+    assert.equal(equipment.name, 'Rare Crystal Fang Pickaxe #7');
     assert.equal('properties' in equipment, false);
     assert.deepEqual(equipment.attributes.slice(0, 3), [
-      { trait_type: 'Type', value: 'Weapon' },
+      { trait_type: 'Type', value: 'Pickaxe' },
       { trait_type: 'Rarity', value: 'Rare' },
-      { display_type: 'number', trait_type: 'Definition', value: 103 }
+      { display_type: 'number', trait_type: 'Definition', value: 1102 }
     ]);
     assert.equal(service.minerContractMetadata().name, 'MATT Mine Miners');
     assert.equal(service.equipmentContractMetadata().name, 'MATT Mine Equipment');

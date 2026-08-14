@@ -40,6 +40,7 @@
         <button data-tab="tuning"><span>Game Balance</span><small>Per-lobby tuning</small></button>
         <button data-tab="expansion"><span>Features &amp; Practice</span><small>Gates, controllers &amp; roster</small></button>
         <span class="nav-label">Economy</span>
+        <button data-tab="nft-v2"><span>NFT V2 Protocol</span><small>On-chain maps &amp; economy</small></button>
         <button data-tab="nugget-economy"><span>Nugget Economy</span><small>Prices &amp; packages</small></button>
         <button data-tab="arena"><span>MATT Arena</span><small>Pool &amp; settlement</small></button>
         <span class="nav-label">System</span>
@@ -258,6 +259,60 @@
             <button type="submit">Save this lobby</button>
           </article>
         </form>
+      </section>
+
+      <section id="tab-nft-v2" class="tab">
+        <div class="section-heading">
+          <div><p class="eyebrow">RONIN MAINNET · NFT V2</p><h2>On-chain protocol controls</h2><p>Every save sends a real Ronin transaction from the dedicated Config Operator. Active runs retain their pinned rules.</p></div>
+          <button id="refresh-nft-v2" class="ghost" type="button">Refresh chain</button>
+        </div>
+        <div id="nft-v2-status" class="notice">Loading the verified on-chain configuration…</div>
+        <div id="nft-v2-paused" class="metrics"></div>
+
+        <form id="nft-v2-economy-form">
+          <details class="panel structured-card" open>
+            <summary><strong>Repair and withdrawal limits</strong><span>Raw 18-decimal token units</span></summary>
+            <div class="tuning-grid">
+              <label class="tuning-field">Armor repair price (MATT wei)<input id="nft-v2-repair" inputmode="numeric" pattern="[0-9]+" required></label>
+              <label class="tuning-field">Minimum withdrawal (Crystal wei)<input id="nft-v2-withdraw-min" inputmode="numeric" pattern="[0-9]+" required></label>
+              <label class="tuning-field">Wallet daily limit (Crystal wei)<input id="nft-v2-withdraw-wallet" inputmode="numeric" pattern="[0-9]+" required></label>
+              <label class="tuning-field">Global daily limit (Crystal wei)<input id="nft-v2-withdraw-global" inputmode="numeric" pattern="[0-9]+" required></label>
+            </div>
+          </details>
+          <details class="panel structured-card" open>
+            <summary><strong>Equipment chest prices</strong><span>Raw MATT wei</span></summary>
+            <div id="nft-v2-chest-prices" class="tuning-grid"></div>
+          </details>
+          <article class="panel save-bar">
+            <label>Required reason<input id="nft-v2-economy-reason" maxlength="240" required placeholder="Why are these on-chain values changing?"></label>
+            <button type="submit">Send economy transactions</button>
+          </article>
+        </form>
+
+        <div class="grid two">
+          <form id="nft-v2-map-form" class="panel">
+            <h2>Approve and activate map version</h2>
+            <label>Mine<select id="nft-v2-map-mode"><option value="arena">MATT Arena</option><option value="paid">Pass Mine</option></select></label>
+            <label>Map ID (bytes32)<input id="nft-v2-map-id" maxlength="66" spellcheck="false" required placeholder="0x…"></label>
+            <label>Content hash (bytes32)<input id="nft-v2-content-hash" maxlength="66" spellcheck="false" required placeholder="0x…"></label>
+            <div class="compact-grid">
+              <label>Mineable units<input id="nft-v2-mineable" type="number" min="1" max="1000000" step="1" required></label>
+              <label>Run timeout seconds<input id="nft-v2-timeout" type="number" min="300" max="86400" step="1" required></label>
+              <label>Conversion (Crystal wei/unit)<input id="nft-v2-conversion" inputmode="numeric" pattern="[0-9]+" required></label>
+              <label>Maximum payout (Crystal wei)<input id="nft-v2-max-payout" inputmode="numeric" pattern="[0-9]+" required></label>
+            </div>
+            <label>Required reason<input id="nft-v2-map-reason" maxlength="240" required></label>
+            <button type="submit">Approve + route new runs</button>
+          </form>
+          <form id="nft-v2-retire-form" class="panel">
+            <h2>Retire a map version</h2>
+            <p class="muted">Retirement is permanent. Existing runs can settle; no new run may start on that version.</p>
+            <label>Version ID (bytes32)<input id="nft-v2-retire-version" maxlength="66" spellcheck="false" required placeholder="0x…"></label>
+            <label>Required reason<input id="nft-v2-retire-reason" maxlength="240" required></label>
+            <button class="danger" type="submit">Retire map version</button>
+          </form>
+        </div>
+        <article class="panel"><h2>Active routes</h2><div id="nft-v2-map-routes"></div></article>
       </section>
 
       <section id="tab-nugget-economy" class="tab">

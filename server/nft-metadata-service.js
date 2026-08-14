@@ -9,16 +9,20 @@ import { compileNftRenderPlan } from './nft-render-plan.js';
 
 const MINER_ABI = parseAbi([
   'function ownerOf(uint256 tokenId) view returns (address)',
-  'function progressionOf(uint256 tokenId) view returns (uint256 bankedXp, uint8 level, uint8 evolution, uint256 prestigeXp)'
+  'function balanceOf(address owner) view returns (uint256)',
+  'function nextTokenId() view returns (uint256)',
+  'function traitsOf(uint256 tokenId) view returns ((uint128 bankedXp,uint16 baseHealth,uint16 pickaxeAttack,uint16 blasterAttack,uint16 dynamiteAttack,uint16 healAmount,uint16 baseCarryCapacity,uint16 deathRetentionBps,uint8 level,uint8 evolution,uint8 crystalsPerHour,uint40 lastVerifiedPlay,uint40 activeUntil,uint40 cphAssignedAt,uint8 earningStatus,bool runLocked))'
 ]);
 const LOADOUT_ABI = parseAbi([
-  'function loadoutOf(uint256 minerId) view returns ((uint256 weapon, uint256 backpackHead, uint256 backpackTail, uint256 helmet, uint256 armor, uint32 backpackCount, bool runLocked))'
+  'function loadoutOf(uint256 minerId) view returns (uint256[6])',
+  'function effectiveTraits(uint256 minerId) view returns ((uint16 maximumHealth,uint16 armorShield,uint16 pickaxeAttack,uint16 blasterAttack,uint16 dynamiteAttack,uint16 healAmount,uint16 carryCapacity,uint16 deathRetentionBps,uint8 level,uint8 crystalsPerHour))'
 ]);
 const EQUIPMENT_ABI = parseAbi([
   'function ownerOf(uint256 tokenId) view returns (address)',
-  'function equipmentData(uint256 tokenId) view returns ((uint32 definitionId, uint16 armorHp, uint8 itemType, uint8 rarity, bool damaged, uint256 equippedToMiner))'
+  'function equipmentData(uint256 tokenId) view returns ((uint32 definitionId,uint32 equippedToMiner,uint8 slot,uint8 rarity,bool damaged))',
+  'function bonusFor(uint256 tokenId) view returns (uint16)'
 ]);
-const ITEM_TYPES = Object.freeze(['Weapon', 'Backpack', 'Helmet', 'Armor']);
+const ITEM_TYPES = Object.freeze(['Armor', 'Pickaxe', 'Blaster', 'Dynamite', 'Helmet', 'Backpack']);
 const RARITIES = Object.freeze(['Common', 'Uncommon', 'Rare', 'Mythic', 'Legendary']);
 const MARKET_IMAGE_SIZE = 960;
 const MARKET_IMAGE_MAX_BYTES = 1_000_000;
@@ -44,7 +48,7 @@ export class NftMetadataService {
     this.enabled = options.enabled === true;
     this.root = resolve(options.root || '.');
     this.publicOrigin = String(options.publicOrigin || '').replace(/\/+$/, '');
-    this.chainId = positiveInteger(options.chainId || 202601, 'NFT chain ID');
+    this.chainId = positiveInteger(options.chainId || 2020, 'NFT chain ID');
     this.addresses = Object.freeze({
       miner: requiredAddress(options.addresses?.miner, 'NFT Miner address'),
       equipment: requiredAddress(options.addresses?.equipment, 'NFT Equipment address'),
@@ -87,17 +91,27 @@ export class NftMetadataService {
     return {
       name: `MATT Mine Miner #${profile.minerId}`,
       description: 'An evolving MATT Mine character. XP, level, evolution, and equipped NFT gear follow this Miner when it is transferred.',
-      image: `${this.publicOrigin}/api/nft/miners/${profile.minerId}/image.png?v=${revision}`,
+      image: `${this.publicOrigin}/api/nft/v2/miners/${profile.minerId}/image.png?v=${revision}`,
       external_url: `${this.publicOrigin}/?miner=${profile.minerId}`,
       background_color: '10243F',
       attributes: [
         trait('Level', profile.progression.level),
         trait('Evolution', EVOLUTION_NAMES[profile.progression.evolution]),
         numericTrait('Banked XP', profile.progression.bankedXp),
-        numericTrait('Prestige XP', profile.progression.prestigeXp),
-        numericTrait('Maximum Health', profile.gameplay.maximumHealth),
-        trait('Crystal Carry', `${profile.gameplay.crystalCarryMultiplier}x`),
-        trait('Weapon', equippedNames.weapon),
+        numericTrait('Base Health', profile.traits.baseHealth),
+        numericTrait('Maximum Health', profile.effectiveTraits.maximumHealth),
+        numericTrait('Armor Shield', profile.effectiveTraits.armorShield),
+        numericTrait('Pickaxe Attack', profile.effectiveTraits.pickaxeAttack),
+        numericTrait('Blaster Attack', profile.effectiveTraits.blasterAttack),
+        numericTrait('Dynamite Attack', profile.effectiveTraits.dynamiteAttack),
+        numericTrait('Heal', profile.effectiveTraits.healAmount),
+        numericTrait('Crystal Carry Capacity', profile.effectiveTraits.carryCapacity),
+        trait('Crystal Death Retention', `${profile.effectiveTraits.deathRetentionBps / 100}%`),
+        numericTrait('Crystals Per Hour', profile.progression.crystalsPerHour),
+        trait('Earning Status', profile.progression.earningStatus),
+        trait('Pickaxe', equippedNames.pickaxe),
+        trait('Blaster', equippedNames.blaster),
+        trait('Dynamite', equippedNames.dynamite),
         trait('Backpack', equippedNames.backpack),
         trait('Helmet', equippedNames.helmet),
         trait('Armor', equippedNames.armor),
@@ -152,7 +166,7 @@ export class NftMetadataService {
     const item = await this.chainReader.equipment(tokenId);
     const definition = this.manifest.equipmentDefinitions[String(item.definitionId)];
     if (!definition) throw new ApiError(502, 'nft_definition_missing', `Equipment definition ${item.definitionId} is not configured.`);
-    const itemType = ITEM_TYPES[item.itemType];
+    const itemType = ITEM_TYPES[item.slot];
     const rarity = RARITIES[item.rarity];
     return {
       name: `${definition.name} #${tokenId}`,
@@ -164,8 +178,8 @@ export class NftMetadataService {
         trait('Type', itemType),
         trait('Rarity', rarity),
         numericTrait('Definition', item.definitionId),
-        ...(item.itemType === 3 ? [numericTrait('Maximum Health', item.armorHp)] : []),
-        ...(item.itemType === 3 ? [trait('Armor State', item.damaged ? 'Damaged' : 'Active')] : []),
+        numericTrait('Fixed Bonus', item.bonus),
+        ...(item.slot === 0 ? [trait('Armor State', item.damaged ? 'Damaged' : 'Active')] : []),
         trait('Equipped', item.equippedToMiner ? `Miner #${item.equippedToMiner}` : 'No')
       ]
     };
@@ -185,8 +199,8 @@ export class NftMetadataService {
     this.assertEnabled();
     return {
       name: 'MATT Mine Equipment',
-      description: 'Tradable weapons, backpacks, helmets, and armor for MATT Mine Miner NFTs.',
-      image: assetUrl(this.publicOrigin, this.manifest, this.manifest.equipmentDefinitions['105'].image),
+      description: 'Tradable armor, weapons, helmets, and single-use backpacks for MATT Mine Miner NFTs.',
+      image: assetUrl(this.publicOrigin, this.manifest, this.manifest.equipmentDefinitions['1104'].image),
       external_link: this.publicOrigin
     };
   }
@@ -205,6 +219,14 @@ export class NftMetadataService {
   async playerMiners(addressInput) {
     this.assertEnabled();
     const owner = getAddress(addressInput);
+    if (typeof this.chainReader.minerIdsForOwner === 'function') {
+      const minerIds = await this.chainReader.minerIdsForOwner(owner);
+      const miners = [];
+      for (let start = 0; start < minerIds.length; start += 20) {
+        miners.push(...await Promise.all(minerIds.slice(start, start + 20).map((minerId) => this.minerProfile(minerId))));
+      }
+      return miners;
+    }
     const miners = [];
     for (let minerId = 1; minerId <= 1_000; minerId += 1) {
       try {
@@ -231,37 +253,68 @@ export class ViemNftChainReader {
     this.addresses = options.addresses;
     const rpcUrl = String(options.rpcUrl || '').trim();
     if (!/^https:\/\//i.test(rpcUrl)) throw new Error('NFT RPC URL must use HTTPS.');
-    this.client = createPublicClient({
+    this.client = options.client || createPublicClient({
       transport: http(rpcUrl, { timeout: positiveInteger(options.timeoutMs || 10_000, 'NFT RPC timeout') })
     });
   }
 
+  async minerIdsForOwner(ownerInput) {
+    const owner = getAddress(ownerInput);
+    const [balance, nextTokenId] = await Promise.all([
+      this.client.readContract({ address: this.addresses.miner, abi: MINER_ABI, functionName: 'balanceOf', args: [owner] }),
+      this.client.readContract({ address: this.addresses.miner, abi: MINER_ABI, functionName: 'nextTokenId' })
+    ]);
+    if (balance === 0n) return [];
+    const expected = Number(balance);
+    const owned = [];
+    const minted = Math.min(1_000, Number(nextTokenId) - 1);
+    for (let start = 1; start <= minted && owned.length < expected; start += 100) {
+      const ids = Array.from({ length: Math.min(100, minted - start + 1) }, (_value, index) => start + index);
+      const results = await this.client.multicall({
+        allowFailure: true,
+        contracts: ids.map((minerId) => ({
+          address: this.addresses.miner,
+          abi: MINER_ABI,
+          functionName: 'ownerOf',
+          args: [BigInt(minerId)]
+        }))
+      });
+      for (let index = 0; index < results.length; index += 1) {
+        if (results[index].status === 'success' && getAddress(results[index].result) === owner) owned.push(ids[index]);
+      }
+    }
+    if (owned.length !== expected) throw new ApiError(502, 'nft_owner_index_incomplete', 'The Ronin Miner ownership index was incomplete.');
+    return owned;
+  }
+
   async miner(minerId) {
     try {
-      const [owner, progression, loadout] = await Promise.all([
+      const [owner, traits, loadout, effectiveTraits] = await Promise.all([
         this.client.readContract({ address: this.addresses.miner, abi: MINER_ABI, functionName: 'ownerOf', args: [BigInt(minerId)] }),
-        this.client.readContract({ address: this.addresses.miner, abi: MINER_ABI, functionName: 'progressionOf', args: [BigInt(minerId)] }),
-        this.client.readContract({ address: this.addresses.loadout, abi: LOADOUT_ABI, functionName: 'loadoutOf', args: [BigInt(minerId)] })
+        this.client.readContract({ address: this.addresses.miner, abi: MINER_ABI, functionName: 'traitsOf', args: [BigInt(minerId)] }),
+        this.client.readContract({ address: this.addresses.loadout, abi: LOADOUT_ABI, functionName: 'loadoutOf', args: [BigInt(minerId)] }),
+        this.client.readContract({ address: this.addresses.loadout, abi: LOADOUT_ABI, functionName: 'effectiveTraits', args: [BigInt(minerId)] })
       ]);
       const normalizedLoadout = normalizeLoadout(loadout);
       const equipment = {};
-      const ids = [
-        normalizedLoadout.weapon,
-        normalizedLoadout.backpackHead,
-        normalizedLoadout.helmet,
-        normalizedLoadout.armor
-      ].filter(Boolean);
+      const ids = Object.values(normalizedLoadout).filter(Boolean);
       await Promise.all(ids.map(async (tokenId) => {
         equipment[tokenId] = await this.equipment(tokenId);
       }));
       return {
         owner,
-        progression: {
-          bankedXp: safeInteger(progression[0], 'banked XP'),
-          level: safeInteger(progression[1], 'level'),
-          evolution: safeInteger(progression[2], 'evolution'),
-          prestigeXp: safeInteger(progression[3], 'prestige XP')
-        },
+        version: 2,
+        traits: normalizeStruct(traits, [
+          'bankedXp', 'baseHealth', 'pickaxeAttack', 'blasterAttack', 'dynamiteAttack',
+          'healAmount', 'baseCarryCapacity', 'deathRetentionBps', 'level', 'evolution',
+          'crystalsPerHour', 'lastVerifiedPlay', 'activeUntil', 'cphAssignedAt',
+          'earningStatus', 'runLocked'
+        ], new Set(['runLocked'])),
+        effectiveTraits: normalizeStruct(effectiveTraits, [
+          'maximumHealth', 'armorShield', 'pickaxeAttack', 'blasterAttack',
+          'dynamiteAttack', 'healAmount', 'carryCapacity', 'deathRetentionBps',
+          'level', 'crystalsPerHour'
+        ]),
         loadout: normalizedLoadout,
         equipment
       };
@@ -272,18 +325,19 @@ export class ViemNftChainReader {
 
   async equipment(tokenId) {
     try {
-      const [owner, data] = await Promise.all([
+      const [owner, data, bonus] = await Promise.all([
         this.client.readContract({ address: this.addresses.equipment, abi: EQUIPMENT_ABI, functionName: 'ownerOf', args: [BigInt(tokenId)] }),
-        this.client.readContract({ address: this.addresses.equipment, abi: EQUIPMENT_ABI, functionName: 'equipmentData', args: [BigInt(tokenId)] })
+        this.client.readContract({ address: this.addresses.equipment, abi: EQUIPMENT_ABI, functionName: 'equipmentData', args: [BigInt(tokenId)] }),
+        this.client.readContract({ address: this.addresses.equipment, abi: EQUIPMENT_ABI, functionName: 'bonusFor', args: [BigInt(tokenId)] })
       ]);
       return {
         owner,
         definitionId: safeInteger(data.definitionId ?? data[0], 'definition ID'),
-        armorHp: safeInteger(data.armorHp ?? data[1], 'armor HP'),
-        itemType: safeInteger(data.itemType ?? data[2], 'item type'),
+        equippedToMiner: safeInteger(data.equippedToMiner ?? data[1], 'equipped Miner ID'),
+        slot: safeInteger(data.slot ?? data[2], 'equipment slot'),
         rarity: safeInteger(data.rarity ?? data[3], 'rarity'),
         damaged: Boolean(data.damaged ?? data[4]),
-        equippedToMiner: safeInteger(data.equippedToMiner ?? data[5], 'equipped Miner ID')
+        bonus: safeInteger(bonus, 'equipment bonus')
       };
     } catch (error) {
       throw chainReadError(error, `Equipment #${tokenId}`);
@@ -427,23 +481,23 @@ function localAssetPath(root, asset) {
 }
 
 function normalizeLoadout(value) {
-  return {
-    weapon: safeInteger(value.weapon ?? value[0], 'loadout weapon'),
-    backpackHead: safeInteger(value.backpackHead ?? value[1], 'loadout backpack head'),
-    backpackTail: safeInteger(value.backpackTail ?? value[2], 'loadout backpack tail'),
-    helmet: safeInteger(value.helmet ?? value[3], 'loadout helmet'),
-    armor: safeInteger(value.armor ?? value[4], 'loadout armor'),
-    backpackCount: safeInteger(value.backpackCount ?? value[5], 'loadout backpack count'),
-    runLocked: Boolean(value.runLocked ?? value[6])
-  };
+  return Object.fromEntries(['armor', 'pickaxe', 'blaster', 'dynamite', 'helmet', 'backpack']
+    .map((slot, index) => [slot, safeInteger(value[index] ?? value[slot], `loadout ${slot}`)]));
 }
 
 function equipmentNames(profile, manifest) {
-  const names = { weapon: 'Starter Pickaxe', backpack: 'None', helmet: 'None', armor: 'None' };
-  for (const layer of profile.render.layers) {
-    names[layer.slot] = manifest.equipmentDefinitions[String(layer.definitionId)]?.name || `Definition ${layer.definitionId}`;
+  const names = { armor: 'None', pickaxe: 'Starter Pickaxe', blaster: 'None', dynamite: 'None', helmet: 'None', backpack: 'None' };
+  for (const [slot, item] of Object.entries(profile.equipment || {})) {
+    if (item) names[slot] = manifest.equipmentDefinitions[String(item.definitionId)]?.name || `Definition ${item.definitionId}`;
   }
   return names;
+}
+
+function normalizeStruct(value, names, booleans = new Set()) {
+  return Object.freeze(Object.fromEntries(names.map((name, index) => [
+    name,
+    booleans.has(name) ? Boolean(value[name] ?? value[index]) : safeInteger(value[name] ?? value[index], name)
+  ])));
 }
 
 function renderRevision(profile, plan) {
@@ -501,5 +555,5 @@ function chainReadError(error, label) {
   if (/nonexistent|does not exist|ERC721NonexistentToken/i.test(message)) {
     return new ApiError(404, 'nft_not_found', `${label} does not exist.`);
   }
-  return new ApiError(502, 'nft_chain_read_failed', `Unable to read ${label} from Saigon.`);
+  return new ApiError(502, 'nft_chain_read_failed', `Unable to read ${label} from Ronin.`);
 }

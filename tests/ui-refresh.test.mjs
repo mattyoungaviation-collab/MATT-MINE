@@ -42,7 +42,7 @@ test('UI controls are wired to existing run, Pass, leaderboard, loadout, and sho
   ]);
 
   assert.match(source, /#practice-run-button'\)\.addEventListener\('click',[\s\S]*startRunMode\(RUN_MODES\.PRACTICE\)/);
-  assert.match(source, /apiClient\.startArenaRun\(selectedNftMinerId\)/);
+  assert.match(source, /apiClient\.startArenaRun\(selectedNftMinerId, '', approval\)/);
   assert.match(source, /#start-pass-mine-button'[\s\S]*startRunMode\(RUN_MODES\.PAID\)/);
   assert.match(source, /#pass-mine-leaderboard-button'[\s\S]*openLeaderboards\(RUN_MODES\.PAID\)/);
   assert.match(source, /#profile-manage-upgrades-button'[\s\S]*showScreen\('upgrade-shop'\)/);
@@ -50,7 +50,7 @@ test('UI controls are wired to existing run, Pass, leaderboard, loadout, and sho
   assert.match(source, /action === 'how-to-play'[\s\S]*showScreen\('how-to-play'\)/);
   assert.match(source, /action === 'store'[\s\S]*mattmine:open-nugget-shop/);
   assert.match(source, /openMinerSelect\(\)/);
-  assert.match(source, /apiClient\.startRun\(mode, selectedNftMinerId\)/);
+  assert.match(source, /apiClient\.startRun\(mode, minerId, approval\)/);
   assert.match(source, /renderLeaderboardPodium\(rows\)/);
   assert.match(source, /mode === ARENA_LEADERBOARD_MODE/);
   assert.match(source, /await refreshArena\(true\)/);

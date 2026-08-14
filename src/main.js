@@ -1319,7 +1319,7 @@ async function startRunMode(mode, options = {}) {
     try {
       const run = options.restartInterruptedNftPractice === true
         ? await apiClient.restartInterruptedNftPractice()
-        : await apiClient.startRun(mode, selectedNftMinerId);
+        : await startApprovedNftServerRun(mode, selectedNftMinerId);
       issuedRun = run;
       activeServerRun = run;
       if (serverPlayer && options.restartInterruptedNftPractice === true) {
@@ -2705,7 +2705,8 @@ async function startArenaRun() {
   arenaBusy = true;
   renderArena();
   try {
-    const run = await apiClient.startArenaRun(selectedNftMinerId);
+    const approval = await approveNftRun('arena', selectedNftMinerId);
+    const run = await apiClient.startArenaRun(selectedNftMinerId, '', approval);
     activeArenaRun = run;
     activeArenaTranscript = new ArenaTranscript(apiClient, run);
     arenaPlayer = normalizeArenaPlayer({
@@ -3379,6 +3380,18 @@ function modeLabel(mode, rewardWeight = 0) {
   if (mode === RUN_MODES.PAID) return `PASS RANKED · ${rewardWeight || 2}×`;
   if (mode === 'arena') return 'MATT ARENA';
   return 'PRACTICE · NO XP · NO CRYSTALS';
+}
+
+async function approveNftRun(mode, minerId) {
+  if (!minerId) throw new Error('Select a MATT Mine Miner NFT first.');
+  const prepared = await apiClient.prepareNftRunAuthorization(mode, minerId);
+  return wallet.signNftRunAuthorization(prepared);
+}
+
+async function startApprovedNftServerRun(mode, minerId) {
+  if (mode !== RUN_MODES.PAID) return apiClient.startRun(mode, 0);
+  const approval = await approveNftRun(mode, minerId);
+  return apiClient.startRun(mode, minerId, approval);
 }
 
 function renderAudioSettings() {

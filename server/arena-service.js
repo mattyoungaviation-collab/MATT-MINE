@@ -335,7 +335,7 @@ export class DailyArenaService {
         receipt: { ...receipt, signature: receiptSignature },
         checkpoint,
         challenge: buildArenaChallenge(contest.deterministicSeed, receipt.tuning),
-        nftRun: receipt.tuning?._nftRun || null
+        ...(receipt.tuning?._nftRun ? { nftRun: receipt.tuning._nftRun } : {})
       }
     };
   }
@@ -1320,6 +1320,7 @@ function arenaProgressionSnapshot(run) {
   const configuredMultiplier = Number(run.tuning?.passXpMultiplier);
   return {
     runId: run.runId,
+    ...(run.tuning?._nftRun ? { nftRun: structuredClone(run.tuning._nftRun) } : {}),
     passActiveAtStart: run.tuning?._minePassBenefits?.active === true,
     passXpMultiplier: Number.isFinite(configuredMultiplier)
       ? Math.max(0, Math.min(10, configuredMultiplier))
