@@ -4,7 +4,9 @@ This directory contains the non-upgradeable Ronin Mainnet contracts for the MATT
 
 The namespaced `src/nft` directory additionally contains the paused-by-default MATT Mine NFT v1 suite for Miners, Equipment, loadouts, chests, run settlement, Crystal redemption, and a dedicated VRF adapter. Its guarded deployment procedure is documented in `docs/NFT_V1_DEPLOYMENT.md`.
 
-No CREATE2 factory, vanity salt, proxy, burn, or replacement MATT token is used. Every deployment is a normal contract creation from a temporary low-balance deployer and every source is submitted to the current Sourcify v2 service for Ronin Mainnet.
+The separate `src/nftv2` namespace contains the approved clean V2 redesign. Miner, Equipment, Loadout custody, and the 48-hour Upgrade Timelock are non-upgradeable. Settlement, Crystal Bank, Chest, and Passive Rewards are UUPS modules whose upgrades can only be executed by that timelock. V2 rules and deployment gates are documented in `docs/NFT_V2_SPEC.md`, `docs/NFT_V2_ARCHITECTURE.md`, and `docs/NFT_V2_DEPLOYMENT.md`.
+
+The legacy Mainnet suite uses normal contract creation and no replacement MATT token. V2 uses named ERC-1967 proxies only for Settlement, Crystal Bank, Chest, and Passive Rewards; Miner ownership, Equipment ownership, Loadout custody, and the Upgrade Timelock remain non-upgradeable. Every production source must be submitted to Ronin's current verification service.
 
 ## Contracts
 

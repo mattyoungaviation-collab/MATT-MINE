@@ -14,6 +14,8 @@ contracts/deployments/
 contracts/config/ronin.json
 contracts/config/ronin-nft.json
 contracts/config/saigon-nft.json
+contracts/config/saigon-nft-v2.json
+contracts/config/ronin-nft-v2.json
 contracts/verification/
 
 # Local NFT working renders and chroma masters are kept outside deployment.

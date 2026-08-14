@@ -6,6 +6,8 @@ import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IRandomnessProvider} from "./interfaces/IRandomnessProvider.sol";
 import {IRandomnessConsumer} from "./interfaces/IRandomnessConsumer.sol";
+import {IRandomnessStatus} from "./interfaces/IRandomnessStatus.sol";
+import {IRandomnessCancellation} from "./interfaces/IRandomnessCancellation.sol";
 
 interface IVRFCoordinatorV2PlusForMattMine {
     struct RandomWordsRequest {
@@ -21,7 +23,13 @@ interface IVRFCoordinatorV2PlusForMattMine {
 }
 /// @title MATT Mine VRF V2.5 Adapter
 /// @notice Dedicated Mine consumer for the existing native-RON VRF subscription.
-contract MattMineVRFV25Adapter is Ownable2Step, ReentrancyGuard, IRandomnessProvider {
+contract MattMineVRFV25Adapter is
+    Ownable2Step,
+    ReentrancyGuard,
+    IRandomnessProvider,
+    IRandomnessStatus,
+    IRandomnessCancellation
+{
     bytes4 private constant EXTRA_ARGS_V1_TAG = bytes4(keccak256("VRF ExtraArgsV1"));
 
     struct Request {
@@ -29,6 +37,7 @@ contract MattMineVRFV25Adapter is Ownable2Step, ReentrancyGuard, IRandomnessProv
         bool exists;
         bool fulfilled;
         bool delivered;
+        bool cancelled;
     }
 
     IVRFCoordinatorV2PlusForMattMine public immutable vrfCoordinator;
@@ -46,6 +55,8 @@ contract MattMineVRFV25Adapter is Ownable2Step, ReentrancyGuard, IRandomnessProv
     event RandomWordRequested(uint256 indexed requestId, address indexed consumer);
     event RandomWordReceived(uint256 indexed requestId, uint256 randomWord);
     event RandomWordDelivery(uint256 indexed requestId, bool success);
+    event RandomWordCancelled(uint256 indexed requestId);
+    event CancelledRandomWordDiscarded(uint256 indexed requestId, uint256 randomWord);
 
     error Unauthorized();
     error InvalidAddress();
@@ -54,6 +65,7 @@ contract MattMineVRFV25Adapter is Ownable2Step, ReentrancyGuard, IRandomnessProv
     error ConsumerAlreadyConfigured();
     error RequestAlreadyFulfilled();
     error RequestNotReady();
+    error RequestAlreadyCancelled();
 
     constructor(
         address coordinatorAddress,
@@ -116,13 +128,36 @@ contract MattMineVRFV25Adapter is Ownable2Step, ReentrancyGuard, IRandomnessProv
         request.fulfilled = true;
         request.randomWord = randomWords[0];
         emit RandomWordReceived(requestId, randomWords[0]);
+        if (request.cancelled) {
+            emit CancelledRandomWordDiscarded(requestId, randomWords[0]);
+            return;
+        }
         _tryDelivery(requestId, request);
     }
 
     function retryFulfillment(uint256 requestId) external nonReentrant returns (bool delivered) {
         Request storage request = requests[requestId];
-        if (!request.fulfilled || request.delivered) revert RequestNotReady();
+        if (!request.fulfilled || request.delivered || request.cancelled) revert RequestNotReady();
         delivered = _tryDelivery(requestId, request);
+    }
+
+    function supportsRequestCancellation() external pure override returns (bool) {
+        return true;
+    }
+
+    function cancelRequest(uint256 requestId) external override nonReentrant {
+        if (msg.sender != consumer) revert Unauthorized();
+        Request storage request = requests[requestId];
+        if (!request.exists) revert InvalidRequest();
+        if (request.fulfilled) revert RequestAlreadyFulfilled();
+        if (request.cancelled) revert RequestAlreadyCancelled();
+        request.cancelled = true;
+        outstandingRequests -= 1;
+        emit RandomWordCancelled(requestId);
+    }
+
+    function isRequestFulfilled(uint256 requestId) external view override returns (bool) {
+        return requests[requestId].fulfilled;
     }
 
     function _tryDelivery(uint256 requestId, Request storage request) internal returns (bool success) {

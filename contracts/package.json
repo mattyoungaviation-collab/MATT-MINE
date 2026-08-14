@@ -26,10 +26,14 @@
     "verify-nft:saigon": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-nft-saigon.ps1",
     "bootstrap-nft-rehearsal:saigon": "hardhat run --build-profile production scripts/bootstrap-nft-saigon-rehearsal.js --network saigon",
     "check-nft-rehearsal:saigon": "hardhat run --build-profile production scripts/check-nft-saigon-rehearsal.js --network saigonReadOnly",
-    "activate-chest-keeper:saigon": "hardhat run --build-profile production scripts/activate-saigon-chest-keeper.js --network saigon"
+    "activate-chest-keeper:saigon": "hardhat run --build-profile production scripts/activate-saigon-chest-keeper.js --network saigon",
+    "validate-nft-v2:saigon": "hardhat run scripts/validate-nft-v2-saigon-config.js --network saigonReadOnly",
+    "deploy-nft-v2:saigon": "hardhat run --build-profile production scripts/deploy-nft-v2-saigon.js --network saigon",
+    "check-nft-v2:saigon": "hardhat run --build-profile production scripts/check-nft-v2-saigon.js --network saigonReadOnly"
   },
   "dependencies": {
-    "@openzeppelin/contracts": "5.4.0"
+    "@openzeppelin/contracts": "5.4.0",
+    "@openzeppelin/contracts-upgradeable": "5.4.0"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-ethers": "4.0.15",
