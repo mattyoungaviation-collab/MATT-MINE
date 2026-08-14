@@ -272,7 +272,7 @@ async function handleApiRequest({
     sendJson(response, 200, { ok: true, ...mines });
     return;
   }
-  const publicMineMatch = path.match(/^\/api\/mines\/(practice|arena|daily|pass|weekly|pvp)$/);
+  const publicMineMatch = path.match(/^\/api\/mines\/(practice|arena|pass)$/);
   if (method === 'GET' && publicMineMatch) {
     const result = await service.publicMineSlot(
       publicMineMatch[1],
@@ -653,7 +653,7 @@ async function handleApiRequest({
     sendJson(response, 200, { ok: true, ...result });
     return;
   }
-  const competitionDraftMatch = path.match(/^\/api\/admin\/competition-studio\/(practice|arena|daily|pass|weekly)\/draft$/);
+  const competitionDraftMatch = path.match(/^\/api\/admin\/competition-studio\/(practice|arena|pass)\/draft$/);
   if (method === 'PUT' && competitionDraftMatch) {
     const body = await readJson(request, Math.max(maxRequestBytes, MAX_COMPETITION_DRAFT_REQUEST_BYTES));
     const result = await service.saveCompetitionDraft(
@@ -665,7 +665,7 @@ async function handleApiRequest({
     sendJson(response, 200, { ok: true, ...result });
     return;
   }
-  const competitionPublishMatch = path.match(/^\/api\/admin\/competition-studio\/(practice|arena|daily|pass|weekly)\/publish$/);
+  const competitionPublishMatch = path.match(/^\/api\/admin\/competition-studio\/(practice|arena|pass)\/publish$/);
   if (method === 'POST' && competitionPublishMatch) {
     const body = await readJson(request, maxRequestBytes);
     const result = await service.publishCompetitionSnapshot(
@@ -676,7 +676,7 @@ async function handleApiRequest({
     sendJson(response, 201, { ok: true, ...result });
     return;
   }
-  const competitionActivateMatch = path.match(/^\/api\/admin\/competition-studio\/(practice|arena|daily|pass|weekly)\/versions\/([A-Za-z0-9_-]+)\/activate$/);
+  const competitionActivateMatch = path.match(/^\/api\/admin\/competition-studio\/(practice|arena|pass)\/versions\/([A-Za-z0-9_-]+)\/activate$/);
   if (method === 'POST' && competitionActivateMatch) {
     const body = await readJson(request, maxRequestBytes);
     const result = await service.activateCompetitionSnapshot(
@@ -718,7 +718,7 @@ async function handleApiRequest({
     sendJson(response, 200, { ok: true, ...result });
     return;
   }
-  const mineOperationsMatch = path.match(/^\/api\/admin\/mine-operations\/(practice|arena|daily|pass|weekly)$/);
+  const mineOperationsMatch = path.match(/^\/api\/admin\/mine-operations\/(practice|arena|pass)$/);
   if (method === 'PUT' && mineOperationsMatch) {
     const body = await readJson(request, maxRequestBytes);
     const result = await service.updateMineOperations(
@@ -730,7 +730,7 @@ async function handleApiRequest({
     sendJson(response, 200, { ok: true, ...result });
     return;
   }
-  const terminateMineRunsMatch = path.match(/^\/api\/admin\/mine-operations\/(practice|arena|daily|pass|weekly)\/terminate-runs$/);
+  const terminateMineRunsMatch = path.match(/^\/api\/admin\/mine-operations\/(practice|arena|pass)\/terminate-runs$/);
   if (method === 'POST' && terminateMineRunsMatch) {
     const body = await readJson(request, maxRequestBytes);
     const result = await service.adminTerminateMineRuns(

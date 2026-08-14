@@ -1,7 +1,7 @@
 import {
+  ACTIVE_COMPETITION_SLOTS as COMPETITION_SLOTS,
   COMPETITION_DEPTH_COUNT,
   COMPETITION_MONSTER_TUNING_SCHEMA,
-  COMPETITION_SLOTS,
   createStarterMap,
   normalizeCompetitionDraft,
   validateCompetitionDraft,

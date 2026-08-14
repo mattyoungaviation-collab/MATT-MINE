@@ -40,12 +40,12 @@ test('daily preview applies the same room tuning and boss enlargement as live Fr
   assert.equal(boss.height, 700);
 });
 
-test('production lobby mounts a real canvas preview with the cinematic mine floor', async () => {
+test('retired Daily Mine preview code remains replayable but is not mounted publicly', async () => {
   const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
   const source = await readFile(new URL('../src/game/dailyMapPreview.js', import.meta.url), 'utf8');
 
-  assert.equal((html.match(/data-daily-mine-preview/g) || []).length, 3);
-  assert.match(html, /ACTUAL FREE DAILY MAP/);
+  assert.equal((html.match(/data-daily-mine-preview/g) || []).length, 0);
+  assert.doesNotMatch(html, /ACTUAL FREE DAILY MAP|FREE DAILY MINE/i);
   assert.doesNotMatch(html, /mine-route-shadow/);
   assert.equal(DAILY_MINE_PREVIEW_FLOOR_ART, '/assets/game/mine-floor-cinematic.webp');
   assert.match(source, /createMineLayout/);

@@ -1,7 +1,11 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { getAddress, verifyMessage } from 'viem';
 import { META_UPGRADES, metaUpgradeCost } from '../src/game/config.js';
-import { GAMEPLAY_LOBBIES, GAME_TUNING_SCHEMA, normalizeTuningPatch } from '../src/game/tuning.js';
+import {
+  ACTIVE_GAMEPLAY_LOBBIES,
+  GAME_TUNING_SCHEMA,
+  normalizeTuningPatch
+} from '../src/game/tuning.js';
 import { normalizeKeybindings } from '../src/game/keybindings.js';
 import { passLevel, utcDayKey, utcWeekKey } from '../src/game/economy.js';
 import {
@@ -49,7 +53,8 @@ import {
   weeklyLeaderboard
 } from './competition-engine.js';
 import {
-  COMPETITION_SLOTS,
+  ACTIVE_COMPETITION_SLOTS as COMPETITION_SLOTS,
+  ACTIVE_MINE_IDS,
   competitionSlotForMode,
   normalizeCompetitionDraft,
   resolveCompetitionSnapshot,
@@ -1160,7 +1165,7 @@ export class MattMineService {
       : await this.database.read();
     const snapshot = resolveCompetitionSnapshot(state.competitionStudio, definition.id, timestamp);
     let leaderboard = null;
-    if (definition.id === 'daily' || definition.id === 'pass') {
+    if (definition.id === 'pass') {
       const week = normalizeWeekKey(requestedPeriod, utcWeekKey(timestamp));
       leaderboard = await this.leaderboardFor(definition.mode, week, '0x0000000000000000000000000000000000000000');
     } else if (definition.id === 'arena' && this.arenaService) {
@@ -1168,21 +1173,6 @@ export class MattMineService {
         await this.arenaLeaderboard(requestedPeriod),
         state
       );
-    } else if (definition.id === 'weekly') {
-      const week = normalizeWeekKey(requestedPeriod, utcWeekKey(timestamp));
-      const rows = weeklyLeaderboard(state.weeklyCompetition, week);
-      leaderboard = {
-        mode: 'weekly',
-        week,
-        finalized: week !== utcWeekKey(timestamp),
-        participantCount: rows.length,
-        rows: rows.slice(0, 100).map((row) => ({
-          ...row,
-          walletId: state.wallets[row.address]?.identity?.name || abbreviateAddress(row.address),
-          identity: publicIdentity(state.wallets[row.address]),
-          appearance: publicLeaderboardAppearance(state.wallets[row.address])
-        }))
-      };
     }
     return {
       slot: publicCompetitionSlot(definition, snapshot, state.operations),
@@ -1384,7 +1374,7 @@ export class MattMineService {
     const timestamp = this.now();
     const runs = Object.values(state.runs);
     const arenaActiveRuns = await Promise.resolve(this.arenaService?.adminActiveRuns?.()).catch(() => []) || [];
-    const mineCards = ['practice', 'arena', 'daily', 'pass', 'weekly'].map((mine) => {
+    const mineCards = ACTIVE_MINE_IDS.map((mine) => {
       const mineRuns = runs.filter((run) => mineForRunMode(run.mode) === mine);
       const payments = mine === 'pass'
         ? Object.values(state.paidEntitlements)
@@ -1567,21 +1557,24 @@ export class MattMineService {
     this.assertAdminKey(adminKey);
     const state = await this.database.read();
     return {
-      lobbies: GAMEPLAY_LOBBIES,
+      lobbies: ACTIVE_GAMEPLAY_LOBBIES,
       schema: GAME_TUNING_SCHEMA,
-      presets: structuredClone(state.gameTuning)
+      presets: Object.fromEntries(ACTIVE_GAMEPLAY_LOBBIES.map((lobby) => [
+        lobby,
+        structuredClone(state.gameTuning[lobby])
+      ]))
     };
   }
 
   async publicGameTuning(lobby) {
-    assertApi(GAMEPLAY_LOBBIES.includes(lobby), 404, 'tuning_lobby_unknown', 'Unknown gameplay lobby.');
+    assertApi(ACTIVE_GAMEPLAY_LOBBIES.includes(lobby), 404, 'tuning_lobby_unknown', 'Choose Practice Mine, MATT Arena, or Pass Mine.');
     const state = await this.database.read();
     return { lobby, preset: structuredClone(state.gameTuning[lobby]) };
   }
 
   async updateAdminGameTuning(adminKey, lobby, input, reason) {
     this.assertAdminKey(adminKey);
-    assertApi(GAMEPLAY_LOBBIES.includes(lobby), 404, 'tuning_lobby_unknown', 'Unknown gameplay lobby.');
+    assertApi(ACTIVE_GAMEPLAY_LOBBIES.includes(lobby), 404, 'tuning_lobby_unknown', 'Choose Practice Mine, MATT Arena, or Pass Mine.');
     const normalizedReason = normalizeAdminReason(reason);
     const snapshot = await this.database.read();
     let patch;
@@ -1680,14 +1673,15 @@ export class MattMineService {
         }
       }
       next.mines ||= {};
-      if (Object.hasOwn(patch, 'freeRankedPaused')) next.mines.daily.entriesPaused = patch.freeRankedPaused;
+      if (Object.hasOwn(patch, 'freeRankedPaused') && next.mines.daily) {
+        next.mines.daily.entriesPaused = patch.freeRankedPaused;
+      }
       if (Object.hasOwn(patch, 'passRankedPaused')) next.mines.pass.entriesPaused = patch.passRankedPaused;
       if (Object.hasOwn(patch, 'purchasesPaused')) {
-        next.mines.practice.paymentsPaused = patch.purchasesPaused;
         next.mines.pass.paymentsPaused = patch.purchasesPaused;
       }
       if (Object.hasOwn(patch, 'claimsPaused')) {
-        next.mines.daily.rewardsPaused = patch.claimsPaused;
+        if (next.mines.daily) next.mines.daily.rewardsPaused = patch.claimsPaused;
         next.mines.pass.rewardsPaused = patch.claimsPaused;
       }
       next.updatedAt = timestamp;
@@ -1702,7 +1696,7 @@ export class MattMineService {
   async updateMineOperations(adminKey, mine, patch, reason) {
     this.assertAdminKey(adminKey);
     const normalizedMine = String(mine || '');
-    assertApi(['practice', 'arena', 'daily', 'pass', 'weekly'].includes(normalizedMine), 404, 'mine_operation_unknown', 'Choose a playable mine.');
+    assertApi(ACTIVE_MINE_IDS.includes(normalizedMine), 404, 'mine_operation_unknown', 'Choose Practice Mine, MATT Arena, or Pass Mine.');
     assertApi(patch && typeof patch === 'object' && !Array.isArray(patch), 400, 'mine_operations_patch_invalid', 'Mine control changes must be an object.');
     const allowed = new Set(['entriesPaused', 'resultsPaused', 'paymentsPaused', 'rewardsPaused']);
     assertApi(Object.keys(patch).length > 0, 400, 'mine_operations_patch_empty', 'Choose at least one mine control.');
@@ -1726,9 +1720,6 @@ export class MattMineService {
         updatedBy: 'SERVER_ADMIN'
       };
       state.operations.mines[normalizedMine] = next;
-      if (normalizedMine === 'daily' && Object.hasOwn(patch, 'entriesPaused')) {
-        state.operations.freeRankedPaused = patch.entriesPaused;
-      }
       if (normalizedMine === 'pass' && Object.hasOwn(patch, 'entriesPaused')) {
         state.operations.passRankedPaused = patch.entriesPaused;
       }
@@ -1751,7 +1742,7 @@ export class MattMineService {
   async adminTerminateMineRuns(adminKey, mine, reason) {
     this.assertAdminKey(adminKey);
     const normalizedMine = String(mine || '');
-    assertApi(['practice', 'arena', 'daily', 'pass', 'weekly'].includes(normalizedMine), 404, 'mine_operation_unknown', 'Choose a playable mine.');
+    assertApi(ACTIVE_MINE_IDS.includes(normalizedMine), 404, 'mine_operation_unknown', 'Choose Practice Mine, MATT Arena, or Pass Mine.');
     const normalizedReason = normalizeAdminReason(reason);
     const timestamp = this.now();
     const arenaResult = normalizedMine === 'arena' && this.arenaService?.adminExpireActiveRuns
@@ -2889,9 +2880,7 @@ function mineOperationCapabilities(mine) {
   return {
     practice: ['entries', 'results'],
     arena: ['entries', 'results', 'payments', 'rewards'],
-    daily: ['entries', 'results', 'rewards'],
-    pass: ['entries', 'results', 'payments', 'rewards'],
-    weekly: ['entries', 'results']
+    pass: ['entries', 'results', 'payments', 'rewards']
   }[mine] || [];
 }
 

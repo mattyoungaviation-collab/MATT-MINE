@@ -9,14 +9,12 @@ export async function mountMineHub(apiClient) {
   layout.innerHTML = `
     <div class="competition-hub">
       <div class="competition-hub-heading">
-        <div><span>LIVE COMPETITIONS</span><strong>Choose your mine</strong></div>
-        <small>Open a mine to see its map, rules, and leaderboard.</small>
+        <div><span>LIVE MINES</span><strong>Choose your mine</strong></div>
+        <small>Practice is public. MATT Arena and Pass Mine require your selected Miner NFT.</small>
       </div>
       <div class="competition-slot-grid" data-mine-cards aria-label="MATT Mine competitions"></div>
     </div>
     <div class="competition-legacy-bridge" aria-hidden="true">
-      <button id="free-run-button" type="button"></button>
-      <span id="free-run-status"></span><span id="free-run-cta"></span>
       <button id="paid-run-button" type="button"></button>
       <span id="pass-status"></span><span id="pass-days"></span>
       <span id="paid-credit-count"></span><span id="paid-daily-status"></span><span id="paid-run-cta"></span>
@@ -104,7 +102,7 @@ function renderCards(container, slots) {
         ? 'VIEW BOARD · ENTRY PAUSED →'
         : slot.id === 'practice'
           ? 'OPEN PRACTICE →'
-          : 'OPEN MINE + BOARD →';
+          : 'MINER NFT REQUIRED · OPEN MINE →';
     const accessibleLabel = slot.comingSoon
       ? `${escapeHtml(slot.name)} coming soon`
       : paused
@@ -171,9 +169,9 @@ function drawCardCharacter(canvas, characterId) {
 
 function renderDetail(modal, slot, leaderboard) {
   const snapshot = slot.snapshot || {};
-  modal.classList.remove('slot-practice', 'slot-arena', 'slot-daily', 'slot-pass', 'slot-weekly', 'slot-pvp');
+  modal.classList.remove('slot-practice', 'slot-arena', 'slot-pass');
   modal.classList.add(`slot-${slot.id}`);
-  modal.querySelector('[data-mine-kicker]').textContent = slot.leaderboard ? 'OFFICIAL COMPETITION' : 'TRAINING MINE';
+  modal.querySelector('[data-mine-kicker]').textContent = slot.leaderboard ? 'MINER-GATED MINE' : 'PUBLIC PRACTICE MINE';
   modal.querySelector('[data-mine-name]').textContent = snapshot.name || slot.name;
   modal.querySelector('[data-mine-subtitle]').textContent = snapshot.subtitle || '';
   modal.querySelector('[data-mine-state]').textContent = slot.entriesPaused
@@ -231,10 +229,7 @@ function fallbackSlots() {
   return [
     ['practice', 1, 'Practice Mine', false, '#55dfb4'],
     ['arena', 2, 'MATT Arena', true, '#ffcf32'],
-    ['daily', 3, 'Daily Mine', true, '#5bd8ff'],
-    ['pass', 4, 'Pass Mine', true, '#bd74ff'],
-    ['weekly', 5, 'Seven-Day Mine', true, '#ff805e'],
-    ['pvp', 6, 'PvP Mine', false, '#6f7787', true]
+    ['pass', 3, 'Pass Mine', true, '#bd74ff']
   ].map(([id, number, name, leaderboard, color, comingSoon = false]) => ({ id, number, name, leaderboard, color, comingSoon }));
 }
 

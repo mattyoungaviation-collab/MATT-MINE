@@ -139,8 +139,11 @@ test('expansion schema rejects unknown and unsafe settings while preserving veri
   );
   await assert.rejects(
     () => service.updateAdminExpansion('admin-test-key', { settings: { weeklyCompetitionEnabled: true } }, 'attempt unverified weekly'),
-    (error) => error.code === 'competitive_replay_validator_missing'
+    (error) => error.code === 'mine_control_retired'
   );
+  const admin = await service.adminExpansion('admin-test-key');
+  assert.equal(admin.schema.some((entry) => entry.category === 'Weekly Competition'), false);
+  assert.equal(admin.schema.some((entry) => entry.category === 'Endless Mode'), false);
 });
 
 test('Pass chest awards the configured 250,000 through the server ledger exactly once', async () => {
@@ -202,32 +205,20 @@ test('Beta completion awards no nuggets, Pass XP, profile progress, or leaderboa
   assert.deepEqual(finished.leaderboard.rows, []);
 });
 
-test('Beta and Weekly runs enforce their server entitlements and daily attempt lock', async () => {
+test('Beta remains private while Weekly and Endless stay retired', async () => {
   const { service } = harness({ competitive: true });
   const token = await login(service);
   await assert.rejects(() => service.startRun(token, 'beta'), (error) => error.code === 'beta_mode_disabled');
   await service.updateAdminExpansion('admin-test-key', {
-    settings: { betaModeEnabled: true, weeklyCompetitionEnabled: true, weeklyActiveDayCount: 1 }
+    settings: { betaModeEnabled: true }
   }, 'enable controlled test modes');
   await assert.rejects(() => service.startRun(token, 'beta'), (error) => error.code === 'beta_access_required');
   await service.setBetaTester('admin-test-key', ADDRESS, true, 'approved tester');
   const beta = await service.startRun(token, 'beta');
   assert.equal(beta.mode, 'beta');
   assert.match(beta.seed, /^MATT-BETA-/);
-  const weekly = await service.startRun(token, 'weekly');
-  assert.equal(weekly.mode, 'weekly');
-  assert.equal(weekly.weeklyStage.day, 1);
-  assert.equal(weekly.competitionSnapshot.depths.length, 5);
-  for (let depth = 1; depth <= 5; depth += 1) {
-    assert.equal(
-      weekly.tuning[`depth${depth}GuardianBosses`],
-      weekly.weeklyStage.bossCount,
-      `weekly depth ${depth} must remain completable`
-    );
-  }
-  await assert.rejects(() => service.startRun(token, 'weekly'), (error) =>
-    ['ranked_run_active', 'weekly_attempt_used'].includes(error.code)
-  );
+  await assert.rejects(() => service.startRun(token, 'weekly'), (error) => error.code === 'mine_retired');
+  await assert.rejects(() => service.startRun(token, 'endless'), (error) => error.code === 'mine_retired');
 });
 
 test('characters require ownership and purchases use the authoritative nugget ledger', async () => {

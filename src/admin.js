@@ -97,7 +97,6 @@ function renderOverview(data) {
   const paidRuns = data.payments?.paidRuns || {};
   $('#systems').innerHTML = [
     row('Server maintenance', status(!data.operations.maintenanceMode)),
-    row('Free ranked', status(!data.operations.freeRankedPaused)),
     row('Pass ranked', status(!data.operations.passRankedPaused)),
     row('Server purchases', status(!data.operations.purchasesPaused)),
     row('Server claims', status(!data.operations.claimsPaused)),
@@ -126,7 +125,6 @@ function renderOverview(data) {
 
 const operationFields = [
   ['maintenanceMode', 'Maintenance mode'],
-  ['freeRankedPaused', 'Pause Free ranked'],
   ['passRankedPaused', 'Pause Pass ranked'],
   ['purchasesPaused', 'Pause purchase confirmation'],
   ['claimsPaused', 'Pause reward claims']
@@ -521,11 +519,11 @@ function renderMineOperations(data) {
         <button type="button" class="danger" data-terminate-mine-runs="${escapeHtml(mine.id)}" ${Number(mine.activeRuns || 0) > 0 ? '' : 'disabled'}>END ${Number(mine.activeRuns || 0).toLocaleString()} ACTIVE RUN${Number(mine.activeRuns || 0) === 1 ? '' : 'S'}</button>
         ${mine.id === 'arena'
           ? '<button type="button" class="ghost" data-operations-tab="arena">Schedule or settle Arena</button>'
-          : ['daily', 'pass'].includes(mine.id)
+          : mine.id === 'pass'
             ? '<button type="button" class="ghost" data-scroll-payouts="true">Open payout desk</button>'
             : ''}
       </div>
-      ${mine.id === 'arena' ? '<p class="mine-footnote">Server controls are here. Contract entry and settlement controls remain in Daily Arena.</p>' : ''}
+      ${mine.id === 'arena' ? '<p class="mine-footnote">Server controls are here. Contract entry and settlement controls remain in MATT Arena.</p>' : ''}
     </article>`;
   }).join('');
 }
@@ -690,22 +688,20 @@ function formatRewardDeadline(value) {
 }
 
 function mineNumber(mine) {
-  return { practice: '01', arena: '02', daily: '03', pass: '04', weekly: '05' }[mine] || '—';
+  return { practice: '01', arena: '02', pass: '03' }[mine] || '—';
 }
 
 function mineNextAction(mine, controls) {
   if (controls.entriesPaused && !controls.resultsPaused) return 'New entries are closed. Let active runs finish, then pause Finish runs.';
   if (controls.entriesPaused && controls.resultsPaused) {
-    if (mine.id === 'arena') return 'Competition is closed. Open Daily Arena and prepare the full-pool settlement.';
-    if (['daily', 'pass'].includes(mine.id)) return 'Competition is closed. Use the payout desk after the weekly leaderboard finalizes.';
+    if (mine.id === 'arena') return 'Competition is closed. Open MATT Arena and prepare the full-pool settlement.';
+    if (mine.id === 'pass') return 'Competition is closed. Use the payout desk after the leaderboard finalizes.';
     return 'Competition is closed. Review results before reopening.';
   }
   if (controls.paymentsPaused) return 'Play is open, but payments are stopped. Resume only after payment verification is healthy.';
   if (controls.rewardsPaused) return 'Play is open, but payouts and claims are stopped. Review obligations before resuming.';
-  if (mine.id === 'daily') return 'Mine is live. Monitor active runs; use the payout desk after the weekly board closes.';
-  if (mine.id === 'weekly') return 'Mine is live. Monitor active runs and pause New runs first when closing.';
   if (mine.id === 'practice') return 'Public demo is live. Maps and balance remain Admin-authored; XP and Crystal rewards are permanently disabled.';
-  if (mine.id === 'arena') return 'Arena is live. Monitor entries here and settle the full pool from Daily Arena after close.';
+  if (mine.id === 'arena') return 'Arena is live. Monitor entries here and settle the full pool from MATT Arena after close.';
   return 'Mine is live. Monitor active runs and paid credits; pause New runs first when closing.';
 }
 

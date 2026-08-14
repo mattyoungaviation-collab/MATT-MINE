@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 
 import {
   COMPETITION_DEPTH_COUNT,
+  ACTIVE_COMPETITION_SLOTS,
   COMPETITION_SLOTS,
   MAP_OBJECT_KINDS,
   competitionMapForDepth,
@@ -68,11 +69,15 @@ test('Competition Studio map imports reject wrong-mine and malformed local files
   assert.throws(() => parseCompetitionMapFile(JSON.stringify(incomplete), 'daily'), /exactly 5 depth maps/);
 });
 
-test('Competition Studio owns five playable slots and keeps PvP visibly locked', () => {
+test('Competition Studio preserves legacy maps but exposes exactly three active mines', () => {
   const studio = defaultCompetitionStudio(NOW);
   assert.deepEqual(COMPETITION_SLOTS.map((slot) => slot.id), [
     'practice', 'arena', 'daily', 'pass', 'weekly', 'pvp'
   ]);
+  assert.deepEqual(ACTIVE_COMPETITION_SLOTS.map((slot) => slot.id), [
+    'practice', 'arena', 'pass'
+  ]);
+  assert.deepEqual(ACTIVE_COMPETITION_SLOTS.map((slot) => slot.number), [1, 2, 3]);
   for (const slot of COMPETITION_SLOTS.filter((entry) => !entry.comingSoon)) {
     const draft = studio.slots[slot.id].draft;
     assert.equal(draft.depths.length, COMPETITION_DEPTH_COUNT);
@@ -193,36 +198,36 @@ test('published competition snapshots are scheduled, immutable, and selected by 
     }
   });
   const overview = await service.adminCompetitionStudio('competition-admin');
-  const draft = structuredClone(overview.studio.slots.daily.draft);
+  const draft = structuredClone(overview.studio.slots.pass.draft);
   draft.name = 'Tomorrow’s Crystal Gauntlet';
   draft.map.name = 'Crystal Gauntlet Layout';
   await service.saveCompetitionDraft(
     'competition-admin',
-    'daily',
+    'pass',
     draft,
     'Prepare tomorrow’s official competition.'
   );
   const effectiveAt = NOW + 60_000;
-  const published = await service.publishCompetitionSnapshot('competition-admin', 'daily', {
+  const published = await service.publishCompetitionSnapshot('competition-admin', 'pass', {
     effectiveAt,
     expiresAt: effectiveAt + 86_400_000,
     reason: 'Publish the reviewed daily map.'
   });
-  assert.match(published.snapshot.id, /^snapshot_daily_/);
+  assert.match(published.snapshot.id, /^snapshot_pass_/);
   assert.match(published.snapshot.fingerprint, /^[a-f0-9]{64}$/);
   const state = await database.read();
-  assert.notEqual(resolveCompetitionSnapshot(state.competitionStudio, 'daily', NOW).id, published.snapshot.id);
-  assert.equal(resolveCompetitionSnapshot(state.competitionStudio, 'daily', effectiveAt).id, published.snapshot.id);
+  assert.notEqual(resolveCompetitionSnapshot(state.competitionStudio, 'pass', NOW).id, published.snapshot.id);
+  assert.equal(resolveCompetitionSnapshot(state.competitionStudio, 'pass', effectiveAt).id, published.snapshot.id);
   assert.equal(
-    resolveCompetitionSnapshot(state.competitionStudio, 'daily', effectiveAt + 86_400_000).id,
-    'bootstrap_daily_v1'
+    resolveCompetitionSnapshot(state.competitionStudio, 'pass', effectiveAt + 86_400_000).id,
+    'bootstrap_pass_v1'
   );
 
   const changed = normalizeCompetitionDraft({
     ...draft,
     name: 'Later Draft'
-  }, 'daily');
-  await service.saveCompetitionDraft('competition-admin', 'daily', changed, 'Start a later draft.');
+  }, 'pass');
+  await service.saveCompetitionDraft('competition-admin', 'pass', changed, 'Start a later draft.');
   const after = await database.read();
   assert.equal(after.competitionStudio.snapshots[published.snapshot.id].name, 'Tomorrow’s Crystal Gauntlet');
 });
@@ -239,8 +244,8 @@ test('draft edits stay private until Admin applies them and published versions c
       return randomCounter.toString(16).padStart(bytes * 2, '0');
     }
   });
-  const before = await service.publicMineSlot('daily');
-  const draft = structuredClone((await service.adminCompetitionStudio('competition-admin')).studio.slots.daily.draft);
+  const before = await service.publicMineSlot('pass');
+  const draft = structuredClone((await service.adminCompetitionStudio('competition-admin')).studio.slots.pass.draft);
   draft.name = 'Admin Live Crystal Mine';
   draft.loadout.characterId = 'orc';
   draft.loadout.startingWeapon = 'blaster';
@@ -248,21 +253,21 @@ test('draft edits stay private until Admin applies them and published versions c
   draft.map = structuredClone(draft.depths[0].map);
   await service.saveCompetitionDraft(
     'competition-admin',
-    'daily',
+    'pass',
     draft,
     'Keep this edit private until it is approved.'
   );
 
-  const afterDraft = await service.publicMineSlot('daily');
+  const afterDraft = await service.publicMineSlot('pass');
   assert.equal(afterDraft.slot.snapshot.id, before.slot.snapshot.id);
   assert.notEqual(afterDraft.slot.snapshot.name, draft.name);
 
-  const published = await service.publishCompetitionSnapshot('competition-admin', 'daily', {
+  const published = await service.publishCompetitionSnapshot('competition-admin', 'pass', {
     reason: 'Apply the reviewed mine immediately.'
   });
   assert.equal(published.snapshot.effectiveAt, NOW);
   assert.equal(published.snapshot.status, 'live');
-  const live = await service.publicMineSlot('daily');
+  const live = await service.publicMineSlot('pass');
   assert.equal(live.slot.snapshot.id, published.snapshot.id);
   assert.equal(live.slot.snapshot.name, 'Admin Live Crystal Mine');
   assert.equal(live.slot.snapshot.loadout.characterId, 'orc');
@@ -271,13 +276,13 @@ test('draft edits stay private until Admin applies them and published versions c
 
   const restored = await service.activateCompetitionSnapshot(
     'competition-admin',
-    'daily',
+    'pass',
     before.slot.snapshot.id,
     'Restore the prior version now.'
   );
   assert.equal(restored.snapshot.restoredFrom, before.slot.snapshot.id);
   assert.equal(restored.snapshot.effectiveAt, NOW);
-  assert.equal((await service.publicMineSlot('daily')).slot.snapshot.id, restored.snapshot.id);
+  assert.equal((await service.publicMineSlot('pass')).slot.snapshot.id, restored.snapshot.id);
 });
 
 test('public mine cards expose authoritative entry pauses without hiding leaderboards', async () => {
@@ -289,16 +294,17 @@ test('public mine cards expose authoritative entry pauses without hiding leaderb
   });
   await service.updateMineOperations(
     'competition-admin',
-    'daily',
+    'pass',
     { entriesPaused: true },
-    'Pause Daily Mine entries for maintenance.'
+    'Pause Pass Mine entries for maintenance.'
   );
 
   const overview = await service.publicMineSlots();
-  assert.equal(overview.slots.find((slot) => slot.id === 'daily').entriesPaused, true);
+  assert.deepEqual(overview.slots.map((slot) => slot.id), ['practice', 'arena', 'pass']);
+  assert.equal(overview.slots.find((slot) => slot.id === 'pass').entriesPaused, true);
   assert.equal(overview.slots.find((slot) => slot.id === 'practice').entriesPaused, false);
 
-  const detail = await service.publicMineSlot('daily');
+  const detail = await service.publicMineSlot('pass');
   assert.equal(detail.slot.entriesPaused, true);
   assert.ok(detail.leaderboard, 'paused mine details still expose the leaderboard');
 });
@@ -525,7 +531,7 @@ test('Admin Practice playtests begin on the selected authored depth', async () =
   assert.equal(ordinaryPractice.run.depth, 1, 'only explicit Admin test snapshots may skip depths');
 });
 
-test('production surfaces include the six-card hub, exact-map loading screen, and visual Admin editor', async () => {
+test('production surfaces include the exact three-mine hub, loading screen, and visual Admin editor', async () => {
   const [admin, main, hub, loading, productionCss, studioJs, ...mineCardAssets] = await Promise.all([
     readFile(new URL('../admin.html', import.meta.url), 'utf8'),
     readFile(new URL('../src/main.js', import.meta.url), 'utf8'),
@@ -533,7 +539,7 @@ test('production surfaces include the six-card hub, exact-map loading screen, an
     readFile(new URL('../src/game/mineLoadingScreen.js', import.meta.url), 'utf8'),
     readFile(new URL('../src/production.css', import.meta.url), 'utf8'),
     readFile(new URL('../src/adminCompetitionStudio.js', import.meta.url), 'utf8'),
-    ...COMPETITION_SLOTS.map((slot) =>
+    ...ACTIVE_COMPETITION_SLOTS.map((slot) =>
       readFile(new URL(`../assets/game/mine-cards/${slot.id}.webp`, import.meta.url))
     )
   ]);
@@ -548,14 +554,16 @@ test('production surfaces include the six-card hub, exact-map loading screen, an
   assert.match(hub, /competition-slot-grid/);
   assert.match(hub, /slot-map-preview/);
   assert.match(hub, /slot-character-preview/);
-  assert.match(hub, /PvP Mine/);
-  assert.match(hub, /OPEN MINE \+ BOARD/);
+  assert.match(hub, /MATT Arena/);
+  assert.match(hub, /Pass Mine/);
+  assert.doesNotMatch(hub, /Daily Mine|Seven-Day Mine|PvP Mine|Endless/i);
+  assert.match(hub, /MINER NFT REQUIRED · OPEN MINE/);
   assert.match(hub, /VIEW BOARD · ENTRY PAUSED/);
   assert.match(hub, /MINE PAUSED/);
   assert.doesNotMatch(hub, /style="--slot-color/);
   assert.match(productionCss, /--mine-card-image/);
   assert.match(productionCss, /\.competition-slot-card\.paused/);
-  assert.equal(mineCardAssets.length, 6);
+  assert.equal(mineCardAssets.length, 3);
   assert.ok(mineCardAssets.every((asset) => asset.byteLength > 20_000));
   assert.match(loading, /MINIMUM_LOADING_MS = 10_000/);
   assert.match(main, /competitionSnapshot/);

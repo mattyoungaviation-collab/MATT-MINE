@@ -41,7 +41,7 @@
         <button data-tab="expansion"><span>Modes &amp; Characters</span><small>Features &amp; roster</small></button>
         <span class="nav-label">Economy</span>
         <button data-tab="nugget-economy"><span>Nugget Economy</span><small>Prices &amp; packages</small></button>
-        <button data-tab="arena"><span>Daily Arena</span><small>Pool &amp; settlement</small></button>
+        <button data-tab="arena"><span>MATT Arena</span><small>Pool &amp; settlement</small></button>
         <span class="nav-label">System</span>
         <button data-tab="contracts"><span>Onchain Actions</span><small>Safe transaction files</small></button>
         <button data-tab="audit"><span>Audit Log</span><small>Every admin change</small></button>
@@ -86,7 +86,7 @@
       <section id="tab-expansion" class="tab">
         <div class="section-heading">
           <div><p class="eyebrow">MODES &amp; CHARACTERS</p><h2>Features and playable roster</h2><p>Release gates, special modes, rewards, controllers, and character stats.</p></div>
-          <label class="search-field">Filter this page<input id="expansion-search" type="search" placeholder="Chest, revive, weekly, character…"></label>
+          <label class="search-field">Filter this page<input id="expansion-search" type="search" placeholder="Chest, revive, controller, character…"></label>
         </div>
         <div class="notice">Production switches unlock only when their server verifier is ready. Competitive settings apply only before a stage opens.</div>
         <div id="production-readiness" class="grid four"></div>
@@ -126,19 +126,19 @@
           </form>
         </details>
         <div class="section-heading compact">
-          <div><p class="eyebrow">MINE-BY-MINE CONTROL</p><h2>Five independent control rooms</h2></div>
+          <div><p class="eyebrow">MINE-BY-MINE CONTROL</p><h2>Three independent control rooms</h2></div>
           <p>Every change is immediate and audit logged.</p>
         </div>
         <label class="panel operations-reason">Reason for the next mine control
-          <input id="mine-control-reason" maxlength="240" placeholder="Example: Closing Daily Mine after the weekly timer ended">
+          <input id="mine-control-reason" maxlength="240" placeholder="Example: Pausing MATT Arena while the map is updated">
         </label>
         <div id="mine-operations-grid" class="mine-operations-grid"></div>
         <div class="section-heading compact reward-desk-heading">
-          <div><p class="eyebrow">FREE + PASS PAYOUT DESK</p><h2>Leaderboard to MATT claim</h2><p>Complete the numbered steps. The server keeps the exact amount owed to every wallet until it is paid or the claim period closes.</p></div>
+          <div><p class="eyebrow">PASS + HISTORICAL PAYOUT DESK</p><h2>Leaderboard to MATT claim</h2><p>Pass payouts stay active. Retired Free Mine obligations remain here so previously earned rewards are never lost.</p></div>
         </div>
         <div class="panel reward-period-bar">
           <label>Closed competition week (Monday UTC)<input id="reward-week" type="date" required></label>
-          <button id="load-reward-week" type="button" class="ghost">Load Free + Pass</button>
+          <button id="load-reward-week" type="button" class="ghost">Load Pass + history</button>
           <span id="reward-week-help" class="muted">Choose the Monday that started the finished week.</span>
         </div>
         <div id="reward-operations-summary" class="reward-operations-summary"></div>
@@ -244,7 +244,7 @@
         <div class="section-heading">
           <div><p class="eyebrow">GAME BALANCE</p><h2>Per-lobby tuning</h2><p>Every combat, enemy, boss, room, weapon, and scoring value.</p></div>
           <div class="filter-bar">
-            <label>Lobby<select id="tuning-lobby"><option value="practice">Practice</option><option value="free">Free ranked</option><option value="paid">Pass ranked</option><option value="arena">Daily Arena</option></select></label>
+            <label>Mine<select id="tuning-lobby"><option value="practice">Practice Mine</option><option value="arena">MATT Arena</option><option value="paid">Pass Mine</option></select></label>
             <label>Category<select id="tuning-category"><option value="">All categories</option></select></label>
             <label>Filter this page<input id="tuning-search" type="search" placeholder="Blaster, armor, Depth 5…"></label>
           </div>
@@ -334,7 +334,7 @@
 
       <section id="tab-arena" class="tab">
         <div class="section-heading">
-          <div><p class="eyebrow">PLAYER-FUNDED MATT COMPETITION</p><h2>Daily Arena</h2></div>
+          <div><p class="eyebrow">PLAYER-FUNDED MATT COMPETITION</p><h2>MATT Arena</h2></div>
           <button id="refresh-arena-admin" class="ghost">Refresh</button>
         </div>
         <div class="notice warning">Every accepted entry and Treasury seed becomes reserved player prize money. Active Arena pools cannot be withdrawn or redirected.</div>

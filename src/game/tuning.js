@@ -2,7 +2,10 @@ import { CONFIG, ORE_TYPES } from './config.js';
 import { bossTuningSchema, validateBossThresholds } from './bossTuning.js';
 import { enemyDepthTuningSchema } from './enemyDepthTuning.js';
 
+// Keep the retired Free preset available for historical run replay and state
+// migration. Only ACTIVE_GAMEPLAY_LOBBIES are exposed for new Admin changes.
 export const GAMEPLAY_LOBBIES = Object.freeze(['practice', 'free', 'paid', 'arena']);
+export const ACTIVE_GAMEPLAY_LOBBIES = Object.freeze(['practice', 'arena', 'paid']);
 export const MAX_TUNED_DEPTH = 5;
 
 const number = (id, category, label, value, min, max, step = 1, description = '') =>

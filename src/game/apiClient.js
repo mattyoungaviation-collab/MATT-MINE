@@ -173,11 +173,14 @@ export class MattMineApiClient {
     return response.leaderboard;
   }
 
-  async startArenaRun(entryId = '') {
+  async startArenaRun(minerId, entryId = '') {
     const response = await this.request('/api/arena/runs/start', {
       method: 'POST',
       authenticated: true,
-      body: entryId ? { entryId } : {}
+      body: {
+        minerId,
+        ...(entryId ? { entryId } : {})
+      }
     });
     return response.run;
   }

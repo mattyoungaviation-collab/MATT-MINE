@@ -14,8 +14,8 @@ test('approved UI refresh exposes every player dashboard and unique control id',
     'site-nav', 'site-account-button', 'site-account-label',
     'miner-select', 'miner-select-grid', 'select-loadout-button', 'enter-mines-button',
     'how-to-play', 'how-to-title', 'launch-mine-select-title',
-    'launch-nugget-button', 'daily-mine', 'start-daily-run-button',
-    'pass-mine', 'start-pass-mine-button', 'buy-pass-credit-button',
+    'launch-nugget-button', 'practice-run-button', 'arena-button',
+    'pass-mine', 'paid-run-button', 'start-pass-mine-button', 'buy-pass-credit-button',
     'miner-profile', 'profile-open-store-button', 'profile-manage-upgrades-button',
     'profile-manage-loadout-button', 'profile-recent-runs', 'profile-full-run-history',
     'leaderboard-podium'
@@ -23,13 +23,15 @@ test('approved UI refresh exposes every player dashboard and unique control id',
     assert.match(html, new RegExp(`id="${id}"`));
   }
   assert.equal((html.match(/data-profile-tab=/g) || []).length, 5);
-  assert.equal((html.match(/class="launch-mine-card /g) || []).length, 4);
+  assert.equal((html.match(/class="launch-mine-card /g) || []).length, 3);
   assert.match(html, /data-site-action="how-to-play"/);
   assert.match(html, /data-site-action="store"/);
-  assert.match(html, /data-launch-action="daily"/);
+  assert.match(html, /data-launch-action="practice"/);
+  assert.match(html, /data-launch-action="arena"/);
   assert.match(html, /data-launch-action="pass-mine"/);
   assert.match(html, /id="select-loadout-button"[^>]*>SELECT LOADOUT</);
-  assert.match(html, /class="leaderboard-tab arena-leaderboard-tab" data-board="arena"/);
+  assert.match(html, /class="leaderboard-tab arena-leaderboard-tab active" data-board="arena"/);
+  assert.doesNotMatch(html, /FREE DAILY MINE|SEVEN-DAY MINE|ENDLESS MINE|PVP MINE/i);
   assert.match(html, /src\/ui-refresh\.css/);
 });
 
@@ -39,8 +41,8 @@ test('UI controls are wired to existing run, Pass, leaderboard, loadout, and sho
     readFile(new URL('src/nuggetShop.js', root), 'utf8')
   ]);
 
-  assert.match(source, /#free-run-button'\)\.addEventListener\('click', openDailyMine\)/);
-  assert.match(source, /#start-daily-run-button'[\s\S]*startRunMode\(RUN_MODES\.FREE\)/);
+  assert.match(source, /#practice-run-button'\)\.addEventListener\('click',[\s\S]*startRunMode\(RUN_MODES\.PRACTICE\)/);
+  assert.match(source, /apiClient\.startArenaRun\(selectedNftMinerId\)/);
   assert.match(source, /#start-pass-mine-button'[\s\S]*startRunMode\(RUN_MODES\.PAID\)/);
   assert.match(source, /#pass-mine-leaderboard-button'[\s\S]*openLeaderboards\(RUN_MODES\.PAID\)/);
   assert.match(source, /#profile-manage-upgrades-button'[\s\S]*showScreen\('upgrade-shop'\)/);

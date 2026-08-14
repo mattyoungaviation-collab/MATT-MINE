@@ -41,7 +41,11 @@ import {
 } from './admin-control-links.js';
 import { buildAdminReadiness } from './admin-readiness.js';
 import { SERVER_RUN_MODES } from './constants.js';
-import { PRACTICE_PLAY_POLICY, requiresMinerNft } from './nft-play-policy.js';
+import {
+  PRACTICE_PLAY_POLICY,
+  isRetiredRunMode,
+  requiresMinerNft
+} from './nft-play-policy.js';
 
 const BETA_CAPABILITIES = Object.freeze([
   'jumpDepth', 'jumpRoom', 'triggerBoss', 'spawnBoss', 'setBossPhase',
@@ -51,6 +55,37 @@ const BETA_CAPABILITIES = Object.freeze([
   'enemyAI', 'bossAI', 'damageNumbers', 'hitboxes', 'cooldownDebug',
   'seedDisplay', 'exportConfiguration', 'importConfiguration'
 ]);
+
+const RETIRED_EXPANSION_SETTING_IDS = new Set([
+  'deathRetentionFree',
+  'advertisementFreeEligible',
+  'weeklyCompetitionEnabled',
+  'weeklyActiveDayCount',
+  'weeklyLockedCharacter',
+  'weeklyAttemptLimit',
+  'endlessEnabled',
+  'endlessHealthGrowth',
+  'endlessDamageGrowth',
+  'endlessSpeedGrowth',
+  'endlessBossFrequency',
+  'endlessBossCount',
+  'endlessRoomCount',
+  'endlessMultiplierGrowth',
+  'endlessMaximumScale',
+  'endlessSeasonDays',
+  ...Array.from({ length: 7 }, (_, index) => {
+    const day = index + 1;
+    return [
+      `weeklyDay${day}Difficulty`,
+      `weeklyDay${day}BossCount`,
+      `weeklyDay${day}RoomCount`
+    ];
+  }).flat()
+]);
+
+const ACTIVE_EXPANSION_SCHEMA = Object.freeze(
+  EXPANSION_SCHEMA.filter((entry) => !RETIRED_EXPANSION_SETTING_IDS.has(entry.id))
+);
 
 export class CompleteProductionMattMineService extends ProductionMattMineService {
   constructor(database, options = {}) {
@@ -155,15 +190,22 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
 
   async startRun(token, mode, input = {}) {
     const normalizedMode = String(mode || '').toLowerCase();
-    if (['weekly', 'endless'].includes(normalizedMode) && !this.competitiveReplayValidator) {
+    if (isRetiredRunMode(normalizedMode)) {
       throw new ApiError(
-        503,
-        'competitive_replay_validator_missing',
-        'This competition remains disabled until deterministic server replay validation is configured.'
+        410,
+        'mine_retired',
+        'That mine is retired. Choose Practice Mine, MATT Arena, or Pass Mine.'
       );
     }
-    const nftGateActive = Boolean(this.nftGameplayService) && requiresMinerNft(normalizedMode);
+    const nftGateActive = requiresMinerNft(normalizedMode);
+    let gatedMinerId = 0;
     if (nftGateActive) {
+      assertApi(
+        this.nftGameplayService,
+        503,
+        'nft_gameplay_required',
+        'Pass Mine remains closed until Miner NFT verification is available.'
+      );
       const replayModes = this.competitiveReplayValidator?.publicStatus?.().modes || [];
       assertApi(
         replayModes.includes(normalizedMode),
@@ -172,9 +214,16 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
         'This NFT mine remains closed until deterministic server replay verification is active.'
       );
       const session = await this.authenticate(token);
+      gatedMinerId = selectedMinerId(input.minerId);
+      assertApi(
+        gatedMinerId > 0,
+        422,
+        'miner_selection_required',
+        'Select one of this wallet’s MATT Mine Miner NFTs before entering Pass Mine.'
+      );
       const selected = await this.nftGameplayService.playerMiner(
         session.address,
-        selectedMinerId(input.minerId)
+        gatedMinerId
       );
       assertApi(
         selected,
@@ -193,7 +242,7 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
         nftRun = await this.nftGameplayService.beginRun({
           address: session.address,
           serverRunId: started.runId,
-          minerId: selectedMinerId(input.minerId)
+          minerId: gatedMinerId
         });
         if (nftRun) {
           started.tuning = {
@@ -311,6 +360,27 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
   }
 
   async startArenaRun(token, input = {}) {
+    assertApi(
+      this.nftGameplayService,
+      503,
+      'nft_gameplay_required',
+      'MATT Arena remains closed until Miner NFT verification is available.'
+    );
+    const session = await this.authenticate(token);
+    const minerId = selectedMinerId(input.minerId);
+    assertApi(
+      minerId > 0,
+      422,
+      'miner_selection_required',
+      'Select one of this wallet’s MATT Mine Miner NFTs before entering MATT Arena.'
+    );
+    const minerProfile = await this.nftGameplayService.playerMiner(session.address, minerId);
+    assertApi(
+      minerProfile,
+      403,
+      'miner_nft_required',
+      'MATT Arena requires a MATT Mine Miner NFT owned by the playing wallet.'
+    );
     const state = await this.database.read();
     const settings = state.expansionConfig.settings;
     const reviveInfrastructureReady =
@@ -318,6 +388,10 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
       typeof this.arenaService?.validatePaidReviveDeath === 'function';
     return super.startArenaRun(token, {
       ...input,
+      nftRun: {
+        minerId,
+        profile: minerProfile
+      },
       paidRevivesEnabled:
         reviveInfrastructureReady && settings.paidRevivesEnabled === true,
       reviveLimitPerRun: settings.reviveLimitPerRun,
@@ -568,7 +642,7 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     await this.ensureAdminControlLinks();
     const state = await this.database.read();
     return {
-      schema: EXPANSION_SCHEMA,
+      schema: ACTIVE_EXPANSION_SCHEMA,
       defaults: defaultExpansionConfig(),
       config: structuredClone(state.expansionConfig),
       blockers: {
@@ -578,8 +652,6 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
         advertisements: this.advertisementVerifier?.publicStatus?.().configured
           ? ''
           : 'Signed advertisement provider completion verifier is not configured.',
-        weeklyCompetition: this.competitiveReplayValidator ? '' : 'Deterministic replay validation is not configured.',
-        endless: this.competitiveReplayValidator ? '' : 'Deterministic replay validation is not configured.'
       },
       productionReadiness: {
         competitiveReplay: this.competitiveReplayValidator?.publicStatus?.() || {
@@ -610,6 +682,14 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
 
   async updateAdminExpansion(adminKey, patch, reason) {
     this.assertAdminKey(adminKey);
+    const retiredSetting = Object.keys(patch?.settings || {})
+      .find((id) => RETIRED_EXPANSION_SETTING_IDS.has(id));
+    assertApi(
+      !retiredSetting,
+      410,
+      'mine_control_retired',
+      `${retiredSetting} belongs to a retired mine and can no longer be changed.`
+    );
     const normalizedReason = adminReason(reason);
     const timestamp = this.now();
     const result = await this.database.transact((state) => {

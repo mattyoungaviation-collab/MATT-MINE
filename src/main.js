@@ -2,7 +2,6 @@ import { MattMineGame } from './game/GameV4.js';
 import { apiClient } from './game/apiClient.js';
 import { META_UPGRADES, metaUpgradeCost } from './game/config.js';
 import { prepareProfileImage } from './game/profileImage.js';
-import { mountDailyMinePreviews } from './game/dailyMapPreview.js';
 import { KEYBIND_ACTIONS, defaultKeybindings, normalizeKeybindings } from './game/keybindings.js';
 import { CONTROLLER_ACTIONS, defaultControllerProfile, normalizeControllerProfile } from './game/expansionConfig.js';
 import { BetaDeveloperTools, defaultBetaConfiguration } from './game/betaTools.js';
@@ -100,7 +99,7 @@ const CONTROLLER_BUTTON_LABELS = Object.freeze([
 let profile = loadProfile();
 let gameplayPreferences = loadGameplayPreferences();
 let toastTimer;
-let activeBoard = RUN_MODES.FREE;
+let activeBoard = ARENA_LEADERBOARD_MODE;
 let serverConfig = null;
 let serverPlayer = null;
 let pendingKeybindings = defaultKeybindings();
@@ -133,7 +132,6 @@ let pendingAvatarDataUrl = '';
 let abandonConfirmUntil = 0;
 let abandonResetTimer = null;
 let touchInputActive = touchInputDetected(globalThis);
-let dailyMinePreviewCleanup = null;
 let liveDashboardTimer = null;
 let liveDashboardBusy = false;
 const wallet = new RoninWalletAdapter({
@@ -192,7 +190,7 @@ function syncLiveDashboardPolling(screenId) {
   clearInterval(liveDashboardTimer);
   liveDashboardTimer = null;
   const liveScreens = new Set([
-    'launch', 'miner-select', 'menu', 'daily-mine', 'pass-mine', 'miner-profile',
+    'launch', 'miner-select', 'menu', 'pass-mine', 'miner-profile',
     'mine-pass', 'daily-arena', 'leaderboards'
   ]);
   if (!serverPlayer || !liveScreens.has(screenId)) return;
@@ -383,12 +381,6 @@ function updateMenu() {
   if ($('#site-account-label')) $('#site-account-label').textContent = connected
     ? serverPlayer.identity?.name || 'MINER PROFILE'
     : walletBusy ? 'CONNECTING…' : 'CONNECT WALLET';
-  $('#free-run-status').textContent = connected
-    ? serverPlayer.suspended ? 'SUSPENDED' : freeAccess.allowed ? 'AVAILABLE' : 'USED TODAY'
-    : 'WALLET REQUIRED';
-  $('#free-run-status').classList.toggle('unavailable', !freeAccess.allowed);
-  $('#free-run-cta').textContent = !connected ? walletCopy.freeRunLabel : freeAccess.allowed ? 'PLAY FREE' : 'COME BACK TOMORROW';
-  $('#free-run-button').disabled = connected && !freeAccess.allowed;
   $('#pass-status').textContent = passActive ? 'PASS ACTIVE' : 'FREE TIER';
   const remainingPassDays = livePayments && paymentStatus
     ? Math.max(0, Math.ceil((paymentStatus.pass.expiresAt - Date.now()) / 86_400_000))
@@ -429,8 +421,6 @@ function updateMenu() {
   });
   renderArenaMenuStatus();
   renderInterruptedNftPractice();
-  $('#weekly-run-button').hidden = serverPlayer?.expansion?.settings?.weeklyCompetitionEnabled !== true;
-  $('#endless-run-button').hidden = serverPlayer?.expansion?.settings?.endlessEnabled !== true;
   $('#beta-run-button').hidden = serverPlayer?.expansion?.betaAvailable !== true;
   renderPassProgress();
   renderGameplayPreferences();
@@ -605,11 +595,6 @@ function activateProfileTab(tabId) {
   for (const panel of document.querySelectorAll('[data-profile-panel]')) {
     panel.classList.toggle('active', panel.dataset.profilePanel === tabId);
   }
-}
-
-function openDailyMine() {
-  updateMenu();
-  showScreen('daily-mine');
 }
 
 function openPassMine() {
@@ -1094,7 +1079,7 @@ async function submitArenaRun(run) {
       <span>Authoritative score: ${formatNumber(result.score || arenaPlayer.bestScore)}${nuggetsCopy}${passXpCopy}${unlockedCopy}</span>
       <small>The signed transcript was replayed against today's deterministic challenge. Browser-reported score totals were not trusted.</small>
     `;
-    toast('Daily Arena score verified');
+    toast('MATT Arena score verified');
     await refreshArena(true);
   } catch (error) {
     const retryable = isRetryableAppendError(error);
@@ -1310,9 +1295,8 @@ async function declinePracticeRewards() {
 
 async function startRunMode(mode, options = {}) {
   const useServer =
-    mode === RUN_MODES.FREE ||
     (mode === RUN_MODES.PAID && serverConfig?.paidRunsEnabled === true) ||
-    [RUN_MODES.BETA, RUN_MODES.WEEKLY, RUN_MODES.ENDLESS].includes(mode);
+    mode === RUN_MODES.BETA;
   activePracticeClaim = null;
   resultScreenMode = null;
   clearPracticeClaimPanel();
@@ -1851,7 +1835,11 @@ window.__MATT_MINE_API__ = apiClient;
 for (const button of document.querySelectorAll('[data-launch-action]')) {
   button.addEventListener('click', () => {
     const action = button.dataset.launchAction;
-    if (['enter', 'daily', 'pass-mine', 'practice', 'arena'].includes(action)) {
+    if (action === 'practice') {
+      void startRunMode(RUN_MODES.PRACTICE);
+      return;
+    }
+    if (['enter', 'pass-mine', 'arena'].includes(action)) {
       void openMinerSelect();
       return;
     }
@@ -1864,7 +1852,7 @@ for (const button of document.querySelectorAll('[data-launch-action]')) {
       return;
     }
     if (action === 'leaderboards') {
-      openLeaderboards(RUN_MODES.FREE);
+      openLeaderboards(ARENA_LEADERBOARD_MODE);
       return;
     }
     void openMinerSelect();
@@ -1876,7 +1864,7 @@ for (const button of document.querySelectorAll('[data-site-action]')) {
     const action = button.dataset.siteAction;
     if (action === 'home') return openLaunch(true);
     if (action === 'how-to-play') return showScreen('how-to-play');
-    if (action === 'leaderboards') return openLeaderboards(RUN_MODES.FREE);
+    if (action === 'leaderboards') return openLeaderboards(ARENA_LEADERBOARD_MODE);
     if (action === 'pass') return openPass();
     if (action === 'store') return window.dispatchEvent(new CustomEvent('mattmine:open-nugget-shop'));
     if (action === 'mines') {
@@ -1933,11 +1921,8 @@ $('#enter-mines-button').addEventListener('click', () => {
   showScreen('menu');
   updateMenu();
 });
-$('#free-run-button').addEventListener('click', openDailyMine);
 $('#practice-run-button').addEventListener('click', () => void startRunMode(RUN_MODES.PRACTICE));
 $('#resume-nft-practice-button').addEventListener('click', () => void resumeInterruptedNftPractice());
-$('#weekly-run-button').addEventListener('click', () => void startRunMode(RUN_MODES.WEEKLY));
-$('#endless-run-button').addEventListener('click', () => void startRunMode(RUN_MODES.ENDLESS));
 $('#beta-run-button').addEventListener('click', () => void startRunMode(RUN_MODES.BETA));
 document.querySelectorAll('[data-beta-action]').forEach((button) => button.addEventListener('click', () => {
   if (!activeBetaTools) return;
@@ -1968,9 +1953,6 @@ $('#beta-copy-config').addEventListener('click', () => {
 $('#paid-run-button').addEventListener('click', () => {
   openPassMine();
 });
-$('#start-daily-run-button').addEventListener('click', () => void startRunMode(RUN_MODES.FREE));
-$('#daily-leaderboard-button').addEventListener('click', () => openLeaderboards(RUN_MODES.FREE));
-$('#daily-back-button').addEventListener('click', () => { showScreen('menu'); updateMenu(); });
 $('#start-pass-mine-button').addEventListener('click', async () => {
   if (!serverPlayer && serverConfig?.paidRunsEnabled === true) {
     const connected = await connectWallet();
@@ -2134,7 +2116,7 @@ $('#effects-volume').addEventListener('input', (event) => {
 });
 $('#pass-button').addEventListener('click', openPass);
 $('#manage-cosmetics-button').addEventListener('click', () => void openCosmetics());
-$('#leaderboards-button').addEventListener('click', () => openLeaderboards(RUN_MODES.FREE));
+$('#leaderboards-button').addEventListener('click', () => openLeaderboards(ARENA_LEADERBOARD_MODE));
 $('#arena-button').addEventListener('click', () => void openArena());
 $('#admin-button').addEventListener('click', openAdmin);
 
@@ -2383,7 +2365,7 @@ async function refreshArena(silent = false) {
   } catch (error) {
     arenaConfig = normalizeArenaConfig({ status: 'disabled', enabled: false });
     arenaLeaderboard = normalizeArenaLeaderboard();
-    if (!silent && error?.status !== 404) toast(error.message || 'Daily Arena status is unavailable.');
+    if (!silent && error?.status !== 404) toast(error.message || 'MATT Arena status is unavailable.');
   }
   renderArenaMenuStatus();
   if ($('#daily-arena').classList.contains('active')) renderArena();
@@ -2614,7 +2596,7 @@ async function purchaseArenaEntry() {
     arenaConfig.entriesPaused ||
     (arenaConfig.entryCutoffAt && Date.now() > arenaConfig.entryCutoffAt)
   ) {
-    toast('Daily Arena entries are not open.');
+    toast('MATT Arena entries are not open.');
     return;
   }
   arenaBusy = true;
@@ -2691,7 +2673,7 @@ async function startArenaRun() {
   arenaBusy = true;
   renderArena();
   try {
-    const run = await apiClient.startArenaRun();
+    const run = await apiClient.startArenaRun(selectedNftMinerId);
     activeArenaRun = run;
     activeArenaTranscript = new ArenaTranscript(apiClient, run);
     arenaPlayer = normalizeArenaPlayer({
@@ -2718,7 +2700,8 @@ async function startArenaRun() {
       character: run.challenge?.tuning?._competitionCharacter || {},
       allowPaidRevive: run.paidReviveEligible === true,
       reviveLimitPerRun: run.reviveLimitPerRun,
-      reviveInvulnerabilitySeconds: run.reviveInvulnerabilitySeconds
+      reviveInvulnerabilitySeconds: run.reviveInvulnerabilitySeconds,
+      nftRun: run.nftRun || null
     });
     if (run.challenge?.tuning?._minePassBenefits?.active === true) {
       toast('Mine Pass active · 2× XP and nuggets');
@@ -2749,7 +2732,7 @@ function createPaidReviveContext() {
 async function releaseActiveArenaRun() {
   if (arenaBusy || !arenaPlayer.activeRunId) return;
   const approved = window.confirm(
-    'Release the unfinished Daily Arena run?\n\n' +
+    'Release the unfinished MATT Arena run?\n\n' +
     'This clears the active-run lock. The consumed Arena entry remains used and no score will be recorded.'
   );
   if (!approved) return;
@@ -3714,9 +3697,7 @@ function abbreviateAddress(address) {
 function slotIdForMode(mode) {
   return {
     [RUN_MODES.PRACTICE]: 'practice',
-    [RUN_MODES.FREE]: 'daily',
     [RUN_MODES.PAID]: 'pass',
-    [RUN_MODES.WEEKLY]: 'weekly',
     arena: 'arena'
   }[mode] || 'practice';
 }
@@ -3772,27 +3753,14 @@ window.addEventListener('mattmine:slot-enter', (event) => {
     openPassMine();
     return;
   }
-  if (slot.id === 'daily') {
-    openDailyMine();
-    return;
-  }
-  const mode = {
-    practice: RUN_MODES.PRACTICE,
-    weekly: RUN_MODES.WEEKLY
-  }[slot.id];
+  const mode = { practice: RUN_MODES.PRACTICE }[slot.id];
   if (mode) void startRunMode(mode);
 });
 
 async function bootstrapServer() {
-  const today = new Date().toISOString().slice(0, 10);
-  dailyMinePreviewCleanup?.();
-  dailyMinePreviewCleanup = mountDailyMinePreviews({ day: today });
   try {
     serverConfig = await apiClient.config();
     publicPaymentStatus = await apiClient.publicPaymentStatus();
-    const freeTuning = await apiClient.gameTuning(RUN_MODES.FREE).catch(() => ({}));
-    dailyMinePreviewCleanup?.();
-    dailyMinePreviewCleanup = mountDailyMinePreviews({ day: today, tuning: freeTuning });
     const restored = await wallet.restore();
     if (restored) {
       serverPlayer = restored;

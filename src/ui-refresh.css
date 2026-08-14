@@ -1465,7 +1465,7 @@ h3,
 
 .launch-mine-card-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
   width: min(100%, var(--ui-page-width));
   margin: auto;

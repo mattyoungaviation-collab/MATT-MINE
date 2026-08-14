@@ -268,6 +268,13 @@ export class DailyArenaService {
     assertApi(selected, 409, 'arena_attempt_required', 'Confirm an unused Daily Arena entry before starting.');
     const tuning = structuredClone(await this.getTuning(day));
     tuning._playerProfile = structuredClone(input.playerProfile || {});
+    if (input.nftRun?.minerId && input.nftRun?.profile) {
+      tuning._nftRun = structuredClone(input.nftRun);
+      const nftMaximumHealth = Number(input.nftRun.profile.gameplay?.maximumHealth);
+      if (Number.isFinite(nftMaximumHealth) && nftMaximumHealth > 0) {
+        tuning.playerMaxHealth = nftMaximumHealth;
+      }
+    }
     applyMinePassGameplayBenefits(tuning, input.passActiveAtStart === true);
     applyArenaPaidReviveConfig(tuning, input);
     const receipt = {
@@ -327,7 +334,8 @@ export class DailyArenaService {
           receipt.tuning?._paidRevive?.invulnerabilitySeconds || 0,
         receipt: { ...receipt, signature: receiptSignature },
         checkpoint,
-        challenge: buildArenaChallenge(contest.deterministicSeed, receipt.tuning)
+        challenge: buildArenaChallenge(contest.deterministicSeed, receipt.tuning),
+        nftRun: receipt.tuning?._nftRun || null
       }
     };
   }
