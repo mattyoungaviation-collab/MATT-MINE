@@ -2,6 +2,7 @@ import { CONFIG, ORE_TYPES } from '../config.js';
 import { createMineLayout, randomPointInRoom, roomAt } from '../layout.js';
 import { clamp, random, randomRange, weightedChoice } from '../utils.js';
 import { bossPhaseForHealth, roomRequiresLock } from '../combat.js';
+import { nftGameplayTraits, nftHealAmount } from '../nftTraits.js';
 import {
   MAP_OBJECT_KINDS,
   competitionMapForDepth,
@@ -16,10 +17,11 @@ export const stateMethods = {
     const meta = this.effectivePermanentMeta || this.profile.meta;
     const tuning = this.runContext?.tuning || {};
     const character = this.runContext?.character || {};
-    const characterHealthScale = Number(character.baseHealth || 100) / 100;
-    const nftHealth = this.runContext?.nftRun
+    const nftTraits = nftGameplayTraits(this.runContext);
+    const characterHealthScale = nftTraits ? 1 : Number(character.baseHealth || 100) / 100;
+    const nftHealth = nftTraits?.maximumHealth || (this.runContext?.nftRun
       ? Math.max(1, Number(tuning.playerMaxHealth || CONFIG.basePlayerHealth))
-      : 0;
+      : 0);
     const maxHealth = nftHealth ||
       ((tuning.playerMaxHealth || CONFIG.basePlayerHealth) + (meta.health || 0) * 8) * characterHealthScale;
     this.run = {
@@ -56,14 +58,23 @@ export const stateMethods = {
       radius: tuning.playerRadius || CONFIG.playerRadius,
       maxHealth,
       health: maxHealth,
-      speed: (tuning.playerSpeed || CONFIG.basePlayerSpeed) * (1 + (meta.speed || 0) * 0.02) * Number(character.movementSpeed || 1),
-      damage: (tuning.playerBaseDamage || CONFIG.baseDamage) * (1 + (meta.damage || 0) * 0.05) * Number(character.pickaxeDamage || 1),
-      attackCooldown: (tuning.pickaxeCooldown || CONFIG.baseAttackCooldown) / Number(character.miningSpeed || 1),
+      maxShield: nftTraits?.armorShield || 0,
+      shield: nftTraits?.armorShield || 0,
+      speed: (tuning.playerSpeed || CONFIG.basePlayerSpeed) * (1 + (meta.speed || 0) * 0.02) * Number(nftTraits ? 1 : character.movementSpeed || 1),
+      damage: nftTraits?.pickaxeAttack || ((tuning.playerBaseDamage || CONFIG.baseDamage) * (1 + (meta.damage || 0) * 0.05) * Number(character.pickaxeDamage || 1)),
+      blasterBaseDamage: nftTraits?.blasterAttack || 0,
+      dynamiteBaseDamage: nftTraits?.dynamiteAttack || 0,
+      healAmount: nftTraits?.healAmount || 0,
+      minerLevel: nftTraits?.level || 0,
+      crystalCarryCapacity: nftTraits?.carryCapacity || 0,
+      crystalDeathRetentionBps: nftTraits?.deathRetentionBps || 0,
+      crystalsPerHour: nftTraits?.crystalsPerHour || 0,
+      attackCooldown: (tuning.pickaxeCooldown || CONFIG.baseAttackCooldown) / Number(nftTraits ? 1 : character.miningSpeed || 1),
       attackTimer: 0,
       attackRange: tuning.pickaxeRange || CONFIG.baseAttackRange,
       critChance: tuning.playerCritChance ?? CONFIG.baseCritChance,
-      magnetRange: ((tuning.playerMagnetRange || CONFIG.baseMagnetRange) + (meta.magnet || 0) * 6) * Number(character.magnetRange || 1),
-      armor: Math.min(0.8, (meta.armor || 0) * 0.01 + Number(character.armor || 0)),
+      magnetRange: ((tuning.playerMagnetRange || CONFIG.baseMagnetRange) + (meta.magnet || 0) * 6) * Number(nftTraits ? 1 : character.magnetRange || 1),
+      armor: nftTraits ? 0 : Math.min(0.8, (meta.armor || 0) * 0.01 + Number(character.armor || 0)),
       level: 1,
       xp: 0,
       nextXp: 45,
@@ -72,9 +83,9 @@ export const stateMethods = {
       invulnerable: 0,
       swingTimer: 0,
       dashCooldown: 0,
-      dashCooldownMax: ((tuning.dashCooldown || CONFIG.baseDashCooldown) / (1 + (meta.dash || 0) * 0.02)) * Number(character.dashCooldown || 1),
+      dashCooldownMax: ((tuning.dashCooldown || CONFIG.baseDashCooldown) / (1 + (meta.dash || 0) * 0.02)) * Number(nftTraits ? 1 : character.dashCooldown || 1),
       dashTimer: 0,
-      dashSpeed: (tuning.dashSpeed || CONFIG.baseDashSpeed) * Number(character.dashStrength || 1),
+      dashSpeed: (tuning.dashSpeed || CONFIG.baseDashSpeed) * Number(nftTraits ? 1 : character.dashStrength || 1),
       lastMoveX: 1,
       lastMoveY: 0,
       dynamiteEvery: 0,
@@ -85,10 +96,10 @@ export const stateMethods = {
       weapon: 'pickaxe',
       unlockedWeapons: { pickaxe: true, dynamite: false, blaster: !isArena },
       dynamiteAmmo: tuning.dynamiteStartAmmo ?? CONFIG.dynamiteStartAmmo,
-      blasterEnergy: (tuning.blasterEnergy || CONFIG.blasterEnergyMax) * (Number(character.blasterEnergy || 100) / 100),
-      blasterEnergyMax: (tuning.blasterEnergy || CONFIG.blasterEnergyMax) * (Number(character.blasterEnergy || 100) / 100),
+      blasterEnergy: (tuning.blasterEnergy || CONFIG.blasterEnergyMax) * (Number(nftTraits ? 100 : character.blasterEnergy || 100) / 100),
+      blasterEnergyMax: (tuning.blasterEnergy || CONFIG.blasterEnergyMax) * (Number(nftTraits ? 100 : character.blasterEnergy || 100) / 100),
       blasterEnergyRegen: tuning.blasterRecharge || CONFIG.blasterEnergyRegen,
-      blasterDamageScale: (tuning.blasterDamageMultiplier || CONFIG.blasterDamageScale) * (1 + (meta.blaster || 0) * 0.03) * Number(character.blasterDamage || 1),
+      blasterDamageScale: (tuning.blasterDamageMultiplier || CONFIG.blasterDamageScale) * (1 + (meta.blaster || 0) * 0.03) * Number(nftTraits ? 1 : character.blasterDamage || 1),
       blasterVolley: 1,
       emptyWeaponToast: 0
     };
@@ -117,7 +128,7 @@ export const stateMethods = {
     this.generateDepth();
     this.hooks.onRunStart?.();
     this.hooks.onToast?.(isArena
-      ? 'Pickaxe ready - Daily Arena live'
+      ? 'Pickaxe ready - MATT Arena live'
       : 'SAFE START - Pickaxe ready');
   },
   generateDepth() {
@@ -157,7 +168,10 @@ export const stateMethods = {
     this.player.y = this.layout.startRoom.y;
     this.player.vx = 0;
     this.player.vy = 0;
-    this.player.health = Math.min(this.player.maxHealth, this.player.health + this.player.maxHealth * 0.3);
+    this.player.health = Math.min(
+      this.player.maxHealth,
+      this.player.health + nftHealAmount(this.runContext, this.player.maxHealth * 0.3)
+    );
     this.run.safeStartUntil = this.run.elapsed +
       (arenaMode ? CONFIG.arenaSafeStartSeconds : (tuning.safeStartSeconds ?? CONFIG.safeStartSeconds));
 
@@ -310,7 +324,7 @@ export const stateMethods = {
       hp,
       maxHp: hp,
       nuggets: Math.round(type.nuggets * (rich ? 2 : 1) * treasureMultiplier * (tuning[`${type.id}ValueMultiplier`] ?? 1) * (tuning.nuggetMultiplier ?? 1)),
-      xp: Math.round(type.xp * (rich ? 1.35 : 1) * treasureMultiplier * (tuning.xpMultiplier ?? 1)),
+      xp: Math.round(type.xp * (rich ? 1.35 : 1) * treasureMultiplier),
       color: type.color,
       rotation: randomRange(0, Math.PI * 2),
       hitFlash: 0,
@@ -503,7 +517,10 @@ export const stateMethods = {
   damagePlayer(amount, sourceAngle, source = {}) {
     if (this.player.invulnerable > 0) return;
     const finalDamage = Math.max(1, amount * (1 - this.player.armor));
-    this.player.health -= finalDamage;
+    const shieldDamage = Math.min(Math.max(0, this.player.shield || 0), finalDamage);
+    if (shieldDamage > 0) this.player.shield -= shieldDamage;
+    const healthDamage = Math.max(0, finalDamage - shieldDamage);
+    this.player.health -= healthDamage;
     if (source.bossId && this.run?.bossTelemetry) {
       this.run.bossTelemetry.damageReceived += finalDamage;
     }
@@ -514,7 +531,14 @@ export const stateMethods = {
     this.moveEntity(this.player, Math.cos(sourceAngle) * 24, Math.sin(sourceAngle) * 24);
     this.camera.shake = 9;
     this.audio.play('playerDamage');
-    this.addFloater(this.player.x, this.player.y - 35, `-${Math.round(finalDamage)}`, '#ff8292');
+    this.addFloater(
+      this.player.x,
+      this.player.y - 35,
+      shieldDamage === finalDamage
+        ? `-${Math.round(shieldDamage)} SHIELD`
+        : `-${Math.round(healthDamage)}${shieldDamage > 0 ? ' HEALTH' : ''}`,
+      shieldDamage === finalDamage ? '#65c9ff' : '#ff8292'
+    );
     this.hooks.onArenaEvent?.({
       type: 'damage_taken',
       tick: Math.round(this.run.elapsed * 1_000),
@@ -660,6 +684,11 @@ export const stateMethods = {
     this.hooks.onHud?.({
       health: this.player.health,
       maxHealth: this.player.maxHealth,
+      shield: this.player.shield || 0,
+      maxShield: this.player.maxShield || 0,
+      minerLevel: this.player.minerLevel || 0,
+      crystalCarryCapacity: this.player.crystalCarryCapacity || 0,
+      crystalDeathRetentionBps: this.player.crystalDeathRetentionBps || 0,
       level: this.player.level,
       xp: this.player.xp,
       nextXp: this.player.nextXp,

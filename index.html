@@ -10,7 +10,7 @@
     <meta name="description" content="MATT Mine is a free-to-play action roguelite on Ronin. Dig, fight, extract, and compete in daily skill-based mines." />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="MATT Mine — Dig. Fight. Extract." />
-    <meta property="og:description" content="One free ranked run every day. Enter the mine, defeat the Guardian, and extract your best score." />
+    <meta property="og:description" content="Practice freely, then bring your Miner NFT into MATT Arena or Pass Mine." />
     <meta property="og:image" content="/assets/ui/matt-mine-hero-reference.png" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="MATT Mine — Dig. Fight. Extract." />
@@ -79,7 +79,7 @@
             <div class="launch-hero-shade"></div>
             <div class="launch-hero-content">
               <div class="launch-live-pill"><span></span> LIVE ON RONIN MAINNET</div>
-              <p class="launch-kicker">THE MINE OPENS EVERY DAY</p>
+              <p class="launch-kicker">THREE LIVE MINES · ONE MINER SYSTEM</p>
               <h1 id="launch-title"><span>MATT MINE</span><small>DIG. FIGHT. EXTRACT.</small></h1>
               <p class="launch-hero-copy">Enter the mine, secure your score,<br />and extract before time runs out.</p>
               <div class="launch-hero-actions">
@@ -88,8 +88,8 @@
                   <small>CHOOSE YOUR NFT MINER FIRST</small>
                 </button>
                 <button class="launch-secondary-cta" type="button" data-launch-action="practice">
-                  <span>ENTER MINES</span>
-                  <small>CHARACTER &rarr; MINE SELECT</small>
+                  <span>PLAY PRACTICE</span>
+                  <small>NO WALLET · NO NFT · NO XP · NO CRYSTALS</small>
                 </button>
               </div>
               <div class="launch-chain-note">
@@ -104,23 +104,24 @@
               </div>
             </div>
 
-            <aside class="launch-daily-summary-card" aria-label="Today's mine status">
+            <aside class="launch-daily-summary-card" aria-label="Live MATT Mine lineup">
               <div class="launch-daily-heading">
                 <div>
-                  <span>TODAY'S MINE</span>
+                  <span>LIVE MINE NETWORK</span>
                   <strong id="launch-date">JUL 25</strong>
                 </div>
                 <b id="launch-live-status">SERVER ONLINE</b>
               </div>
-              <div class="mine-route-map compact-map" role="img" aria-label="Actual top-down preview of today's Free Daily Mine">
-                <canvas data-daily-mine-preview width="520" height="210" aria-hidden="true"></canvas>
+              <div class="launch-daily-stats">
+                <div><span>PRACTICE</span><strong>PUBLIC</strong></div>
+                <div><span>MATT ARENA</span><strong>MINER NFT</strong></div>
+                <div><span>PASS MINE</span><strong>MINER NFT</strong></div>
               </div>
               <div class="launch-daily-stats">
-                <div><span>FREE RUN</span><strong id="launch-free-status">READY</strong></div>
-                <div><span>PASS</span><strong><span id="launch-pass-price">95</span> RON</strong></div>
-                <div><span>PAID RUN</span><strong><span id="launch-run-price">10</span> RON</strong></div>
+                <div><span>MINE PASS</span><strong><span id="launch-pass-price">95</span> RON</strong></div>
+                <div><span>PASS RUN</span><strong><span id="launch-run-price">10</span> RON</strong></div>
               </div>
-              <button type="button" data-launch-action="enter">VIEW RUN SELECT</button>
+              <button type="button" data-launch-action="enter">SELECT MINER + VIEW MINES</button>
               <button class="launch-store-shortcut" type="button" data-open-nugget-shop>
                 <span><b>NUGGET STORE</b><small>Verified packages · Live balance</small></span>
                 <strong>OPEN STORE →</strong>
@@ -135,17 +136,14 @@
               <span></span><h2 id="launch-mine-select-title">CHOOSE YOUR MINE</h2><span></span>
             </div>
             <div class="launch-mine-card-grid">
-              <button class="launch-mine-card launch-daily-card daily" type="button" data-launch-action="daily">
-                <i aria-hidden="true">▦</i><strong>DAILY MINE</strong><small>One ranked run every day</small><b>PLAY FREE</b><em>AVAILABLE DAILY</em>
-              </button>
-              <button class="launch-mine-card pass" type="button" data-launch-action="pass-mine">
-                <i aria-hidden="true">M</i><strong>PASS MINE</strong><small>Premium competitive run</small><b>PLAY NOW</b><em>PASS HOLDERS</em>
+              <button class="launch-mine-card practice" type="button" data-launch-action="practice">
+                <i aria-hidden="true">◎</i><strong>PRACTICE MINE</strong><small>Anyone can play · No XP · No Crystals</small><b>PRACTICE NOW</b><em>ALWAYS OPEN</em>
               </button>
               <button class="launch-mine-card arena" type="button" data-launch-action="arena">
-                <i aria-hidden="true">⚔</i><strong>MATT ARENA</strong><small>10M MATT LAUNCH POOL</small><b>ENTER ARENA</b><em>COMPETITIVE</em>
+                <i aria-hidden="true">⚔</i><strong>MATT ARENA</strong><small>Selected Miner NFT required</small><b>SELECT MINER</b><em>COMPETITIVE</em>
               </button>
-              <button class="launch-mine-card practice" type="button" data-launch-action="practice">
-                <i aria-hidden="true">◎</i><strong>PRACTICE</strong><small>No wallet required</small><b>PRACTICE NOW</b><em>ALWAYS OPEN</em>
+              <button class="launch-mine-card pass" type="button" data-launch-action="pass-mine">
+                <i aria-hidden="true">M</i><strong>PASS MINE</strong><small>Miner NFT + Mine Pass required</small><b>SELECT MINER</b><em>PASS HOLDERS</em>
               </button>
             </div>
             <button class="launch-home-store" type="button" data-open-nugget-shop>
@@ -154,10 +152,10 @@
           </section>
 
           <section class="launch-proof-rail" aria-label="Game highlights">
-            <div><strong>1</strong><span>FREE RANKED RUN<br />EVERY UTC DAY</span></div>
+            <div><strong>3</strong><span>ACTIVE MINES<br />PRACTICE · ARENA · PASS</span></div>
             <div><strong>3</strong><span>WEAPONS TO MASTER<br />PICKAXE · DYNAMITE · BLASTER</span></div>
-            <div><strong>7</strong><span>PROCEDURAL ROOMS<br />ONE DAILY SEED</span></div>
-            <div><strong>0</strong><span>MATT BURNED<br />REWARDS RECYCLE SUPPLY</span></div>
+            <div><strong>5</strong><span>DEPTHS PER MINE<br />ADMIN-BUILT MAPS</span></div>
+            <div><strong>100%</strong><span>SERVER CONTROLLED<br />GAMEPLAY + POINTS</span></div>
           </section>
 
           <section id="launch-gameplay" class="launch-section launch-gameplay-section">
@@ -216,23 +214,23 @@
 
           <section id="launch-economy" class="launch-section launch-economy-section">
             <div class="launch-section-heading centered">
-              <p>ONE GAME · THREE WAYS TO COMPETE</p>
-              <h2>Free to enter.<br /><span>Built to compete.</span></h2>
-              <p class="launch-section-copy">Play the free daily mine, progress through the Mine Pass, or enter the player-funded MATT Daily Arena as many times as you choose.</p>
+              <p>ONE GAME · THREE LIVE MINES</p>
+              <h2>Practice freely.<br /><span>Compete with your Miner.</span></h2>
+              <p class="launch-section-copy">Learn in public Practice, then bring an owned Miner NFT into MATT Arena or the premium Pass Mine.</p>
             </div>
             <div class="launch-tier-grid">
               <article class="launch-tier-card free-tier-card">
-                <div class="tier-topline"><span>FREE TIER</span><b>FOR EVERY MINER</b></div>
+                <div class="tier-topline"><span>PRACTICE MINE</span><b>OPEN TO EVERYONE</b></div>
                 <h3>0 RON</h3>
-                <p class="tier-subtitle">No purchase required</p>
+                <p class="tier-subtitle">No wallet or NFT required</p>
                 <ul>
-                  <li>One ranked run every UTC day</li>
-                  <li>Free weekly leaderboard</li>
-                  <li>Daily quests and streak progress</li>
-                  <li>Unlimited unranked Practice</li>
-                  <li>Eligible for Free-pool MATT rewards</li>
+                  <li>Unlimited public gameplay</li>
+                  <li>Admin-built maps and combat settings</li>
+                  <li>No Miner NFT gate</li>
+                  <li>No XP or MATT Crystals</li>
+                  <li>No ranked leaderboard rewards</li>
                 </ul>
-                <button type="button" data-launch-action="enter">START FREE</button>
+                <button type="button" data-launch-action="practice">START PRACTICE</button>
               </article>
               <article class="launch-tier-card pass-tier-card">
                 <div class="tier-glow"></div>
@@ -242,7 +240,7 @@
                 <ul>
                   <li>Premium Pass Leaderboard</li>
                   <li>Paid ranked runs at <span id="launch-run-price-card">10</span> RON</li>
-                  <li>2× run XP and nuggets in every mine</li>
+                  <li>Configured XP and crystal benefits in rewarded mines</li>
                   <li>2× Pass Leaderboard reward weight</li>
                   <li>Premium Pass XP and reward track</li>
                   <li>Permanent cosmetics and loadouts</li>
@@ -251,7 +249,7 @@
               </article>
               <article class="launch-tier-card arena-tier-card">
                 <div class="tier-glow"></div>
-                <div class="tier-topline"><span>MATT DAILY ARENA</span><b id="launch-arena-state">LOADING</b></div>
+                <div class="tier-topline"><span>MATT ARENA</span><b id="launch-arena-state">LOADING</b></div>
                 <h3 id="launch-arena-entry">MATT ENTRY</h3>
                 <p class="tier-subtitle">Treasury-set daily price · 25K–1M MATT</p>
                 <ul>
@@ -261,7 +259,7 @@
                   <li>Up to 10M MATT Treasury seed</li>
                   <li>No entry-pool ceiling, burn, or house fee</li>
                 </ul>
-                <button type="button" data-launch-action="arena">VIEW DAILY ARENA</button>
+                <button type="button" data-launch-action="arena">VIEW MATT ARENA</button>
               </article>
             </div>
             <div class="launch-flywheel">
@@ -275,7 +273,7 @@
               <b>+</b>
               <div><span>10%</span><small>GAME RESERVE</small></div>
             </div>
-            <p class="launch-economy-note">Zero MATT is burned. Free and Pass rewards remain fixed and performance-based; the Daily Arena pool grows with every entry and has no player-funded ceiling.</p>
+            <p class="launch-economy-note">Zero MATT is burned. Practice never pays rewards; Pass Mine and MATT Arena remain server-verified and Miner-gated.</p>
           </section>
 
           <section id="launch-roadmap" class="launch-section launch-roadmap-section">
@@ -323,11 +321,11 @@
 
           <section class="launch-final-cta">
             <div>
-              <p class="launch-kicker">YOUR DAILY RUN IS WAITING</p>
+              <p class="launch-kicker">YOUR MINER IS WAITING</p>
               <h2>How deep can<br />you go?</h2>
-              <p>Play free. Learn the mine. Put your best score on the board.</p>
+              <p>Practice freely, then select your Miner NFT and choose MATT Arena or Pass Mine.</p>
             </div>
-            <button type="button" data-launch-action="enter"><span>ENTER MATT MINE</span><small>RONIN MAINNET · FREE DAILY RUN</small></button>
+            <button type="button" data-launch-action="enter"><span>SELECT YOUR MINER</span><small>RONIN MAINNET · ARENA + PASS</small></button>
           </section>
 
           <footer class="launch-footer">
@@ -351,7 +349,7 @@
             <div><p class="eyebrow">HOW TO PLAY</p><h1 id="how-to-title"><span>HOW TO PLAY</span></h1><p>ENTER. DIG. EXTRACT.</p></div>
           </header>
           <div class="how-to-steps">
-            <article class="gold"><b>1</b><div><h2>CHOOSE YOUR MINE</h2><p>Daily, Pass, Arena, or unlimited Practice.</p></div><span aria-hidden="true">▦ &nbsp; M &nbsp; ⚔ &nbsp; ◎</span></article>
+            <article class="gold"><b>1</b><div><h2>CHOOSE YOUR MINE</h2><p>Practice Mine, MATT Arena, or Pass Mine.</p></div><span aria-hidden="true">◎ &nbsp; ⚔ &nbsp; M</span></article>
             <article class="cyan"><b>2</b><div><h2>DIG &amp; FIGHT</h2><p>Break ore, clear sealed chambers, collect upgrades, and defeat enemies.</p></div><span aria-hidden="true">⛏</span></article>
             <article class="purple"><b>3</b><div><h2>EXTRACT &amp; SCORE</h2><p>Reach the Lift Station and extract before the mine takes everything.</p></div><span aria-hidden="true">⇧</span></article>
           </div>
@@ -424,11 +422,8 @@
             <div class="mine-briefing-column">
               <div class="menu-mine-overview">
                 <div class="menu-map-heading">
-                  <span><b>ACTUAL FREE DAILY MAP</b><small>7 rooms → beat the boss → return to the lift</small></span>
-                  <em>SAME MAP FOR EVERY RANKED PLAYER</em>
-                </div>
-                <div class="mine-route-map" role="img" aria-label="Actual top-down preview of today's Free Daily Mine">
-                  <canvas data-daily-mine-preview width="1100" height="280" aria-hidden="true"></canvas>
+                  <span><b>THREE LIVE MINES</b><small>Practice · MATT Arena · Pass Mine</small></span>
+                  <em>MAPS + GAMEPLAY CONTROLLED BY ADMIN</em>
                 </div>
               </div>
               <div class="quick-play-guide" aria-label="How to play">
@@ -440,42 +435,34 @@
 
             <div class="lobby-choice-column">
               <div class="lobby-choice-heading">
-                <span>SELECT A LOBBY</span>
-                <small>Practice is always free. Ranked mines save your score.</small>
+                <span>SELECT A MINE</span>
+                <small>Practice is public. Arena and Pass use the Miner NFT selected for this session.</small>
               </div>
-              <div class="run-mode-grid four-lobbies" aria-label="Choose one of four play lobbies">
-                <button id="free-run-button" class="run-mode-card free-run-card">
+              <div class="run-mode-grid four-lobbies three-lobbies" aria-label="Choose one of three live mines">
+                <button id="practice-run-button" class="run-mode-card practice-run-card">
                   <span class="lobby-number">1</span>
-                  <span class="mode-kicker">FREE DAILY MINE</span>
-                  <strong>Play once for free</strong>
-                  <small>One ranked run today. Earn leaderboard rewards.</small>
-                  <span class="lobby-status"><strong id="free-run-status">AVAILABLE</strong><small>Resets 00:00 UTC</small></span>
-                  <b id="free-run-cta">PLAY FREE</b>
+                  <span class="mode-kicker">PRACTICE MINE</span>
+                  <strong>Learn with no risk</strong>
+                  <small>Anyone can play. Admin-authored maps and combat with no permanent rewards.</small>
+                  <span class="lobby-status"><strong>NO XP · NO CRYSTALS</strong><small>No wallet or Miner NFT needed</small></span>
+                  <b>START PRACTICE</b>
+                </button>
+                <button id="arena-button" class="run-mode-card arena-run-card" type="button">
+                  <span class="lobby-number">2</span>
+                  <span class="mode-kicker">MATT ARENA</span>
+                  <strong>Enter with MATT</strong>
+                  <small>Selected Miner NFT required. Your best verified score counts.</small>
+                  <span class="lobby-status"><strong id="arena-menu-pool">—</strong><small>Current prize pool</small></span>
+                  <b id="arena-menu-action">ENTER ARENA</b>
                 </button>
                 <button id="paid-run-button" class="run-mode-card paid-run-card">
-                  <span class="lobby-number">2</span>
+                  <span class="lobby-number">3</span>
                   <span class="mode-kicker">PASS MINE</span>
                   <strong>Use a run credit</strong>
-                  <small>Pass holders compete for the larger weekly pool.</small>
+                  <small>Selected Miner NFT and active Mine Pass required.</small>
                   <span class="lobby-status"><strong id="pass-status">FREE TIER</strong><small id="pass-days">Pass needed</small></span>
                   <span class="lobby-credit"><b id="paid-credit-count">0</b> credits · <small id="paid-daily-status">0 / 10 today</small></span>
                   <b id="paid-run-cta">GET MINE PASS</b>
-                </button>
-                <button id="arena-button" class="run-mode-card arena-run-card" type="button">
-                  <span class="lobby-number">3</span>
-                  <span class="mode-kicker">MATT ARENA</span>
-                  <strong>Enter with MATT</strong>
-                  <small>Unlimited entries. Your best score counts.</small>
-                  <span class="lobby-status"><strong id="arena-menu-pool">—</strong><small>Today's prize pool</small></span>
-                  <b id="arena-menu-action">ENTER ARENA</b>
-                </button>
-                <button id="practice-run-button" class="run-mode-card practice-run-card">
-                  <span class="lobby-number">4</span>
-                  <span class="mode-kicker">PRACTICE MINE</span>
-                  <strong>Learn with no risk</strong>
-                  <small>Free and unlimited. No prizes. Great for learning.</small>
-                  <span class="lobby-status"><strong>ALWAYS OPEN</strong><small>No wallet needed</small></span>
-                  <b>START PRACTICE</b>
                 </button>
               </div>
               <div id="interrupted-nft-practice" class="interrupted-nft-practice" hidden>
@@ -512,47 +499,6 @@
             <small id="wallet-network">WALLETCONNECT · RONIN MAINNET</small>
           </span>
         </button>
-      </section>
-
-      <section id="daily-mine" class="screen mine-briefing-screen" aria-labelledby="daily-mine-title">
-        <div class="panel wide-panel mine-briefing-panel daily-briefing-panel">
-          <button class="close-button" data-close="daily-mine" aria-label="Close">×</button>
-          <header class="mine-briefing-hero">
-            <div>
-              <p class="eyebrow">FREE DAILY RANKED</p>
-              <h2 id="daily-mine-title">Daily Mine</h2>
-              <p>One verified attempt. Every player receives the same daily mine.</p>
-              <span id="daily-entry-status" class="dashboard-live-pill">CHECKING LIVE STATUS</span>
-            </div>
-            <div class="mine-briefing-art" aria-hidden="true"></div>
-          </header>
-          <div class="mine-briefing-grid">
-            <article class="mine-route-card">
-              <div class="section-heading-row"><h3>TODAY'S ROUTE</h3><span>SERVER-VERIFIED SCORE</span></div>
-              <div class="mine-route-map" role="img" aria-label="Actual top-down preview of today's Free Daily Mine">
-                <canvas data-daily-mine-preview width="1100" height="300" aria-hidden="true"></canvas>
-              </div>
-              <div class="route-legend"><span>CACHE</span><span>FIGHT</span><span>ELITE</span><span>VAULT</span><span>GUARDIAN</span><span>EXTRACT</span></div>
-            </article>
-            <aside class="mine-entry-card">
-              <h3>YOUR DAILY RUN</h3>
-              <div class="dashboard-metrics three">
-                <div><span>ATTEMPT</span><strong id="daily-attempt-value">—</strong></div>
-                <div><span>WEEKLY BEST</span><strong id="daily-best-value">0</strong></div>
-                <div><span>BANKED</span><strong id="daily-nugget-value">0</strong></div>
-              </div>
-              <ul class="mine-rule-list">
-                <li>One ranked attempt per UTC day</li>
-                <li>Identical seed and rules for every player</li>
-                <li>Score accepted only after server verification</li>
-                <li>Extract to secure the complete run score</li>
-              </ul>
-              <button id="start-daily-run-button" class="primary-button gold-button">START DAILY RUN</button>
-              <button id="daily-leaderboard-button" class="secondary-button">VIEW FREE LEADERBOARD</button>
-              <button id="daily-back-button" class="text-button" type="button">← BACK TO MINES</button>
-            </aside>
-          </div>
-        </div>
       </section>
 
       <section id="pass-mine" class="screen mine-briefing-screen pass-mine-screen" aria-labelledby="pass-mine-title">
@@ -650,8 +596,6 @@
                   </div>
                 </article>
                 <div class="run-mode-grid expansion-lobbies" aria-label="Additional competitive modes">
-                  <button id="weekly-run-button" class="run-mode-card" hidden><span class="mode-kicker">SEVEN-DAY MINE</span><strong>One stage each UTC day</strong><small>Same seed, character, and immutable rules for every player.</small><b>PLAY TODAY'S STAGE</b></button>
-                  <button id="endless-run-button" class="run-mode-card" hidden><span class="mode-kicker">ENDLESS MINE</span><strong>Go as deep as you can</strong><small>Depth, score, bosses, then survival time decide rank.</small><b>START ENDLESS</b></button>
                   <button id="beta-run-button" class="run-mode-card" hidden><span class="mode-kicker">BETA TESTING</span><strong>Developer test mine</strong><small>No nuggets, MATT, Pass XP, achievements, or permanent progress.</small><b>ENTER BETA</b></button>
                 </div>
               </section>
@@ -704,7 +648,7 @@
               <ul>
                 <li>Premium Pass Leaderboard</li>
                 <li>Paid ranked runs at <b id="paid-run-price-copy">10 RON</b></li>
-                <li>2× run XP and nuggets in every mine</li>
+                <li>Configured XP and crystal benefits in rewarded mines</li>
                 <li>2× Pass Leaderboard reward weight</li>
                 <li>Premium pass XP and rewards</li>
                 <li>Permanent cosmetics and loadouts</li>
@@ -716,7 +660,7 @@
             <div class="label-row"><span>PASS LEVEL <strong id="pass-level">1</strong></span><span id="pass-xp-text">0 XP</span></div>
             <div class="bar"><div id="pass-xp-fill" class="bar-fill pass-xp-fill"></div></div>
             <div id="pass-track" class="pass-track"></div>
-            <p class="preview-note">Active Pass holders earn 2× run XP and nuggets in Practice, MATT Arena, Daily, Pass, and Seven-Day mines. Pass-track XP is 25 for Daily and 100 for each completed Pass or verified MATT Arena run.</p>
+            <p class="preview-note">Practice always remains rewardless. MATT Arena and Pass Mine use the selected Miner NFT, with all XP, crystal, score, and gameplay modifiers controlled by the server Admin.</p>
             <button id="manage-cosmetics-button" class="secondary-button pass-cosmetics-button">MANAGE COSMETICS &amp; REWARDS</button>
           </div>
           <div class="paid-run-purchase-card">
@@ -749,13 +693,13 @@
           <div class="arena-heading">
             <div>
               <p class="eyebrow">DAILY PLAYER-FUNDED COMPETITION</p>
-              <h2 id="arena-title">MATT Daily Arena</h2>
+              <h2 id="arena-title">MATT Arena</h2>
               <p>Pay the Treasury-set MATT entry, mine the identical daily challenge, and improve your score with unlimited entries. Only your best verified score holds your leaderboard position.</p>
             </div>
             <div id="arena-state-badge" class="arena-state-badge">LOADING</div>
           </div>
 
-          <div class="arena-pool-grid" aria-label="Daily Arena pool">
+          <div class="arena-pool-grid" aria-label="MATT Arena pool">
             <article>
               <span>PLAYER ENTRY POOL</span>
               <strong id="arena-entry-pool">—</strong>
@@ -792,7 +736,7 @@
               <strong id="arena-countdown">--:--:--</strong>
               <small id="arena-day-label">MATT entry closes 23:35 UTC; official runs close at 00:00 UTC.</small>
               <div class="arena-rules">
-                <span>Unlimited official entries</span>
+                <span>Unlimited entries</span>
                 <span>One leaderboard place per wallet</span>
                 <span>Server-verified deterministic mine</span>
                 <span>Canceled days return every entry</span>
@@ -825,9 +769,8 @@
           <button class="close-button" data-close="leaderboards" aria-label="Close">×</button>
           <header class="leaderboard-page-hero"><div><p class="eyebrow">COMPETE · EXTRACT · CLIMB</p><h2 id="leaderboards-title"><span>MATT</span> LEADERBOARDS</h2></div></header>
           <div class="leaderboard-tabs">
-            <button class="leaderboard-tab active" data-board="free">FREE LEADERBOARD</button>
+            <button class="leaderboard-tab arena-leaderboard-tab active" data-board="arena">MATT ARENA <span>· CURRENT POOL</span></button>
             <button class="leaderboard-tab" data-board="paid">PASS LEADERBOARD</button>
-            <button class="leaderboard-tab arena-leaderboard-tab" data-board="arena">MATT ARENA <span>· CURRENT DAILY POOL</span></button>
           </div>
           <div id="leaderboard-podium" class="leaderboard-podium" aria-label="Top three miners"></div>
           <div class="leaderboard-summary">
@@ -1001,6 +944,10 @@
           <div class="health-block">
             <div class="label-row"><span>HEALTH</span><strong id="health-text">100 / 100</strong></div>
             <div class="bar"><div id="health-fill" class="bar-fill health-fill"></div></div>
+            <div id="shield-row" class="shield-row" hidden>
+              <div class="label-row"><span>ARMOR SHIELD</span><strong id="shield-text">0 / 0</strong></div>
+              <div class="bar"><div id="shield-fill" class="bar-fill shield-fill"></div></div>
+            </div>
           </div>
           <div class="depth-badge">DEPTH <strong id="depth-text">1</strong></div>
           <div class="loot-block">

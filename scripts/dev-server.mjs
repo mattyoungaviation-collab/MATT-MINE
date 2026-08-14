@@ -34,6 +34,8 @@ import { PaidCompetitionEligibilityPolicy } from '../server/eligibility.js';
 import { NftMetadataService } from '../server/nft-metadata-service.js';
 import { createSaigonChestKeeperFromEnvironment } from '../server/saigon-chest-keeper.js';
 import { createNftGameplayServiceFromEnvironment } from '../server/nft-gameplay-service.js';
+import { createNftV2AdminServiceFromEnvironment } from '../server/nft-v2-admin-service.js';
+import { nftRpcUrlFromEnvironment } from '../server/nft-rpc-url.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const packageMetadata = JSON.parse(
@@ -214,13 +216,14 @@ const advertisementVerifier =
       })
     : null;
 const nftMetadataEnabled = process.env.MATT_MINE_NFT_ENABLED === 'true';
+const nftRpcUrl = nftRpcUrlFromEnvironment();
 const nftMetadataService = nftMetadataEnabled
   ? await new NftMetadataService({
       enabled: true,
       root,
       publicOrigin: process.env.MATT_MINE_NFT_PUBLIC_BASE_URL || process.env.MATT_MINE_PUBLIC_ORIGIN,
-      chainId: Number(process.env.MATT_MINE_NFT_CHAIN_ID || 202601),
-      rpcUrl: process.env.MATT_MINE_NFT_RPC_URL || 'https://saigon-testnet.roninchain.com/rpc',
+      chainId: Number(process.env.MATT_MINE_NFT_CHAIN_ID || 2020),
+      rpcUrl: nftRpcUrl,
       timeoutMs: Number(process.env.MATT_MINE_RPC_TIMEOUT_MS || 10_000),
       addresses: {
         miner: process.env.MATT_MINE_NFT_MINER_ADDRESS,
@@ -229,8 +232,19 @@ const nftMetadataService = nftMetadataEnabled
       }
     }).init()
   : null;
-const nftGameplayService = createNftGameplayServiceFromEnvironment(nftMetadataService);
-if (nftGameplayService) await nftGameplayService.init();
+const nftGameplayService = createNftGameplayServiceFromEnvironment(nftMetadataService, process.env, { rpcUrl: nftRpcUrl });
+if (nftGameplayService) {
+  const savedProtocol = (await database.read()).nftV2Protocol || {};
+  const savedVersions = savedProtocol.mapVersions || {};
+  if (savedProtocol.updatedAt > 0) {
+    nftGameplayService.clearMapVersion('arena');
+    nftGameplayService.clearMapVersion('paid');
+  }
+  for (const [mode, versionId] of Object.entries(savedVersions)) nftGameplayService.setMapVersion(mode, versionId);
+  await nftGameplayService.init();
+}
+const nftV2AdminService = createNftV2AdminServiceFromEnvironment(nftGameplayService, process.env, { rpcUrl: nftRpcUrl });
+if (nftV2AdminService) await nftV2AdminService.init();
 const saigonChestKeeper = createSaigonChestKeeperFromEnvironment();
 if (saigonChestKeeper) await saigonChestKeeper.init();
 const service = new CompleteProductionMattMineService(database, {
@@ -259,6 +273,7 @@ const service = new CompleteProductionMattMineService(database, {
   competitiveReplayValidator,
   nftMetadataService,
   nftGameplayService,
+  nftV2AdminService,
   ...(revivePaymentVerifier && competitiveReplayValidator ? {
     revivePaymentVerifier,
     reviveEligibilityValidator: {
@@ -284,7 +299,8 @@ server.listen(port, '0.0.0.0', () => {
   console.log(`Paid revive verifier: ${revivePaymentVerifier ? 'EXACT RON TRANSFER ENABLED' : 'disabled'}`);
   console.log(`Advertisement verifier: ${advertisementVerifier ? `SIGNED ${advertisementProvider}` : 'disabled'}`);
   console.log(`NFT metadata: ${nftMetadataService ? `ENABLED (chain ${nftMetadataService.chainId})` : 'disabled'}`);
-  console.log(`NFT gameplay: ${nftGameplayService ? 'ENABLED (Saigon vertical slice)' : 'disabled'}`);
+  console.log(`NFT gameplay: ${nftGameplayService ? 'ENABLED (Ronin V2)' : 'disabled'}`);
+  console.log(`NFT V2 Admin controls: ${nftV2AdminService ? 'ENABLED' : 'disabled'}`);
   console.log(`Saigon chest keeper: ${saigonChestKeeper ? 'ENABLED' : 'disabled'}`);
   console.log(`Server data: ${database.kind}${databaseUrl ? '' : ` (${dataFile})`}`);
   console.log(`Nugget economy data: ${nuggetEconomyStore.kind}${databaseUrl ? '' : ` (${nuggetEconomyFile})`}`);

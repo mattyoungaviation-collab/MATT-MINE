@@ -1,10 +1,33 @@
 # MATT Mine contracts
 
+## NFT V2 Ronin Mainnet
+
+NFT V2 is a separate fourteen-contract deployment. Its reviewed configuration,
+paused deployment, source verification, read-only verification, and later
+activation are intentionally split into separate commands. Do not use the
+legacy `ronin.json` workflow for NFT V2.
+
+Start with the complete operator runbook:
+
+- `docs/NFT_V2_MAINNET_DEPLOYMENT.md`
+- `docs/NFT_V2_RELEASE_READINESS.md`
+
+The first deployment-day command is:
+
+```powershell
+powershell.exe -NoExit -ExecutionPolicy Bypass -File ".\contracts\scripts\run-nft-v2-mainnet-preflight.ps1"
+```
+
+It is read-only. The deployment wrapper remains separately confirmation-gated,
+nonce-locked, restart-safe, and deploys every contract paused.
+
 This directory contains the non-upgradeable Ronin Mainnet contracts for the MATT Mine pass, paid runs, swaps, and weekly claims.
 
 The namespaced `src/nft` directory additionally contains the paused-by-default MATT Mine NFT v1 suite for Miners, Equipment, loadouts, chests, run settlement, Crystal redemption, and a dedicated VRF adapter. Its guarded deployment procedure is documented in `docs/NFT_V1_DEPLOYMENT.md`.
 
-No CREATE2 factory, vanity salt, proxy, burn, or replacement MATT token is used. Every deployment is a normal contract creation from a temporary low-balance deployer and every source is submitted to the current Sourcify v2 service for Ronin Mainnet.
+The separate `src/nftv2` namespace contains the approved clean V2 redesign. Miner, Equipment, Loadout custody, and the 48-hour Upgrade Timelock are non-upgradeable. Settlement, Crystal Bank, Chest, and Passive Rewards are UUPS modules whose upgrades can only be executed by that timelock. V2 rules and deployment gates are documented in `docs/NFT_V2_SPEC.md`, `docs/NFT_V2_ARCHITECTURE.md`, and `docs/NFT_V2_DEPLOYMENT.md`.
+
+The legacy Mainnet suite uses normal contract creation and no replacement MATT token. V2 uses named ERC-1967 proxies only for Settlement, Crystal Bank, Chest, and Passive Rewards; Miner ownership, Equipment ownership, Loadout custody, and the Upgrade Timelock remain non-upgradeable. Every production source must be submitted to Ronin's current verification service.
 
 ## Contracts
 

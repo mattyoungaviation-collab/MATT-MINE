@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 
 import { CONFIG } from '../src/game/config.js';
 import {
+  ADMIN_GAME_TUNING_SCHEMA,
   GAME_TUNING_SCHEMA,
   defaultGameTuning,
-  normalizeGameTuning
+  normalizeGameTuning,
+  tuningSchemaForLobby
 } from '../src/game/tuning.js';
 import { normalizeServerState } from '../server/state.js';
 import { MattMineGame } from '../src/game/GameV4.js';
@@ -39,12 +41,13 @@ function closeTo(actual, expected, epsilon = 1e-9) {
   assert.ok(Math.abs(actual - expected) <= epsilon, `${actual} should be close to ${expected}`);
 }
 
-test('command-center tuning exposes the requested Blaster, armor, beta, and per-depth spawn controls', () => {
+test('runtime normalization preserves legacy controls while Admin exposes only controls with live ownership', () => {
   const ids = new Set(GAME_TUNING_SCHEMA.map((entry) => entry.id));
   for (const id of [
     'blasterFocusedCoreBonus',
     'blasterVolleyTwoDamageMultiplier',
     'blasterVolleyThreeDamageMultiplier',
+    'dynamiteDamageMultiplier',
     'armorUpgradePerLevel',
     'armorMaximum',
     'ignorePermanentUpgrades',
@@ -56,6 +59,34 @@ test('command-center tuning exposes the requested Blaster, armor, beta, and per-
   ]) assert.equal(ids.has(id), true, `${id} should be available in admin tuning`);
   assert.equal(ids.has('bossReinforcementCount'), false, 'obsolete no-op boss control must not be shown');
   assert.equal(ids.has('bossReinforcementInterval'), false, 'obsolete no-op boss control must not be shown');
+  for (const id of [
+    'bossPhase1HealthThreshold',
+    'bossPhase2SlamProjectileSpeed',
+    'bossPhase2SlamProjectileCount',
+    'bossPhase2SlamSpread',
+    'bossPhase2RadialSpread',
+    'bossPhase2SummonDamage',
+    'bossPhase2SummonProjectileSpeed',
+    'bossPhase2SummonSpread',
+    'bossPhase2SummonRange'
+  ]) assert.equal(ids.has(id), false, `${id} is not consumed by Guardian gameplay`);
+
+  const adminIds = new Set(ADMIN_GAME_TUNING_SCHEMA.map((entry) => entry.id));
+  for (const id of [
+    'playerMaxHealth',
+    'ignorePermanentUpgrades',
+    'usePerDepthRoomSpawns',
+    'depth2CombatEnemies',
+    'depth5GuardianBosses'
+  ]) assert.equal(adminIds.has(id), false, `${id} is owned by Competition Studio`);
+  assert.deepEqual(
+    tuningSchemaForLobby('paid').find((entry) => entry.id === 'playerBaseDamage'),
+    undefined,
+    'V2 Miner Pickaxe Attack owns the Pass base damage'
+  );
+  assert.equal(tuningSchemaForLobby('practice').some((entry) => entry.id === 'playerBaseDamage'), true);
+  assert.equal(tuningSchemaForLobby('arena').some((entry) => entry.id === 'bossProjectileSpeed'), true);
+  assert.equal(tuningSchemaForLobby('paid').some((entry) => entry.id === 'bossProjectileSpeed'), false);
 
   const presets = defaultGameTuning();
   assert.equal(presets.free.blasterDamageMultiplier, .60);
@@ -123,6 +154,27 @@ test('Focused Core is 10 percent and split volleys deal 66 and 60 percent per pr
   game.pendingUpgradeIds = ['blasterpower'];
   game.chooseRunUpgrade('blasterpower');
   closeTo(game.player.blasterDamageScale, beforeCore * 1.10);
+});
+
+test('Admin point modifiers change the authoritative in-game score calculation', () => {
+  const tuning = emptySpawnPlan({
+    ...normalizeGameTuning().practice,
+    scoreMultiplier: 2,
+    depthScoreMultiplier: 1.5,
+    killPointValue: 17,
+    xpMultiplier: 2
+  });
+  const game = gameFor(tuning, defaultProfile(), 'practice');
+  game.run.depth = 3;
+  game.run.rawNuggets = 100;
+  assert.equal(game.projectedPayout(), 800);
+
+  game.player.xp = 0;
+  game.player.nextXp = 1_000;
+  game.killEnemy({ id: 99, isBoss: false, x: game.player.x, y: game.player.y, radius: 10, xp: 9 });
+  assert.equal(game.run.rawNuggets, 117);
+  assert.equal(game.player.xp, 18);
+  assert.equal(game.projectedPayout(), 936);
 });
 
 test('beta toggles provide a true new-player baseline without deleting saved progression', () => {

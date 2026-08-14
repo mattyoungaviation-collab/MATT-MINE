@@ -1,8 +1,14 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { getAddress, verifyMessage } from 'viem';
 import { META_UPGRADES, metaUpgradeCost } from '../src/game/config.js';
-import { GAMEPLAY_LOBBIES, GAME_TUNING_SCHEMA, normalizeTuningPatch } from '../src/game/tuning.js';
+import {
+  ADMIN_GAME_TUNING_SCHEMA,
+  ACTIVE_GAMEPLAY_LOBBIES,
+  normalizeTuningPatch,
+  tuningSettingAppliesToLobby
+} from '../src/game/tuning.js';
 import { normalizeKeybindings } from '../src/game/keybindings.js';
+import { normalizeControllerProfile } from '../src/game/expansionConfig.js';
 import { passLevel, utcDayKey, utcWeekKey } from '../src/game/economy.js';
 import {
   COSMETIC_SLOTS,
@@ -18,12 +24,12 @@ import {
   MIN_RANKED_RUN_WINDOW_MS,
   RONIN_CHAINS,
   RUN_TTL_MS,
-  PRACTICE_CLAIM_TTL_MS,
   SERVER_RUN_MODES,
   SESSION_TTL_MS
 } from './constants.js';
 import { buildSignInMessage, normalizeOrigin } from './auth-message.js';
 import { ApiError, assertApi } from './errors.js';
+import { PRACTICE_PLAY_POLICY } from './nft-play-policy.js';
 import { validateAvatarDataUrl, validateUsername } from './identity.js';
 import { MATT_MINE_LAUNCH_PRICES } from './payment-verifier.js';
 import { isTransientPostgresError } from './postgres-resilience.js';
@@ -49,7 +55,8 @@ import {
   weeklyLeaderboard
 } from './competition-engine.js';
 import {
-  COMPETITION_SLOTS,
+  ACTIVE_COMPETITION_SLOTS as COMPETITION_SLOTS,
+  ACTIVE_MINE_IDS,
   competitionSlotForMode,
   normalizeCompetitionDraft,
   resolveCompetitionSnapshot,
@@ -118,6 +125,7 @@ export class MattMineService {
       realPaymentsEnabled: this.mainnetTransactionsEnabled,
       mattClaimsEnabled: Boolean(this.rewardManager),
       mainnetTransactionsEnabled: this.mainnetTransactionsEnabled,
+      practice: PRACTICE_PLAY_POLICY,
       arena: this.arenaService
         ? this.arenaService.publicConfig()
         : { enabled: false },
@@ -265,7 +273,7 @@ export class MattMineService {
       const current = state.challenges[nonce];
       assertApi(current && current.expiresAt > timestamp, 401, 'challenge_used', 'The sign-in challenge was already used.');
       delete state.challenges[nonce];
-      if (!state.wallets[normalizedAddress]) state.wallets[normalizedAddress] = defaultWalletState(normalizedAddress, timestamp);
+      if (!state.wallets[normalizedAddress]) state.wallets[normalizedAddress] = walletWithServerDefaults(state, normalizedAddress, timestamp);
       state.sessions[tokenHash] = {
         tokenHash,
         address: normalizedAddress,
@@ -757,6 +765,9 @@ export class MattMineService {
         'Select an enabled character owned by this wallet.'
       );
       const baseTuning = structuredClone(state.gameTuning[normalizedMode] || state.gameTuning.practice);
+      if (normalizedMode === SERVER_RUN_MODES.PRACTICE) {
+        baseTuning.practicePolicy = { ...PRACTICE_PLAY_POLICY };
+      }
       // Pin the authoritative profile used when the run is issued. This keeps
       // browser gameplay and deterministic replay aligned after Admin changes
       // a logged-in player's permanent ranks.
@@ -902,9 +913,12 @@ export class MattMineService {
       run.status = 'finished';
       run.finishedAt = timestamp;
       run.result = result;
-      let practiceClaim = null;
-      if (run.mode === SERVER_RUN_MODES.PRACTICE) {
-        practiceClaim = upsertPracticeClaim(wallet, run, result, timestamp);
+      const practiceClaim = null;
+      if (run.mode === SERVER_RUN_MODES.PRACTICE && wallet.practiceClaims?.[runId]) {
+        // Keep the public Practice lane permanently rewardless. Historical
+        // claims can still be resolved through their original records, but a
+        // newly finished Practice run can never create one.
+        delete wallet.practiceClaims[runId];
       } else if ([SERVER_RUN_MODES.FREE, SERVER_RUN_MODES.PAID].includes(run.mode)) {
         const _ledgerUpdate = applyNuggetLedgerDelta(wallet, result.banked, {
           type: NUGGET_LEDGER_TYPES.RUN_EXTRACTION,
@@ -1153,7 +1167,7 @@ export class MattMineService {
       : await this.database.read();
     const snapshot = resolveCompetitionSnapshot(state.competitionStudio, definition.id, timestamp);
     let leaderboard = null;
-    if (definition.id === 'daily' || definition.id === 'pass') {
+    if (definition.id === 'pass') {
       const week = normalizeWeekKey(requestedPeriod, utcWeekKey(timestamp));
       leaderboard = await this.leaderboardFor(definition.mode, week, '0x0000000000000000000000000000000000000000');
     } else if (definition.id === 'arena' && this.arenaService) {
@@ -1161,21 +1175,6 @@ export class MattMineService {
         await this.arenaLeaderboard(requestedPeriod),
         state
       );
-    } else if (definition.id === 'weekly') {
-      const week = normalizeWeekKey(requestedPeriod, utcWeekKey(timestamp));
-      const rows = weeklyLeaderboard(state.weeklyCompetition, week);
-      leaderboard = {
-        mode: 'weekly',
-        week,
-        finalized: week !== utcWeekKey(timestamp),
-        participantCount: rows.length,
-        rows: rows.slice(0, 100).map((row) => ({
-          ...row,
-          walletId: state.wallets[row.address]?.identity?.name || abbreviateAddress(row.address),
-          identity: publicIdentity(state.wallets[row.address]),
-          appearance: publicLeaderboardAppearance(state.wallets[row.address])
-        }))
-      };
     }
     return {
       slot: publicCompetitionSlot(definition, snapshot, state.operations),
@@ -1377,7 +1376,7 @@ export class MattMineService {
     const timestamp = this.now();
     const runs = Object.values(state.runs);
     const arenaActiveRuns = await Promise.resolve(this.arenaService?.adminActiveRuns?.()).catch(() => []) || [];
-    const mineCards = ['practice', 'arena', 'daily', 'pass', 'weekly'].map((mine) => {
+    const mineCards = ACTIVE_MINE_IDS.map((mine) => {
       const mineRuns = runs.filter((run) => mineForRunMode(run.mode) === mine);
       const payments = mine === 'pass'
         ? Object.values(state.paidEntitlements)
@@ -1460,7 +1459,7 @@ export class MattMineService {
     const normalizedReason = normalizeAdminReason(reason);
     const timestamp = this.now();
     return this.database.transact((state) => {
-      if (!state.wallets[normalizedAddress]) state.wallets[normalizedAddress] = defaultWalletState(normalizedAddress, timestamp);
+      if (!state.wallets[normalizedAddress]) state.wallets[normalizedAddress] = walletWithServerDefaults(state, normalizedAddress, timestamp);
       state.wallets[normalizedAddress].suspended = suspended;
       state.wallets[normalizedAddress].updatedAt = timestamp;
       addAudit(state, 'SERVER_ADMIN', suspended ? 'WALLET_SUSPENDED' : 'WALLET_RESTORED', `${normalizedAddress}: ${normalizedReason}`, timestamp);
@@ -1560,21 +1559,24 @@ export class MattMineService {
     this.assertAdminKey(adminKey);
     const state = await this.database.read();
     return {
-      lobbies: GAMEPLAY_LOBBIES,
-      schema: GAME_TUNING_SCHEMA,
-      presets: structuredClone(state.gameTuning)
+      lobbies: ACTIVE_GAMEPLAY_LOBBIES,
+      schema: ADMIN_GAME_TUNING_SCHEMA,
+      presets: Object.fromEntries(ACTIVE_GAMEPLAY_LOBBIES.map((lobby) => [
+        lobby,
+        structuredClone(state.gameTuning[lobby])
+      ]))
     };
   }
 
   async publicGameTuning(lobby) {
-    assertApi(GAMEPLAY_LOBBIES.includes(lobby), 404, 'tuning_lobby_unknown', 'Unknown gameplay lobby.');
+    assertApi(ACTIVE_GAMEPLAY_LOBBIES.includes(lobby), 404, 'tuning_lobby_unknown', 'Choose Practice Mine, MATT Arena, or Pass Mine.');
     const state = await this.database.read();
     return { lobby, preset: structuredClone(state.gameTuning[lobby]) };
   }
 
   async updateAdminGameTuning(adminKey, lobby, input, reason) {
     this.assertAdminKey(adminKey);
-    assertApi(GAMEPLAY_LOBBIES.includes(lobby), 404, 'tuning_lobby_unknown', 'Unknown gameplay lobby.');
+    assertApi(ACTIVE_GAMEPLAY_LOBBIES.includes(lobby), 404, 'tuning_lobby_unknown', 'Choose Practice Mine, MATT Arena, or Pass Mine.');
     const normalizedReason = normalizeAdminReason(reason);
     const snapshot = await this.database.read();
     let patch;
@@ -1584,6 +1586,13 @@ export class MattMineService {
       throw new ApiError(422, 'tuning_invalid', error.message);
     }
     assertApi(Object.keys(patch).length > 0, 400, 'tuning_patch_empty', 'Change at least one setting.');
+    const unavailable = Object.keys(patch).filter((id) => !tuningSettingAppliesToLobby(id, lobby));
+    assertApi(
+      unavailable.length === 0,
+      422,
+      'tuning_setting_not_applicable',
+      `${unavailable.join(', ')} cannot affect ${lobby}. Use Competition Studio or the selected Miner NFT trait instead.`
+    );
     const timestamp = this.now();
     return this.database.transact((state) => {
       const before = state.gameTuning[lobby];
@@ -1673,14 +1682,15 @@ export class MattMineService {
         }
       }
       next.mines ||= {};
-      if (Object.hasOwn(patch, 'freeRankedPaused')) next.mines.daily.entriesPaused = patch.freeRankedPaused;
+      if (Object.hasOwn(patch, 'freeRankedPaused') && next.mines.daily) {
+        next.mines.daily.entriesPaused = patch.freeRankedPaused;
+      }
       if (Object.hasOwn(patch, 'passRankedPaused')) next.mines.pass.entriesPaused = patch.passRankedPaused;
       if (Object.hasOwn(patch, 'purchasesPaused')) {
-        next.mines.practice.paymentsPaused = patch.purchasesPaused;
         next.mines.pass.paymentsPaused = patch.purchasesPaused;
       }
       if (Object.hasOwn(patch, 'claimsPaused')) {
-        next.mines.daily.rewardsPaused = patch.claimsPaused;
+        if (next.mines.daily) next.mines.daily.rewardsPaused = patch.claimsPaused;
         next.mines.pass.rewardsPaused = patch.claimsPaused;
       }
       next.updatedAt = timestamp;
@@ -1695,7 +1705,7 @@ export class MattMineService {
   async updateMineOperations(adminKey, mine, patch, reason) {
     this.assertAdminKey(adminKey);
     const normalizedMine = String(mine || '');
-    assertApi(['practice', 'arena', 'daily', 'pass', 'weekly'].includes(normalizedMine), 404, 'mine_operation_unknown', 'Choose a playable mine.');
+    assertApi(ACTIVE_MINE_IDS.includes(normalizedMine), 404, 'mine_operation_unknown', 'Choose Practice Mine, MATT Arena, or Pass Mine.');
     assertApi(patch && typeof patch === 'object' && !Array.isArray(patch), 400, 'mine_operations_patch_invalid', 'Mine control changes must be an object.');
     const allowed = new Set(['entriesPaused', 'resultsPaused', 'paymentsPaused', 'rewardsPaused']);
     assertApi(Object.keys(patch).length > 0, 400, 'mine_operations_patch_empty', 'Choose at least one mine control.');
@@ -1719,9 +1729,6 @@ export class MattMineService {
         updatedBy: 'SERVER_ADMIN'
       };
       state.operations.mines[normalizedMine] = next;
-      if (normalizedMine === 'daily' && Object.hasOwn(patch, 'entriesPaused')) {
-        state.operations.freeRankedPaused = patch.entriesPaused;
-      }
       if (normalizedMine === 'pass' && Object.hasOwn(patch, 'entriesPaused')) {
         state.operations.passRankedPaused = patch.entriesPaused;
       }
@@ -1744,7 +1751,7 @@ export class MattMineService {
   async adminTerminateMineRuns(adminKey, mine, reason) {
     this.assertAdminKey(adminKey);
     const normalizedMine = String(mine || '');
-    assertApi(['practice', 'arena', 'daily', 'pass', 'weekly'].includes(normalizedMine), 404, 'mine_operation_unknown', 'Choose a playable mine.');
+    assertApi(ACTIVE_MINE_IDS.includes(normalizedMine), 404, 'mine_operation_unknown', 'Choose Practice Mine, MATT Arena, or Pass Mine.');
     const normalizedReason = normalizeAdminReason(reason);
     const timestamp = this.now();
     const arenaResult = normalizedMine === 'arena' && this.arenaService?.adminExpireActiveRuns
@@ -2880,11 +2887,9 @@ function appendCompetitionSnapshotId(snapshotIds, slotId, snapshotId) {
 
 function mineOperationCapabilities(mine) {
   return {
-    practice: ['entries', 'results', 'payments', 'rewards'],
+    practice: ['entries', 'results'],
     arena: ['entries', 'results', 'payments', 'rewards'],
-    daily: ['entries', 'results', 'rewards'],
-    pass: ['entries', 'results', 'payments', 'rewards'],
-    weekly: ['entries', 'results']
+    pass: ['entries', 'results', 'payments', 'rewards']
   }[mine] || [];
 }
 
@@ -2948,6 +2953,17 @@ function requireWallet(state, address) {
   return wallet;
 }
 
+function walletWithServerDefaults(state, address, timestamp) {
+  const wallet = defaultWalletState(address, timestamp);
+  const settings = state.expansionConfig?.settings || {};
+  wallet.expansion.controller = normalizeControllerProfile({
+    deadZone: settings.controllerDeadZone,
+    aimSensitivity: settings.controllerAimSensitivity,
+    vibration: settings.controllerVibration
+  });
+  return wallet;
+}
+
 function assertIdentityReady(wallet) {
   assertApi(
     Boolean(wallet?.identity?.name),
@@ -2996,35 +3012,6 @@ function safeTokenEqual(left, right) {
   const leftBuffer = Buffer.from(String(left));
   const rightBuffer = Buffer.from(String(right));
   return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
-}
-
-function upsertPracticeClaim(wallet, run, result, timestamp) {
-  const runId = String(run.id || run.runId || '').slice(0, 120);
-  const projectedNuggets = safeInteger(result.projected, 0, true);
-  const createdAt = safeInteger(timestamp, Date.now());
-  const existing = wallet.practiceClaims?.[runId];
-  if (existing) {
-    existing.projectedNuggets = projectedNuggets;
-    existing.status = existing.status === 'discarded' ? 'discarded' : existing.status || 'pending';
-    if (!existing.createdAt) existing.createdAt = createdAt;
-    if (!existing.expiresAt) existing.expiresAt = createdAt + PRACTICE_CLAIM_TTL_MS;
-    return {
-      ...existing,
-      runId
-    };
-  }
-  const claim = {
-    runId,
-    status: 'pending',
-    createdAt,
-    expiresAt: createdAt + PRACTICE_CLAIM_TTL_MS,
-    projectedNuggets,
-    settledAt: 0,
-    transactionHash: ''
-  };
-  wallet.practiceClaims ||= {};
-  wallet.practiceClaims[runId] = claim;
-  return { ...claim };
 }
 
 function findPracticeClaimByTransactionHash(practiceClaims, transactionHash) {

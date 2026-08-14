@@ -396,20 +396,19 @@ test('Arena screen promises the locked economic rules without test-token copy', 
   assert.doesNotMatch(html, /TEST MATT/i);
 });
 
-test('production run selection has four clear lobbies, a full mine map, and official Ronin branding', () => {
+test('production run selection exposes exactly three live mines with official Ronin branding', () => {
   const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const css = fs.readFileSync(new URL('../src/production.css', import.meta.url), 'utf8');
   const roninLogo = fs.statSync(new URL('../assets/ronin-mark-official.png', import.meta.url));
 
-  assert.match(html, /Choose one of four play lobbies/i);
-  assert.match(html, /FREE DAILY MINE/);
+  assert.match(html, /Choose one of three live mines/i);
   assert.match(html, /PASS MINE/);
   assert.match(html, /MATT ARENA/);
   assert.match(html, /PRACTICE MINE/);
-  assert.equal((html.match(/class="lobby-number"/g) || []).length, 4);
-  assert.match(html, /ACTUAL FREE DAILY MAP/);
-  assert.match(html, /7 rooms → beat the boss → return to the lift/);
-  assert.equal((html.match(/data-daily-mine-preview/g) || []).length, 3);
+  assert.equal((html.match(/class="lobby-number"/g) || []).length, 3);
+  assert.match(html, /THREE LIVE MINES/);
+  assert.equal((html.match(/data-daily-mine-preview/g) || []).length, 0);
+  assert.doesNotMatch(html, /FREE DAILY MINE|SEVEN-DAY MINE|ENDLESS MINE|PVP MINE/i);
   assert.match(html, /ronin-mark-official\.png/);
   assert.match(html, /BUILT ON RONIN/);
   assert.ok(roninLogo.size > 1_000);
@@ -450,7 +449,7 @@ test('Arena UI closes cleanly for review while already-purchased attempts surviv
   assert.match(startRunSource, /serverPlayer\.suspended/);
 });
 
-test('verified Arena results apply and display server-awarded Pass XP', () => {
+test('verified Arena results apply server-awarded Pass XP while Admin controls live reward modifiers', () => {
   const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const source = fs.readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
   const submitSource = source.slice(
@@ -462,7 +461,7 @@ test('verified Arena results apply and display server-awarded Pass XP', () => {
   assert.match(submitSource, /applyPassInventory\(accepted\.passInventory\)/);
   assert.match(submitSource, /\+\$\{accepted\.passXpAwarded\} Pass XP/);
   assert.match(submitSource, /accepted\.passRewardsUnlocked/);
-  assert.match(html, /100 for each completed Pass or verified MATT Arena run/);
+  assert.match(html, /all XP, crystal, score, and gameplay modifiers controlled by the server Admin/i);
 });
 
 test('production lobby exposes wallet-saved custom gameplay controls', () => {

@@ -31,51 +31,53 @@ services:
         sync: false
       - key: MATT_MINE_RPC_TIMEOUT_MS
         value: "10000"
-      # NFT metadata reads the isolated Saigon rehearsal contracts. This does
-      # not change the main game's Ronin Mainnet authentication or payments.
+      # Activated Ronin Mainnet NFT V2 release. Private operator/signer keys
+      # remain dashboard secrets; all addresses and map versions are public.
       - key: MATT_MINE_NFT_ENABLED
-        value: "true"
+        value: "false"
+      - key: MATT_MINE_NFT_CONTRACT_VERSION
+        value: "2"
       - key: MATT_MINE_NFT_PUBLIC_BASE_URL
         value: "https://matt-mine.onrender.com"
       - key: MATT_MINE_NFT_CHAIN_ID
-        value: "202601"
+        value: "2020"
       - key: MATT_MINE_NFT_RPC_URL
-        value: "https://saigon-testnet.roninchain.com/rpc"
+        sync: false
       - key: MATT_MINE_NFT_MINER_ADDRESS
-        value: "0x545d5d4c714eB4d2242BBFE82C31fe9a1E5Cff29"
+        value: "0xBbaBE35B943E3Ba911B53C2b39447cF181fE565A"
       - key: MATT_MINE_NFT_EQUIPMENT_ADDRESS
-        value: "0x73A4Ad9a2b4bfeeE1b98F5D99AaB24B702dEb093"
+        value: "0x415cF1DeA47f3d4BAb830F78B82e12D6EeceD612"
       - key: MATT_MINE_NFT_LOADOUT_ADDRESS
-        value: "0x6cf168cdD198D0d111faE2286aE6dcD86FA960d8"
+        value: "0xb88C219C792cFa07749E0E5D939DbbbF1E62C7b5"
       - key: MATT_MINE_NFT_CHEST_ADDRESS
-        value: "0x52f66358ae951638a794777F3cc3448513d5be37"
+        value: "0x693525e7fD76949834cad56d67D469bAAd6687F6"
       - key: MATT_MINE_NFT_SETTLEMENT_ADDRESS
-        value: "0x08d6FE054A75a59b7Abd4942D890f56f8e1896B2"
-      - key: MATT_MINE_NFT_REDEMPTION_ADDRESS
-        value: "0xc06b131C160701150Cea5b2C22dB3c6d7f451309"
-      - key: MATT_MINE_NFT_RANDOMNESS_ADDRESS
-        value: "0x13B2CC4744657bbc75a1f7588A1Ca8e397E69521"
+        value: "0x21BEe81AdC4c87e3Ea4686DD8a38a64c8Ea5b95c"
+      - key: MATT_MINE_NFT_CRYSTAL_BANK_ADDRESS
+        value: "0x8C640Cd91Ea6616cDD07B8323492E76e5c9ffE78"
+      - key: MATT_MINE_NFT_PASSIVE_REWARDS_ADDRESS
+        value: "0xC5cf71e8000017e099fb39b24149544e1F40b0E0"
+      - key: MATT_MINE_NFT_CHEST_RANDOMNESS_ADDRESS
+        value: "0x74746f7853e84302255B49421A6A3AF5808c8AA6"
+      - key: MATT_MINE_NFT_PASSIVE_RANDOMNESS_ADDRESS
+        value: "0x652eD370383a7B5bf3c1c19e2145780bcb9A92F8"
+      - key: MATT_MINE_NFT_MAP_VERSIONS_JSON
+        value: '{"arena":"0x5fa5b85dfd9794c50d1de87c83b8cc2b28e4c454c4d64ce7280876984fd526f0","paid":"0x4d86497b3e3385412a206bebed747aa621db1d38766608d19e69f2eb7185385c"}'
       - key: MATT_MINE_NFT_GAMEPLAY_ENABLED
         sync: false
-      - key: MATT_MINE_NFT_CRYSTAL_CARRY_LIMIT
-        value: "10"
       - key: MATT_MINE_NFT_GAME_OPERATOR_ADDRESS
-        value: "0x112C8a89bfAb3f19D7ceADf7433Fd8D253cFe4D3"
-      - key: MATT_MINE_NFT_GAME_SIGNER_ADDRESS
-        value: "0x61FC35192964Fa4b50D915261419e9D2Ba369708"
+        sync: false
+      - key: MATT_MINE_NFT_REWARD_SIGNER_ADDRESS
+        sync: false
       - key: MATT_MINE_NFT_GAME_OPERATOR_PRIVATE_KEY
         sync: false
-      - key: MATT_MINE_NFT_GAME_SIGNER_PRIVATE_KEY
+      - key: MATT_MINE_NFT_REWARD_SIGNER_PRIVATE_KEY
         sync: false
-      # Saigon-only keeper. Enable only after its dedicated address and private
-      # key are stored in Render; 0xF799 retains contract ownership.
-      - key: MATT_MINE_NFT_SAIGON_KEEPER_ENABLED
+      - key: MATT_MINE_NFT_ADMIN_CONTROLS_ENABLED
+        value: "false"
+      - key: MATT_MINE_NFT_CONFIG_OPERATOR_ADDRESS
         sync: false
-      - key: MATT_MINE_NFT_SAIGON_KEEPER_POLL_MS
-        value: "5000"
-      - key: MATT_MINE_NFT_SAIGON_KEEPER_ADDRESS
-        sync: false
-      - key: MATT_MINE_NFT_SAIGON_KEEPER_PRIVATE_KEY
+      - key: MATT_MINE_NFT_CONFIG_OPERATOR_PRIVATE_KEY
         sync: false
       - key: MATT_MINE_ADMIN_WALLETS
         sync: false

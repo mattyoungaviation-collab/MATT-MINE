@@ -19,6 +19,7 @@ const state = {
   expansion: null,
   expansionDraft: null,
   mineOperations: null,
+  nftV2: null,
   controlIndex: [],
   activeTab: 'overview',
   overviewTimer: null
@@ -73,6 +74,7 @@ async function activateTab(name) {
   if (name === 'tuning') await loadTuning();
   if (name === 'expansion') await loadExpansion();
   if (name === 'nugget-economy') await window.mattMineAdminEconomy?.load?.();
+  if (name === 'nft-v2') await loadNftV2Protocol();
   if (name === 'operations') await loadMineOperations();
   if (name === 'arena') await loadArenaAdmin();
   if (name === 'audit') await loadAudit();
@@ -97,7 +99,6 @@ function renderOverview(data) {
   const paidRuns = data.payments?.paidRuns || {};
   $('#systems').innerHTML = [
     row('Server maintenance', status(!data.operations.maintenanceMode)),
-    row('Free ranked', status(!data.operations.freeRankedPaused)),
     row('Pass ranked', status(!data.operations.passRankedPaused)),
     row('Server purchases', status(!data.operations.purchasesPaused)),
     row('Server claims', status(!data.operations.claimsPaused)),
@@ -126,7 +127,6 @@ function renderOverview(data) {
 
 const operationFields = [
   ['maintenanceMode', 'Maintenance mode'],
-  ['freeRankedPaused', 'Pause Free ranked'],
   ['passRankedPaused', 'Pause Pass ranked'],
   ['purchasesPaused', 'Pause purchase confirmation'],
   ['claimsPaused', 'Pause reward claims']
@@ -229,9 +229,6 @@ async function loadTuning(force = false) {
     state.tuningDrafts = Object.fromEntries(
       Object.entries(state.tuning.presets).map(([lobby, preset]) => [lobby, structuredClone(preset)])
     );
-    const categories = [...new Set(state.tuning.schema.map((entry) => entry.category))];
-    $('#tuning-category').innerHTML = '<option value="">All categories</option>' +
-      categories.map((category) => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`).join('');
     rebuildControlIndex();
   }
   renderTuning();
@@ -240,10 +237,14 @@ async function loadTuning(force = false) {
 function renderTuning() {
   if (!state.tuning) return;
   const lobby = $('#tuning-lobby').value;
+  const applicable = state.tuning.schema.filter((entry) =>
+    !Array.isArray(entry.lobbies) || entry.lobbies.includes(lobby)
+  );
+  syncTuningCategories(applicable);
   const preset = state.tuningDrafts[lobby] || state.tuning.presets[lobby];
   const needle = $('#tuning-search').value.trim().toLowerCase();
   const categoryFilter = $('#tuning-category').value;
-  const visible = state.tuning.schema.filter((entry) =>
+  const visible = applicable.filter((entry) =>
     (!categoryFilter || entry.category === categoryFilter) &&
     (!needle || `${entry.id} ${entry.category} ${entry.label} ${entry.description || ''}`.toLowerCase().includes(needle))
   );
@@ -252,19 +253,161 @@ function renderTuning() {
     map.get(entry.category).push(entry);
     return map;
   }, new Map());
-  $('#tuning-result-count').textContent = `${visible.length.toLocaleString()} of ${state.tuning.schema.length.toLocaleString()} settings · ${words(lobby)} lobby`;
+  const hidden = state.tuning.schema.length - applicable.length;
+  $('#tuning-result-count').textContent = `${visible.length.toLocaleString()} of ${applicable.length.toLocaleString()} effective settings · ${mineLabel(lobby)}${hidden ? ` · ${hidden.toLocaleString()} settings owned by Studio, NFTs, or another mine hidden` : ''}`;
   $('#tuning-fields').innerHTML = [...groups].map(([category, entries], index) => `<details class="panel structured-card" ${needle || categoryFilter || index < 2 ? 'open' : ''}>
     <summary><strong>${escapeHtml(category)}</strong><span>${entries.length} controls</span></summary>
     <div class="tuning-grid">${entries.map((entry) => {
       const linked = linkedControlForTuning(lobby, entry.id);
       return `<label class="tuning-field ${linked ? 'linked-field' : ''}">${escapeHtml(entry.label)}
       ${linked ? `<span class="link-chip">Linked · ${escapeHtml(linked.linkedTo)}</span>` : ''}
+      ${entry.lobbies?.length !== state.tuning.lobbies.length ? `<span class="link-chip">${escapeHtml(entry.lobbies.map(mineLabel).join(', '))} only</span>` : ''}
       ${entry.type === 'boolean'
         ? `<input data-tuning="${entry.id}" ${linked ? `data-linked-control="${linked.id}"` : ''} type="checkbox" ${preset[entry.id] ? 'checked' : ''}>`
         : `<input data-tuning="${entry.id}" ${linked ? `data-linked-control="${linked.id}"` : ''} type="number" min="${entry.min}" max="${entry.max}" step="${entry.step || 'any'}" value="${preset[entry.id]}">`}
       ${entry.description ? `<small>${escapeHtml(entry.description)}</small>` : ''}</label>`;
     }).join('')}</div>
   </details>`).join('');
+}
+
+const NFT_V2_SLOTS = ['armor', 'pickaxe', 'blaster', 'dynamite', 'helmet', 'backpack'];
+
+async function loadNftV2Protocol() {
+  try {
+    const data = await api('/api/admin/nft-v2/protocol');
+    state.nftV2 = data;
+    renderNftV2Protocol();
+  } catch (error) {
+    state.nftV2 = null;
+    $('#nft-v2-status').classList.add('warning');
+    $('#nft-v2-status').textContent = error.code === 'nft_v2_admin_disabled'
+      ? 'Safe before deployment: on-chain NFT V2 controls are disabled until verified contracts and the dedicated Config Operator are activated.'
+      : error.message;
+  }
+}
+
+function renderNftV2Protocol() {
+  const data = state.nftV2;
+  if (!data) return;
+  const protocol = data.protocol;
+  $('#nft-v2-status').classList.remove('warning');
+  $('#nft-v2-status').textContent = `Connected to Ronin chain ${data.status.chainId} · Config Operator ${short(data.status.operator)} · values below were read directly from the contracts.`;
+  const pausedFragment = document.createDocumentFragment();
+  for (const [name, paused] of Object.entries(protocol.paused || {})) {
+    const card = document.createElement('div');
+    card.className = 'metric';
+    const label = document.createElement('span');
+    label.textContent = words(name);
+    const value = document.createElement('strong');
+    value.textContent = paused ? 'PAUSED' : 'LIVE';
+    card.append(label, value);
+    pausedFragment.append(card);
+  }
+  $('#nft-v2-paused').replaceChildren(pausedFragment);
+  $('#nft-v2-repair').value = protocol.repairPriceRaw;
+  $('#nft-v2-withdraw-min').value = protocol.withdrawal.minimumRaw;
+  $('#nft-v2-withdraw-wallet').value = protocol.withdrawal.walletDailyRaw;
+  $('#nft-v2-withdraw-global').value = protocol.withdrawal.globalDailyRaw;
+  const priceFragment = document.createDocumentFragment();
+  for (const slot of NFT_V2_SLOTS) {
+    const label = document.createElement('label');
+    label.className = 'tuning-field';
+    label.append(document.createTextNode(words(slot)));
+    const input = document.createElement('input');
+    input.dataset.nftV2Chest = slot;
+    input.inputMode = 'numeric';
+    input.pattern = '[0-9]+';
+    input.value = protocol.chestPrices[slot];
+    input.required = true;
+    label.append(input);
+    priceFragment.append(label);
+  }
+  $('#nft-v2-chest-prices').replaceChildren(priceFragment);
+  const routeFragment = document.createDocumentFragment();
+  for (const mode of ['arena', 'paid']) {
+    const item = document.createElement('div');
+    item.className = 'kv';
+    const label = document.createElement('span');
+    label.textContent = mineLabel(mode);
+    const value = document.createElement('span');
+    value.textContent = protocol.activeMapVersions?.[mode] || 'No active on-chain version';
+    item.append(label, value);
+    routeFragment.append(item);
+  }
+  $('#nft-v2-map-routes').replaceChildren(routeFragment);
+}
+
+$('#refresh-nft-v2').addEventListener('click', loadNftV2Protocol);
+
+$('#nft-v2-economy-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (!await confirmAction('Send NFT V2 economy transactions?', 'These values change on Ronin Mainnet after the dedicated Config Operator transactions confirm.')) return;
+  await api('/api/admin/nft-v2/economy', {
+    method: 'PUT',
+    body: {
+      repairPriceRaw: $('#nft-v2-repair').value,
+      withdrawal: {
+        minimumRaw: $('#nft-v2-withdraw-min').value,
+        walletDailyRaw: $('#nft-v2-withdraw-wallet').value,
+        globalDailyRaw: $('#nft-v2-withdraw-global').value
+      },
+      chestPrices: Object.fromEntries([...document.querySelectorAll('[data-nft-v2-chest]')].map((input) => [input.dataset.nftV2Chest, input.value])),
+      reason: $('#nft-v2-economy-reason').value
+    }
+  });
+  $('#nft-v2-economy-reason').value = '';
+  await loadNftV2Protocol();
+  showAlert('NFT V2 economy transactions confirmed on Ronin.');
+});
+
+$('#nft-v2-map-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (!await confirmAction('Approve this NFT V2 map?', 'The version becomes the active route for all new runs in the selected mine after confirmation.')) return;
+  const result = await api('/api/admin/nft-v2/maps/approve', {
+    method: 'POST',
+    body: {
+      mode: $('#nft-v2-map-mode').value,
+      mapId: $('#nft-v2-map-id').value,
+      contentHash: $('#nft-v2-content-hash').value,
+      mineableCrystalUnits: Number($('#nft-v2-mineable').value),
+      conversionRateRaw: $('#nft-v2-conversion').value,
+      maximumPayoutRaw: $('#nft-v2-max-payout').value,
+      runTimeoutSeconds: Number($('#nft-v2-timeout').value),
+      reason: $('#nft-v2-map-reason').value
+    }
+  });
+  $('#nft-v2-map-reason').value = '';
+  $('#nft-v2-retire-version').value = result.versionId;
+  await loadNftV2Protocol();
+  showAlert(`Map ${result.versionId} is approved and active for new runs.`);
+});
+
+$('#nft-v2-retire-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (!await confirmAction('Permanently retire this map version?', 'This cannot be undone. Active runs may settle, but no new runs can use it.')) return;
+  await api('/api/admin/nft-v2/maps/retire', {
+    method: 'POST',
+    body: { versionId: $('#nft-v2-retire-version').value, reason: $('#nft-v2-retire-reason').value }
+  });
+  $('#nft-v2-retire-reason').value = '';
+  await loadNftV2Protocol();
+  showAlert('NFT V2 map version retired on Ronin.');
+});
+
+function syncTuningCategories(definitions) {
+  const select = $('#tuning-category');
+  const current = select.value;
+  const categories = [...new Set(definitions.map((entry) => entry.category))];
+  select.innerHTML = '<option value="">All categories</option>' +
+    categories.map((category) => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`).join('');
+  select.value = categories.includes(current) ? current : '';
+}
+
+function mineLabel(lobby) {
+  if (lobby === 'practice') return 'Practice Mine';
+  if (lobby === 'arena') return 'MATT Arena';
+  if (lobby === 'paid') return 'Pass Mine';
+  return words(lobby);
 }
 
 $('#tuning-lobby').addEventListener('change', renderTuning);
@@ -284,7 +427,11 @@ $('#tuning-form').addEventListener('submit', async (event) => {
   const lobby = $('#tuning-lobby').value;
   const original = state.tuning.presets[lobby];
   const draft = state.tuningDrafts[lobby];
-  const patch = Object.fromEntries(Object.entries(draft).filter(([key, value]) => original[key] !== value));
+  const applicableIds = new Set(state.tuning.schema
+    .filter((entry) => !Array.isArray(entry.lobbies) || entry.lobbies.includes(lobby))
+    .map((entry) => entry.id));
+  const patch = Object.fromEntries(Object.entries(draft)
+    .filter(([key, value]) => applicableIds.has(key) && original[key] !== value));
   if (!Object.keys(patch).length) {
     showAlert('No Game Balance values changed.');
     return;
@@ -360,7 +507,7 @@ function renderExpansion() {
     .filter(([id, character]) => !needle || `${id} ${Object.entries(character).flat().join(' ')}`.toLowerCase().includes(needle))
     .map(([id, character]) => `<details class="panel structured-card" ${needle ? 'open' : ''}>
     <summary><strong>${escapeHtml(character.name)}</strong><span>${character.enabled ? 'Enabled' : 'Disabled'}</span></summary>
-    <div class="tuning-grid">${Object.entries(character).map(([key, value]) => characterField(id, key, value)).join('')}</div>
+    <div class="tuning-grid">${Object.entries(character).filter(([key]) => key !== 'passive').map(([key, value]) => characterField(id, key, value)).join('')}</div>
   </details>`).join('');
   $('#expansion-fields').innerHTML = `${settingCards}<div class="section-heading"><div><p class="eyebrow">PLAYABLE ROSTER</p><h2>Characters</h2></div></div>${characters}`;
 }
@@ -401,16 +548,19 @@ $('#expansion-fields').addEventListener('input', (event) => {
 });
 $('#expansion-form').addEventListener('submit', async (event) => {
   event.preventDefault();
-  const settings = objectDiff(state.expansion.config.settings, state.expansionDraft.settings);
+  const activeSettingIds = new Set(state.expansion.schema.map((entry) => entry.id));
+  const settings = Object.fromEntries(Object.entries(
+    objectDiff(state.expansion.config.settings, state.expansionDraft.settings)
+  ).filter(([id]) => activeSettingIds.has(id)));
   const characters = Object.fromEntries(Object.entries(state.expansionDraft.characters).flatMap(([id, character]) => {
     const changes = objectDiff(state.expansion.config.characters[id] || {}, character);
     return Object.keys(changes).length ? [[id, changes]] : [];
   }));
   if (!Object.keys(settings).length && !Object.keys(characters).length) {
-    showAlert('No Modes & Characters values changed.');
+    showAlert('No Features & Practice values changed.');
     return;
   }
-  if (!await confirmAction('Save Modes & Characters settings?', 'Every field is schema validated, linked controls move together, and the reason is audit logged.')) return;
+  if (!await confirmAction('Save Features & Practice settings?', 'Every field is schema validated, linked controls move together, and the reason is audit logged.')) return;
   const result = await api('/api/admin/expansion', {
     method: 'PUT',
     body: { patch: { settings, characters }, reason: $('#expansion-reason').value }
@@ -423,7 +573,7 @@ $('#expansion-form').addEventListener('submit', async (event) => {
     window.mattMineAdminEconomy?.load?.()
   ]);
   renderExpansion();
-  showAlert('Modes & Characters settings validated, synchronized, saved, and audited.');
+  showAlert('Features & Practice settings validated, synchronized, saved, and audited.');
 });
 
 $('#export-expansion').addEventListener('click', () => {
@@ -434,7 +584,11 @@ $('#export-expansion').addEventListener('click', () => {
 $('#reset-expansion').addEventListener('click', async () => {
   if (!state.expansion?.defaults) return;
   if (!await confirmAction('Load safe expansion defaults?', 'This only stages the defaults in the form. Enter a reason and press Save to apply them.')) return;
-  state.expansionDraft = structuredClone(state.expansion.defaults);
+  state.expansionDraft = structuredClone(state.expansion.config);
+  for (const definition of state.expansion.schema) {
+    state.expansionDraft.settings[definition.id] = state.expansion.defaults.settings[definition.id];
+  }
+  state.expansionDraft.characters = structuredClone(state.expansion.defaults.characters);
   renderExpansion();
   showAlert('Safe defaults loaded for review. No server setting changed yet.');
 });
@@ -521,11 +675,11 @@ function renderMineOperations(data) {
         <button type="button" class="danger" data-terminate-mine-runs="${escapeHtml(mine.id)}" ${Number(mine.activeRuns || 0) > 0 ? '' : 'disabled'}>END ${Number(mine.activeRuns || 0).toLocaleString()} ACTIVE RUN${Number(mine.activeRuns || 0) === 1 ? '' : 'S'}</button>
         ${mine.id === 'arena'
           ? '<button type="button" class="ghost" data-operations-tab="arena">Schedule or settle Arena</button>'
-          : ['daily', 'pass'].includes(mine.id)
+          : mine.id === 'pass'
             ? '<button type="button" class="ghost" data-scroll-payouts="true">Open payout desk</button>'
             : ''}
       </div>
-      ${mine.id === 'arena' ? '<p class="mine-footnote">Server controls are here. Contract entry and settlement controls remain in Daily Arena.</p>' : ''}
+      ${mine.id === 'arena' ? '<p class="mine-footnote">Server controls are here. Contract entry and settlement controls remain in MATT Arena.</p>' : ''}
     </article>`;
   }).join('');
 }
@@ -690,22 +844,20 @@ function formatRewardDeadline(value) {
 }
 
 function mineNumber(mine) {
-  return { practice: '01', arena: '02', daily: '03', pass: '04', weekly: '05' }[mine] || '—';
+  return { practice: '01', arena: '02', pass: '03' }[mine] || '—';
 }
 
 function mineNextAction(mine, controls) {
   if (controls.entriesPaused && !controls.resultsPaused) return 'New entries are closed. Let active runs finish, then pause Finish runs.';
   if (controls.entriesPaused && controls.resultsPaused) {
-    if (mine.id === 'arena') return 'Competition is closed. Open Daily Arena and prepare the full-pool settlement.';
-    if (['daily', 'pass'].includes(mine.id)) return 'Competition is closed. Use the payout desk after the weekly leaderboard finalizes.';
+    if (mine.id === 'arena') return 'Competition is closed. Open MATT Arena and prepare the full-pool settlement.';
+    if (mine.id === 'pass') return 'Competition is closed. Use the payout desk after the leaderboard finalizes.';
     return 'Competition is closed. Review results before reopening.';
   }
   if (controls.paymentsPaused) return 'Play is open, but payments are stopped. Resume only after payment verification is healthy.';
   if (controls.rewardsPaused) return 'Play is open, but payouts and claims are stopped. Review obligations before resuming.';
-  if (mine.id === 'daily') return 'Mine is live. Monitor active runs; use the payout desk after the weekly board closes.';
-  if (mine.id === 'weekly') return 'Mine is live. Monitor active runs and pause New runs first when closing.';
-  if (mine.id === 'practice') return 'Mine is live. Monitor active runs and paid Practice reward claims.';
-  if (mine.id === 'arena') return 'Arena is live. Monitor entries here and settle the full pool from Daily Arena after close.';
+  if (mine.id === 'practice') return 'Public demo is live. Maps and balance remain Admin-authored; XP and Crystal rewards are permanently disabled.';
+  if (mine.id === 'arena') return 'Arena is live. Monitor entries here and settle the full pool from MATT Arena after close.';
   return 'Mine is live. Monitor active runs and paid credits; pause New runs first when closing.';
 }
 
@@ -1130,9 +1282,14 @@ async function openControlSearchResult(result) {
   if (result.id.startsWith('tuning:')) {
     if (!state.tuning) await loadTuning();
     const definition = state.tuning.schema.find((entry) => `tuning:${entry.id}` === result.id);
+    const currentLobby = $('#tuning-lobby').value;
+    if (definition?.lobbies?.length && !definition.lobbies.includes(currentLobby)) {
+      $('#tuning-lobby').value = definition.lobbies[0];
+    }
+    await activateTab(result.tab);
     $('#tuning-category').value = definition?.category || '';
     $('#tuning-search').value = definition?.label || result.label;
-    await activateTab(result.tab);
+    renderTuning();
     $('#tuning-fields').scrollIntoView({ behavior: 'smooth', block: 'start' });
   } else if (result.id.startsWith('expansion:')) {
     if (!state.expansion) await loadExpansion();

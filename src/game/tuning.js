@@ -2,8 +2,56 @@ import { CONFIG, ORE_TYPES } from './config.js';
 import { bossTuningSchema, validateBossThresholds } from './bossTuning.js';
 import { enemyDepthTuningSchema } from './enemyDepthTuning.js';
 
+// Keep the retired Free preset available for historical run replay and state
+// migration. Only ACTIVE_GAMEPLAY_LOBBIES are exposed for new Admin changes.
 export const GAMEPLAY_LOBBIES = Object.freeze(['practice', 'free', 'paid', 'arena']);
+export const ACTIVE_GAMEPLAY_LOBBIES = Object.freeze(['practice', 'arena', 'paid']);
 export const MAX_TUNED_DEPTH = 5;
+
+// Competition Studio pins these values into every active mine version. Keeping
+// a second editable copy in Game Balance made the controls appear live even
+// though the published Studio snapshot always won at run start.
+const STUDIO_OWNED_SETTING_IDS = new Set([
+  'ignorePermanentUpgrades',
+  'disableRunUpgrades',
+  'usePerDepthRoomSpawns',
+  'playerMaxHealth',
+  'safeStartSeconds',
+  'blasterEnergy',
+  'dynamiteStartAmmo',
+  'bossAwarenessRange',
+  'bossRoomWidth',
+  'bossRoomHeight',
+  'roomWidth',
+  'roomHeight',
+  'corridorWidth',
+  'roomsPerDepth',
+  'oreAmountMultiplier',
+  'spawnSlimes',
+  'spawnBats',
+  'spawnCrawlers',
+  'spawnBeetles',
+  'spawnExploders',
+  'spawnRanged'
+]);
+
+// These baselines are supplied by the selected V2 Miner NFT in Arena and Pass.
+// Practice still uses them because it is the public non-NFT gameplay lane.
+export const V2_TRAIT_SUPERSEDED_SETTING_IDS = Object.freeze([
+  'playerBaseDamage',
+  'dynamiteDamage',
+  'permanentHealthPerRank',
+  'permanentDamagePerRank',
+  'permanentSpeedPerRank',
+  'permanentLuckPerRank',
+  'permanentMagnetPerRank',
+  'permanentArmorPerRank',
+  'permanentDashPerRank',
+  'permanentBlasterDamagePerRank',
+  'armorUpgradePerLevel',
+  'armorMaximum'
+]);
+const V2_TRAIT_SUPERSEDED_SETTINGS = new Set(V2_TRAIT_SUPERSEDED_SETTING_IDS);
 
 const number = (id, category, label, value, min, max, step = 1, description = '') =>
   Object.freeze({ id, category, label, type: 'number', default: value, min, max, step, description });
@@ -40,12 +88,12 @@ export const GAME_TUNING_SCHEMA = Object.freeze([
   toggle('disableBlasterUpgrades', 'Beta testing', 'Disable Prospector Cache Blaster upgrades', false, 'The cache still refills the Blaster, but it does not offer Battery, Charger, Core, or Volley talents.'),
   toggle('usePerDepthRoomSpawns', 'Beta testing', 'Use editable per-depth room spawns', true, 'Uses the room-by-room spawn plan below. Saving applies this choice to the next new run; runs already in progress keep their pinned plan.'),
 
-  number('playerMaxHealth', 'Player', 'Starting health', CONFIG.basePlayerHealth, 25, 1000),
+  number('playerMaxHealth', 'Player', 'Starting health', CONFIG.basePlayerHealth, 25, 1000, 1, 'Competition Studio owns starting health. Arena and Pass replace it with the selected Miner NFT Base Health.'),
   number('playerSpeed', 'Player', 'Movement speed', CONFIG.basePlayerSpeed, 80, 700),
   number('playerAcceleration', 'Player', 'Acceleration', CONFIG.playerAcceleration, 2, 40, .5),
   number('playerFriction', 'Player', 'Stopping control', CONFIG.playerFriction, 2, 40, .5),
   number('playerRadius', 'Player', 'Collision size', CONFIG.playerRadius, 10, 45),
-  number('playerBaseDamage', 'Player', 'Base damage', CONFIG.baseDamage, 1, 250),
+  number('playerBaseDamage', 'Player', 'Practice base Pickaxe damage', CONFIG.baseDamage, 1, 250, 1, 'Practice uses this base value. Arena and Pass use the selected Miner NFT Pickaxe Attack with the Pickaxe damage multiplier.'),
   number('playerCritChance', 'Player', 'Critical chance', CONFIG.baseCritChance, 0, .75, .01),
   number('playerMagnetRange', 'Player', 'Pickup range', CONFIG.baseMagnetRange, 20, 600),
   number('dashCooldown', 'Player', 'Dash cooldown', CONFIG.baseDashCooldown, .25, 12, .05),
@@ -85,7 +133,7 @@ export const GAME_TUNING_SCHEMA = Object.freeze([
   number('blasterRange', 'Blaster', 'Projectile range', CONFIG.blasterRange, 100, 1200, 10),
   number('blasterProjectileSpeed', 'Blaster', 'Projectile speed', 760, 100, 1800, 10),
   number('blasterCooldownMultiplier', 'Blaster', 'Fire cooldown multiplier', .48, .1, 2, .01),
-  number('blasterEnergy', 'Blaster', 'Battery capacity', CONFIG.blasterEnergyMax, 10, 1000, 5),
+  number('blasterEnergy', 'Blaster', 'Starting battery capacity', CONFIG.blasterEnergyMax, 10, 1000, 5, 'Competition Studio owns the starting Blaster battery for each published mine version.'),
   number('blasterRecharge', 'Blaster', 'Recharge per second', CONFIG.blasterEnergyRegen, 1, 200, 1),
   number('blasterEnergyCost', 'Blaster', 'Energy per shot', CONFIG.blasterEnergyCost, 1, 100, 1),
   number('blasterCapacityPerLevel', 'Blaster', 'Battery upgrade per level', 30, 0, 250, 5),
@@ -93,7 +141,8 @@ export const GAME_TUNING_SCHEMA = Object.freeze([
   number('blasterBeams', 'Blaster', 'Maximum beams', 3, 1, 3),
   number('blasterVolleySpread', 'Blaster', 'Volley spread', CONFIG.blasterVolleySpread, 0, 1.2, .01),
 
-  number('dynamiteDamage', 'Dynamite', 'Explosion damage', CONFIG.dynamiteDamage, 1, 500),
+  number('dynamiteDamage', 'Dynamite', 'Practice explosion damage', CONFIG.dynamiteDamage, 1, 500, 1, 'Practice uses this base value. Arena and Pass use the selected Miner NFT Dynamite Attack with the damage multiplier.'),
+  number('dynamiteDamageMultiplier', 'Dynamite', 'Damage multiplier', 1, .05, 10, .05, 'Scales the selected Miner NFT Dynamite Attack. Legacy non-NFT runs use the configured explosion damage as their base.'),
   number('dynamiteThrowRange', 'Dynamite', 'Throw range', CONFIG.dynamiteRange, 50, 800, 10),
   number('dynamiteBlastRadius', 'Dynamite', 'Blast radius', 170, 50, 500, 5),
   number('dynamiteStartAmmo', 'Dynamite', 'Starting ammo', CONFIG.dynamiteStartAmmo, 0, 50),
@@ -123,35 +172,49 @@ export const GAME_TUNING_SCHEMA = Object.freeze([
   number('bossHealthMultiplier', 'Boss', 'Health multiplier', 2.25, .1, 20, .05, 'Default targets a readable roughly 30-second final encounter for a normally upgraded miner.'),
   number('bossDamageMultiplier', 'Boss', 'Damage multiplier', 1, 0, 10, .05),
   number('bossSpeedMultiplier', 'Boss', 'Speed multiplier', 1, .1, 5, .05),
-  number('bossAwarenessRange', 'Boss', 'Awareness range', CONFIG.guardianAwarenessRange, 100, 1800, 10),
-  number('bossRoomWidth', 'Boss', 'Room width', 720, 420, 1600, 10),
-  number('bossRoomHeight', 'Boss', 'Room height', 520, 320, 1200, 10),
-  number('bossProjectileSpeed', 'Boss', 'Projectile speed', 280, 50, 1200, 10),
-  number('bossVolleySpread', 'Boss', 'Volley spread', .38, .05, 1.5, .01),
+  number('bossAwarenessRange', 'Boss', 'Awareness range', CONFIG.guardianAwarenessRange, 100, 1800, 10, 'Competition Studio owns Guardian awareness independently at every depth.'),
+  number('bossRoomWidth', 'Boss', 'Room width', 720, 420, 1600, 10, 'Competition Studio owns the exact Guardian-room geometry.'),
+  number('bossRoomHeight', 'Boss', 'Room height', 520, 320, 1200, 10, 'Competition Studio owns the exact Guardian-room geometry.'),
+  number('bossProjectileSpeed', 'Boss', 'Legacy Arena projectile speed', 280, 50, 1200, 10, 'Used only when MATT Arena selects the Legacy Guardian controller in Competition Studio.'),
+  number('bossVolleySpread', 'Boss', 'Legacy Arena volley spread', .38, .05, 1.5, .01, 'Used only when MATT Arena selects the Legacy Guardian controller in Competition Studio.'),
   ...bossTuningSchema(number, toggle),
 
-  number('roomWidth', 'Mine layout', 'Standard room width', CONFIG.roomWidth, 260, 900, 10),
-  number('roomHeight', 'Mine layout', 'Standard room height', CONFIG.roomHeight, 200, 700, 10),
-  number('corridorWidth', 'Mine layout', 'Corridor width', CONFIG.corridorWidth, 70, 300, 5),
-  number('roomsPerDepth', 'Mine layout', 'Rooms per depth', CONFIG.roomsPerDepth, 4, 12),
-  number('oreAmountMultiplier', 'Mine layout', 'Ore amount multiplier', 1, .1, 5, .05),
+  number('roomWidth', 'Mine layout', 'Standard room width', CONFIG.roomWidth, 260, 900, 10, 'Competition Studio owns exact room geometry for every live mine.'),
+  number('roomHeight', 'Mine layout', 'Standard room height', CONFIG.roomHeight, 200, 700, 10, 'Competition Studio owns exact room geometry for every live mine.'),
+  number('corridorWidth', 'Mine layout', 'Corridor width', CONFIG.corridorWidth, 70, 300, 5, 'Competition Studio owns exact corridor geometry for every live mine.'),
+  number('roomsPerDepth', 'Mine layout', 'Rooms per depth', CONFIG.roomsPerDepth, 4, 12, 1, 'Competition Studio owns the exact room count for every depth.'),
+  number('oreAmountMultiplier', 'Mine layout', 'Ore amount multiplier', 1, .1, 5, .05, 'Competition Studio owns exact ore types and quantities for every depth.'),
   number('treasureAmountMultiplier', 'Mine layout', 'Treasure amount multiplier', 1, 0, 5, .05),
 
-  number('scoreMultiplier', 'Rewards and scoring', 'Leaderboard score multiplier', 1, 0, 10, .05),
-  number('nuggetMultiplier', 'Rewards and scoring', 'Nugget value multiplier', 1, 0, 10, .05),
-  number('xpMultiplier', 'Rewards and scoring', 'Run XP multiplier', 1, 0, 10, .05),
-  number('passXpMultiplier', 'Rewards and scoring', 'Pass XP multiplier', 1, 0, 10, .05),
+  number('scoreMultiplier', 'Rewards and scoring', 'Leaderboard score multiplier', 1, 0, 10, .05, 'Scales the final server-replayed run score.'),
+  number('nuggetMultiplier', 'Rewards and scoring', 'Mined ore score-value multiplier', 1, 0, 10, .05, 'Scales score value released by mined ore and treasure. It does not mint MATT Crystals.'),
+  number('xpMultiplier', 'Rewards and scoring', 'In-run upgrade XP multiplier', 1, 0, 10, .05, 'Scales temporary XP earned inside a run from every source. V2 Miner lifetime XP remains the immutable five-phase contract table.'),
+  number('passXpMultiplier', 'Rewards and scoring', 'Mine Pass progression XP multiplier', 1, 0, 10, .05, 'Scales separate Mine Pass progression after a verified run. It does not change Miner NFT lifetime XP.'),
   number('killPointValue', 'Rewards and scoring', 'Bonus points per enemy', 0, 0, 10000),
   number('bossPointValue', 'Rewards and scoring', 'Bonus points for Guardian', 0, 0, 100000),
   number('depthScoreMultiplier', 'Rewards and scoring', 'Depth score multiplier', 1, 0, 10, .05),
-  number('deathKeepFraction', 'Rewards and scoring', 'Loot kept on knockout', CONFIG.deathKeepFraction, 0, 1, .01),
+  number('deathKeepFraction', 'Rewards and scoring', 'Knockout score retention', CONFIG.deathKeepFraction, 0, 1, .01, 'Controls retained run score after knockout. On-chain MATT Crystal retention comes only from the selected Miner NFT trait.'),
   ...Object.entries(ORE_TYPES).flatMap(([id, ore]) => [
     number(`${id}HealthMultiplier`, 'Ore', `${ore.name} health`, 1, .1, 10, .05),
     number(`${id}ValueMultiplier`, 'Ore', `${ore.name} value`, 1, 0, 10, .05)
   ])
-]);
+].map(withTuningScope));
+
+// This is the only schema the live Admin console exposes. Hidden definitions
+// remain in normalization solely so historical run snapshots can still replay.
+export const ADMIN_GAME_TUNING_SCHEMA = Object.freeze(
+  GAME_TUNING_SCHEMA.filter((definition) => definition.lobbies.length > 0)
+);
 
 const schemaById = new Map(GAME_TUNING_SCHEMA.map((entry) => [entry.id, entry]));
+
+export function tuningSettingAppliesToLobby(id, lobby) {
+  return schemaById.get(id)?.lobbies.includes(lobby) === true;
+}
+
+export function tuningSchemaForLobby(lobby) {
+  return ADMIN_GAME_TUNING_SCHEMA.filter((definition) => definition.lobbies.includes(lobby));
+}
 
 export function defaultGameTuning() {
   return Object.fromEntries(GAMEPLAY_LOBBIES.map((lobby) => [lobby, defaultTuningPreset(lobby)]));
@@ -212,4 +275,28 @@ function normalizeValue(definition, raw) {
   if (!Number.isFinite(value)) throw new Error(`${definition.label} must be a number.`);
   const clamped = Math.min(definition.max, Math.max(definition.min, value));
   return definition.step >= 1 ? Math.round(clamped) : Number(clamped.toFixed(4));
+}
+
+function withTuningScope(definition) {
+  let lobbies = ACTIVE_GAMEPLAY_LOBBIES;
+  let owner = 'Game Balance';
+  if (
+    STUDIO_OWNED_SETTING_IDS.has(definition.id) ||
+    definition.category.startsWith('Depth ') ||
+    definition.category.startsWith('Boss Phase ')
+  ) {
+    lobbies = [];
+    owner = 'Competition Studio';
+  } else if (definition.id === 'bossProjectileSpeed' || definition.id === 'bossVolleySpread') {
+    lobbies = ['arena'];
+    owner = 'MATT Arena legacy Guardian';
+  } else if (V2_TRAIT_SUPERSEDED_SETTINGS.has(definition.id)) {
+    lobbies = ['practice'];
+    owner = 'Practice Mine; V2 Miner trait in NFT mines';
+  }
+  return Object.freeze({
+    ...definition,
+    lobbies: Object.freeze([...lobbies]),
+    owner
+  });
 }

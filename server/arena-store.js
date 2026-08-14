@@ -178,6 +178,36 @@ export class MemoryArenaStore {
     });
   }
 
+  async attachNftRun(runId, address, nftRun) {
+    return this.#mutate(() => {
+      const run = this.runs.get(runId);
+      assertApi(run, 404, 'arena_run_missing', 'The Daily Arena run was not found.');
+      assertApi(run.address === address, 403, 'arena_run_owner_mismatch', 'This Daily Arena run belongs to another wallet.');
+      assertApi(run.status === 'active', 409, 'arena_run_not_active', 'The Daily Arena run is no longer active.');
+      run.tuning ||= {};
+      run.tuning._nftRun = clone(nftRun);
+      return clone(run);
+    });
+  }
+
+  async rollbackUnstartedNftRun(runId, address, timestamp) {
+    return this.#mutate(() => {
+      const run = this.runs.get(runId);
+      assertApi(run, 404, 'arena_run_missing', 'The Daily Arena run was not found.');
+      assertApi(run.address === address, 403, 'arena_run_owner_mismatch', 'This Daily Arena run belongs to another wallet.');
+      assertApi(run.status === 'active', 409, 'arena_run_not_active', 'The Daily Arena run is no longer active.');
+      const nftRun = run.tuning?._nftRun;
+      assertApi(nftRun?.minerId && !nftRun.runId && !nftRun.beginTransactionHash, 409, 'arena_nft_run_already_started', 'The Arena entry cannot be restored after its on-chain Miner run started.');
+      const entry = this.entries.get(run.entryId);
+      assertApi(entry?.runId === runId, 409, 'arena_entry_run_mismatch', 'The Arena entry no longer matches this run.');
+      run.status = 'expired';
+      run.finishedAt = timestamp;
+      entry.runId = '';
+      entry.consumedAt = 0;
+      return { run: clone(run), entry: clone(entry), restored: true };
+    });
+  }
+
   async recoverRejectedRun(runId, error, timestamp) {
     return this.#mutate(() => {
       const run = this.runs.get(runId);
@@ -642,6 +672,82 @@ export class PostgresArenaStore {
       [runId, timestamp]
     );
     return this.getRun(runId);
+  }
+
+  async attachNftRun(runId, address, nftRun) {
+    await this.init();
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const selected = await client.query(
+        'SELECT * FROM matt_mine_arena.runs WHERE run_id=$1 FOR UPDATE',
+        [runId]
+      );
+      assertApi(selected.rows[0], 404, 'arena_run_missing', 'The Daily Arena run was not found.');
+      const run = formatRunRow(selected.rows[0]);
+      assertApi(run.address === address, 403, 'arena_run_owner_mismatch', 'This Daily Arena run belongs to another wallet.');
+      assertApi(run.status === 'active', 409, 'arena_run_not_active', 'The Daily Arena run is no longer active.');
+      run.tuning ||= {};
+      run.tuning._nftRun = clone(nftRun);
+      await client.query(
+        'UPDATE matt_mine_arena.runs SET tuning=$2::jsonb WHERE run_id=$1',
+        [runId, JSON.stringify(run.tuning)]
+      );
+      await client.query('COMMIT');
+      return run;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async rollbackUnstartedNftRun(runId, address, timestamp) {
+    await this.init();
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const selected = await client.query(
+        'SELECT * FROM matt_mine_arena.runs WHERE run_id=$1 FOR UPDATE',
+        [runId]
+      );
+      assertApi(selected.rows[0], 404, 'arena_run_missing', 'The Daily Arena run was not found.');
+      const run = formatRunRow(selected.rows[0]);
+      assertApi(run.address === address, 403, 'arena_run_owner_mismatch', 'This Daily Arena run belongs to another wallet.');
+      assertApi(run.status === 'active', 409, 'arena_run_not_active', 'The Daily Arena run is no longer active.');
+      const nftRun = run.tuning?._nftRun;
+      assertApi(nftRun?.minerId && !nftRun.runId && !nftRun.beginTransactionHash, 409, 'arena_nft_run_already_started', 'The Arena entry cannot be restored after its on-chain Miner run started.');
+      const entryResult = await client.query(
+        'SELECT * FROM matt_mine_arena.entries WHERE entry_id=$1 FOR UPDATE',
+        [run.entryId]
+      );
+      const entry = entryResult.rows[0] ? formatEntryRow(entryResult.rows[0]) : null;
+      assertApi(entry?.runId === runId, 409, 'arena_entry_run_mismatch', 'The Arena entry no longer matches this run.');
+      await client.query(
+        `UPDATE matt_mine_arena.runs
+         SET status='expired',finished_at_ms=$2
+         WHERE run_id=$1`,
+        [runId, timestamp]
+      );
+      await client.query(
+        `UPDATE matt_mine_arena.entries
+         SET run_id='',consumed_at_ms=0
+         WHERE entry_id=$1`,
+        [run.entryId]
+      );
+      await client.query('COMMIT');
+      run.status = 'expired';
+      run.finishedAt = timestamp;
+      entry.runId = '';
+      entry.consumedAt = 0;
+      return { run, entry, restored: true };
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async recoverRejectedRun(runId, error, timestamp) {

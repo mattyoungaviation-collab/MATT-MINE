@@ -257,6 +257,10 @@ button,
   gap: 10px;
 }
 
+.run-mode-grid.four-lobbies.three-lobbies {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .four-lobbies .run-mode-card {
   position: relative;
   min-height: 184px;
@@ -1646,4 +1650,14 @@ button,
 @media (max-width: 700px) {
   .interrupted-nft-practice { grid-template-columns: 1fr; }
   .interrupted-nft-practice button { width: 100%; }
+}
+
+.run-mode-grid.four-lobbies.three-lobbies {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 900px) {
+  .run-mode-grid.four-lobbies.three-lobbies {
+    grid-template-columns: 1fr;
+  }
 }

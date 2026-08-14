@@ -4,6 +4,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 
 import { MemoryDatabase } from '../server/database.js';
 import { CompleteProductionMattMineService } from '../server/complete-production-service.js';
+import { MattMineService } from '../server/service.js';
 import { MemoryNuggetEconomyStore } from '../server/nugget-economy.js';
 import { RONIN_CHAINS, SERVER_RUN_MODES } from '../server/constants.js';
 
@@ -53,10 +54,14 @@ async function signIn(harness) {
   return session;
 }
 
-test('knockout rewards keep the same balance while append-only entries classify death retention', async () => {
+test('legacy knockout records remain replayable after the old Free mine is retired', async () => {
   const harness = createHarness();
   const session = await signIn(harness);
-  const run = await harness.service.startRun(session.token, SERVER_RUN_MODES.FREE);
+  const run = await MattMineService.prototype.startRun.call(
+    harness.service,
+    session.token,
+    SERVER_RUN_MODES.FREE
+  );
   harness.advance(60_000);
   const result = {
     extracted: false,
@@ -100,7 +105,7 @@ test('knockout rewards keep the same balance while append-only entries classify 
   assert.equal(repeated.wallets[account.address.toLowerCase()].nuggetLedger.length, 3);
 });
 
-test('authenticated player data exposes only pending server Practice claims to the wallet UI', async () => {
+test('public Practice runs never create wallet rewards or pending claims', async () => {
   const harness = createHarness();
   const session = await signIn(harness);
   const run = await harness.service.startRun(session.token, SERVER_RUN_MODES.PRACTICE);
@@ -120,7 +125,5 @@ test('authenticated player data exposes only pending server Practice claims to t
   });
   const player = await harness.service.me(session.token);
   assert.equal(player.profile.bankedNuggets, 0);
-  assert.equal(player.nuggetEconomy.pendingPracticeClaims.length, 1);
-  assert.equal(player.nuggetEconomy.pendingPracticeClaims[0].runId, run.runId);
-  assert.equal(player.nuggetEconomy.pendingPracticeClaims[0].projectedNuggets, 2_000);
+  assert.deepEqual(player.nuggetEconomy.pendingPracticeClaims, []);
 });

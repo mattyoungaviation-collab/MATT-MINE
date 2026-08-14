@@ -38,10 +38,11 @@
         <span class="nav-label">Game</span>
         <button data-tab="studio"><span>Competition Studio</span><small>Maps &amp; schedules</small></button>
         <button data-tab="tuning"><span>Game Balance</span><small>Per-lobby tuning</small></button>
-        <button data-tab="expansion"><span>Modes &amp; Characters</span><small>Features &amp; roster</small></button>
+        <button data-tab="expansion"><span>Features &amp; Practice</span><small>Gates, controllers &amp; roster</small></button>
         <span class="nav-label">Economy</span>
+        <button data-tab="nft-v2"><span>NFT V2 Protocol</span><small>On-chain maps &amp; economy</small></button>
         <button data-tab="nugget-economy"><span>Nugget Economy</span><small>Prices &amp; packages</small></button>
-        <button data-tab="arena"><span>Daily Arena</span><small>Pool &amp; settlement</small></button>
+        <button data-tab="arena"><span>MATT Arena</span><small>Pool &amp; settlement</small></button>
         <span class="nav-label">System</span>
         <button data-tab="contracts"><span>Onchain Actions</span><small>Safe transaction files</small></button>
         <button data-tab="audit"><span>Audit Log</span><small>Every admin change</small></button>
@@ -85,10 +86,10 @@
 
       <section id="tab-expansion" class="tab">
         <div class="section-heading">
-          <div><p class="eyebrow">MODES &amp; CHARACTERS</p><h2>Features and playable roster</h2><p>Release gates, special modes, rewards, controllers, and character stats.</p></div>
-          <label class="search-field">Filter this page<input id="expansion-search" type="search" placeholder="Chest, revive, weekly, character…"></label>
+          <div><p class="eyebrow">FEATURES &amp; PRACTICE ROSTER</p><h2>Server features and legacy characters</h2><p>Release gates, rewards, controllers, and Practice-only character stats.</p></div>
+          <label class="search-field">Filter this page<input id="expansion-search" type="search" placeholder="Chest, revive, controller, character…"></label>
         </div>
-        <div class="notice">Production switches unlock only when their server verifier is ready. Competitive settings apply only before a stage opens.</div>
+        <div class="notice">Production switches unlock only when their server verifier is ready. Arena and Pass use the selected V2 Miner NFT instead of legacy character stats. Practice is the public no-wallet demo and always awards zero XP and zero Crystals. Retired Daily, Seven-Day, Endless, and Practice-ad reward controls are not exposed.</div>
         <div id="production-readiness" class="grid four"></div>
         <p id="expansion-result-count" class="result-count"></p>
         <form id="expansion-form">
@@ -126,19 +127,19 @@
           </form>
         </details>
         <div class="section-heading compact">
-          <div><p class="eyebrow">MINE-BY-MINE CONTROL</p><h2>Five independent control rooms</h2></div>
+          <div><p class="eyebrow">MINE-BY-MINE CONTROL</p><h2>Three independent control rooms</h2></div>
           <p>Every change is immediate and audit logged.</p>
         </div>
         <label class="panel operations-reason">Reason for the next mine control
-          <input id="mine-control-reason" maxlength="240" placeholder="Example: Closing Daily Mine after the weekly timer ended">
+          <input id="mine-control-reason" maxlength="240" placeholder="Example: Pausing MATT Arena while the map is updated">
         </label>
         <div id="mine-operations-grid" class="mine-operations-grid"></div>
         <div class="section-heading compact reward-desk-heading">
-          <div><p class="eyebrow">FREE + PASS PAYOUT DESK</p><h2>Leaderboard to MATT claim</h2><p>Complete the numbered steps. The server keeps the exact amount owed to every wallet until it is paid or the claim period closes.</p></div>
+          <div><p class="eyebrow">PASS + HISTORICAL PAYOUT DESK</p><h2>Leaderboard to MATT claim</h2><p>Pass payouts stay active. Retired Free Mine obligations remain here so previously earned rewards are never lost.</p></div>
         </div>
         <div class="panel reward-period-bar">
           <label>Closed competition week (Monday UTC)<input id="reward-week" type="date" required></label>
-          <button id="load-reward-week" type="button" class="ghost">Load Free + Pass</button>
+          <button id="load-reward-week" type="button" class="ghost">Load Pass + history</button>
           <span id="reward-week-help" class="muted">Choose the Monday that started the finished week.</span>
         </div>
         <div id="reward-operations-summary" class="reward-operations-summary"></div>
@@ -242,14 +243,14 @@
 
       <section id="tab-tuning" class="tab">
         <div class="section-heading">
-          <div><p class="eyebrow">GAME BALANCE</p><h2>Per-lobby tuning</h2><p>Every combat, enemy, boss, room, weapon, and scoring value.</p></div>
+          <div><p class="eyebrow">GAME BALANCE</p><h2>Effective per-mine tuning</h2><p>Only controls that can change the selected mine are shown.</p></div>
           <div class="filter-bar">
-            <label>Lobby<select id="tuning-lobby"><option value="practice">Practice</option><option value="free">Free ranked</option><option value="paid">Pass ranked</option><option value="arena">Daily Arena</option></select></label>
+            <label>Mine<select id="tuning-lobby"><option value="practice">Practice Mine</option><option value="arena">MATT Arena</option><option value="paid">Pass Mine</option></select></label>
             <label>Category<select id="tuning-category"><option value="">All categories</option></select></label>
             <label>Filter this page<input id="tuning-search" type="search" placeholder="Blaster, armor, Depth 5…"></label>
           </div>
         </div>
-        <div class="notice">Saved changes apply immediately to new runs in this lobby, including MATT Arena. Runs already in progress keep their pinned rules. Contract custody, confirmed payments, and finished scores remain protected.</div>
+        <div class="notice">Competition Studio owns maps, creature placement, Guardian phases, and starting loadouts. In Arena and Pass, the selected V2 Miner NFT owns base Health, Shield Armor, Pickaxe Attack, Blaster Attack, Dynamite Attack, Heal, carry capacity, and death retention. Game Balance shows the remaining controls that actually affect the selected mine. Changes apply to new runs; active runs and server replays keep their pinned rules.</div>
         <p id="tuning-result-count" class="result-count"></p>
         <form id="tuning-form">
           <div id="tuning-fields" class="tuning-groups"></div>
@@ -258,6 +259,60 @@
             <button type="submit">Save this lobby</button>
           </article>
         </form>
+      </section>
+
+      <section id="tab-nft-v2" class="tab">
+        <div class="section-heading">
+          <div><p class="eyebrow">RONIN MAINNET · NFT V2</p><h2>On-chain protocol controls</h2><p>Every save sends a real Ronin transaction from the dedicated Config Operator. Active runs retain their pinned rules.</p></div>
+          <button id="refresh-nft-v2" class="ghost" type="button">Refresh chain</button>
+        </div>
+        <div id="nft-v2-status" class="notice">Loading the verified on-chain configuration…</div>
+        <div id="nft-v2-paused" class="metrics"></div>
+
+        <form id="nft-v2-economy-form">
+          <details class="panel structured-card" open>
+            <summary><strong>Repair and withdrawal limits</strong><span>Raw 18-decimal token units</span></summary>
+            <div class="tuning-grid">
+              <label class="tuning-field">Armor repair price (MATT wei)<input id="nft-v2-repair" inputmode="numeric" pattern="[0-9]+" required></label>
+              <label class="tuning-field">Minimum withdrawal (Crystal wei)<input id="nft-v2-withdraw-min" inputmode="numeric" pattern="[0-9]+" required></label>
+              <label class="tuning-field">Wallet daily limit (Crystal wei)<input id="nft-v2-withdraw-wallet" inputmode="numeric" pattern="[0-9]+" required></label>
+              <label class="tuning-field">Global daily limit (Crystal wei)<input id="nft-v2-withdraw-global" inputmode="numeric" pattern="[0-9]+" required></label>
+            </div>
+          </details>
+          <details class="panel structured-card" open>
+            <summary><strong>Equipment chest prices</strong><span>Raw MATT wei</span></summary>
+            <div id="nft-v2-chest-prices" class="tuning-grid"></div>
+          </details>
+          <article class="panel save-bar">
+            <label>Required reason<input id="nft-v2-economy-reason" maxlength="240" required placeholder="Why are these on-chain values changing?"></label>
+            <button type="submit">Send economy transactions</button>
+          </article>
+        </form>
+
+        <div class="grid two">
+          <form id="nft-v2-map-form" class="panel">
+            <h2>Approve and activate map version</h2>
+            <label>Mine<select id="nft-v2-map-mode"><option value="arena">MATT Arena</option><option value="paid">Pass Mine</option></select></label>
+            <label>Map ID (bytes32)<input id="nft-v2-map-id" maxlength="66" spellcheck="false" required placeholder="0x…"></label>
+            <label>Content hash (bytes32)<input id="nft-v2-content-hash" maxlength="66" spellcheck="false" required placeholder="0x…"></label>
+            <div class="compact-grid">
+              <label>Mineable units<input id="nft-v2-mineable" type="number" min="1" max="1000000" step="1" required></label>
+              <label>Run timeout seconds<input id="nft-v2-timeout" type="number" min="300" max="86400" step="1" required></label>
+              <label>Conversion (Crystal wei/unit)<input id="nft-v2-conversion" inputmode="numeric" pattern="[0-9]+" required></label>
+              <label>Maximum payout (Crystal wei)<input id="nft-v2-max-payout" inputmode="numeric" pattern="[0-9]+" required></label>
+            </div>
+            <label>Required reason<input id="nft-v2-map-reason" maxlength="240" required></label>
+            <button type="submit">Approve + route new runs</button>
+          </form>
+          <form id="nft-v2-retire-form" class="panel">
+            <h2>Retire a map version</h2>
+            <p class="muted">Retirement is permanent. Existing runs can settle; no new run may start on that version.</p>
+            <label>Version ID (bytes32)<input id="nft-v2-retire-version" maxlength="66" spellcheck="false" required placeholder="0x…"></label>
+            <label>Required reason<input id="nft-v2-retire-reason" maxlength="240" required></label>
+            <button class="danger" type="submit">Retire map version</button>
+          </form>
+        </div>
+        <article class="panel"><h2>Active routes</h2><div id="nft-v2-map-routes"></div></article>
       </section>
 
       <section id="tab-nugget-economy" class="tab">
@@ -269,11 +324,11 @@
         <div id="nugget-economy-metrics" class="metrics"></div>
         <form id="nugget-economy-form">
           <details class="panel structured-card" open>
-            <summary><strong>Release gates</strong><span>5 controls</span></summary>
+            <summary><strong>Release gates</strong><span>4 controls</span></summary>
             <div class="toggle-grid">
               <label class="toggle">Nugget purchases<input id="economy-purchases-enabled" type="checkbox"></label>
-              <label class="toggle">Paid Practice claims<input id="economy-practice-enabled" type="checkbox"></label>
-              <label class="toggle linked-field"><span class="toggle-copy">Advertisement rewards<span class="link-chip">Linked · Modes &amp; Characters</span></span><input id="economy-ads-enabled" type="checkbox" data-linked-control="advertisement-rewards-enabled"></label>
+              <input id="economy-practice-enabled" type="checkbox" hidden disabled aria-hidden="true">
+              <label class="toggle linked-field"><span class="toggle-copy">Advertisement rewards<span class="link-chip">Linked · Features &amp; Practice</span></span><input id="economy-ads-enabled" type="checkbox" data-linked-control="advertisement-rewards-enabled"></label>
               <label class="toggle">Accept MATT<input id="economy-asset-matt" type="checkbox"></label>
               <label class="toggle">Accept RON<input id="economy-asset-ron" type="checkbox"></label>
             </div>
@@ -292,8 +347,8 @@
             </div>
           </details>
 
-          <details class="panel structured-card">
-            <summary><strong>Practice claim price</strong><span>2 controls</span></summary>
+          <details class="panel structured-card" hidden>
+            <summary><strong>Retired Practice claim price</strong><span>Not used</span></summary>
             <div class="tuning-grid">
               <label class="tuning-field">Payment asset<select id="economy-practice-asset"><option value="MATT">MATT</option><option value="RON">RON</option></select></label>
               <label class="tuning-field">Token amount<input id="economy-practice-amount" type="number" min="0" step="0.000000000000000001"></label>
@@ -334,7 +389,7 @@
 
       <section id="tab-arena" class="tab">
         <div class="section-heading">
-          <div><p class="eyebrow">PLAYER-FUNDED MATT COMPETITION</p><h2>Daily Arena</h2></div>
+          <div><p class="eyebrow">PLAYER-FUNDED MATT COMPETITION</p><h2>MATT Arena</h2></div>
           <button id="refresh-arena-admin" class="ghost">Refresh</button>
         </div>
         <div class="notice warning">Every accepted entry and Treasury seed becomes reserved player prize money. Active Arena pools cannot be withdrawn or redirected.</div>

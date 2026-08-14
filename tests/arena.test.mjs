@@ -411,6 +411,40 @@ test('a confirmed payment cannot be replayed by another wallet', async () => {
   );
 });
 
+test('an Arena entry is restored only when its NFT transaction definitely never started', async () => {
+  const store = await new MemoryArenaStore().init();
+  await store.ensureDay(dayRecord());
+  await store.confirmEntry(entryRecord(1, HASH_A));
+  const pending = {
+    ...runRecord('arena_run_nft_rollback', 1_000),
+    tuning: { _nftRun: { minerId: 1, profile: { minerId: 1 } } }
+  };
+  await store.consumeEntry(PLAYER, DAY, 'arena_entry_1', pending);
+  const rolledBack = await store.rollbackUnstartedNftRun(
+    'arena_run_nft_rollback',
+    PLAYER,
+    2_000
+  );
+  assert.equal(rolledBack.restored, true);
+  assert.equal((await store.unusedEntries(PLAYER, DAY)).length, 1);
+
+  await store.consumeEntry(PLAYER, DAY, 'arena_entry_1', {
+    ...pending,
+    runId: 'arena_run_nft_started',
+    startedAt: 3_000,
+    expiresAt: 63_000
+  });
+  await store.attachNftRun('arena_run_nft_started', PLAYER, {
+    minerId: 1,
+    runId: `0x${'a'.repeat(64)}`,
+    beginTransactionHash: `0x${'b'.repeat(64)}`
+  });
+  await assert.rejects(
+    () => store.rollbackUnstartedNftRun('arena_run_nft_started', PLAYER, 4_000),
+    (error) => error.code === 'arena_nft_run_already_started'
+  );
+});
+
 test('each entry is consumed once and only the wallet best run ranks', async () => {
   const store = await new MemoryArenaStore().init();
   await store.ensureDay(dayRecord());

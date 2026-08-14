@@ -173,11 +173,15 @@ export class MattMineApiClient {
     return response.leaderboard;
   }
 
-  async startArenaRun(entryId = '') {
+  async startArenaRun(minerId, entryId = '', approval = null) {
     const response = await this.request('/api/arena/runs/start', {
       method: 'POST',
       authenticated: true,
-      body: entryId ? { entryId } : {}
+      body: {
+        minerId,
+        ...(entryId ? { entryId } : {}),
+        ...(approval ? approval : {})
+      }
     });
     return response.run;
   }
@@ -232,11 +236,20 @@ export class MattMineApiClient {
     });
   }
 
-  async startRun(mode, minerId = 0) {
+  async prepareNftRunAuthorization(mode, minerId) {
+    const response = await this.request('/api/nft/v2/runs/authorization', {
+      method: 'POST',
+      authenticated: true,
+      body: { mode, minerId }
+    });
+    return response.authorization;
+  }
+
+  async startRun(mode, minerId = 0, approval = null) {
     const response = await this.request('/api/runs/start', {
       method: 'POST',
       authenticated: true,
-      body: { mode, ...(minerId ? { minerId } : {}) }
+      body: { mode, ...(minerId ? { minerId } : {}), ...(approval ? approval : {}) }
     });
     return response.run;
   }

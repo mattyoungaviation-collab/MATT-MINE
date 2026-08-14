@@ -214,7 +214,7 @@ test('legacy global pause state migrates into the matching mine controls', () =>
   assert.equal(migrated.operations.mines.arena.entriesPaused, false);
 });
 
-test('mine operations reject controls that have no real flow to pause', async () => {
+test('mine operations expose only the three live mines and reject controls with no flow', async () => {
   const harness = serviceHarness();
   await assert.rejects(
     () => harness.service.updateMineOperations(
@@ -223,7 +223,7 @@ test('mine operations reject controls that have no real flow to pause', async ()
       { paymentsPaused: true },
       'Daily Mine is free and has no payment flow'
     ),
-    (error) => error.code === 'mine_operation_not_applicable'
+    (error) => error.code === 'mine_operation_unknown'
   );
   await assert.rejects(
     () => harness.service.updateMineOperations(
@@ -232,20 +232,38 @@ test('mine operations reject controls that have no real flow to pause', async ()
       { rewardsPaused: true },
       'Seven-Day Mine has no separate MATT claim flow'
     ),
+    (error) => error.code === 'mine_operation_unknown'
+  );
+  await assert.rejects(
+    () => harness.service.updateMineOperations(
+      'admin-secret',
+      'practice',
+      { paymentsPaused: true },
+      'Practice is permanently free and rewardless'
+    ),
     (error) => error.code === 'mine_operation_not_applicable'
   );
 });
 
 test('game tuning is lobby-specific, audited, and applies immediately to every new run', async () => {
   const harness = serviceHarness();
-  const free = await harness.service.updateAdminGameTuning(
+  const practice = await harness.service.updateAdminGameTuning(
     'admin-secret',
-    'free',
-    { playerMaxHealth: 175 },
-    'Raise Free lobby survivability'
+    'practice',
+    { playerSpeed: 335, enemyDamageMultiplier: 1.25 },
+    'Tune the public Practice demo'
   );
-  assert.equal(free.preset.playerMaxHealth, 175);
-  assert.equal(free.effectiveAt, START);
+  assert.equal(practice.preset.playerSpeed, 335);
+  assert.equal(practice.preset.enemyDamageMultiplier, 1.25);
+
+  const pass = await harness.service.updateAdminGameTuning(
+    'admin-secret',
+    'paid',
+    { playerSpeed: 345 },
+    'Tune Pass Mine movement'
+  );
+  assert.equal(pass.preset.playerSpeed, 345);
+  assert.equal(pass.effectiveAt, START);
 
   const arena = await harness.service.updateAdminGameTuning(
     'admin-secret',
@@ -257,9 +275,23 @@ test('game tuning is lobby-specific, audited, and applies immediately to every n
   const state = await harness.database.read();
   assert.equal(state.gameTuning.arena.bossHealthMultiplier, 2.5);
   assert.equal(Object.hasOwn(state, 'arenaTuningSchedule'), false);
-  assert.equal((await harness.service.publicGameTuning('free')).preset.playerMaxHealth, 175);
+  assert.equal((await harness.service.publicGameTuning('practice')).preset.playerSpeed, 335);
+  assert.equal((await harness.service.publicGameTuning('paid')).preset.playerSpeed, 345);
+  await assert.rejects(
+    () => harness.service.updateAdminGameTuning(
+      'admin-secret',
+      'paid',
+      { playerMaxHealth: 175 },
+      'This is owned by the selected Miner NFT'
+    ),
+    (error) => error.code === 'tuning_setting_not_applicable'
+  );
+  await assert.rejects(
+    () => harness.service.publicGameTuning('free'),
+    (error) => error.code === 'tuning_lobby_unknown'
+  );
   const audit = await harness.service.adminAudit('admin-secret', { action: 'GAME_TUNING_UPDATED' });
-  assert.equal(audit.entries.length, 2);
+  assert.equal(audit.entries.length, 3);
   assert.ok(audit.entries.every((entry) => entry.details.includes('effective immediately for new runs')));
 });
 
@@ -507,9 +539,11 @@ test('admin HTTP routes reject missing credentials and apply audited controls', 
   const minePayload = await mineOverview.json();
   assert.equal(minePayload.mines.find((mine) => mine.id === 'practice').controls.entriesPaused, true);
   assert.deepEqual(
-    minePayload.mines.find((mine) => mine.id === 'daily').availableControls,
-    ['entries', 'results', 'rewards']
+    minePayload.mines.find((mine) => mine.id === 'practice').availableControls,
+    ['entries', 'results']
   );
+  assert.deepEqual(minePayload.mines.map((mine) => mine.id), ['practice', 'arena', 'pass']);
+  assert.equal(minePayload.mines.some((mine) => mine.id === 'daily'), false);
 
   const terminated = await fetch(`${base}/api/admin/mine-operations/practice/terminate-runs`, {
     method: 'POST',

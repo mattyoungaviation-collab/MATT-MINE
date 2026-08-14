@@ -26,10 +26,25 @@
     "verify-nft:saigon": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-nft-saigon.ps1",
     "bootstrap-nft-rehearsal:saigon": "hardhat run --build-profile production scripts/bootstrap-nft-saigon-rehearsal.js --network saigon",
     "check-nft-rehearsal:saigon": "hardhat run --build-profile production scripts/check-nft-saigon-rehearsal.js --network saigonReadOnly",
-    "activate-chest-keeper:saigon": "hardhat run --build-profile production scripts/activate-saigon-chest-keeper.js --network saigon"
+    "activate-chest-keeper:saigon": "hardhat run --build-profile production scripts/activate-saigon-chest-keeper.js --network saigon",
+    "validate-nft-v2:saigon": "hardhat run scripts/validate-nft-v2-saigon-config.js --network saigonReadOnly",
+    "deploy-nft-v2:saigon": "hardhat run --build-profile production scripts/deploy-nft-v2-saigon.js --network saigon",
+    "check-nft-v2:saigon": "hardhat run --build-profile production scripts/check-nft-v2-saigon.js --network saigonReadOnly",
+    "audit-nft-v2": "node scripts/audit-nft-v2-source.js",
+    "validate-nft-v2:ronin": "hardhat run scripts/validate-nft-v2-mainnet-config.js --network roninReadOnly",
+    "check-nft-v2-deployer:ronin": "hardhat run --build-profile production scripts/check-nft-v2-mainnet-deployer.js --network roninNftV2",
+    "deploy-nft-v2:ronin": "hardhat run --build-profile production scripts/deploy-nft-v2-mainnet.js --network roninNftV2",
+    "check-nft-v2:ronin": "hardhat run --build-profile production scripts/check-nft-v2-mainnet.js --network roninReadOnly",
+    "verify-nft-v2:ronin": "hardhat run --build-profile production scripts/verify-nft-v2-mainnet.js --network roninReadOnly",
+    "check-nft-v2-inventory:ronin": "hardhat run --build-profile production scripts/check-nft-v2-mainnet-inventory.js --network roninReadOnly",
+    "premint-nft-v2-inventory:ronin": "hardhat run --build-profile production scripts/premint-nft-v2-mainnet-inventory.js --network roninNftV2",
+    "check-nft-v2-activation:ronin": "hardhat run --build-profile production scripts/check-nft-v2-mainnet-activation.js --network roninNftV2",
+    "activate-nft-v2:ronin": "hardhat run --build-profile production scripts/activate-nft-v2-mainnet.js --network roninNftV2",
+    "check-nft-v2-live:ronin": "hardhat run --build-profile production scripts/check-nft-v2-mainnet-live.js --network roninReadOnly"
   },
   "dependencies": {
-    "@openzeppelin/contracts": "5.4.0"
+    "@openzeppelin/contracts": "5.4.0",
+    "@openzeppelin/contracts-upgradeable": "5.4.0"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-ethers": "4.0.15",

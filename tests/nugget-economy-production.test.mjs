@@ -231,7 +231,7 @@ test('expired quotes are rejected without crediting nuggets', async () => {
   assert.equal(persisted.wallets[account.address.toLowerCase()].profile.bankedNuggets, 0);
 });
 
-test('Practice rewards remain pending until the exact quoted payment verifies', async () => {
+test('Practice remains rewardless even when the legacy purchase economy is enabled', async () => {
   const harness = createHarness();
   const session = await signIn(harness);
   await enableEconomy(harness);
@@ -251,20 +251,11 @@ test('Practice rewards remain pending until the exact quoted payment verifies', 
     }
   });
   assert.equal(finished.profile.bankedNuggets, 0);
-  assert.equal(finished.practiceClaim.status, 'pending');
-
-  const quoted = await harness.service.quotePracticeClaim(session.token, { runId: run.runId });
-  assert.equal(quoted.quote.nuggets, 2_500);
-  assert.equal(quoted.quote.amountAtomic, '5000000000000000000000');
-  const claimed = await harness.service.practiceRunClaim(session.token, {
-    action: 'claim',
-    runId: run.runId,
-    quoteId: quoted.quote.id,
-    transactionHash: TX_B
-  });
-  assert.equal(claimed.profile.bankedNuggets, 2_500);
-  assert.equal(claimed.practiceClaim.status, 'claimed');
-  assert.equal(claimed.ledgerEntry.type, 'PRACTICE_CLAIM');
+  assert.equal(finished.practiceClaim, null);
+  await assert.rejects(
+    () => harness.service.quotePracticeClaim(session.token, { runId: run.runId }),
+    (error) => error.code === 'claim_record_not_found'
+  );
 });
 
 test('exact verifier rejects underpayment, overpayment, wrong recipient, and wrong chain-call shape', async () => {

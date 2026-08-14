@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 
-test('the production lobby presents the map and four play choices in one command deck', async () => {
+test('the production lobby presents exactly three live mines in one command deck', async () => {
   const html = await readFile(`${root}index.html`, 'utf8');
   const css = await readFile(`${root}src/production.css`, 'utf8');
   assert.match(html, /class="lobby-topbar"/);
@@ -14,8 +14,12 @@ test('the production lobby presents the map and four play choices in one command
   assert.match(html, /class="lobby-choice-column"/);
   assert.match(html, /class="menu-bottom-deck"/);
 
-  const lobbyBlock = html.match(/<div class="run-mode-grid four-lobbies"[\s\S]*?<\/div>\s*<\/div>\s*<\/div>\s*<div class="menu-bottom-deck">/)?.[0] || '';
-  assert.equal((lobbyBlock.match(/class="run-mode-card/g) || []).length, 4);
+  const lobbyBlock = html.match(/<div class="run-mode-grid four-lobbies three-lobbies"[\s\S]*?<\/div>\s*<\/div>\s*<\/div>\s*<div class="menu-bottom-deck">/)?.[0] || '';
+  assert.equal((lobbyBlock.match(/class="run-mode-card/g) || []).length, 3);
+  assert.match(lobbyBlock, /PRACTICE MINE/);
+  assert.match(lobbyBlock, /MATT ARENA/);
+  assert.match(lobbyBlock, /PASS MINE/);
+  assert.doesNotMatch(lobbyBlock, /FREE DAILY|SEVEN-DAY|ENDLESS|PVP/i);
   const productionLobby = css.slice(css.lastIndexOf('/* Production lobby:'));
   assert.match(productionLobby, /#menu\.menu-v4:not\(\.active\)\s*\{\s*display:\s*none;/);
 });
@@ -63,4 +67,21 @@ test('the lobby exposes NFT Practice refresh recovery without reusing a lost run
   assert.match(source, /restartInterruptedNftPractice: true/);
   assert.match(apiSource, /\/api\/runs\/nft-practice\/restart/);
   assert.match(httpSource, /service\.restartInterruptedNftPractice\(bearerToken\(request\)\)/);
+});
+
+test('Practice is visibly public, rewardless, and starts without the authenticated NFT path', async () => {
+  const html = await readFile(`${root}index.html`, 'utf8');
+  const source = await readFile(`${root}src/main.js`, 'utf8');
+  const admin = await readFile(`${root}admin.html`, 'utf8');
+
+  assert.match(html, /Anyone can play · No XP · No Crystals/);
+  assert.match(html, /NO XP · NO CRYSTALS/);
+  assert.match(html, /No wallet or Miner NFT needed/);
+  assert.match(source, /PRACTICE · NO XP · NO CRYSTALS/);
+  assert.match(source, /No XP, no MATT Crystals, and no leaderboard score/);
+  const useServer = source.match(/const useServer\s*=([\s\S]*?);\s*activePracticeClaim/)?.[1] || '';
+  assert.doesNotMatch(useServer, /RUN_MODES\.PRACTICE/);
+  assert.match(source, /apiClient\.gameTuning\(mode\)/);
+  assert.match(source, /apiClient\.mineSlot\(slotIdForMode\(mode\)\)/);
+  assert.match(admin, /Practice is the public no-wallet demo and always awards zero XP and zero Crystals/);
 });

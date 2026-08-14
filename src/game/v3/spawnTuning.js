@@ -12,6 +12,7 @@ import {
   resolveEnemySpawnType
 } from '../enemyDepthTuning.js';
 import { competitionGuardianTuningForDepth } from '../competitionStudio.js';
+import { nftHealAmount } from '../nftTraits.js';
 
 const TAU = Math.PI * 2;
 const MAX_CONFIGURED_DEPTH = 5;
@@ -91,7 +92,10 @@ export const spawnTuningMethods = {
     this.player.y = this.layout.startRoom.y;
     this.player.vx = 0;
     this.player.vy = 0;
-    this.player.health = Math.min(this.player.maxHealth, this.player.health + this.player.maxHealth * .3);
+    this.player.health = Math.min(
+      this.player.maxHealth,
+      this.player.health + nftHealAmount(this.runContext, this.player.maxHealth * .3)
+    );
     this.run.safeStartUntil = this.run.elapsed +
       (arenaMode ? CONFIG.arenaSafeStartSeconds : (tuning.safeStartSeconds ?? CONFIG.safeStartSeconds));
 

@@ -113,8 +113,8 @@ test('competitive replay checkpoints are signed, ordered, persisted, and bound t
   const run = {
     id: 'run_111111111111111111111111',
     address: ADDRESS,
-    mode: 'weekly',
-    seed: 'MATT-WEEKLY-TEST',
+    mode: 'paid',
+    seed: 'MATT-PASS-TEST',
     startedAt: now,
     expiresAt: now + 60_000
   };

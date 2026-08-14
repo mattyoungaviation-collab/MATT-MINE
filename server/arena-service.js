@@ -268,6 +268,13 @@ export class DailyArenaService {
     assertApi(selected, 409, 'arena_attempt_required', 'Confirm an unused Daily Arena entry before starting.');
     const tuning = structuredClone(await this.getTuning(day));
     tuning._playerProfile = structuredClone(input.playerProfile || {});
+    if (input.nftRun?.minerId && input.nftRun?.profile) {
+      tuning._nftRun = structuredClone(input.nftRun);
+      const nftMaximumHealth = Number(input.nftRun.profile.gameplay?.maximumHealth);
+      if (Number.isFinite(nftMaximumHealth) && nftMaximumHealth > 0) {
+        tuning.playerMaxHealth = nftMaximumHealth;
+      }
+    }
     applyMinePassGameplayBenefits(tuning, input.passActiveAtStart === true);
     applyArenaPaidReviveConfig(tuning, input);
     const receipt = {
@@ -327,7 +334,8 @@ export class DailyArenaService {
           receipt.tuning?._paidRevive?.invulnerabilitySeconds || 0,
         receipt: { ...receipt, signature: receiptSignature },
         checkpoint,
-        challenge: buildArenaChallenge(contest.deterministicSeed, receipt.tuning)
+        challenge: buildArenaChallenge(contest.deterministicSeed, receipt.tuning),
+        ...(receipt.tuning?._nftRun ? { nftRun: receipt.tuning._nftRun } : {})
       }
     };
   }
@@ -1312,6 +1320,7 @@ function arenaProgressionSnapshot(run) {
   const configuredMultiplier = Number(run.tuning?.passXpMultiplier);
   return {
     runId: run.runId,
+    ...(run.tuning?._nftRun ? { nftRun: structuredClone(run.tuning._nftRun) } : {}),
     passActiveAtStart: run.tuning?._minePassBenefits?.active === true,
     passXpMultiplier: Number.isFinite(configuredMultiplier)
       ? Math.max(0, Math.min(10, configuredMultiplier))

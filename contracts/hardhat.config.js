@@ -74,6 +74,13 @@ export default defineConfig({
       url: process.env.RONIN_RPC_URL || "https://api.roninchain.com/rpc",
       accounts: []
     },
+    roninNftV2: {
+      type: "http",
+      chainType: "l1",
+      chainId: 2020,
+      url: process.env.RONIN_RPC_URL || "https://api.roninchain.com/rpc",
+      accounts: [configVariable("NUGG_DEPLOYER_PRIVATE_KEY")]
+    },
     saigon: {
       type: "http",
       chainType: "l1",
@@ -92,7 +99,7 @@ export default defineConfig({
   verify: {
     sourcify: {
       enabled: true,
-      apiUrl: "https://sourcify.roninchain.com/server"
+      apiUrl: "https://sourcify.roninchain.com/server/"
     }
   }
 });

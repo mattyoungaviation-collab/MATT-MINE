@@ -1,7 +1,7 @@
 import {
+  ACTIVE_COMPETITION_SLOTS as COMPETITION_SLOTS,
   COMPETITION_DEPTH_COUNT,
   COMPETITION_MONSTER_TUNING_SCHEMA,
-  COMPETITION_SLOTS,
   createStarterMap,
   normalizeCompetitionDraft,
   validateCompetitionDraft,
@@ -438,6 +438,9 @@ function updateInspector(event) {
 
 function renderCompetition() {
   const draft = studio.draft;
+  const nftGated = studio.slotId === 'arena' || studio.slotId === 'pass';
+  const isArena = studio.slotId === 'arena';
+  const isPass = studio.slotId === 'pass';
   $('#studio-competition-fields').innerHTML = `
     ${field('Competition name', 'name', draft.name, 'text')}
     ${field('Card description', 'subtitle', draft.subtitle, 'text')}
@@ -445,25 +448,25 @@ function renderCompetition() {
       <option value="authored" ${draft.enemyPlanMode !== 'generated' ? 'selected' : ''}>Exact Studio map objects</option>
       <option value="generated" ${draft.enemyPlanMode === 'generated' ? 'selected' : ''}>Generated room plan</option>
     </select><small>Exact Studio objects preserves every placed enemy. Generated mode replaces them using room-count balancing.</small></label>
-    <label class="tuning-field">Guardian control system<select data-competition="guardianAiMode">
+    ${isArena ? `<label class="tuning-field">Guardian control system<select data-competition="guardianAiMode">
       <option value="advanced" ${draft.guardianAiMode !== 'legacy' ? 'selected' : ''}>Advanced phase controller</option>
       <option value="legacy" ${draft.guardianAiMode === 'legacy' ? 'selected' : ''}>Legacy Arena controller</option>
-    </select><small>Advanced makes every phase and attack control below authoritative. Legacy is retained only for compatibility.</small></label>
-    <label class="tuning-field">Locked character<select data-competition="loadout.characterId">${CHARACTER_IDS.map((characterId) => `<option value="${characterId}" ${draft.loadout.characterId === characterId ? 'selected' : ''}>${escapeHtml(CHARACTER_DEFAULTS[characterId]?.name || titleCase(characterId))}</option>`).join('')}</select></label>
+    </select><small>Advanced makes every phase and attack control below authoritative. Legacy is retained only for Arena compatibility.</small></label>` : ''}
+    ${nftGated ? `<div class="studio-tip"><b>V2 MINER TRAITS ACTIVE</b><span>The selected Miner NFT supplies appearance, Health, Shield Armor, Pickaxe, Blaster, Dynamite, Heal, carry capacity, and death retention. Those values cannot be overridden here.</span></div>` : `<label class="tuning-field">Locked character<select data-competition="loadout.characterId">${CHARACTER_IDS.map((characterId) => `<option value="${characterId}" ${draft.loadout.characterId === characterId ? 'selected' : ''}>${escapeHtml(CHARACTER_DEFAULTS[characterId]?.name || titleCase(characterId))}</option>`).join('')}</select></label>`}
     <label class="tuning-field">Starting weapon<select data-competition="loadout.startingWeapon">${['pickaxe','dynamite','blaster'].map((weapon) => `<option value="${weapon}" ${draft.loadout.startingWeapon === weapon ? 'selected' : ''}>${titleCase(weapon)}</option>`).join('')}</select></label>
     ${['pickaxe','dynamite','blaster'].map((weapon) => `<label class="tuning-field studio-check">${titleCase(weapon)} available<input data-competition="loadout.availableWeapons" data-weapon="${weapon}" type="checkbox" ${(draft.loadout.availableWeapons || []).includes(weapon) ? 'checked' : ''} ${weapon === 'pickaxe' ? 'disabled' : ''}></label>`).join('')}
-    ${field('Starting health', 'loadout.startingHealth', draft.loadout.startingHealth, 'number', '1', '1000', '1', true)}
+    ${nftGated ? '' : field('Starting health', 'loadout.startingHealth', draft.loadout.startingHealth, 'number', '1', '1000', '1', true)}
     ${field('Starting dynamite', 'loadout.startingDynamite', draft.loadout.startingDynamite, 'number', '0', '99', '1', true)}
     ${field('Blaster energy', 'loadout.blasterEnergy', draft.loadout.blasterEnergy, 'number', '1', '1000', '1', true)}
     ${field('Maximum drones', 'loadout.maximumDrones', draft.loadout.maximumDrones, 'number', '0', '4', '1', true)}
-    ${field('Attempt limit (0 = unlimited)', 'rules.attemptLimit', draft.rules.attemptLimit, 'number', '0', '1000', '1', true)}
+    ${isPass ? field('Attempt limit (0 = unlimited)', 'rules.attemptLimit', draft.rules.attemptLimit, 'number', '0', '1000', '1', true) : ''}
     ${field('Safe start seconds', 'rules.safeStartSeconds', draft.rules.safeStartSeconds, 'number', '0', '30', '.5', true)}
     ${field('Leaderboard title', 'rules.leaderboardTitle', draft.rules.leaderboardTitle, 'text')}
     ${field('Reward label', 'rules.rewardLabel', draft.rules.rewardLabel, 'text')}
     ${field('Player instructions', 'rules.instructions', draft.rules.instructions, 'text')}
-    ${check('Permanent upgrades enabled', 'loadout.permanentUpgrades', draft.loadout.permanentUpgrades)}
+    ${nftGated ? '' : check('Permanent upgrades enabled', 'loadout.permanentUpgrades', draft.loadout.permanentUpgrades)}
     ${check('Run upgrades enabled', 'loadout.runUpgrades', draft.loadout.runUpgrades)}
-    ${check('Paid revive enabled', 'loadout.paidRevive', draft.loadout.paidRevive)}
+    ${studio.slotId === 'practice' ? '' : check('Paid revive enabled', 'loadout.paidRevive', draft.loadout.paidRevive)}
     <section class="studio-monster-tuning">
       <div class="studio-monster-heading">
         <span><b>DEPTH ${studio.depth} CREATURE CONTROL</b><small>Every field is pinned into the published version and read by the live enemy engine.</small></span>
@@ -478,16 +481,22 @@ function renderMonsterTuning() {
   const roomDefinitions = COMPETITION_MONSTER_TUNING_SCHEMA.filter((definition) =>
     definition.category === `Depth ${studio.depth} generated room plan`
   );
-  const roomPlan = `<details class="studio-monster-card">
+  const roomPlan = studio.draft.enemyPlanMode === 'generated' ? `<details class="studio-monster-card">
     <summary><span><b>Generated room plan</b><small>Used only when Enemy placement source is Generated room plan.</small></span><em>${roomDefinitions.length} CONTROLS</em></summary>
     <div class="studio-monster-fields">${roomDefinitions.map(renderMonsterField).join('')}</div>
-  </details>`;
+  </details>` : '';
   const creatures = PER_DEPTH_ENEMY_TYPES.map((type) => {
     const typePrefix = `${depthPrefix}${type.id.charAt(0).toUpperCase()}${type.id.slice(1)}`;
-    const definitions = COMPETITION_MONSTER_TUNING_SCHEMA.filter((definition) =>
+    let definitions = COMPETITION_MONSTER_TUNING_SCHEMA.filter((definition) =>
       (definition.id.startsWith(typePrefix) && definition.category === `Depth ${studio.depth} enemy tuning`) ||
       (type.id === 'guardian' && definition.id.startsWith(`${depthPrefix}Boss`))
     );
+    if (studio.draft.enemyPlanMode !== 'generated') {
+      definitions = definitions.filter((definition) => !definition.id.endsWith('SpawnWeight'));
+    }
+    if (type.id === 'guardian' && studio.slotId === 'arena' && studio.draft.guardianAiMode === 'legacy') {
+      definitions = definitions.filter((definition) => !definition.runtimeId);
+    }
     const summary = definitions
       .filter((definition) => /(?:Health|Damage|Speed|Enabled)$/.test(definition.id))
       .slice(0, 4)

@@ -78,6 +78,8 @@ export const weaponsMethods = {
     this.player.swingTimer = 0.24;
     this.player.dynamiteAmmo -= 1;
     const speed = 430;
+    const tuning = this.runContext?.tuning || {};
+    const baseDamage = this.player.dynamiteBaseDamage || tuning.dynamiteDamage || CONFIG.dynamiteDamage;
     this.projectiles.push({
       id: this.entityId++,
       kind: 'dynamite',
@@ -89,9 +91,9 @@ export const weaponsMethods = {
       radius: 10,
       life: 0.68,
       travelled: 0,
-      maxRange: this.runContext?.tuning?.dynamiteThrowRange || CONFIG.dynamiteRange,
-      damage: this.runContext?.tuning?.dynamiteDamage || CONFIG.dynamiteDamage,
-      explosionRadius: this.runContext?.tuning?.dynamiteBlastRadius || 155,
+      maxRange: tuning.dynamiteThrowRange || CONFIG.dynamiteRange,
+      damage: baseDamage * (tuning.dynamiteDamageMultiplier ?? 1),
+      explosionRadius: tuning.dynamiteBlastRadius || 155,
       color: '#ffb342'
     });
     this.audio.play('throw');

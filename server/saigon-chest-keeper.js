@@ -168,9 +168,12 @@ export class SaigonChestKeeper {
 export function createSaigonChestKeeperFromEnvironment(environment = process.env, options = {}) {
   const enabled = environment.MATT_MINE_NFT_SAIGON_KEEPER_ENABLED === 'true';
   if (!enabled) return null;
+  const chainId = Number(environment.MATT_MINE_NFT_CHAIN_ID || 202601);
+  const contractVersion = Number(environment.MATT_MINE_NFT_CONTRACT_VERSION || 1);
+  if (chainId !== 202601 || contractVersion !== 1) return null;
   return new SaigonChestKeeper({
     enabled,
-    chainId: Number(environment.MATT_MINE_NFT_CHAIN_ID || 202601),
+    chainId,
     rpcUrl: environment.MATT_MINE_NFT_RPC_URL || 'https://saigon-testnet.roninchain.com/rpc',
     randomnessAddress: environment.MATT_MINE_NFT_RANDOMNESS_ADDRESS,
     chestAddress: environment.MATT_MINE_NFT_CHEST_ADDRESS,

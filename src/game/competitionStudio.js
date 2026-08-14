@@ -5,11 +5,17 @@ import { enemyDepthTuningSchema } from './enemyDepthTuning.js';
 export const COMPETITION_SLOTS = Object.freeze([
   Object.freeze({ id: 'practice', number: 1, name: 'Practice Mine', mode: 'practice', leaderboard: false, color: '#55dfb4' }),
   Object.freeze({ id: 'arena', number: 2, name: 'MATT Arena', mode: 'arena', leaderboard: true, color: '#ffcf32' }),
-  Object.freeze({ id: 'daily', number: 3, name: 'Daily Mine', mode: 'free', leaderboard: true, color: '#5bd8ff' }),
+  Object.freeze({ id: 'daily', number: 3, name: 'Daily Mine', mode: 'free', leaderboard: true, color: '#5bd8ff', retired: true }),
   Object.freeze({ id: 'pass', number: 4, name: 'Pass Mine', mode: 'paid', leaderboard: true, color: '#bd74ff' }),
-  Object.freeze({ id: 'weekly', number: 5, name: 'Seven-Day Mine', mode: 'weekly', leaderboard: true, color: '#ff805e' }),
-  Object.freeze({ id: 'pvp', number: 6, name: 'PvP Mine', mode: 'pvp', leaderboard: false, color: '#6f7787', comingSoon: true })
+  Object.freeze({ id: 'weekly', number: 5, name: 'Seven-Day Mine', mode: 'weekly', leaderboard: true, color: '#ff805e', retired: true }),
+  Object.freeze({ id: 'pvp', number: 6, name: 'PvP Mine', mode: 'pvp', leaderboard: false, color: '#6f7787', comingSoon: true, retired: true })
 ]);
+
+export const ACTIVE_COMPETITION_SLOTS = Object.freeze(COMPETITION_SLOTS
+  .filter((slot) => ['practice', 'arena', 'pass'].includes(slot.id))
+  .map((slot, index) => Object.freeze({ ...slot, number: index + 1 })));
+export const ACTIVE_MINE_IDS = Object.freeze(ACTIVE_COMPETITION_SLOTS.map((slot) => slot.id));
+export const RETIRED_MINE_IDS = Object.freeze(['daily', 'weekly', 'endless', 'pvp']);
 
 export const MAP_OBJECT_KINDS = Object.freeze({
   spawn: Object.freeze(['player']),
@@ -155,9 +161,9 @@ export function normalizeCompetitionDraft(input, forcedSlotId = '') {
     depths,
     map: depths[0].map,
     enemyPlanMode: source.enemyPlanMode === 'generated' ? 'generated' : 'authored',
-    guardianAiMode: source.guardianAiMode === 'legacy' ? 'legacy' : 'advanced',
+    guardianAiMode: slotId === 'arena' && source.guardianAiMode === 'legacy' ? 'legacy' : 'advanced',
     monsterTuning: normalizeCompetitionMonsterTuning(source.monsterTuning),
-    loadout: normalizeLoadout(source.loadout),
+    loadout: normalizeLoadout(source.loadout, slotId),
     rules: normalizeRules(source.rules, slotId)
   };
 }
@@ -486,8 +492,9 @@ function defaultLoadout() {
   };
 }
 
-function normalizeLoadout(input) {
+function normalizeLoadout(input, slotId = 'practice') {
   const source = isRecord(input) ? input : {};
+  const nftGated = slotId === 'arena' || slotId === 'pass';
   const weapons = ['pickaxe', 'dynamite', 'blaster'];
   const availableWeapons = Array.isArray(source.availableWeapons)
     ? [...new Set(source.availableWeapons.filter((weapon) => weapons.includes(weapon)))]
@@ -495,16 +502,18 @@ function normalizeLoadout(input) {
   if (!availableWeapons.includes('pickaxe')) availableWeapons.unshift('pickaxe');
   const requestedCharacterId = cleanId(source.characterId || 'matt');
   return {
-    characterId: CHARACTER_IDS.includes(requestedCharacterId) ? requestedCharacterId : 'matt',
+    characterId: nftGated
+      ? 'matt'
+      : CHARACTER_IDS.includes(requestedCharacterId) ? requestedCharacterId : 'matt',
     startingWeapon: availableWeapons.includes(source.startingWeapon) ? source.startingWeapon : 'pickaxe',
     availableWeapons,
-    startingHealth: boundedNumber(source.startingHealth, 1, 1000, 100),
+    startingHealth: nftGated ? 100 : boundedNumber(source.startingHealth, 1, 1000, 100),
     startingDynamite: boundedInteger(source.startingDynamite, 0, 99, 0),
     blasterEnergy: boundedNumber(source.blasterEnergy, 1, 1000, 115),
-    permanentUpgrades: source.permanentUpgrades !== false,
+    permanentUpgrades: nftGated ? false : source.permanentUpgrades !== false,
     runUpgrades: source.runUpgrades !== false,
     maximumDrones: boundedInteger(source.maximumDrones, 0, 4, 4),
-    paidRevive: source.paidRevive === true
+    paidRevive: slotId !== 'practice' && source.paidRevive === true
   };
 }
 
@@ -514,8 +523,8 @@ function defaultSlotRules(slotId) {
     attemptLimit: slotId === 'practice' || slotId === 'arena' ? 0 : slotId === 'pass' ? 10 : 1,
     safeStartSeconds: 4,
     leaderboardTitle: `${COMPETITION_SLOTS.find((slot) => slot.id === slotId)?.name || 'Mine'} Leaderboard`,
-    rewardLabel: slotId === 'practice' ? 'No rewards' : 'Server-verified rewards',
-    instructions: 'Beat the Guardian, bank the most nuggets, and return to the lift.'
+    rewardLabel: slotId === 'practice' ? 'No XP · No Crystals' : 'Miner NFT Required · Server Verified',
+    instructions: 'Beat the Guardian, bank your crystals, and return to the lift.'
   };
 }
 
@@ -524,7 +533,9 @@ function normalizeRules(input, slotId) {
   const defaults = defaultSlotRules(slotId);
   return {
     scoring: ['best', 'cumulative'].includes(source.scoring) ? source.scoring : defaults.scoring,
-    attemptLimit: boundedInteger(source.attemptLimit, 0, 1000, defaults.attemptLimit),
+    attemptLimit: slotId === 'pass'
+      ? boundedInteger(source.attemptLimit, 0, 1000, defaults.attemptLimit)
+      : 0,
     safeStartSeconds: boundedNumber(source.safeStartSeconds, 0, 30, defaults.safeStartSeconds),
     leaderboardTitle: cleanText(source.leaderboardTitle || defaults.leaderboardTitle, 70),
     rewardLabel: cleanText(source.rewardLabel || defaults.rewardLabel, 100),
@@ -561,12 +572,12 @@ function roomsOverlap(a, b) {
 
 function defaultSubtitle(slotId) {
   return {
-    practice: 'Learn the mine with no risk.',
-    arena: 'Unlimited MATT entries. Best verified score wins.',
-    daily: 'One free official attempt on today’s handcrafted map.',
-    pass: 'Premium competition for active Mine Pass holders.',
-    weekly: 'Seven days. One championship mine.',
-    pvp: 'Competitive multiplayer is in development.'
+    practice: 'Anyone can play. No XP and no crystals.',
+    arena: 'Miner NFT required. Unlimited MATT entries; best verified score wins.',
+    daily: 'Retired legacy mine. Historical versions remain readable.',
+    pass: 'Miner NFT and active Mine Pass required.',
+    weekly: 'Retired legacy mine. Historical versions remain readable.',
+    pvp: 'Retired prototype retained only for saved data.'
   }[slotId] || '';
 }
 
