@@ -26,6 +26,8 @@ describe('NFT RPC configuration', () => {
 
   it('publishes role addresses while keeping every role key secret in Render', () => {
     const blueprint = readFileSync(new URL('../render.yaml', import.meta.url), 'utf8');
+    assert.match(blueprint, /key: MATT_MINE_PUBLIC_ORIGIN\r?\n\s+value: "https:\/\/mattmine\.com"/);
+    assert.match(blueprint, /key: MATT_MINE_NFT_PUBLIC_BASE_URL\r?\n\s+value: "https:\/\/mattmine\.com"/);
     assert.match(blueprint, /key: MATT_MINE_NFT_ENABLED\r?\n\s+value: "true"/);
     assert.match(blueprint, /key: MATT_MINE_NFT_ADMIN_CONTROLS_ENABLED\r?\n\s+value: "true"/);
     for (const [key, address] of [
