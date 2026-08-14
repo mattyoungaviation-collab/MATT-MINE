@@ -122,7 +122,7 @@ contract MattMiner is ERC721, AccessControlDefaultAdminRules {
         override(ERC721, AccessControlDefaultAdminRules)
         returns (bool)
     {
-        return super.supportsInterface(interfaceId);
+        return interfaceId == bytes4(0x49064906) || super.supportsInterface(interfaceId);
     }
 
     /// @dev ERC-4906 metadata refresh events.

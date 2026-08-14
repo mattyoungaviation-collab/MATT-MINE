@@ -17,6 +17,7 @@
     "check-arena-deployment:ronin": "hardhat run --build-profile production scripts/check-arena-mainnet-deployment.js --network roninReadOnly",
     "verify-arena:ronin": "hardhat run --build-profile production scripts/verify-arena-mainnet.js --network roninReadOnly",
     "validate-nft:ronin": "hardhat run scripts/validate-nft-mainnet-config.js --network roninReadOnly",
+    "check-nft-deployer:ronin": "hardhat run --build-profile production scripts/check-nft-mainnet-deployer.js --network ronin",
     "deploy-nft:ronin": "hardhat run --build-profile production scripts/deploy-nft-mainnet.js --network ronin",
     "validate-nft:saigon": "hardhat run scripts/validate-nft-saigon-config.js --network saigonReadOnly",
     "deploy-nft:saigon": "hardhat run --build-profile production scripts/deploy-nft-saigon.js --network saigon",

@@ -153,6 +153,13 @@ async function openAndFulfill(system, chestType, randomWord) {
 }
 
 describe("MATT Mine NFT system", function () {
+  it("advertises the ERC-4906 metadata refresh interface", async function () {
+    const system = await networkHelpers.loadFixture(deploySystem);
+
+    assert.equal(await system.miner.supportsInterface("0x49064906"), true);
+    assert.equal(await system.equipment.supportsInterface("0x49064906"), true);
+  });
+
   it("keeps equipped NFTs attached to the Miner when it is sold", async function () {
     const system = await networkHelpers.loadFixture(deploySystem);
     const weaponId = await mintEquipment(system, 0, 0, 101, 0);

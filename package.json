@@ -27,6 +27,7 @@
     "contracts:check-arena-deployment:ronin": "npm --workspace contracts run check-arena-deployment:ronin",
     "contracts:verify-arena:ronin": "npm --workspace contracts run verify-arena:ronin",
     "contracts:validate-nft:ronin": "npm --workspace contracts run validate-nft:ronin",
+    "contracts:check-nft-deployer:ronin": "npm --workspace contracts run check-nft-deployer:ronin",
     "contracts:deploy-nft:ronin": "npm --workspace contracts run deploy-nft:ronin",
     "contracts:validate-nft:saigon": "npm --workspace contracts run validate-nft:saigon",
     "contracts:deploy-nft:saigon": "npm --workspace contracts run deploy-nft:saigon",
