@@ -216,28 +216,50 @@ export class NftMetadataService {
     return miners[0] || null;
   }
 
-  async playerMiners(addressInput) {
+  async playerMinerIds(addressInput) {
     this.assertEnabled();
     const owner = getAddress(addressInput);
     if (typeof this.chainReader.minerIdsForOwner === 'function') {
-      const minerIds = await this.chainReader.minerIdsForOwner(owner);
-      const miners = [];
-      for (let start = 0; start < minerIds.length; start += 20) {
-        miners.push(...await Promise.all(minerIds.slice(start, start + 20).map((minerId) => this.minerProfile(minerId))));
-      }
-      return miners;
+      return this.chainReader.minerIdsForOwner(owner);
     }
-    const miners = [];
+    const minerIds = [];
     for (let minerId = 1; minerId <= 1_000; minerId += 1) {
       try {
         const profile = await this.minerProfile(minerId);
-        if (getAddress(profile.owner) === owner) miners.push(profile);
+        if (getAddress(profile.owner) === owner) minerIds.push(minerId);
       } catch (error) {
         if (error?.status === 404 || error?.code === 'nft_not_found') break;
         throw error;
       }
     }
+    return minerIds;
+  }
+
+  async minerProfiles(minerIdsInput) {
+    const minerIds = Array.from(minerIdsInput || []);
+    const miners = [];
+    for (let start = 0; start < minerIds.length; start += 20) {
+      miners.push(...await Promise.all(minerIds.slice(start, start + 20).map((minerId) => this.minerProfile(minerId))));
+    }
     return miners;
+  }
+
+  async playerMiners(addressInput, options = {}) {
+    const minerIds = await this.playerMinerIds(addressInput);
+    const limit = options.limit === undefined
+      ? minerIds.length
+      : Math.max(0, Math.min(minerIds.length, Number(options.limit) || 0));
+    return this.minerProfiles(minerIds.slice(0, limit));
+  }
+
+  async playerMinerById(addressInput, minerIdInput) {
+    this.assertEnabled();
+    const owner = getAddress(addressInput);
+    const profile = await this.minerProfile(minerIdInput);
+    if (getAddress(profile.owner) !== owner) {
+      throw new ApiError(403, 'nft_miner_not_owned', `Miner #${profile.minerId} is not owned by the connected wallet.`);
+    }
+    return profile;
   }
 
   assertEnabled() {

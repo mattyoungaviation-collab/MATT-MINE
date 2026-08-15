@@ -2,7 +2,9 @@ import { expect, test } from '@playwright/test';
 
 const NFT_TEST_ADDRESS = `0x${'3'.repeat(40)}`;
 
-async function installSignedInMiner(page) {
+async function installSignedInMiner(page, options = {}) {
+  const minerId = options.minerId || 1;
+  const includeMinerInSignIn = options.includeMinerInSignIn !== false;
   await page.addInitScript(({ address }) => {
     window.ronin = {
       provider: {
@@ -34,8 +36,8 @@ async function installSignedInMiner(page) {
         identity: { name: 'V2 Browser Miner', requiresSetup: false },
         entitlements: { freeRunAvailable: true },
         suspended: false,
-        nftMiners: [{
-          minerId: 1,
+        ...(includeMinerInSignIn ? { nftMiners: [{
+          minerId,
           contractVersion: 'v2',
           progression: { level: 1, evolution: 0 },
           traits: {
@@ -51,7 +53,33 @@ async function installSignedInMiner(page) {
           },
           gameplay: { runLocked: false, earningStatus: 'not_eligible' },
           equipped: {}
-        }]
+        }] } : {})
+      }
+    })
+  }));
+  await page.route(`**/api/me/miners/${minerId}`, (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      ok: true,
+      miner: {
+        minerId,
+        contractVersion: 'v2',
+        owner: NFT_TEST_ADDRESS,
+        progression: { level: 1, evolution: 0 },
+        traits: {
+          maximumHealth: 50,
+          armorShield: 0,
+          pickaxeAttack: 15,
+          blasterAttack: 5,
+          dynamiteAttack: 20,
+          healAmount: 10,
+          carryCapacity: 750,
+          deathRetentionBps: 1000,
+          crystalsPerHour: 0
+        },
+        gameplay: { runLocked: false, earningStatus: 'not_eligible' },
+        equipped: {}
       }
     })
   }));
@@ -113,6 +141,21 @@ test('desktop player navigation opens every redesigned public surface', async ({
   await page.locator('#daily-arena [data-close]').click();
   await expect(page.locator('#menu')).toHaveClass(/active/);
   expect(runtimeErrors).toEqual([]);
+});
+
+test('fresh sign-in selects an owned Miner by number without visiting the loadout screen', async ({ page }) => {
+  await installSignedInMiner(page, { includeMinerInSignIn: false, minerId: 777 });
+  await page.goto('/');
+  await page.locator('[data-launch-action="enter"].launch-primary-cta').click();
+  await expect(page.locator('#miner-select')).toHaveClass(/active/);
+  await expect(page.locator('.miner-select-empty')).toContainText('SELECT A MINER NUMBER');
+  await page.locator('#miner-number-input').fill('777');
+  await page.locator('#miner-number-submit').click();
+  await expect(page.locator('#selected-miner-name')).toHaveText('MATT MINE MINER #777');
+  await expect(page.locator('#miner-number-status')).toContainText('You can enter the mines now');
+  await expect(page.locator('#enter-mines-button')).toBeEnabled();
+  await page.locator('#enter-mines-button').click();
+  await expect(page.locator('#menu')).toHaveClass(/active/);
 });
 
 test('profile tabs, store return path, and shared color accents remain usable', async ({ page }) => {

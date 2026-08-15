@@ -109,6 +109,7 @@ let pendingRunFinalization = null;
 let runFinalizationBusy = false;
 let nftPracticeRecoveryBusy = false;
 let selectedNftMinerId = 0;
+let minerSelectionBusy = false;
 const SELECTED_MINER_STORAGE_KEY = 'matt-mine:selected-nft-miner';
 let paymentStatus = null;
 let publicPaymentStatus = null;
@@ -1418,12 +1419,71 @@ async function openMinerSelect() {
     selectedNftMinerId = miners[0]?.minerId || 0;
   }
   renderMinerSelect();
+  const storedMinerId = Number(sessionStorage.getItem(SELECTED_MINER_STORAGE_KEY) || 0);
+  if (!selectedNftMinerId && storedMinerId >= 1 && storedMinerId <= 1_000) {
+    $('#miner-number-input').value = String(storedMinerId);
+  }
   showScreen('miner-select');
 }
 
 function ownedNftMiners() {
   if (Array.isArray(serverPlayer?.nftMiners)) return serverPlayer.nftMiners;
   return serverPlayer?.nftMiner ? [serverPlayer.nftMiner] : [];
+}
+
+function rememberSelectedMiner(minerId) {
+  selectedNftMinerId = minerId;
+  try {
+    sessionStorage.setItem(SELECTED_MINER_STORAGE_KEY, String(minerId));
+  } catch {}
+}
+
+function cacheOwnedMiner(miner) {
+  const miners = ownedNftMiners().filter((candidate) => candidate.minerId !== miner.minerId);
+  serverPlayer.nftMiners = [...miners, miner].sort((left, right) => left.minerId - right.minerId);
+  serverPlayer.nftMiner = serverPlayer.nftMiners[0] || null;
+  const ids = new Set(Array.isArray(serverPlayer.nftMinerIds) ? serverPlayer.nftMinerIds : []);
+  ids.add(miner.minerId);
+  serverPlayer.nftMinerIds = [...ids].sort((left, right) => left - right);
+  serverPlayer.nftMinerCount = Math.max(Number(serverPlayer.nftMinerCount) || 0, serverPlayer.nftMinerIds.length);
+}
+
+function setMinerNumberStatus(message, state = '') {
+  const status = $('#miner-number-status');
+  if (!status) return;
+  status.textContent = message;
+  status.className = state;
+}
+
+async function selectMinerByNumber() {
+  const input = $('#miner-number-input');
+  const minerId = Number(input?.value);
+  if (!Number.isSafeInteger(minerId) || minerId < 1 || minerId > 1_000) {
+    setMinerNumberStatus('Enter a Miner number from 1 to 1,000.', 'error');
+    return false;
+  }
+  if (!serverPlayer) {
+    const connected = await connectWallet();
+    if (!connected) return false;
+  }
+  if (minerSelectionBusy) return false;
+  minerSelectionBusy = true;
+  $('#miner-number-submit').disabled = true;
+  setMinerNumberStatus(`Checking ownership of Miner #${minerId} on Ronin Mainnet…`);
+  try {
+    const miner = await apiClient.ownedMiner(minerId);
+    cacheOwnedMiner(miner);
+    rememberSelectedMiner(miner.minerId);
+    renderMinerSelect();
+    setMinerNumberStatus(`Miner #${miner.minerId} selected. You can enter the mines now.`, 'success');
+    return true;
+  } catch (error) {
+    setMinerNumberStatus(error?.message || `Miner #${minerId} could not be loaded.`, 'error');
+    return false;
+  } finally {
+    minerSelectionBusy = false;
+    $('#miner-number-submit').disabled = false;
+  }
 }
 
 function renderMinerSelect() {
@@ -1435,9 +1495,9 @@ function renderMinerSelect() {
     const empty = document.createElement('article');
     empty.className = 'miner-select-empty';
     const title = document.createElement('strong');
-    title.textContent = 'NO MINER NFT FOUND';
+    title.textContent = 'SELECT A MINER NUMBER';
     const note = document.createElement('span');
-    note.textContent = 'This wallet needs a MATT Mine Miner before entering NFT-powered mines.';
+    note.textContent = 'Enter a Miner number above. Ownership will be verified directly on Ronin Mainnet.';
     empty.append(title, note);
     grid.append(empty);
   }
@@ -1458,7 +1518,9 @@ function renderMinerSelect() {
     copy.append(token, evolution, level);
     button.append(image, copy);
     button.addEventListener('click', () => {
-      selectedNftMinerId = miner.minerId;
+      rememberSelectedMiner(miner.minerId);
+      $('#miner-number-input').value = String(miner.minerId);
+      setMinerNumberStatus(`Miner #${miner.minerId} selected. You can enter the mines now.`, 'success');
       renderMinerSelect();
     });
     grid.append(button);
@@ -1511,6 +1573,7 @@ function renderMinerSelect() {
   const loadout = $('#select-loadout-button');
   loadout.href = selected ? `./nft-lab.html?miner=${selected.minerId}` : './nft-lab.html';
   loadout.setAttribute('aria-disabled', String(!selected));
+  if (selected) $('#miner-number-input').value = String(selected.minerId);
 }
 
 function minerEarningLabel(miner, traits) {
@@ -1949,7 +2012,13 @@ mobileWalletConnectCancel.addEventListener('click', () => {
 
 $('#home-button').addEventListener('click', () => openLaunch(true));
 $('#miner-select-home').addEventListener('click', () => openLaunch(true));
+$('#miner-number-form').addEventListener('submit', (event) => {
+  event.preventDefault();
+  void selectMinerByNumber();
+});
 $('#enter-mines-button').addEventListener('click', () => {
+  if (!selectedNftMinerId) return;
+  rememberSelectedMiner(selectedNftMinerId);
   showScreen('menu');
   updateMenu();
 });
@@ -3815,7 +3884,13 @@ async function bootstrapServer() {
       await refreshPaymentStatus(true);
       const storedMinerId = Number(sessionStorage.getItem(SELECTED_MINER_STORAGE_KEY) || 0);
       if (ownedNftMiners().some((miner) => miner.minerId === storedMinerId)) {
-        selectedNftMinerId = storedMinerId;
+        rememberSelectedMiner(storedMinerId);
+      } else if (storedMinerId && restored.nftMinerIds?.includes(storedMinerId)) {
+        try {
+          const storedMiner = await apiClient.ownedMiner(storedMinerId);
+          cacheOwnedMiner(storedMiner);
+          rememberSelectedMiner(storedMinerId);
+        } catch {}
       }
     }
     await refreshArena(true);

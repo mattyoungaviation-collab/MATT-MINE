@@ -59,6 +59,13 @@ export class MattMineApiClient {
     return response.player;
   }
 
+  async ownedMiner(minerId) {
+    const response = await this.request(`/api/me/miners/${encodeURIComponent(minerId)}`, {
+      authenticated: true
+    });
+    return response.miner;
+  }
+
   async setIdentity(name, avatarDataUrl = '') {
     return this.request('/api/profile/identity', {
       method: 'POST',
