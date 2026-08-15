@@ -305,13 +305,38 @@ export class MattMineService {
     player.entitlements.paidRunsEnabled = this.mainnetTransactionsEnabled;
     const hydrated = await this.hydratePlayerScores(player);
     if (this.nftMetadataService) {
-      const miners = typeof this.nftMetadataService.playerMiners === 'function'
-        ? await this.nftMetadataService.playerMiners(session.address)
-        : [await this.nftMetadataService.playerMiner(session.address)].filter(Boolean);
+      const minerIds = typeof this.nftMetadataService.playerMinerIds === 'function'
+        ? await this.nftMetadataService.playerMinerIds(session.address)
+        : null;
+      const visibleMinerIds = minerIds?.slice(0, 12) || null;
+      const miners = visibleMinerIds && typeof this.nftMetadataService.minerProfiles === 'function'
+        ? await this.nftMetadataService.minerProfiles(visibleMinerIds)
+        : typeof this.nftMetadataService.playerMiners === 'function'
+          ? await this.nftMetadataService.playerMiners(session.address, { limit: 12 })
+          : [await this.nftMetadataService.playerMiner(session.address)].filter(Boolean);
       hydrated.nftMiners = miners;
       hydrated.nftMiner = miners[0] || null;
+      hydrated.nftMinerIds = minerIds || miners.map((miner) => miner.minerId);
+      hydrated.nftMinerCount = minerIds?.length ?? miners.length;
+      hydrated.nftMinersTruncated = hydrated.nftMinerCount > miners.length;
     }
     return hydrated;
+  }
+
+  async ownedMiner(token, minerIdInput) {
+    const session = await this.authenticate(token);
+    assertApi(this.nftMetadataService, 503, 'nft_metadata_disabled', 'NFT metadata is not enabled on this server.');
+    if (typeof this.nftMetadataService.playerMinerById === 'function') {
+      return this.nftMetadataService.playerMinerById(session.address, minerIdInput);
+    }
+    const profile = await this.nftMetadataService.minerProfile(minerIdInput);
+    assertApi(
+      normalizeAddress(profile.owner) === session.address,
+      403,
+      'nft_miner_not_owned',
+      `Miner #${profile.minerId} is not owned by the connected wallet.`
+    );
+    return profile;
   }
 
   async setPlayerIdentity(token, input = {}) {

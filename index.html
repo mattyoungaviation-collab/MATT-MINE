@@ -375,7 +375,18 @@
             <span class="dashboard-live-pill">LIVE ON-CHAIN LOADOUT</span>
           </header>
           <div class="miner-select-layout">
-            <div id="miner-select-grid" class="miner-select-grid" aria-label="Owned Miner NFTs"></div>
+            <div class="miner-select-browser">
+              <form id="miner-number-form" class="miner-number-form">
+                <label for="miner-number-input">SELECT BY MINER NUMBER</label>
+                <div class="miner-number-control">
+                  <span aria-hidden="true">#</span>
+                  <input id="miner-number-input" name="miner-number" type="number" inputmode="numeric" min="1" max="1000" step="1" placeholder="1–1000" autocomplete="off" required />
+                  <button id="miner-number-submit" class="primary-button" type="submit">SELECT MINER</button>
+                </div>
+                <small id="miner-number-status">Enter a Miner NFT number owned by this connected wallet.</small>
+              </form>
+              <div id="miner-select-grid" class="miner-select-grid" aria-label="Loaded Miner NFTs"></div>
+            </div>
             <aside id="selected-miner-card" class="selected-miner-card">
               <div class="selected-miner-render">
                 <img id="selected-miner-image" alt="Selected MATT Mine Miner" hidden />
@@ -387,10 +398,10 @@
                 <div id="selected-miner-stats" class="selected-miner-stats"></div>
               </div>
               <div class="miner-select-actions">
-                <a id="select-loadout-button" class="primary-button miner-garage-link" href="./nft-lab.html">SELECT LOADOUT</a>
                 <button id="enter-mines-button" class="primary-button gold-button" type="button" disabled>ENTER MINES</button>
+                <a id="select-loadout-button" class="primary-button miner-garage-link" href="./nft-lab.html">MANAGE LOADOUT (OPTIONAL)</a>
               </div>
-              <small>Manage equipment, buy chests, queue backpacks, and repair armor in the NFT Garage.</small>
+              <small>Your Miner selection is locked in here. The NFT Garage is optional.</small>
             </aside>
           </div>
         </div>

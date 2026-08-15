@@ -1612,6 +1612,17 @@ button,
 .miner-select-heading h2 { margin: 0; color: #fff; font: 1000 clamp(34px, 5vw, 68px)/.95 Impact, sans-serif; text-transform: uppercase; }
 .miner-select-heading p:last-child { max-width: 680px; margin: 12px 0 0; color: #aab6bd; font: 700 13px/1.55 Inter, sans-serif; }
 .miner-select-layout { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(310px, .65fr); gap: 20px; padding-top: 20px; }
+.miner-select-browser { display: grid; align-content: start; gap: 16px; }
+.miner-number-form { display: grid; gap: 10px; padding: 18px; border: 1px solid #44515a; background: linear-gradient(135deg, #10171c, #080c0f); }
+.miner-number-form > label { color: #47eee3; font: 900 10px Inter, sans-serif; letter-spacing: .14em; }
+.miner-number-control { display: grid; grid-template-columns: 42px minmax(0, 1fr) minmax(150px, .42fr); min-height: 56px; }
+.miner-number-control > span { display: grid; place-items: center; color: #071014; background: #47eee3; font: 1000 22px Impact, sans-serif; }
+.miner-number-control input { min-width: 0; padding: 0 16px; color: #fff; border: 1px solid #47eee3; border-inline-width: 0 1px; outline: none; background: #070b0e; font: 1000 22px/1 Inter, sans-serif; }
+.miner-number-control input:focus { box-shadow: inset 0 0 0 2px rgba(71,238,227,.24); }
+.miner-number-control button { min-height: 56px; }
+.miner-number-form > small { min-height: 15px; color: #94a3ab; font: 700 10px/1.5 Inter, sans-serif; }
+.miner-number-form > small.success { color: #47eee3; }
+.miner-number-form > small.error { color: #ff7668; }
 .miner-select-grid { display: grid; grid-template-columns: repeat(2, minmax(220px, 1fr)); gap: 14px; align-content: start; }
 .miner-select-option { display: grid; grid-template-columns: 130px 1fr; align-items: center; gap: 15px; min-height: 150px; padding: 10px; color: #fff; border: 1px solid #2c353b; background: #0d1216; text-align: left; }
 .miner-select-option:hover, .miner-select-option.active { border-color: #47eee3; box-shadow: inset 0 0 0 1px #47eee3; transform: translateY(-2px); }
@@ -1642,6 +1653,8 @@ button,
   .miner-select-panel { width: 100%; padding: 16px; }
   .miner-select-heading, .miner-select-layout { grid-template-columns: 1fr; display: grid; }
   .miner-select-grid { grid-template-columns: 1fr; }
+  .miner-number-control { grid-template-columns: 38px minmax(0, 1fr); }
+  .miner-number-control button { grid-column: 1 / -1; }
   .miner-select-option { grid-template-columns: 90px 1fr; min-height: 110px; }
   .miner-select-option img { width: 90px; height: 90px; }
   .miner-select-actions { grid-template-columns: 1fr; }

@@ -98,6 +98,7 @@ function createHarness(options = {}) {
     mainnetTransactionsEnabled: options.mainnetTransactionsEnabled === true,
     paymentVerifier: options.paymentVerifier,
     arenaService: options.arenaService,
+    nftMetadataService: options.nftMetadataService,
     eligibilityPolicy: options.eligibilityPolicy,
     walletConnectProjectId: options.walletConnectProjectId,
     randomHex(bytes) {
@@ -268,6 +269,32 @@ async function signIn(harness, signer = account, options = {}) {
   }
   return { challenge, signature, session };
 }
+
+test('wallet hydration stays bounded and Miner number selection verifies ownership directly', async () => {
+  const profileCalls = [];
+  const nftMetadataService = {
+    async playerMinerIds() {
+      return Array.from({ length: 1_000 }, (_value, index) => index + 1);
+    },
+    async minerProfiles(ids) {
+      profileCalls.push([...ids]);
+      return ids.map((minerId) => ({ minerId, owner: account.address }));
+    },
+    async playerMinerById(owner, minerId) {
+      assert.equal(owner, account.address.toLowerCase());
+      assert.equal(minerId, '777');
+      return { minerId: 777, owner: account.address };
+    }
+  };
+  const harness = createHarness({ nftMetadataService });
+  const { session } = await signIn(harness);
+  const player = await harness.service.me(session.token);
+  assert.equal(player.nftMinerCount, 1_000);
+  assert.equal(player.nftMiners.length, 12);
+  assert.equal(player.nftMinersTruncated, true);
+  assert.deepEqual(profileCalls, [Array.from({ length: 12 }, (_value, index) => index + 1)]);
+  assert.equal((await harness.service.ownedMiner(session.token, '777')).minerId, 777);
+});
 
 test('wallet identities require one permanent unique name and serve validated leaderboard avatars', async () => {
   const harness = createHarness();

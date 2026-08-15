@@ -310,6 +310,12 @@ async function handleApiRequest({
     sendJson(response, 200, { ok: true, player });
     return;
   }
+  const ownedMinerMatch = path.match(/^\/api\/me\/miners\/(\d+)$/);
+  if (method === 'GET' && ownedMinerMatch) {
+    const miner = await service.ownedMiner(bearerToken(request), ownedMinerMatch[1]);
+    sendJson(response, 200, { ok: true, miner });
+    return;
+  }
   const profileAvatarMatch = path.match(/^\/api\/profiles\/(0x[a-fA-F0-9]{40})\/avatar$/);
   if (method === 'GET' && profileAvatarMatch) {
     const avatar = await service.profileAvatar(profileAvatarMatch[1]);

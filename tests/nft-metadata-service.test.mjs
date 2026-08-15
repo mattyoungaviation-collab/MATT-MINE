@@ -109,6 +109,28 @@ describe('NFT metadata service', function () {
     assert.equal((await service.playerMiner(OWNER)).minerId, 1);
   });
 
+  it('loads one Miner by number only when the connected wallet owns it', async function () {
+    const otherOwner = '0x0000000000000000000000000000000000000001';
+    const service = new NftMetadataService({
+      enabled: true,
+      root: ROOT,
+      publicOrigin: 'https://mattmine.com',
+      chainId: 2020,
+      addresses: ADDRESSES,
+      chainReader: {
+        async miner(minerId) {
+          return { ...minerState(), owner: minerId === 7 ? OWNER : otherOwner };
+        }
+      }
+    });
+    await service.init();
+    assert.equal((await service.playerMinerById(OWNER, 7)).minerId, 7);
+    await assert.rejects(
+      () => service.playerMinerById(OWNER, 8),
+      (error) => error.status === 403 && error.code === 'nft_miner_not_owned'
+    );
+  });
+
   it('builds wallet metadata and a composited Miner PNG with the starter pickaxe', async function () {
     const service = await createService();
     const metadata = await service.minerMetadata(1);
