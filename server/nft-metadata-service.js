@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { isAbsolute, relative, resolve } from 'node:path';
 import sharp from 'sharp';
 import { createPublicClient, getAddress, http, parseAbi } from 'viem';
+import { ronin, saigon } from 'viem/chains';
 import { ApiError } from './errors.js';
 import { compileMinerNftProfile } from './nft-profile-compiler.js';
 import { compileNftRenderPlan } from './nft-render-plan.js';
@@ -275,7 +276,10 @@ export class ViemNftChainReader {
     this.addresses = options.addresses;
     const rpcUrl = String(options.rpcUrl || '').trim();
     if (!/^https:\/\//i.test(rpcUrl)) throw new Error('NFT RPC URL must use HTTPS.');
+    const chain = this.chainId === ronin.id ? ronin : this.chainId === saigon.id ? saigon : null;
+    if (!chain) throw new Error(`Unsupported NFT chain ID ${this.chainId}.`);
     this.client = options.client || createPublicClient({
+      chain,
       transport: http(rpcUrl, { timeout: positiveInteger(options.timeoutMs || 10_000, 'NFT RPC timeout') })
     });
   }

@@ -64,6 +64,19 @@ async function createService() {
 }
 
 describe('NFT metadata service', function () {
+  it('configures Ronin Multicall3 for production wallet ownership scans', function () {
+    const reader = new ViemNftChainReader({
+      chainId: 2020,
+      rpcUrl: 'https://example.invalid',
+      addresses: ADDRESSES
+    });
+    assert.equal(reader.client.chain.id, 2020);
+    assert.equal(
+      reader.client.chain.contracts.multicall3.address.toLowerCase(),
+      '0xca11bde05977b3631167028862be2a173976ca11'
+    );
+  });
+
   it('indexes up to 1,000 minted Miners in bounded Ronin multicalls instead of sequential profile reads', async function () {
     const batches = [];
     const reader = new ViemNftChainReader({

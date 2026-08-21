@@ -131,9 +131,10 @@ export class RoninWalletAdapter {
         params: [{ chainId: `0x${Number(typedData.domain.chainId).toString(16)}` }]
       });
     }
+    const signableTypedData = withEip712DomainType(typedData);
     const playerSignature = await this.provider.request({
       method: 'eth_signTypedData_v4',
-      params: [address, JSON.stringify(typedData)]
+      params: [address, JSON.stringify(signableTypedData)]
     });
     if (!/^0x[0-9a-f]{130}$/i.test(String(playerSignature || ''))) {
       throw new Error('Ronin Wallet did not return a valid Miner run approval.');
@@ -268,6 +269,21 @@ export class RoninWalletAdapter {
     this.providerKind = '';
     this.onInvalidated(reason);
   }
+}
+
+function withEip712DomainType(typedData) {
+  return {
+    ...typedData,
+    types: {
+      EIP712Domain: [
+        { name: 'name', type: 'string' },
+        { name: 'version', type: 'string' },
+        { name: 'chainId', type: 'uint256' },
+        { name: 'verifyingContract', type: 'address' }
+      ],
+      ...(typedData.types || {})
+    }
+  };
 }
 
 function walletTransactionError(error, transaction = {}) {

@@ -10,6 +10,7 @@ import {
   completedPhaseCount,
   recordNftCrystalBank
 } from '../server/complete-production-service.js';
+import { RoninWalletAdapter } from '../src/game/walletAdapter.js';
 import { MattMineGame } from '../src/game/GameV4.js';
 import { defaultProfile } from '../src/game/storage.js';
 
@@ -44,6 +45,83 @@ test('production gameplay accepts the existing legacy game-signer secret name', 
     MATT_MINE_NFT_MAP_VERSIONS_JSON: JSON.stringify({ arena: MAP_VERSION, paid: MAP_VERSION })
   });
   assert.ok(service instanceof NftGameplayService);
+});
+
+test('Miner run approvals include the explicit EIP-712 domain type required by Ronin Wallet', async () => {
+  const operator = privateKeyToAccount(OPERATOR_KEY);
+  const signer = privateKeyToAccount(SIGNER_KEY);
+  const service = new NftGameplayService({
+    enabled: true,
+    chainId: 2020,
+    rpcUrl: 'https://example.invalid',
+    settlementAddress: SETTLEMENT,
+    loadoutAddress: LOADOUT,
+    operatorAddress: operator.address,
+    signerAddress: signer.address,
+    operatorPrivateKey: OPERATOR_KEY,
+    signerPrivateKey: SIGNER_KEY,
+    mapVersions: { arena: MAP_VERSION, paid: MAP_VERSION },
+    metadataService: { async minerProfile() { return profile(); } },
+    publicClient: {
+      async readContract({ functionName }) {
+        if (functionName === 'playerNonces') return 0n;
+        if (functionName === 'loadoutHash') return LOADOUT_HASH;
+        if (functionName === 'mapVersions') {
+          return [MAP_VERSION, MAP_VERSION, 1n, 1n, 1, 300, true, false];
+        }
+        throw new Error(`Unexpected ${functionName}`);
+      }
+    },
+    operatorClient: {}
+  });
+  const prepared = await service.prepareRunAuthorization({ address: PLAYER, minerId: 1, mode: 'paid' });
+  assert.deepEqual(prepared.typedData.types.EIP712Domain, [
+    { name: 'name', type: 'string' },
+    { name: 'version', type: 'string' },
+    { name: 'chainId', type: 'uint256' },
+    { name: 'verifyingContract', type: 'address' }
+  ]);
+});
+
+test('the Ronin adapter repairs cached run approvals that omit the EIP-712 domain type', async () => {
+  const requests = [];
+  const adapter = new RoninWalletAdapter({ api: {} });
+  adapter.player = { address: PLAYER };
+  adapter.provider = {
+    async request(payload) {
+      requests.push(payload);
+      if (payload.method === 'eth_requestAccounts') return [PLAYER];
+      if (payload.method === 'eth_chainId') return '0x7e4';
+      if (payload.method === 'eth_signTypedData_v4') return PLAYER_SIGNATURE;
+      throw new Error(`Unexpected ${payload.method}`);
+    }
+  };
+  await adapter.signNftRunAuthorization({
+    authorization: authorization(1),
+    typedData: {
+      domain: {
+        name: 'MATT Mine V2 Run Settlement',
+        version: '2',
+        chainId: 2020,
+        verifyingContract: SETTLEMENT
+      },
+      types: {
+        RunAuthorization: [
+          { name: 'player', type: 'address' },
+          { name: 'minerId', type: 'uint256' },
+          { name: 'mapVersion', type: 'bytes32' },
+          { name: 'loadoutHash', type: 'bytes32' },
+          { name: 'nonce', type: 'uint256' },
+          { name: 'deadline', type: 'uint256' }
+        ]
+      },
+      primaryType: 'RunAuthorization',
+      message: authorization(1)
+    }
+  });
+  const request = requests.find(({ method }) => method === 'eth_signTypedData_v4');
+  const signedPayload = JSON.parse(request.params[1]);
+  assert.equal(signedPayload.types.EIP712Domain[3].name, 'verifyingContract');
 });
 
 function profile(overrides = {}) {

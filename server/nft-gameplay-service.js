@@ -12,6 +12,13 @@ import { ApiError, assertApi } from './errors.js';
 import { nftRpcUrlFromEnvironment } from './nft-rpc-url.js';
 
 const SETTLEMENT_ABI = parseAbi([
+  'error AuthorizationExpired()',
+  'error InvalidNonce()',
+  'error InvalidSignature()',
+  'error MapUnavailable()',
+  'error NotMinerOwner()',
+  'error RunAlreadyActive()',
+  'error RunMismatch()',
   'function OPERATOR_ROLE() view returns (bytes32)',
   'function rewardSigner() view returns (address)',
   'function hasRole(bytes32 role,address account) view returns (bool)',
@@ -37,6 +44,12 @@ export const NFT_V2_RUN_AUTHORIZATION_TYPES = Object.freeze({
     { name: 'deadline', type: 'uint256' }
   ]
 });
+export const NFT_V2_EIP712_DOMAIN_TYPES = Object.freeze([
+  { name: 'name', type: 'string' },
+  { name: 'version', type: 'string' },
+  { name: 'chainId', type: 'uint256' },
+  { name: 'verifyingContract', type: 'address' }
+]);
 const RUN_RESULT_TYPES = Object.freeze({
   RunResult: [
     { name: 'player', type: 'address' },
@@ -191,7 +204,10 @@ export class NftGameplayService {
       authorization: jsonSafe(authorization),
       typedData: {
         domain: this.#domain(),
-        types: NFT_V2_RUN_AUTHORIZATION_TYPES,
+        types: {
+          EIP712Domain: NFT_V2_EIP712_DOMAIN_TYPES,
+          ...NFT_V2_RUN_AUTHORIZATION_TYPES
+        },
         primaryType: 'RunAuthorization',
         message: jsonSafe(authorization)
       }
