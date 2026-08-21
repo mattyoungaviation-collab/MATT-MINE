@@ -58,6 +58,15 @@ import { loadProfile, saveProfile } from './game/storage.js';
 import { loadGameplayPreferences, saveGameplayPreferences } from './game/preferences.js';
 import { RoninWalletAdapter } from './game/walletAdapter.js';
 import {
+  NftGarageClient,
+  NFT_GARAGE_CHESTS,
+  NFT_GARAGE_RARITIES,
+  NFT_GARAGE_SLOTS,
+  formatTokenUnits as formatGarageTokenUnits,
+  garageImageUrl,
+  parseTokenUnits
+} from './game/nftGarageClient.js';
+import {
   enterMobileGameplayFullscreen,
   exitMobileGameplayFullscreen,
   mobilePortraitGameplay,
@@ -109,6 +118,8 @@ let pendingRunFinalization = null;
 let runFinalizationBusy = false;
 let nftPracticeRecoveryBusy = false;
 let lockedMinerRecoveryBusy = false;
+let nftGarageBusy = false;
+let nftGarageSnapshot = null;
 let selectedNftMinerId = 0;
 let minerSelectionBusy = false;
 const SELECTED_MINER_STORAGE_KEY = 'matt-mine:selected-nft-miner';
@@ -127,6 +138,7 @@ let activeArenaRun = null;
 let activeArenaTranscript = null;
 let activePracticeClaim = null;
 let resultScreenMode = null;
+let returnToMinerAfterRun = false;
 let activeBetaTools = null;
 let paidRevivePending = false;
 let paidReviveBusy = false;
@@ -151,6 +163,7 @@ const wallet = new RoninWalletAdapter({
     toast(reason);
   }
 });
+const nftGarage = new NftGarageClient({ wallet });
 
 const ui = {
   healthText: $('#health-text'),
@@ -1476,6 +1489,10 @@ async function selectMinerByNumber() {
     cacheOwnedMiner(miner);
     rememberSelectedMiner(miner.minerId);
     renderMinerSelect();
+    if (!$('#miner-command-center').hidden) {
+      nftGarageSnapshot = null;
+      void refreshNftGarage();
+    }
     setMinerNumberStatus(`Miner #${miner.minerId} selected. You can enter the mines now.`, 'success');
     return true;
   } catch (error) {
@@ -1522,6 +1539,10 @@ function renderMinerSelect() {
       rememberSelectedMiner(miner.minerId);
       $('#miner-number-input').value = String(miner.minerId);
       setMinerNumberStatus(`Miner #${miner.minerId} selected. You can enter the mines now.`, 'success');
+      if (!$('#miner-command-center').hidden) {
+        nftGarageSnapshot = null;
+        void refreshNftGarage();
+      }
       renderMinerSelect();
     });
     grid.append(button);
@@ -1575,8 +1596,8 @@ function renderMinerSelect() {
     ? lockedMinerRecoveryBusy ? 'UNLOCKING MINER...' : 'END LOCKED RUN'
     : 'ENTER MINES';
   const loadout = $('#select-loadout-button');
-  loadout.href = selected ? `./nft-lab.html?miner=${selected.minerId}` : './nft-lab.html';
-  loadout.setAttribute('aria-disabled', String(!selected));
+  loadout.disabled = !selected || nftGarageBusy;
+  loadout.textContent = nftGarageBusy ? 'LOADING LOADOUT...' : 'MANAGE LOADOUT';
   if (selected) $('#miner-number-input').value = String(selected.minerId);
 }
 
@@ -1638,6 +1659,290 @@ async function recoverLockedMinerRun(minerId) {
     lockedMinerRecoveryBusy = false;
     renderMinerSelect();
   }
+}
+
+async function openMinerCommandCenter() {
+  if (!selectedNftMinerId || !serverPlayer) return;
+  const panel = $('#miner-command-center');
+  if (nftGarageSnapshot?.minerId !== selectedNftMinerId) nftGarageSnapshot = null;
+  panel.hidden = false;
+  renderNftGarage();
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  await refreshNftGarage();
+}
+
+function closeMinerCommandCenter() {
+  $('#miner-command-center').hidden = true;
+  $('#selected-miner-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+async function refreshNftGarage() {
+  if (nftGarageBusy || !serverPlayer || !selectedNftMinerId || $('#miner-command-center').hidden) return;
+  nftGarageBusy = true;
+  setGarageStatus(`Loading Miner #${selectedNftMinerId}, equipment, and balances directly from Ronin...`, 'busy');
+  renderMinerSelect();
+  renderNftGarage();
+  try {
+    nftGarageSnapshot = await nftGarage.snapshot({
+      address: serverPlayer.address,
+      minerId: selectedNftMinerId,
+      ownedMinerIds: serverPlayer.nftMinerIds || ownedNftMiners().map((miner) => miner.minerId)
+    });
+    setGarageStatus(`Miner #${selectedNftMinerId} is synchronized with Ronin Mainnet.`);
+  } catch (error) {
+    setGarageStatus(error?.message || 'The Miner Command Center could not load.', 'error');
+  } finally {
+    nftGarageBusy = false;
+    renderMinerSelect();
+    renderNftGarage();
+  }
+}
+
+function renderNftGarage() {
+  const snapshot = nftGarageSnapshot?.minerId === selectedNftMinerId ? nftGarageSnapshot : null;
+  $('#garage-matt-balance').textContent = snapshot ? `${formatGarageTokenUnits(snapshot.mattBalanceRaw)} MATT` : '--';
+  $('#garage-crystal-balance').textContent = snapshot ? `${formatGarageTokenUnits(snapshot.crystalBalanceRaw)} CRYSTALS` : '--';
+  $('#garage-miner-state').textContent = snapshot ? snapshot.runLocked ? 'LOCKED IN RUN' : 'READY' : '--';
+  $('#garage-equipment-count').textContent = snapshot ? `${snapshot.equipment.length} ITEMS` : '--';
+  $('#garage-inventory-state').textContent = nftGarageBusy ? 'SYNCING' : snapshot ? 'LIVE' : 'NOT LOADED';
+  renderGarageLoadout(snapshot);
+  renderGarageEquipment(snapshot);
+  renderGarageArmor(snapshot);
+  renderGarageCrystalBank(snapshot);
+  renderGarageChests(snapshot);
+}
+
+function renderGarageLoadout(snapshot) {
+  const container = $('#garage-loadout-slots');
+  container.replaceChildren();
+  for (const slot of NFT_GARAGE_SLOTS) {
+    const tokenId = Number(snapshot?.loadout?.[slot.key] || 0);
+    const item = snapshot?.equipment.find((candidate) => candidate.tokenId === tokenId);
+    const card = document.createElement('article');
+    card.className = 'garage-loadout-slot';
+    const label = document.createElement('span');
+    label.textContent = slot.label;
+    const copy = document.createElement('div');
+    const name = document.createElement('strong');
+    name.textContent = item?.metadata?.name || (tokenId ? `EQUIPMENT #${tokenId}` : slot.key === 'pickaxe' ? 'STARTER PICKAXE' : 'EMPTY');
+    const detail = document.createElement('small');
+    detail.textContent = item
+      ? `${NFT_GARAGE_RARITIES[item.rarity] || 'UNKNOWN'} · TOKEN #${item.tokenId} · +${item.bonus}${item.damaged ? ' · DAMAGED' : ''}`
+      : tokenId ? `TOKEN #${tokenId}` : 'No Equipment NFT equipped';
+    copy.append(name, detail);
+    card.append(label, copy);
+    container.append(card);
+  }
+  $('#garage-wallet-note').textContent = !snapshot
+    ? 'Open the Command Center to read the live loadout.'
+    : snapshot.equipmentOperatorApproved
+      ? 'Quick equip is enabled. Each equip or unequip is still one real Ronin transaction.'
+      : 'The first equip includes one approval for the Loadout contract. Later equips need fewer confirmations.';
+}
+
+function renderGarageEquipment(snapshot) {
+  const container = $('#garage-equipment-list');
+  container.replaceChildren();
+  if (!snapshot?.equipment.length) {
+    const empty = document.createElement('p');
+    empty.className = 'garage-inventory-empty';
+    empty.textContent = nftGarageBusy ? 'Reading Equipment NFTs from Ronin...' : 'No Equipment NFTs are available for this wallet yet.';
+    container.append(empty);
+    return;
+  }
+  for (const item of snapshot.equipment) {
+    const equippedHere = item.equippedToMiner === snapshot.minerId;
+    const equippedElsewhere = item.equippedToMiner > 0 && !equippedHere;
+    const slot = NFT_GARAGE_SLOTS[item.slot];
+    const occupiedTokenId = Number(snapshot.loadout?.[slot?.key] || 0);
+    const card = document.createElement('article');
+    card.className = `garage-equipment-card${equippedHere ? ' equipped' : ''}`;
+    const image = document.createElement('img');
+    image.src = garageImageUrl(item.metadata?.image);
+    image.alt = item.metadata?.name || `Equipment #${item.tokenId}`;
+    const copy = document.createElement('div');
+    const name = document.createElement('strong');
+    name.textContent = item.metadata?.name || `EQUIPMENT #${item.tokenId}`;
+    const detail = document.createElement('small');
+    detail.textContent = `${NFT_GARAGE_RARITIES[item.rarity] || 'UNKNOWN'} ${slot?.label || 'ITEM'} · TOKEN #${item.tokenId} · BONUS +${item.bonus}${item.damaged ? ' · DAMAGED' : ''}`;
+    const location = document.createElement('small');
+    location.textContent = equippedHere
+      ? `EQUIPPED TO MINER #${snapshot.minerId}`
+      : equippedElsewhere ? `EQUIPPED TO MINER #${item.equippedToMiner}` : 'IN WALLET';
+    const action = document.createElement('button');
+    action.type = 'button';
+    action.className = equippedHere ? 'unequip' : '';
+    action.disabled = nftGarageBusy || snapshot.runLocked || equippedElsewhere;
+    action.textContent = equippedHere
+      ? 'UNEQUIP'
+      : equippedElsewhere
+        ? `ON MINER #${item.equippedToMiner}`
+        : occupiedTokenId ? 'REPLACE' : 'EQUIP';
+    action.addEventListener('click', () => void mutateGarageEquipment(item));
+    copy.append(name, detail, location, action);
+    card.append(image, copy);
+    container.append(card);
+  }
+}
+
+function renderGarageArmor(snapshot) {
+  const armorTokenId = Number(snapshot?.loadout?.armor || 0);
+  const armor = snapshot?.equipment.find((item) => item.tokenId === armorTokenId);
+  const button = $('#garage-repair-button');
+  button.disabled = nftGarageBusy || !snapshot || snapshot.runLocked || !armor?.damaged;
+  button.textContent = snapshot
+    ? `REPAIR · ${formatGarageTokenUnits(snapshot.repairPriceRaw)} MATT`
+    : 'REPAIR ARMOR';
+  $('#garage-armor-copy').textContent = !snapshot
+    ? 'Load a Miner to inspect its armor.'
+    : snapshot.runLocked
+      ? 'Armor cannot be changed while this Miner is locked in a run.'
+      : !armor
+        ? 'No armor is equipped.'
+        : armor.damaged
+          ? `${armor.metadata?.name || `Armor #${armor.tokenId}`} is damaged and provides no shield.`
+          : `${armor.metadata?.name || `Armor #${armor.tokenId}`} is healthy and provides +${armor.bonus} shield.`;
+}
+
+function renderGarageCrystalBank(snapshot) {
+  const button = $('#garage-withdraw-button');
+  const full = $('#garage-withdraw-all-button');
+  button.disabled = nftGarageBusy || !snapshot || snapshot.crystalBalanceRaw < snapshot.minimumWithdrawalRaw;
+  full.disabled = nftGarageBusy || !snapshot || snapshot.crystalBalanceRaw === 0n;
+  $('#garage-withdraw-copy').textContent = !snapshot
+    ? 'Load the live Crystal Bank balance first.'
+    : `Minimum withdrawal: ${formatGarageTokenUnits(snapshot.minimumWithdrawalRaw)} MATT Crystals. Withdrawing mints the token into this wallet.`;
+}
+
+function renderGarageChests(snapshot) {
+  const container = $('#garage-chest-list');
+  container.replaceChildren();
+  const products = snapshot?.chestPrices || NFT_GARAGE_CHESTS;
+  for (const product of products) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'garage-chest-product';
+    button.disabled = nftGarageBusy || !snapshot;
+    const label = document.createElement('span');
+    label.textContent = product.label;
+    const price = document.createElement('strong');
+    price.textContent = product.priceRaw === undefined ? 'LOADING...' : `${formatGarageTokenUnits(product.priceRaw)} MATT`;
+    const detail = document.createElement('small');
+    detail.textContent = 'OPEN RANDOM EQUIPMENT';
+    button.append(label, price, detail);
+    button.addEventListener('click', () => void openGarageChest(product));
+    container.append(button);
+  }
+}
+
+function setGarageStatus(message, state = '') {
+  const status = $('#garage-status');
+  status.textContent = message;
+  status.className = `garage-status${state ? ` ${state}` : ''}`;
+}
+
+async function mutateGarageEquipment(item) {
+  const snapshot = nftGarageSnapshot;
+  if (nftGarageBusy || !snapshot || snapshot.minerId !== selectedNftMinerId) return;
+  const equippedHere = item.equippedToMiner === snapshot.minerId;
+  const slot = NFT_GARAGE_SLOTS[item.slot];
+  const occupied = Number(snapshot.loadout?.[slot?.key] || 0);
+  const approvalCount = equippedHere ? 1 : (occupied ? 1 : 0) + (snapshot.equipmentOperatorApproved ? 0 : 1) + 1;
+  nftGarageBusy = true;
+  renderNftGarage();
+  renderMinerSelect();
+  setGarageStatus(
+    `${equippedHere ? 'Unequipping' : occupied ? 'Replacing' : 'Equipping'} ${item.metadata?.name || `Equipment #${item.tokenId}`}. Expect ${approvalCount} Ronin Wallet confirmation${approvalCount === 1 ? '' : 's'}.`,
+    'busy'
+  );
+  try {
+    if (equippedHere) await nftGarage.unequip(snapshot, item);
+    else await nftGarage.equip(snapshot, item);
+    await refreshSelectedMinerFromChain(snapshot.minerId);
+    nftGarageBusy = false;
+    await refreshNftGarage();
+    setGarageStatus(`Miner #${snapshot.minerId} loadout updated. No separate confirmation is needed.`);
+  } catch (error) {
+    setGarageStatus(error?.message || 'The equipment transaction failed.', 'error');
+  } finally {
+    nftGarageBusy = false;
+    renderMinerSelect();
+    renderNftGarage();
+  }
+}
+
+async function repairGarageArmor() {
+  const snapshot = nftGarageSnapshot;
+  if (nftGarageBusy || !snapshot) return;
+  nftGarageBusy = true;
+  renderNftGarage();
+  setGarageStatus('Repairing armor. Ronin may first request an exact MATT approval, then the repair transaction.', 'busy');
+  try {
+    await nftGarage.repairArmor(snapshot);
+    await refreshSelectedMinerFromChain(snapshot.minerId);
+    nftGarageBusy = false;
+    await refreshNftGarage();
+    setGarageStatus(`Miner #${snapshot.minerId} armor is repaired and active.`);
+  } catch (error) {
+    setGarageStatus(error?.message || 'Armor repair failed.', 'error');
+  } finally {
+    nftGarageBusy = false;
+    renderMinerSelect();
+    renderNftGarage();
+  }
+}
+
+async function withdrawGarageCrystals() {
+  const snapshot = nftGarageSnapshot;
+  if (nftGarageBusy || !snapshot) return;
+  let amountRaw;
+  try {
+    amountRaw = parseTokenUnits($('#garage-withdraw-input').value);
+  } catch (error) {
+    setGarageStatus(error.message, 'error');
+    return;
+  }
+  nftGarageBusy = true;
+  renderNftGarage();
+  setGarageStatus(`Withdrawing ${formatGarageTokenUnits(amountRaw)} MATT Crystals to the connected wallet...`, 'busy');
+  try {
+    await nftGarage.withdrawCrystals(snapshot, amountRaw);
+    $('#garage-withdraw-input').value = '';
+    nftGarageBusy = false;
+    await refreshNftGarage();
+    setGarageStatus('MATT Crystals were minted into the connected wallet.');
+  } catch (error) {
+    setGarageStatus(error?.message || 'Crystal withdrawal failed.', 'error');
+  } finally {
+    nftGarageBusy = false;
+    renderNftGarage();
+  }
+}
+
+async function openGarageChest(product) {
+  const snapshot = nftGarageSnapshot;
+  if (nftGarageBusy || !snapshot) return;
+  nftGarageBusy = true;
+  renderNftGarage();
+  setGarageStatus(`Opening ${product.label}. Ronin may first request an exact MATT approval, then the chest transaction.`, 'busy');
+  try {
+    await nftGarage.openChest(snapshot, product);
+    nftGarageBusy = false;
+    await refreshNftGarage();
+    setGarageStatus(`${product.label} request confirmed. Randomness may take a moment; use Refresh if the new item is still minting.`);
+  } catch (error) {
+    setGarageStatus(error?.message || `${product.label} could not be opened.`, 'error');
+  } finally {
+    nftGarageBusy = false;
+    renderNftGarage();
+  }
+}
+
+async function refreshSelectedMinerFromChain(minerId) {
+  const miner = await apiClient.ownedMiner(minerId);
+  cacheOwnedMiner(miner);
+  renderMinerSelect();
+  return miner;
 }
 
 async function purchasePaidRevive() {
@@ -1843,6 +2148,7 @@ const game = new MattMineGame(canvas, profile, {
     $('#menu-button').hidden = false;
     const mode = result.mode || RUN_MODES.PRACTICE;
     resultScreenMode = mode;
+    $('#menu-button').textContent = mode === RUN_MODES.PRACTICE ? 'BACK TO BASE' : 'BACK TO MINER';
     const serverRun = activeServerRun && activeServerRun.mode === mode ? activeServerRun : null;
     const arenaRun = activeArenaRun && mode === 'arena' ? activeArenaRun : null;
     const recorded = serverRun || arenaRun
@@ -1922,13 +2228,19 @@ const game = new MattMineGame(canvas, profile, {
   },
   onMenu() {
     leaveGameplayFullscreen();
+    const openMinerAfterCleanup = returnToMinerAfterRun;
+    returnToMinerAfterRun = false;
     resultScreenMode = null;
     paidRevivePending = false;
     paidReviveBusy = false;
     paidReviveContext = null;
     clearPracticeClaimPanel();
-    showScreen('menu');
     setGameplayUi(false);
+    if (openMinerAfterCleanup && serverPlayer) {
+      void openMinerSelect();
+      return;
+    }
+    showScreen('menu');
     updateMenu();
   },
   onRunAbandoned(context) {
@@ -2054,6 +2366,15 @@ $('#enter-mines-button').addEventListener('click', () => {
   showScreen('menu');
   updateMenu();
 });
+$('#select-loadout-button').addEventListener('click', () => void openMinerCommandCenter());
+$('#garage-refresh-button').addEventListener('click', () => void refreshNftGarage());
+$('#garage-close-button').addEventListener('click', closeMinerCommandCenter);
+$('#garage-repair-button').addEventListener('click', () => void repairGarageArmor());
+$('#garage-withdraw-button').addEventListener('click', () => void withdrawGarageCrystals());
+$('#garage-withdraw-all-button').addEventListener('click', () => {
+  if (!nftGarageSnapshot) return;
+  $('#garage-withdraw-input').value = formatGarageTokenUnits(nftGarageSnapshot.crystalBalanceRaw, 18, 18);
+});
 $('#practice-run-button').addEventListener('click', () => void startRunMode(RUN_MODES.PRACTICE));
 $('#resume-nft-practice-button').addEventListener('click', () => void resumeInterruptedNftPractice());
 $('#beta-run-button').addEventListener('click', () => void startRunMode(RUN_MODES.BETA));
@@ -2130,7 +2451,10 @@ $('#play-again-button').addEventListener('click', () => {
   }
   game.backToMenu();
 });
-$('#menu-button').addEventListener('click', () => game.backToMenu());
+$('#menu-button').addEventListener('click', () => {
+  returnToMinerAfterRun = resultScreenMode !== RUN_MODES.PRACTICE;
+  game.backToMenu();
+});
 $('#practice-claim-button').addEventListener('click', () => void claimPracticeRewards());
 $('#practice-decline-button').addEventListener('click', () => void declinePracticeRewards());
 $('#paid-revive-button').addEventListener('click', () => void purchasePaidRevive());

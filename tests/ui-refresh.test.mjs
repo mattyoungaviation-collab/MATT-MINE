@@ -14,6 +14,8 @@ test('approved UI refresh exposes every player dashboard and unique control id',
     'site-nav', 'site-account-button', 'site-account-label',
     'miner-select', 'miner-number-form', 'miner-number-input', 'miner-number-submit',
     'miner-select-grid', 'select-loadout-button', 'enter-mines-button',
+    'miner-command-center', 'garage-crystal-balance', 'garage-loadout-slots',
+    'garage-equipment-list', 'garage-repair-button', 'garage-withdraw-button',
     'how-to-play', 'how-to-title', 'launch-mine-select-title',
     'launch-nugget-button', 'practice-run-button', 'arena-button',
     'pass-mine', 'paid-run-button', 'start-pass-mine-button', 'buy-pass-credit-button',
@@ -30,7 +32,8 @@ test('approved UI refresh exposes every player dashboard and unique control id',
   assert.match(html, /data-launch-action="practice"/);
   assert.match(html, /data-launch-action="arena"/);
   assert.match(html, /data-launch-action="pass-mine"/);
-  assert.match(html, /id="select-loadout-button"[^>]*>MANAGE LOADOUT \(OPTIONAL\)</);
+  assert.match(html, /id="select-loadout-button"[^>]*>MANAGE LOADOUT</);
+  assert.doesNotMatch(html, /id="select-loadout-button"[^>]*href="\.\/nft-lab\.html"/);
   assert.match(html, /id="miner-number-input"[^>]*min="1"[^>]*max="1000"/);
   assert.match(html, /class="leaderboard-tab arena-leaderboard-tab active" data-board="arena"/);
   assert.doesNotMatch(html, /FREE DAILY MINE|SEVEN-DAY MINE|ENDLESS MINE|PVP MINE/i);
@@ -54,6 +57,8 @@ test('UI controls are wired to existing run, Pass, leaderboard, loadout, and sho
   assert.match(source, /openMinerSelect\(\)/);
   assert.match(source, /apiClient\.ownedMiner\(minerId\)/);
   assert.match(source, /apiClient\.startRun\(mode, minerId, approval\)/);
+  assert.match(source, /openMinerCommandCenter\(\)/);
+  assert.match(source, /nftGarage\.withdrawCrystals\(snapshot, amountRaw\)/);
   assert.match(source, /renderLeaderboardPodium\(rows\)/);
   assert.match(source, /mode === ARENA_LEADERBOARD_MODE/);
   assert.match(source, /await refreshArena\(true\)/);

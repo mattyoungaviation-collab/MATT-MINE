@@ -399,11 +399,61 @@
               </div>
               <div class="miner-select-actions">
                 <button id="enter-mines-button" class="primary-button gold-button" type="button" disabled>ENTER MINES</button>
-                <a id="select-loadout-button" class="primary-button miner-garage-link" href="./nft-lab.html">MANAGE LOADOUT (OPTIONAL)</a>
+                <button id="select-loadout-button" class="primary-button miner-garage-link" type="button" disabled>MANAGE LOADOUT</button>
               </div>
-              <small>Your Miner selection is locked in here. The NFT Garage is optional.</small>
+              <small>Select, equip, repair, check balances, and enter a mine without leaving this page.</small>
             </aside>
           </div>
+          <section id="miner-command-center" class="miner-command-center" hidden aria-labelledby="miner-command-center-title">
+            <header class="miner-command-center-heading">
+              <div>
+                <p class="eyebrow">MINER COMMAND CENTER</p>
+                <h3 id="miner-command-center-title">LOADOUT &amp; CRYSTAL BANK</h3>
+                <p>All changes are live on Ronin immediately. There is no separate confirmation step.</p>
+              </div>
+              <div>
+                <button id="garage-refresh-button" type="button">REFRESH</button>
+                <button id="garage-close-button" type="button">CLOSE</button>
+              </div>
+            </header>
+            <div class="garage-balance-strip">
+              <article><span>MATT BALANCE</span><strong id="garage-matt-balance">--</strong></article>
+              <article class="crystal-balance-card"><span>BANKED MATT CRYSTALS</span><strong id="garage-crystal-balance">--</strong></article>
+              <article><span>MINER STATE</span><strong id="garage-miner-state">--</strong></article>
+              <article><span>EQUIPMENT</span><strong id="garage-equipment-count">--</strong></article>
+            </div>
+            <div class="miner-command-center-layout">
+              <section class="garage-panel garage-loadout-panel">
+                <div class="garage-panel-heading"><span>ACTIVE LOADOUT</span><small>ON-CHAIN</small></div>
+                <div id="garage-loadout-slots" class="garage-loadout-slots"></div>
+                <p id="garage-wallet-note" class="garage-wallet-note">Real equipment changes require Ronin Wallet confirmation.</p>
+              </section>
+              <section class="garage-panel garage-inventory-panel">
+                <div class="garage-panel-heading"><span>EQUIPMENT INVENTORY</span><small id="garage-inventory-state">LOADING</small></div>
+                <div id="garage-equipment-list" class="garage-equipment-list"></div>
+              </section>
+              <aside class="garage-service-column">
+                <section class="garage-panel garage-service-card">
+                  <div class="garage-panel-heading"><span>ARMOR SERVICE</span><small>PAID IN MATT</small></div>
+                  <p id="garage-armor-copy">Select a Miner to inspect its armor.</p>
+                  <button id="garage-repair-button" class="primary-button" type="button" disabled>REPAIR ARMOR</button>
+                </section>
+                <section class="garage-panel garage-service-card crystal-bank-service">
+                  <div class="garage-panel-heading"><span>CRYSTAL BANK</span><small>ON-CHAIN</small></div>
+                  <p id="garage-withdraw-copy">Crystals earned from verified runs are held here until withdrawn.</p>
+                  <label for="garage-withdraw-input">WITHDRAW AMOUNT</label>
+                  <input id="garage-withdraw-input" type="number" min="0" step="any" placeholder="0" inputmode="decimal" />
+                  <button id="garage-withdraw-all-button" class="garage-withdraw-all-button" type="button">USE FULL BALANCE</button>
+                  <button id="garage-withdraw-button" class="primary-button" type="button" disabled>WITHDRAW CRYSTALS</button>
+                </section>
+              </aside>
+            </div>
+            <section class="garage-panel garage-chest-store">
+              <div class="garage-panel-heading"><span>EQUIPMENT CHESTS</span><small>MINTED ON RONIN</small></div>
+              <div id="garage-chest-list" class="garage-chest-list"></div>
+            </section>
+            <div id="garage-status" class="garage-status" role="status">Open the Command Center to load live Ronin balances and equipment.</div>
+          </section>
         </div>
       </section>
 
@@ -938,7 +988,7 @@
           </div>
           <div class="results-actions">
             <button id="play-again-button" class="primary-button">CHOOSE NEXT RUN</button>
-            <button id="menu-button" class="secondary-button">BACK TO BASE</button>
+            <button id="menu-button" class="secondary-button">BACK TO MINER</button>
           </div>
         </div>
       </section>
