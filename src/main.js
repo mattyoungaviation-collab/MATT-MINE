@@ -108,6 +108,7 @@ let activeServerRun = null;
 let pendingRunFinalization = null;
 let runFinalizationBusy = false;
 let nftPracticeRecoveryBusy = false;
+let lockedMinerRecoveryBusy = false;
 let selectedNftMinerId = 0;
 let minerSelectionBusy = false;
 const SELECTED_MINER_STORAGE_KEY = 'matt-mine:selected-nft-miner';
@@ -1568,8 +1569,11 @@ function renderMinerSelect() {
     }
   }
   const enter = $('#enter-mines-button');
-  enter.disabled = !selected || selected.gameplay?.runLocked === true;
-  enter.textContent = selected?.gameplay?.runLocked ? 'MINER IS IN A RUN' : 'ENTER MINES';
+  const minerLocked = selected?.gameplay?.runLocked === true;
+  enter.disabled = !selected || lockedMinerRecoveryBusy;
+  enter.textContent = minerLocked
+    ? lockedMinerRecoveryBusy ? 'UNLOCKING MINER...' : 'END LOCKED RUN'
+    : 'ENTER MINES';
   const loadout = $('#select-loadout-button');
   loadout.href = selected ? `./nft-lab.html?miner=${selected.minerId}` : './nft-lab.html';
   loadout.setAttribute('aria-disabled', String(!selected));
@@ -1610,6 +1614,29 @@ async function resumeInterruptedNftPractice() {
   } finally {
     nftPracticeRecoveryBusy = false;
     updateMenu();
+  }
+}
+
+async function recoverLockedMinerRun(minerId) {
+  if (lockedMinerRecoveryBusy || !minerId) return;
+  const approved = window.confirm(
+    `End Miner #${minerId}'s locked run? The contract will record this as a death with no XP or Crystals. Any active backpack will be burned and equipped armor will be damaged.`
+  );
+  if (!approved) return;
+  lockedMinerRecoveryBusy = true;
+  renderMinerSelect();
+  try {
+    const recovery = await apiClient.recoverLockedMinerRun(minerId);
+    if (recovery.profile) cacheOwnedMiner(recovery.profile);
+    else cacheOwnedMiner(await apiClient.ownedMiner(minerId));
+    renderMinerSelect();
+    setMinerNumberStatus(`Miner #${minerId} is unlocked and ready.`, 'success');
+    toast(`Miner #${minerId} unlocked`);
+  } catch (error) {
+    toast(error?.message || `Miner #${minerId} could not be unlocked.`);
+  } finally {
+    lockedMinerRecoveryBusy = false;
+    renderMinerSelect();
   }
 }
 
@@ -2018,6 +2045,11 @@ $('#miner-number-form').addEventListener('submit', (event) => {
 });
 $('#enter-mines-button').addEventListener('click', () => {
   if (!selectedNftMinerId) return;
+  const selected = ownedNftMiners().find((miner) => miner.minerId === selectedNftMinerId);
+  if (selected?.gameplay?.runLocked === true) {
+    void recoverLockedMinerRun(selectedNftMinerId);
+    return;
+  }
   rememberSelectedMiner(selectedNftMinerId);
   showScreen('menu');
   updateMenu();

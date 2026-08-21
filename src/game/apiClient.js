@@ -270,6 +270,15 @@ export class MattMineApiClient {
     return response.run;
   }
 
+  async recoverLockedMinerRun(minerId) {
+    const response = await this.request('/api/nft/v2/runs/recover', {
+      method: 'POST',
+      authenticated: true,
+      body: { minerId }
+    });
+    return response.recovery;
+  }
+
   async finishRun(runId, runToken, result, competitiveCheckpoint = null) {
     return this.request('/api/runs/finish', {
       method: 'POST',

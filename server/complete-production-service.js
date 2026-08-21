@@ -669,6 +669,60 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     return this.startRun(token, SERVER_RUN_MODES.PRACTICE);
   }
 
+  async recoverLockedMinerRun(token, payload) {
+    assertApi(this.nftGameplayService, 503, 'nft_gameplay_disabled', 'NFT gameplay is not enabled.');
+    const session = await this.authenticate(token);
+    const minerId = Number(payload?.minerId);
+    assertApi(Number.isSafeInteger(minerId) && minerId >= 1 && minerId <= 1_000, 422, 'nft_miner_id_invalid', 'Choose a valid Miner number.');
+
+    const before = await this.nftGameplayService.playerMiner(session.address, minerId);
+    assertApi(before, 403, 'miner_nft_required', 'A Miner NFT owned by this wallet is required.');
+    if (before.gameplay?.runLocked !== true) {
+      return { recovered: false, minerId, profile: before };
+    }
+
+    const cancellation = await this.nftGameplayService.cancelRun({
+      address: session.address,
+      minerId
+    });
+    const timestamp = this.now();
+    const expiredRunIds = await this.database.transact(async (state, transaction) => {
+      const runIds = [];
+      for (const run of Object.values(state.runs || {})) {
+        if (
+          run.address !== session.address ||
+          run.status !== 'active' ||
+          Number(run.nftRun?.minerId) !== minerId
+        ) continue;
+        run.status = 'expired';
+        run.finishedAt = timestamp;
+        run.result = null;
+        run.orphanRecoveryAt = timestamp;
+        await transaction?.upsertRun(run);
+        runIds.push(run.id);
+      }
+      appendAudit(
+        state,
+        'NFT_V2_ORPHAN_RUN_RECOVERED',
+        `${session.address}; Miner #${minerId}; ${cancellation.transactionHash || 'already unlocked'}`,
+        timestamp,
+        session.address
+      );
+      return runIds;
+    });
+    await Promise.all(expiredRunIds.map((runId) =>
+      this.competitiveReplayValidator?.finalize?.(runId, 'expired').catch(() => undefined)
+    ));
+    const profile = cancellation.settlement?.profile ||
+      await this.nftGameplayService.playerMiner(session.address, minerId);
+    return {
+      recovered: cancellation.cancelled === true,
+      minerId,
+      transactionHash: cancellation.transactionHash || null,
+      profile
+    };
+  }
+
   async adminWallet(adminKey, address) {
     const detail = await super.adminWallet(adminKey, address);
     const state = await this.database.read();
