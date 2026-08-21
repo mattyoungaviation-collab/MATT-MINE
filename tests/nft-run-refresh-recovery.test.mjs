@@ -29,9 +29,9 @@ function minerProfile(runLocked = false, minerId = 1) {
   };
 }
 
-function createHarness({ ownsMiner = true } = {}) {
+function createHarness({ ownsMiner = true, initialLocked = false } = {}) {
   let randomCounter = 0;
-  let locked = false;
+  let locked = initialLocked;
   const cancellations = [];
   const finalized = [];
   const database = new MemoryDatabase();
@@ -39,7 +39,7 @@ function createHarness({ ownsMiner = true } = {}) {
     publicStatus: () => ({ enabled: true, chainId: 202601 }),
     async playerMiner(_address, requestedMinerId = 0) {
       if (!ownsMiner) return null;
-      return minerProfile(false, requestedMinerId || 1);
+      return minerProfile(locked, requestedMinerId || 1);
     },
     async beginRun({ serverRunId }) {
       locked = true;
@@ -124,6 +124,31 @@ test('refresh recovery is unavailable without an active NFT Practice run', async
     () => harness.service.restartInterruptedNftPractice(session.token),
     (error) => error.code === 'interrupted_nft_practice_missing'
   );
+});
+
+test('an owned Miner with an orphaned on-chain run can be explicitly unlocked', async () => {
+  const harness = createHarness({ initialLocked: true });
+  const session = await signIn(harness.service);
+
+  const result = await harness.service.recoverLockedMinerRun(session.token, { minerId: 1 });
+
+  assert.equal(result.recovered, true);
+  assert.equal(result.minerId, 1);
+  assert.equal(result.profile.gameplay.runLocked, false);
+  assert.deepEqual(harness.cancellations, [1]);
+  const state = await harness.database.read();
+  assert.equal(state.audit.at(-1).action, 'NFT_V2_ORPHAN_RUN_RECOVERED');
+});
+
+test('orphan recovery rejects a Miner that the signed-in wallet does not own', async () => {
+  const harness = createHarness({ ownsMiner: false, initialLocked: true });
+  const session = await signIn(harness.service);
+
+  await assert.rejects(
+    () => harness.service.recoverLockedMinerRun(session.token, { minerId: 1 }),
+    (error) => error.code === 'miner_nft_required'
+  );
+  assert.deepEqual(harness.cancellations, []);
 });
 
 test('reward-bearing mines reject a wallet without a selected owned Miner before consuming its run', async () => {

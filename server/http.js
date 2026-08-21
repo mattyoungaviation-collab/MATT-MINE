@@ -490,6 +490,12 @@ async function handleApiRequest({
     sendJson(response, 201, { ok: true, run });
     return;
   }
+  if (method === 'POST' && path === '/api/nft/v2/runs/recover') {
+    const body = await readJson(request, maxRequestBytes);
+    const recovery = await service.recoverLockedMinerRun(bearerToken(request), body);
+    sendJson(response, 200, { ok: true, recovery });
+    return;
+  }
   if (method === 'POST' && path === '/api/runs/finish') {
     const body = await readJson(request, maxRequestBytes);
     const result = await service.finishRun(bearerToken(request), body);

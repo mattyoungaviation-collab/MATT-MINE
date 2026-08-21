@@ -69,6 +69,17 @@ test('the lobby exposes NFT Practice refresh recovery without reusing a lost run
   assert.match(httpSource, /service\.restartInterruptedNftPractice\(bearerToken\(request\)\)/);
 });
 
+test('the Miner selector exposes an explicit on-chain orphan recovery action', async () => {
+  const source = await readFile(`${root}src/main.js`, 'utf8');
+  const apiSource = await readFile(`${root}src/game/apiClient.js`, 'utf8');
+  const httpSource = await readFile(`${root}server/http.js`, 'utf8');
+
+  assert.match(source, /END LOCKED RUN/);
+  assert.match(source, /recoverLockedMinerRun\(selectedNftMinerId\)/);
+  assert.match(apiSource, /\/api\/nft\/v2\/runs\/recover/);
+  assert.match(httpSource, /service\.recoverLockedMinerRun\(bearerToken\(request\), body\)/);
+});
+
 test('Practice is visibly public, rewardless, and starts without the authenticated NFT path', async () => {
   const html = await readFile(`${root}index.html`, 'utf8');
   const source = await readFile(`${root}src/main.js`, 'utf8');
