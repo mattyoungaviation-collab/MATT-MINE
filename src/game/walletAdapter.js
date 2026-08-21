@@ -289,6 +289,18 @@ function withEip712DomainType(typedData) {
 function walletTransactionError(error, transaction = {}) {
   const code = Number(error?.code);
   if (code === 4001) return 'The transaction was canceled in Ronin Wallet.';
+  const action = ({
+    approve: 'MATT approval',
+    enter: 'Arena entry',
+    'equipment-approval': 'one-time Equipment approval',
+    equip: 'Equipment equip',
+    unequip: 'Equipment removal',
+    'armor-repair-approval': 'armor repair approval',
+    'armor-repair': 'armor repair',
+    'chest-approval': 'chest purchase approval',
+    'chest-purchase': 'chest purchase',
+    'crystal-withdrawal': 'MATT Crystal withdrawal'
+  })[transaction.kind] || 'transaction';
   const message = String(
     error?.shortMessage ||
     error?.data?.message ||
@@ -296,18 +308,15 @@ function walletTransactionError(error, transaction = {}) {
     ''
   ).replace(/^Error:\s*/i, '').trim();
   if (/insufficient funds/i.test(message)) {
-    const action = transaction.kind === 'approve'
-      ? 'MATT approval'
-      : transaction.kind === 'enter'
-        ? 'Arena entry'
-        : 'transaction';
     return `Ronin Wallet reported insufficient RON for network gas during the ${action}. MATT cannot pay Ronin gas; add RON to the signed-in wallet and try again.`;
   }
   if (/erc20insufficientbalance|transfer amount exceeds balance|insufficient token balance/i.test(message)) {
-    return 'The signed-in wallet does not have enough MATT for this Arena entry. Refresh the Arena to load its exact onchain balance.';
+    return transaction.kind === 'enter'
+      ? 'The signed-in wallet does not have enough MATT for this Arena entry. Refresh the Arena to load its exact onchain balance.'
+      : `The signed-in wallet does not have enough MATT for the ${action}. Refresh the Miner dashboard and try again.`;
   }
   if (/revert|execution reverted/i.test(message)) {
-    return 'Ronin rejected the claim during its safety check. Refresh the leaderboard and try again.';
+    return `Ronin rejected the ${action} during its on-chain safety check. Refresh the Miner dashboard and try again.`;
   }
   return message || 'Ronin Wallet could not send the transaction.';
 }

@@ -32,6 +32,7 @@ const NFT_LAB_RPC_CONTRACTS = new Set([
   '0xb88c219c792cfa07749e0e5d939dbbbf1e62c7b5',
   '0x693525e7fd76949834cad56d67d469baad6687f6',
   '0x21bee81adc4c87e3ea4686dd8a38a64c8ea5b95c',
+  '0x8c640cd91ea6616cdd07b8323492e76e5c9ffe78',
   '0xa5450417bdca0bdfb058ffe41205400ffda1174d'
 ]);
 

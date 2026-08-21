@@ -31,6 +31,7 @@ test('run results use a compact two-column layout with both exit actions grouped
   assert.match(html, /class="results-summary-column"/);
   assert.match(html, /class="results-outcome-column"/);
   assert.match(html, /class="results-actions"/);
+  assert.match(html, /id="menu-button"[^>]*>BACK TO MINER</);
   assert.match(css, /\.results-layout\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*0\.95fr\)\s+minmax\(0,\s*1\.05fr\)/);
   assert.match(css, /\.results-panel-v4\s*\{[\s\S]*max-height:\s*calc\(100dvh - 24px\)/);
 });
@@ -78,6 +79,24 @@ test('the Miner selector exposes an explicit on-chain orphan recovery action', a
   assert.match(source, /recoverLockedMinerRun\(selectedNftMinerId\)/);
   assert.match(apiSource, /\/api\/nft\/v2\/runs\/recover/);
   assert.match(httpSource, /service\.recoverLockedMinerRun\(bearerToken\(request\), body\)/);
+});
+
+test('Miner selection, loadout, balances, repair, chests, and mine entry share one player flow', async () => {
+  const html = await readFile(`${root}index.html`, 'utf8');
+  const source = await readFile(`${root}src/main.js`, 'utf8');
+
+  assert.match(html, /id="miner-command-center"/);
+  assert.match(html, /id="garage-crystal-balance"/);
+  assert.match(html, /id="garage-equipment-list"/);
+  assert.match(html, /id="garage-repair-button"/);
+  assert.match(html, /id="garage-withdraw-button"/);
+  assert.match(html, /id="garage-withdraw-all-button" class="garage-withdraw-all-button"/);
+  assert.match(html, /id="garage-chest-list"/);
+  assert.doesNotMatch(html, /id="select-loadout-button"[^>]*href=/);
+  assert.match(source, /new NftGarageClient\(\{ wallet \}\)/);
+  assert.match(source, /No separate confirmation is needed/);
+  assert.match(source, /returnToMinerAfterRun = resultScreenMode !== RUN_MODES\.PRACTICE/);
+  assert.match(source, /void openMinerSelect\(\)/);
 });
 
 test('Practice is visibly public, rewardless, and starts without the authenticated NFT path', async () => {
