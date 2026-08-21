@@ -25,6 +25,7 @@
     <link rel="stylesheet" href="./src/launch.css" />
     <link rel="stylesheet" href="./src/production.css" />
     <link rel="stylesheet" href="./src/ui-refresh.css" />
+    <link rel="stylesheet" href="./src/player-journey.css" />
   </head>
   <body>
     <main id="app">
@@ -35,6 +36,7 @@
           <span aria-hidden="true">⛏</span><strong>MATT <b>MINE</b></strong>
         </button>
         <nav aria-label="Player pages">
+          <button type="button" data-site-action="mines">MINES</button>
           <button type="button" data-site-action="how-to-play">HOW TO PLAY</button>
           <button type="button" data-site-action="leaderboards">LEADERBOARDS</button>
           <button type="button" data-site-action="pass">PASS</button>
@@ -52,9 +54,9 @@
             <span><b>MATT</b> MINE<small>RONIN ACTION ROGUELITE</small></span>
           </button>
           <nav class="launch-links" aria-label="Main navigation">
-            <button type="button" data-launch-action="how-to-play">HOW TO PLAY</button>
+            <button type="button" data-launch-action="how-to-play">HOW IT WORKS</button>
+            <button type="button" data-launch-action="mines">CHOOSE A MINE</button>
             <button type="button" data-launch-action="leaderboards">LEADERBOARDS</button>
-            <button type="button" data-launch-action="pass">PASS</button>
           </nav>
           <div class="launch-nav-actions">
             <button id="launch-nugget-button" class="launch-nugget-button" type="button" data-open-nugget-shop>
@@ -69,7 +71,7 @@
               <span class="status-dot"></span>
               <span>CONNECT WALLET</span>
             </button>
-            <button class="launch-enter-button" type="button" data-launch-action="enter">ENTER MINE</button>
+            <button class="launch-enter-button" type="button" data-launch-action="how-to-play">START HERE</button>
           </div>
         </header>
 
@@ -79,17 +81,17 @@
             <div class="launch-hero-shade"></div>
             <div class="launch-hero-content">
               <div class="launch-live-pill"><span></span> LIVE ON RONIN MAINNET</div>
-              <p class="launch-kicker">THREE LIVE MINES · ONE MINER SYSTEM</p>
-              <h1 id="launch-title"><span>MATT MINE</span><small>DIG. FIGHT. EXTRACT.</small></h1>
-              <p class="launch-hero-copy">Enter the mine, secure your score,<br />and extract before time runs out.</p>
+              <p class="launch-kicker">YOUR RUN STARTS HERE</p>
+              <h1 id="launch-title"><span>MATT MINE</span><small>MAKE THE CALL. GET OUT ALIVE.</small></h1>
+              <p class="launch-hero-copy">Choose your route, build your Miner, and decide when the haul is worth the risk.</p>
               <div class="launch-hero-actions">
-                <button class="launch-primary-cta" type="button" data-launch-action="enter">
-                  <span>SELECT CHARACTER</span>
-                  <small>CHOOSE YOUR NFT MINER FIRST</small>
+                <button class="launch-primary-cta" type="button" data-launch-action="how-to-play">
+                  <span>START HERE</span>
+                  <small>60-SECOND MINE BRIEFING</small>
                 </button>
-                <button class="launch-secondary-cta" type="button" data-launch-action="practice">
-                  <span>PLAY PRACTICE</span>
-                  <small>NO WALLET · NO NFT · NO XP · NO CRYSTALS</small>
+                <button class="launch-secondary-cta" type="button" data-launch-action="mines">
+                  <span>CHOOSE A MINE</span>
+                  <small>I ALREADY KNOW THE RULES</small>
                 </button>
               </div>
               <div class="launch-chain-note">
@@ -101,6 +103,11 @@
                 <span>Browser playable</span>
                 <i></i>
                 <span>Desktop + mobile</span>
+              </div>
+              <div class="journey-progress home-progress" aria-label="Player journey">
+                <span class="active"><b>01</b><small>HOME</small></span><i></i>
+                <span><b>02</b><small>HOW TO PLAY</small></span><i></i>
+                <span><b>03</b><small>CHOOSE MINE</small></span>
               </div>
             </div>
 
@@ -121,7 +128,7 @@
                 <div><span>MINE PASS</span><strong><span id="launch-pass-price">95</span> RON</strong></div>
                 <div><span>PASS RUN</span><strong><span id="launch-run-price">10</span> RON</strong></div>
               </div>
-              <button type="button" data-launch-action="enter">SELECT MINER + VIEW MINES</button>
+              <button type="button" data-launch-action="mines">VIEW THE THREE MINES</button>
               <button class="launch-store-shortcut" type="button" data-open-nugget-shop>
                 <span><b>NUGGET STORE</b><small>Verified packages · Live balance</small></span>
                 <strong>OPEN STORE →</strong>
@@ -133,7 +140,7 @@
 
           <section class="launch-mine-select" aria-labelledby="launch-mine-select-title">
             <div class="launch-mine-select-heading">
-              <span></span><h2 id="launch-mine-select-title">CHOOSE YOUR MINE</h2><span></span>
+              <span></span><h2 id="launch-mine-select-title">THREE WAYS INTO THE MINE</h2><span></span>
             </div>
             <div class="launch-mine-card-grid">
               <button class="launch-mine-card practice" type="button" data-launch-action="practice">
@@ -146,6 +153,9 @@
                 <i aria-hidden="true">M</i><strong>PASS MINE</strong><small>Miner NFT + Mine Pass required</small><b>SELECT MINER</b><em>PASS HOLDERS</em>
               </button>
             </div>
+            <button class="journey-continue" type="button" data-launch-action="how-to-play">
+              <span>NOT SURE WHICH MINE?</span><strong>SEE HOW A RUN WORKS →</strong>
+            </button>
             <button class="launch-home-store" type="button" data-open-nugget-shop>
               <span><i aria-hidden="true">◆</i><strong>NUGGET STORE</strong><small>Live server balance · Verified packages</small></span><b>OPEN STORE →</b>
             </button>
@@ -346,26 +356,41 @@
       <section id="how-to-play" class="screen experience-screen" aria-labelledby="how-to-title">
         <div class="experience-page how-to-page">
           <header class="experience-hero how-to-hero">
-            <div><p class="eyebrow">HOW TO PLAY</p><h1 id="how-to-title"><span>HOW TO PLAY</span></h1><p>ENTER. DIG. EXTRACT.</p></div>
+            <button class="journey-back" type="button" data-site-action="home">&larr; HOME</button>
+            <div class="how-to-hero-copy">
+              <p class="eyebrow">THE MINE BRIEFING</p>
+              <h1 id="how-to-title"><span>HOW TO SURVIVE</span></h1>
+              <p>Every rewarded run asks the same question: extract what you have, or risk it all for more?</p>
+            </div>
+            <div class="journey-progress how-progress" aria-label="Player journey">
+              <span><b>01</b><small>HOME</small></span><i></i>
+              <span class="active"><b>02</b><small>HOW TO PLAY</small></span><i></i>
+              <span><b>03</b><small>CHOOSE MINE</small></span>
+            </div>
           </header>
+          <section class="how-to-choice" aria-label="Choose how to play">
+            <article><span>OPEN TO EVERYONE</span><h2>PRACTICE MINE</h2><p>Learn the controls and survive a full run. No wallet, Miner NFT, XP, or crystals.</p></article>
+            <article><span>ON-CHAIN PROGRESSION</span><h2>REWARDED MINES</h2><p>Select your Miner NFT first. Its traits, loadout, XP, crystals, armor state, and death rules follow it into the run.</p></article>
+          </section>
           <div class="how-to-steps">
-            <article class="gold"><b>1</b><div><h2>CHOOSE YOUR MINE</h2><p>Practice Mine, MATT Arena, or Pass Mine.</p></div><span aria-hidden="true">◎ &nbsp; ⚔ &nbsp; M</span></article>
-            <article class="cyan"><b>2</b><div><h2>DIG &amp; FIGHT</h2><p>Break ore, clear sealed chambers, collect upgrades, and defeat enemies.</p></div><span aria-hidden="true">⛏</span></article>
-            <article class="purple"><b>3</b><div><h2>EXTRACT &amp; SCORE</h2><p>Reach the Lift Station and extract before the mine takes everything.</p></div><span aria-hidden="true">⇧</span></article>
+            <article class="gold"><b>1</b><div><h2>SELECT</h2><p>Choose Practice, MATT Arena, or Pass Mine. Rewarded mines will guide you through Miner selection.</p></div><span aria-hidden="true">◎ &nbsp; ⚔ &nbsp; M</span></article>
+            <article class="cyan"><b>2</b><div><h2>DIG &amp; FIGHT</h2><p>Break ore, clear chambers, collect upgrades, and push deeper while your carry fills.</p></div><span aria-hidden="true">⛏</span></article>
+            <article class="purple"><b>3</b><div><h2>MAKE THE CALL</h2><p>Extract to bank the run. Die before extraction and the session XP is lost while death rules are applied.</p></div><span aria-hidden="true">⇧</span></article>
           </div>
           <div class="how-to-bottom">
             <article class="run-glance-card">
-              <h2>THE RUN AT A GLANCE</h2>
-              <div class="run-glance-flow"><span><i>▱</i><b>ENTER</b></span><em>›</em><span><i>◆</i><b>MINE</b></span><em>›</em><span><i>⇧</i><b>UPGRADE</b></span><em>›</em><span><i>♛</i><b>GUARDIAN</b></span><em>›</em><span><i>▥</i><b>EXTRACT</b></span></div>
+              <h2>ONE RUN · FIVE PHASES</h2>
+              <div class="run-glance-flow"><span><i>01</i><b>ENTER</b></span><em>›</em><span><i>02</i><b>MINE</b></span><em>›</em><span><i>03</i><b>UPGRADE</b></span><em>›</em><span><i>04</i><b>GUARDIAN</b></span><em>›</em><span><i>05</i><b>EXTRACT</b></span></div>
+              <p><strong>MOVE</strong> with WASD, arrows, or joystick. <strong>ATTACK</strong>, use your tools, and follow the objective marker to the lift.</p>
             </article>
-            <aside class="goal-card"><span aria-hidden="true">✦</span><h2>YOUR GOAL</h2><p>Secure the highest score you can and get out alive.</p><button class="primary-button" type="button" data-site-action="mines">⛏ CHOOSE YOUR MINE</button></aside>
+            <aside class="goal-card"><span aria-hidden="true">✦</span><h2>READY?</h2><p>Pick the route that matches how you want to play. Practice starts immediately; rewarded mines ask for your Miner.</p><button class="primary-button" type="button" data-site-action="mines">CHOOSE YOUR MINE &rarr;</button><button class="text-button" type="button" data-site-action="home">&larr; BACK HOME</button></aside>
           </div>
         </div>
       </section>
 
       <section id="miner-select" class="screen miner-select-screen" aria-labelledby="miner-select-title">
         <div class="panel wide-panel miner-select-panel">
-          <button id="miner-select-home" class="home-chip" type="button">&larr; MAIN PAGE</button>
+          <button id="miner-select-home" class="home-chip" type="button">&larr; BACK TO MINES</button>
           <header class="miner-select-heading">
             <div>
               <p class="eyebrow">STEP 1 OF 2</p>
@@ -471,11 +496,16 @@
             </div>
             <div class="matchmaking-heading">
               <div>
-                <p class="eyebrow">CHOOSE WHERE TO PLAY</p>
-                <h2>Pick a mine</h2>
-                <p>Choose a lobby, enter the mine, beat the boss, and return to the lift.</p>
+                <p class="eyebrow">STEP 3 · CHOOSE YOUR ROUTE</p>
+                <h2>Choose your mine</h2>
+                <p>Practice is open. Rewarded mines will ask you to select the Miner NFT entering the run.</p>
               </div>
               <span class="matchmaking-day"><small>TODAY</small><strong id="menu-date">JUL 26</strong></span>
+            </div>
+            <div class="journey-progress mines-progress" aria-label="Player journey">
+              <span><b>01</b><small>HOME</small></span><i></i>
+              <span><b>02</b><small>HOW TO PLAY</small></span><i></i>
+              <span class="active"><b>03</b><small>CHOOSE MINE</small></span>
             </div>
           </header>
 
@@ -488,9 +518,9 @@
                 </div>
               </div>
               <div class="quick-play-guide" aria-label="How to play">
-                <span><b>1</b><strong>MOVE</strong><small>WASD, arrows, or joystick</small></span>
-                <span><b>2</b><strong>FIGHT</strong><small>Aim, attack, and collect upgrades</small></span>
-                <span><b>3</b><strong>ESCAPE</strong><small>Beat the boss, then use the lift</small></span>
+                <span><b>1</b><strong>PRACTICE</strong><small>Open to everyone · no rewards</small></span>
+                <span><b>2</b><strong>MATT ARENA</strong><small>Miner NFT · competitive run</small></span>
+                <span><b>3</b><strong>PASS MINE</strong><small>Miner NFT · active Mine Pass</small></span>
               </div>
             </div>
 
@@ -531,6 +561,11 @@
                 <button id="resume-nft-practice-button" type="button">RESUME MINER RUN</button>
               </div>
             </div>
+          </div>
+
+          <div class="mine-route-help">
+            <button id="mines-how-to-button" class="secondary-button" type="button">&larr; HOW TO PLAY</button>
+            <button id="mines-miner-button" class="secondary-button" type="button">SELECT / MANAGE MINER</button>
           </div>
 
           <div class="menu-bottom-deck">

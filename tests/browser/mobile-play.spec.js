@@ -1,5 +1,12 @@
 import { expect, test } from '@playwright/test';
 
+async function startPracticeFromMines(page) {
+  await page.locator('[data-mine-slot="practice"]').click();
+  const detail = page.locator('#mine-detail');
+  await expect(detail).toBeVisible();
+  await detail.locator('[data-mine-enter]').click();
+}
+
 test.describe('Ronin mobile play', () => {
   test.describe.configure({ timeout: 60_000 });
   test.use({
@@ -18,15 +25,19 @@ test.describe('Ronin mobile play', () => {
     const walletBox = await wallet.boundingBox();
     expect(walletBox?.height).toBeGreaterThanOrEqual(44);
 
-    const practice = page.locator('[data-launch-action="practice"].launch-secondary-cta');
+    const start = page.locator('[data-launch-action="how-to-play"].launch-primary-cta');
     const mineGrid = page.locator('.launch-mine-card-grid');
-    const practiceBox = await practice.boundingBox();
+    const startBox = await start.boundingBox();
     const mineGridBox = await mineGrid.boundingBox();
-    expect(practiceBox).not.toBeNull();
+    expect(startBox).not.toBeNull();
     expect(mineGridBox).not.toBeNull();
-    expect(practiceBox.y + practiceBox.height).toBeLessThan(mineGridBox.y);
+    expect(startBox.y + startBox.height).toBeLessThan(mineGridBox.y);
 
-    await practice.click();
+    await start.click();
+    await expect(page.locator('#how-to-play')).toHaveClass(/active/);
+    await page.locator('#how-to-play [data-site-action="mines"]').first().click();
+    await expect(page.locator('#menu')).toHaveClass(/active/);
+    await startPracticeFromMines(page);
     await expect(page.locator('#mobile-orientation-gate')).toHaveCount(0);
     await expect(page.locator('#hud')).toHaveClass(/active/, { timeout: 15_000 });
     await expect(page.locator('.screen.active')).toHaveCount(0);
@@ -36,7 +47,8 @@ test.describe('Ronin mobile play', () => {
 
   test('separates portrait controls from the playable canvas', async ({ page }) => {
     await page.goto('/');
-    await page.locator('[data-launch-action="practice"].launch-secondary-cta').click();
+    await page.locator('[data-launch-action="mines"].launch-secondary-cta').click();
+    await startPracticeFromMines(page);
 
     await expect(page.locator('#hud')).toHaveClass(/active/, { timeout: 15_000 });
     await expect(page.locator('#mobile-controls')).toBeVisible();
@@ -108,7 +120,8 @@ test.describe('Ronin mobile play', () => {
       };
     });
     await page.goto('/');
-    await page.locator('[data-launch-action="practice"].launch-secondary-cta').click();
+    await page.locator('[data-launch-action="mines"].launch-secondary-cta').click();
+    await startPracticeFromMines(page);
 
     await expect(page.locator('html')).toHaveClass(/mobile-gameplay-fullscreen/);
     await expect(page.locator('#hud')).toHaveClass(/active/, { timeout: 15_000 });
