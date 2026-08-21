@@ -122,6 +122,7 @@ let nftGarageBusy = false;
 let nftGarageSnapshot = null;
 let selectedNftMinerId = 0;
 let minerSelectionBusy = false;
+let pendingMineDestination = '';
 const SELECTED_MINER_STORAGE_KEY = 'matt-mine:selected-nft-miner';
 let paymentStatus = null;
 let publicPaymentStatus = null;
@@ -195,7 +196,8 @@ function showScreen(id = null) {
   document.body.dataset.activeScreen = id || 'game';
   for (const button of document.querySelectorAll('#site-nav [data-site-action]')) {
     const action = button.dataset.siteAction;
-    const active = (action === 'how-to-play' && id === 'how-to-play') ||
+    const active = (action === 'mines' && id === 'menu') ||
+      (action === 'how-to-play' && id === 'how-to-play') ||
       (action === 'leaderboards' && id === 'leaderboards') ||
       (action === 'pass' && (id === 'mine-pass' || id === 'pass-mine' || id === 'pass-cosmetics')) ||
       (action === 'store' && id === 'nugget-shop') ||
@@ -699,6 +701,33 @@ function openLaunch(scrollToTop = false) {
   showScreen('launch');
   updateMenu();
   if (scrollToTop) $('#launch-scroll')?.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function openMines() {
+  setGameplayUi(false);
+  showScreen('menu');
+  updateMenu();
+}
+
+function selectedOwnedMiner() {
+  return ownedNftMiners().find((miner) => miner.minerId === selectedNftMinerId) || null;
+}
+
+function openMineRoute(destination) {
+  const selected = selectedOwnedMiner();
+  if (selected && selected.gameplay?.runLocked !== true) {
+    pendingMineDestination = '';
+    if (destination === 'arena') {
+      void openArena();
+      return;
+    }
+    if (destination === 'pass-mine') {
+      openPassMine();
+      return;
+    }
+  }
+  pendingMineDestination = destination;
+  void openMinerSelect();
 }
 
 function toast(message) {
@@ -1594,7 +1623,11 @@ function renderMinerSelect() {
   enter.disabled = !selected || lockedMinerRecoveryBusy;
   enter.textContent = minerLocked
     ? lockedMinerRecoveryBusy ? 'UNLOCKING MINER...' : 'END LOCKED RUN'
-    : 'ENTER MINES';
+    : pendingMineDestination === 'arena'
+      ? 'ENTER MATT ARENA'
+      : pendingMineDestination === 'pass-mine'
+        ? 'ENTER PASS MINE'
+        : 'ENTER MINES';
   const loadout = $('#select-loadout-button');
   loadout.disabled = !selected || nftGarageBusy;
   loadout.textContent = nftGarageBusy ? 'LOADING LOADOUT...' : 'MANAGE LOADOUT';
@@ -2273,8 +2306,12 @@ for (const button of document.querySelectorAll('[data-launch-action]')) {
       void startRunMode(RUN_MODES.PRACTICE);
       return;
     }
-    if (['enter', 'pass-mine', 'arena'].includes(action)) {
-      void openMinerSelect();
+    if (action === 'mines' || action === 'enter') {
+      openMines();
+      return;
+    }
+    if (action === 'pass-mine' || action === 'arena') {
+      openMineRoute(action);
       return;
     }
     if (action === 'how-to-play') {
@@ -2302,7 +2339,7 @@ for (const button of document.querySelectorAll('[data-site-action]')) {
     if (action === 'pass') return openPass();
     if (action === 'store') return window.dispatchEvent(new CustomEvent('mattmine:open-nugget-shop'));
     if (action === 'mines') {
-      return void openMinerSelect();
+      return openMines();
     }
     if (action === 'account') {
       if (serverPlayer) return openMinerProfile(false);
@@ -2350,7 +2387,15 @@ mobileWalletConnectCancel.addEventListener('click', () => {
 });
 
 $('#home-button').addEventListener('click', () => openLaunch(true));
-$('#miner-select-home').addEventListener('click', () => openLaunch(true));
+$('#miner-select-home').addEventListener('click', () => {
+  pendingMineDestination = '';
+  openMines();
+});
+$('#mines-how-to-button').addEventListener('click', () => showScreen('how-to-play'));
+$('#mines-miner-button').addEventListener('click', () => {
+  pendingMineDestination = '';
+  void openMinerSelect();
+});
 $('#miner-number-form').addEventListener('submit', (event) => {
   event.preventDefault();
   void selectMinerByNumber();
@@ -2363,8 +2408,17 @@ $('#enter-mines-button').addEventListener('click', () => {
     return;
   }
   rememberSelectedMiner(selectedNftMinerId);
-  showScreen('menu');
-  updateMenu();
+  const destination = pendingMineDestination;
+  pendingMineDestination = '';
+  if (destination === 'arena') {
+    void openArena();
+    return;
+  }
+  if (destination === 'pass-mine') {
+    openPassMine();
+    return;
+  }
+  openMines();
 });
 $('#select-loadout-button').addEventListener('click', () => void openMinerCommandCenter());
 $('#garage-refresh-button').addEventListener('click', () => void refreshNftGarage());
@@ -2405,7 +2459,7 @@ $('#beta-copy-config').addEventListener('click', () => {
   toast('Beta configuration copied');
 });
 $('#paid-run-button').addEventListener('click', () => {
-  openPassMine();
+  openMineRoute('pass-mine');
 });
 $('#start-pass-mine-button').addEventListener('click', async () => {
   if (!serverPlayer && serverConfig?.paidRunsEnabled === true) {
@@ -2574,7 +2628,7 @@ $('#effects-volume').addEventListener('input', (event) => {
 $('#pass-button').addEventListener('click', openPass);
 $('#manage-cosmetics-button').addEventListener('click', () => void openCosmetics());
 $('#leaderboards-button').addEventListener('click', () => openLeaderboards(ARENA_LEADERBOARD_MODE));
-$('#arena-button').addEventListener('click', () => void openArena());
+$('#arena-button').addEventListener('click', () => openMineRoute('arena'));
 $('#admin-button').addEventListener('click', openAdmin);
 
 for (const button of document.querySelectorAll('[data-close]')) {
@@ -4216,11 +4270,11 @@ window.addEventListener('mattmine:slot-enter', (event) => {
   const slot = event.detail?.slot;
   if (!slot || slot.comingSoon) return;
   if (slot.id === 'arena') {
-    void openArena();
+    openMineRoute('arena');
     return;
   }
   if (slot.id === 'pass') {
-    openPassMine();
+    openMineRoute('pass-mine');
     return;
   }
   const mode = { practice: RUN_MODES.PRACTICE }[slot.id];

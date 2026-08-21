@@ -1,0 +1,519 @@
+:root {
+  --journey-gold: #ffd229;
+  --journey-gold-deep: #a86f00;
+  --journey-cyan: #36e8ff;
+  --journey-ink: #050708;
+  --journey-panel: rgba(9, 13, 15, 0.94);
+  --journey-line: rgba(255, 210, 41, 0.25);
+  --journey-muted: #a5adb7;
+}
+
+/* One focused player journey: Home -> How to Play -> Choose Mine. */
+#launch .launch-proof-rail,
+#launch #launch-gameplay,
+#launch #launch-economy,
+#launch #launch-roadmap,
+#launch #launch-contracts,
+#launch .launch-final-cta,
+#launch .launch-footer {
+  display: none;
+}
+
+#launch .launch-shell {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 75% 22%, rgba(255, 200, 35, 0.09), transparent 27rem),
+    linear-gradient(180deg, rgba(3, 5, 6, 0.15), #050708 68%);
+}
+
+#launch .launch-hero {
+  min-height: min(720px, 75vh);
+}
+
+#launch .launch-hero-content {
+  max-width: 760px;
+}
+
+#launch .launch-hero-copy {
+  max-width: 650px;
+  font-size: clamp(1rem, 1.8vw, 1.35rem);
+  line-height: 1.55;
+}
+
+#launch .launch-mine-select {
+  padding-block: clamp(42px, 7vw, 88px);
+}
+
+#launch .launch-mine-card-grid {
+  align-items: stretch;
+}
+
+.journey-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(100%, 620px);
+  margin-top: 28px;
+}
+
+.journey-progress > span {
+  display: grid;
+  gap: 3px;
+  min-width: 90px;
+  color: #717b85;
+}
+
+.journey-progress > span b {
+  font: 800 0.72rem/1 var(--font-mono, monospace);
+  letter-spacing: 0.12em;
+}
+
+.journey-progress > span small {
+  font: 800 0.65rem/1.1 var(--font-display, sans-serif);
+  letter-spacing: 0.08em;
+}
+
+.journey-progress > span.active {
+  color: var(--journey-gold);
+}
+
+.journey-progress > i {
+  flex: 1;
+  min-width: 16px;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255, 210, 41, 0.6), rgba(255, 255, 255, 0.13));
+}
+
+.journey-continue {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  width: fit-content;
+  margin: 24px auto 0;
+  padding: 13px 20px;
+  border: 1px solid rgba(54, 232, 255, 0.35);
+  background: rgba(6, 16, 20, 0.82);
+  color: #fff;
+  cursor: pointer;
+}
+
+.journey-continue span,
+.journey-continue strong {
+  font: 800 0.72rem/1.2 var(--font-mono, monospace);
+  letter-spacing: 0.06em;
+}
+
+.journey-continue strong {
+  color: var(--journey-cyan);
+}
+
+/* How to Play */
+#how-to-play {
+  overflow-y: auto;
+  background:
+    linear-gradient(90deg, rgba(2, 5, 7, 0.97) 0%, rgba(2, 5, 7, 0.78) 48%, rgba(2, 5, 7, 0.94) 100%),
+    url('../assets/ui/how-to-panels.png') center 20% / cover fixed;
+}
+
+#how-to-play .how-to-page {
+  width: min(1440px, calc(100% - 40px));
+  min-height: 100%;
+  margin: 0 auto;
+  padding: 38px 0 64px;
+}
+
+#how-to-play .how-to-hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  min-height: 260px;
+  padding: clamp(86px, 10vw, 138px) clamp(24px, 5vw, 72px) 34px;
+  border: 1px solid var(--journey-line);
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.43)),
+    url('../assets/ui/matt-mine-hero-reference.png') center 42% / cover;
+  overflow: hidden;
+}
+
+#how-to-play .journey-back {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  border: 0;
+  background: none;
+  color: var(--journey-gold);
+  font: 900 0.72rem/1 var(--font-mono, monospace);
+  letter-spacing: 0.1em;
+  cursor: pointer;
+}
+
+#how-to-play .how-to-hero-copy {
+  max-width: 720px;
+}
+
+#how-to-play .how-to-hero h1 {
+  margin: 5px 0 10px;
+  font-size: clamp(3.2rem, 7vw, 7.4rem);
+  line-height: 0.78;
+}
+
+#how-to-play .how-to-hero-copy > p:last-child {
+  max-width: 650px;
+  margin: 0;
+  color: #d3d8dd;
+  font-size: clamp(1rem, 1.6vw, 1.25rem);
+  line-height: 1.5;
+}
+
+#how-to-play .how-progress {
+  justify-self: end;
+  width: min(420px, 100%);
+}
+
+.how-to-choice {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-inline: 1px solid var(--journey-line);
+  border-bottom: 1px solid var(--journey-line);
+}
+
+.how-to-choice article {
+  min-height: 160px;
+  padding: 26px clamp(22px, 4vw, 48px);
+  background: rgba(7, 10, 12, 0.94);
+}
+
+.how-to-choice article + article {
+  border-left: 1px solid var(--journey-line);
+  background: linear-gradient(135deg, rgba(11, 28, 31, 0.97), rgba(7, 10, 12, 0.97));
+}
+
+.how-to-choice span {
+  color: var(--journey-cyan);
+  font: 800 0.65rem/1 var(--font-mono, monospace);
+  letter-spacing: 0.12em;
+}
+
+.how-to-choice h2 {
+  margin: 9px 0 7px;
+  color: #fff;
+  font-size: clamp(1.35rem, 2.3vw, 2rem);
+}
+
+.how-to-choice p {
+  max-width: 610px;
+  margin: 0;
+  color: var(--journey-muted);
+  line-height: 1.55;
+}
+
+#how-to-play .how-to-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 18px 0;
+}
+
+#how-to-play .how-to-steps article {
+  min-height: 210px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--journey-panel);
+}
+
+#how-to-play .how-to-steps article > b {
+  color: rgba(255, 255, 255, 0.16);
+  font-size: clamp(4.4rem, 8vw, 7.5rem);
+  line-height: 0.8;
+}
+
+#how-to-play .how-to-steps article h2 {
+  color: #fff;
+}
+
+#how-to-play .how-to-bottom {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(300px, 0.7fr);
+  gap: 12px;
+}
+
+#how-to-play .run-glance-card,
+#how-to-play .goal-card {
+  border: 1px solid var(--journey-line);
+  background: var(--journey-panel);
+}
+
+#how-to-play .run-glance-card > p {
+  margin: 22px 0 0;
+  color: var(--journey-muted);
+  line-height: 1.6;
+}
+
+#how-to-play .run-glance-card > p strong {
+  color: var(--journey-cyan);
+}
+
+#how-to-play .goal-card .text-button {
+  margin-top: 12px;
+  color: var(--journey-muted);
+}
+
+/* Mine chooser */
+#menu.menu-v4 {
+  overflow-y: auto;
+  padding: clamp(74px, 7vw, 102px) clamp(16px, 4vw, 54px) 42px;
+  background:
+    linear-gradient(180deg, rgba(1, 3, 4, 0.55), #030506 86%),
+    url('../assets/ui/mine-selector-emblems.png') center top / cover fixed;
+}
+
+#menu .economy-menu-card {
+  width: min(1500px, 100%);
+  margin: 0 auto;
+  border: 1px solid var(--journey-line);
+  background: rgba(3, 6, 8, 0.93);
+  box-shadow: 0 30px 100px rgba(0, 0, 0, 0.5);
+}
+
+#menu .lobby-topbar {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 34px;
+  padding: 28px 30px;
+  border-bottom: 1px solid var(--journey-line);
+}
+
+#menu .mines-progress {
+  width: 360px;
+  margin: 0;
+}
+
+#menu .matchmaking-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.42fr) minmax(0, 1fr);
+  gap: 0;
+}
+
+#menu .matchmaking-layout:has(.competition-hub) {
+  display: block;
+}
+
+#menu .competition-hub {
+  padding: 30px;
+}
+
+#menu .competition-hub-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 0.55fr) minmax(260px, 1fr);
+  align-items: end;
+  padding: 0 0 22px;
+}
+
+#menu .competition-hub-heading strong {
+  margin-top: 7px;
+  font: 950 clamp(2.2rem, 4.5vw, 4.7rem) / 0.82 var(--font-display, sans-serif);
+  text-transform: uppercase;
+}
+
+#menu .competition-hub-heading small {
+  max-width: 620px;
+  justify-self: end;
+  color: var(--journey-muted);
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+#menu .competition-slot-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+#menu .competition-slot-card {
+  min-height: clamp(360px, 42vh, 500px);
+  padding: clamp(170px, 23vh, 260px) 24px 24px;
+}
+
+#menu .competition-slot-card::before {
+  background:
+    linear-gradient(180deg, rgba(4, 6, 9, 0.04) 9%, rgba(4, 6, 9, 0.52) 46%, rgba(4, 6, 9, 0.98) 78%),
+    linear-gradient(90deg, rgba(4, 6, 9, 0.78), transparent 76%);
+}
+
+#menu .competition-slot-card .slot-map-preview {
+  opacity: 0.52;
+}
+
+#menu .competition-slot-card .slot-character-preview {
+  right: 9%;
+  bottom: 17%;
+  width: 132px;
+  height: 170px;
+  opacity: 0.92;
+}
+
+#menu .competition-slot-card .slot-number {
+  top: 14px;
+  right: 18px;
+  font-size: clamp(3rem, 5vw, 5rem);
+  opacity: 0.45;
+}
+
+#menu .competition-slot-card strong {
+  max-width: 90%;
+  margin-top: 15px;
+  font: 950 clamp(1.9rem, 3vw, 3.4rem) / 0.9 var(--font-display, sans-serif);
+  text-transform: uppercase;
+}
+
+#menu .competition-slot-card small {
+  max-width: 85%;
+  min-height: 48px;
+  font-size: 0.82rem;
+}
+
+#menu .competition-slot-card .slot-meta {
+  border-radius: 0;
+}
+
+#menu .mine-briefing-column {
+  padding: 28px;
+  border-right: 1px solid var(--journey-line);
+  background: linear-gradient(180deg, rgba(255, 210, 41, 0.04), transparent);
+}
+
+#menu .quick-play-guide {
+  display: grid;
+  gap: 10px;
+}
+
+#menu .quick-play-guide > span {
+  min-height: 86px;
+}
+
+.mine-route-help {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 0 30px 26px;
+}
+
+.mine-route-help button {
+  width: 100%;
+}
+
+#menu .lobby-choice-column {
+  padding: 28px;
+}
+
+#menu .run-mode-grid.three-lobbies {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+#menu .run-mode-card {
+  position: relative;
+  min-height: 370px;
+  padding: 190px 22px 22px;
+  text-align: left;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+#menu .run-mode-card::before,
+#menu .run-mode-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background-position: center;
+  background-size: cover;
+  transition: transform 180ms ease;
+}
+
+#menu .practice-run-card::before { background-image: url('../assets/game/mine-cards/practice.webp'); }
+#menu .arena-run-card::before { background-image: url('../assets/game/mine-cards/arena.webp'); }
+#menu .paid-run-card::before { background-image: url('../assets/game/mine-cards/pass.webp'); }
+
+#menu .run-mode-card::after {
+  z-index: -1;
+  background: linear-gradient(180deg, rgba(2, 3, 4, 0.05) 14%, rgba(3, 5, 6, 0.9) 55%, #050708 100%);
+}
+
+#menu .run-mode-card:hover::before {
+  transform: scale(1.025);
+}
+
+#menu .run-mode-card > b:last-child {
+  display: block;
+  margin-top: auto;
+  color: var(--journey-gold);
+}
+
+#menu .menu-bottom-deck {
+  border-top: 1px solid var(--journey-line);
+}
+
+#menu .home-chip {
+  position: fixed;
+  z-index: 15;
+  top: 18px;
+  left: 18px;
+}
+
+#menu .wallet-chip {
+  position: fixed;
+  z-index: 15;
+  top: 14px;
+  right: 18px;
+}
+
+@media (max-width: 1050px) {
+  #launch .launch-hero { min-height: 670px; }
+  #how-to-play .how-to-hero { grid-template-columns: 1fr; align-items: end; }
+  #how-to-play .how-progress { justify-self: start; }
+  #menu .lobby-topbar { grid-template-columns: 1fr auto; }
+  #menu .compact-brand { display: none; }
+  #menu .mines-progress { grid-column: 1 / -1; width: min(100%, 470px); }
+  #menu .matchmaking-layout { grid-template-columns: 1fr; }
+  #menu .mine-briefing-column { border-right: 0; border-bottom: 1px solid var(--journey-line); }
+  #menu .quick-play-guide { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .mine-route-help { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 760px) {
+  #launch .launch-hero { min-height: auto; }
+  #launch .launch-hero-content { padding-bottom: 32px; }
+  #launch .launch-hero-actions { display: grid; grid-template-columns: 1fr; }
+  .journey-progress { gap: 6px; }
+  .journey-progress > span { min-width: 0; }
+  .journey-progress > span small { font-size: 0.53rem; }
+  .journey-continue { width: 100%; flex-direction: column; }
+  #how-to-play .how-to-page { width: min(100% - 20px, 1440px); padding-top: 10px; }
+  #how-to-play .how-to-hero { min-height: 480px; padding: 90px 22px 24px; }
+  #how-to-play .how-to-hero h1 { font-size: clamp(3rem, 16vw, 5.4rem); }
+  .how-to-choice,
+  #how-to-play .how-to-steps,
+  #how-to-play .how-to-bottom { grid-template-columns: 1fr; }
+  .how-to-choice article + article { border-left: 0; border-top: 1px solid var(--journey-line); }
+  #how-to-play .how-to-steps article { min-height: 180px; }
+  #how-to-play .run-glance-flow { overflow-x: auto; justify-content: flex-start; }
+  #menu.menu-v4 { padding: 72px 10px 24px; }
+  #menu .lobby-topbar { grid-template-columns: 1fr; gap: 18px; padding: 22px 18px; }
+  #menu .matchmaking-day { position: absolute; top: 20px; right: 18px; }
+  #menu .mine-briefing-column,
+  #menu .lobby-choice-column { padding: 18px; }
+  #menu .quick-play-guide,
+  .mine-route-help,
+  #menu .run-mode-grid.three-lobbies,
+  #menu .competition-hub-heading,
+  #menu .competition-slot-grid { grid-template-columns: 1fr; }
+  #menu .competition-hub { padding: 20px 18px; }
+  #menu .competition-hub-heading small { display: block; justify-self: start; }
+  #menu .competition-slot-card { min-height: 350px; padding-top: 172px; }
+  .mine-route-help { padding: 0 18px 20px; }
+  #menu .run-mode-card { min-height: 340px; }
+  #menu .wallet-chip { top: 12px; right: 10px; max-width: 50vw; }
+  #menu .home-chip { left: 10px; }
+}

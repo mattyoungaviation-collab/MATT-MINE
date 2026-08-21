@@ -14,7 +14,7 @@ test('the production lobby presents exactly three live mines in one command deck
   assert.match(html, /class="lobby-choice-column"/);
   assert.match(html, /class="menu-bottom-deck"/);
 
-  const lobbyBlock = html.match(/<div class="run-mode-grid four-lobbies three-lobbies"[\s\S]*?<\/div>\s*<\/div>\s*<\/div>\s*<div class="menu-bottom-deck">/)?.[0] || '';
+  const lobbyBlock = html.match(/<div class="run-mode-grid four-lobbies three-lobbies"[\s\S]*?<\/div>\s*<\/div>\s*<\/div>\s*<div class="mine-route-help">/)?.[0] || '';
   assert.equal((lobbyBlock.match(/class="run-mode-card/g) || []).length, 3);
   assert.match(lobbyBlock, /PRACTICE MINE/);
   assert.match(lobbyBlock, /MATT ARENA/);

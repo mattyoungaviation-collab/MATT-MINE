@@ -18,6 +18,7 @@ test('approved UI refresh exposes every player dashboard and unique control id',
     'garage-equipment-list', 'garage-repair-button', 'garage-withdraw-button',
     'how-to-play', 'how-to-title', 'launch-mine-select-title',
     'launch-nugget-button', 'practice-run-button', 'arena-button',
+    'mines-how-to-button', 'mines-miner-button',
     'pass-mine', 'paid-run-button', 'start-pass-mine-button', 'buy-pass-credit-button',
     'miner-profile', 'profile-open-store-button', 'profile-manage-upgrades-button',
     'profile-manage-loadout-button', 'profile-recent-runs', 'profile-full-run-history',
@@ -38,6 +39,7 @@ test('approved UI refresh exposes every player dashboard and unique control id',
   assert.match(html, /class="leaderboard-tab arena-leaderboard-tab active" data-board="arena"/);
   assert.doesNotMatch(html, /FREE DAILY MINE|SEVEN-DAY MINE|ENDLESS MINE|PVP MINE/i);
   assert.match(html, /src\/ui-refresh\.css/);
+  assert.match(html, /src\/player-journey\.css/);
 });
 
 test('UI controls are wired to existing run, Pass, leaderboard, loadout, and shop flows', async () => {
@@ -67,10 +69,12 @@ test('UI controls are wired to existing run, Pass, leaderboard, loadout, and sho
 });
 
 test('live dashboards poll only while visible and the shared theme covers popups', async () => {
-  const [source, css] = await Promise.all([
+  const [source, refreshCss, journeyCss] = await Promise.all([
     readFile(new URL('src/main.js', root), 'utf8'),
-    readFile(new URL('src/ui-refresh.css', root), 'utf8')
+    readFile(new URL('src/ui-refresh.css', root), 'utf8'),
+    readFile(new URL('src/player-journey.css', root), 'utf8')
   ]);
+  const css = `${refreshCss}\n${journeyCss}`;
 
   assert.match(source, /document\.visibilityState === 'visible'/);
   assert.match(source, /app\.classList\.contains\('gameplay-active'\)/);

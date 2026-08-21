@@ -86,7 +86,9 @@ async function installSignedInMiner(page, options = {}) {
 }
 
 async function enterNftMineMenu(page) {
-  await page.locator('[data-launch-action="enter"].launch-primary-cta').click();
+  await page.locator('[data-launch-action="mines"].launch-secondary-cta').click();
+  await expect(page.locator('#menu')).toHaveClass(/active/);
+  await page.locator('#mines-miner-button').click();
   await expect(page.locator('#miner-select')).toHaveClass(/active/);
   await expect(page.locator('#selected-miner-name')).toHaveText('MATT MINE MINER #1');
   await expect(page.locator('#select-loadout-button')).toBeVisible();
@@ -130,7 +132,9 @@ test('desktop player navigation opens every redesigned public surface', async ({
   await page.locator('#site-nav [data-site-action="home"]').click();
   await expect(page.locator('#launch')).toHaveClass(/active/);
 
-  await page.locator('[data-launch-action="pass"]').first().click();
+  await page.locator('[data-launch-action="mines"].launch-secondary-cta').click();
+  await expect(page.locator('#menu')).toHaveClass(/active/);
+  await page.locator('#pass-button').click();
   await expect(page.locator('#mine-pass')).toHaveClass(/active/);
   await page.locator('#site-nav [data-site-action="home"]').click();
   await expect(page.locator('#launch')).toHaveClass(/active/);
@@ -146,7 +150,9 @@ test('desktop player navigation opens every redesigned public surface', async ({
 test('fresh sign-in selects an owned Miner by number without visiting the loadout screen', async ({ page }) => {
   await installSignedInMiner(page, { includeMinerInSignIn: false, minerId: 777 });
   await page.goto('/');
-  await page.locator('[data-launch-action="enter"].launch-primary-cta').click();
+  await page.locator('[data-launch-action="mines"].launch-secondary-cta').click();
+  await expect(page.locator('#menu')).toHaveClass(/active/);
+  await page.locator('#mines-miner-button').click();
   await expect(page.locator('#miner-select')).toHaveClass(/active/);
   await expect(page.locator('.miner-select-empty')).toContainText('SELECT A MINER NUMBER');
   await page.locator('#miner-number-input').fill('777');
