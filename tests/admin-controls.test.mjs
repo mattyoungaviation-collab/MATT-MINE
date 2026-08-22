@@ -295,7 +295,7 @@ test('game tuning is lobby-specific, audited, and applies immediately to every n
   assert.ok(audit.entries.every((entry) => entry.details.includes('effective immediately for new runs')));
 });
 
-test('player search uses permanent names and audited awards appear in individual activity', async () => {
+test('player search uses permanent names and audited Pass XP awards appear in individual activity', async () => {
   const harness = serviceHarness();
   await signIn(harness.service);
   const search = await harness.service.adminWallets('admin-secret', 'AdminTester');
@@ -304,11 +304,11 @@ test('player search uses permanent names and audited awards appear in individual
   await harness.service.adminAwardPlayer(
     'admin-secret',
     account.address,
-    { type: 'nuggets', amount: 250 },
+    { type: 'pass_xp', amount: 250 },
     'Community event award'
   );
   const detail = await harness.service.adminWallet('admin-secret', account.address);
-  assert.equal(detail.wallet.profile.bankedNuggets, 250);
+  assert.equal(detail.wallet.passProgress.xp, 250);
   assert.ok(detail.activity.some((entry) => entry.action === 'ADMIN_AWARD'));
 });
 
@@ -625,12 +625,12 @@ test('wallet-authenticated Admin controls update mine gates, tuning, and exact p
     method: 'PUT',
     headers: mutationHeaders,
     body: JSON.stringify({
-      patch: { permanentHealthPerRank: 20 },
-      reason: 'Verify permanent upgrade scaling control'
+      patch: { scoreMultiplier: 1.25 },
+      reason: 'Verify live score scaling control'
     })
   });
   assert.equal(tuned.status, 200, JSON.stringify(await tuned.clone().json()));
-  assert.equal((await tuned.json()).preset.permanentHealthPerRank, 20);
+  assert.equal((await tuned.json()).preset.scoreMultiplier, 1.25);
 
   const studioResponse = await fetch(`${base}/api/admin/competition-studio`, {
     headers: { cookie }
@@ -691,7 +691,7 @@ test('wallet-authenticated Admin controls update mine gates, tuning, and exact p
   assert.equal(published.snapshot.depths[0].map.rooms[0].width, 1.5);
 
   const run = await harness.service.startRun(playerSession.token, SERVER_RUN_MODES.PRACTICE);
-  assert.equal(run.tuning.permanentHealthPerRank, 20);
+  assert.equal(run.tuning.scoreMultiplier, 1.25);
   assert.equal(run.competitionSnapshot.id, published.snapshot.id);
   assert.equal(run.competitionSnapshot.depths[0].map.rooms[0].width, 1.5);
   assert.equal(run.competitionSnapshot.depths[0].map.name, 'Wallet Admin Depth One');

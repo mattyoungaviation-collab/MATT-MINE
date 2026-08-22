@@ -1,19 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { clamp, pickUnique, weightedChoice } from '../src/game/utils.js';
-import { META_UPGRADES, ORE_TYPES } from '../src/game/config.js';
+import { clamp, weightedChoice } from '../src/game/utils.js';
+import { ORE_TYPES } from '../src/game/config.js';
 import { createMineLayout, pointInLayout, randomPointInRoom, roomAt } from '../src/game/layout.js';
 
 test('clamp keeps values inside the requested range', () => {
   assert.equal(clamp(-2, 0, 10), 0);
   assert.equal(clamp(12, 0, 10), 10);
   assert.equal(clamp(4, 0, 10), 4);
-});
-
-test('pickUnique never repeats an option', () => {
-  const picked = pickUnique(META_UPGRADES, 3);
-  assert.equal(picked.length, 3);
-  assert.equal(new Set(picked.map((item) => item.id)).size, 3);
 });
 
 test('weightedChoice returns an entry from the supplied pool', () => {
@@ -66,13 +60,7 @@ test('a generated run contains enough crystals and a treasure cache', async () =
     addEventListener() {},
     getBoundingClientRect: () => ({ left: 0, top: 0, width: 1280, height: 720 })
   };
-  const profile = {
-    bankedNuggets: 0,
-    bestDepth: 0,
-    bestScore: 0,
-    totalRuns: 0,
-    meta: { health: 0, damage: 0, speed: 0, luck: 0 }
-  };
+  const profile = { bestDepth: 0, bestScore: 0, totalRuns: 0 };
   const game = new MattMineGame(canvas, profile);
   game.startRun();
 
@@ -82,7 +70,7 @@ test('a generated run contains enough crystals and a treasure cache', async () =
   assert.equal(pointInLayout(game.layout, game.player.x, game.player.y, game.player.radius * 0.68), true);
 });
 
-test('guardian and extraction flow banks the projected payout', async () => {
+test('guardian and extraction flow records the run score', async () => {
   globalThis.window = {
     addEventListener() {},
     devicePixelRatio: 1
@@ -101,16 +89,10 @@ test('guardian and extraction flow banks the projected payout', async () => {
     addEventListener() {},
     getBoundingClientRect: () => ({ left: 0, top: 0, width: 1280, height: 720 })
   };
-  const profile = {
-    bankedNuggets: 0,
-    bestDepth: 0,
-    bestScore: 0,
-    totalRuns: 0,
-    meta: { health: 0, damage: 0, speed: 0, luck: 0 }
-  };
+  const profile = { bestDepth: 0, bestScore: 0, totalRuns: 0 };
   const game = new MattMineGame(canvas, profile);
   game.startRun();
-  game.run.rawNuggets = 100;
+  game.run.rawScore = 100;
   game.run.crystals = game.crystalGoal();
   game.updatePickups(0);
 
@@ -129,7 +111,7 @@ test('guardian and extraction flow banks the projected payout', async () => {
   assert.equal(game.projectedPayout(), 100);
   game.extract();
   assert.equal(game.state, 'ended');
-  assert.equal(profile.bankedNuggets, 100);
+  assert.equal(profile.bestScore, 100);
   assert.equal(profile.totalRuns, 1);
 });
 
@@ -139,9 +121,7 @@ test('camera can center rooms placed at every authored map edge', async () => {
   globalThis.requestAnimationFrame = () => 0;
 
   const { MattMineGame } = await import('../src/game/Game.js');
-  const game = new MattMineGame({}, {
-    meta: { health: 0, damage: 0, speed: 0, luck: 0 }
-  }, { headless: true });
+  const game = new MattMineGame({}, { bestDepth: 0, bestScore: 0, totalRuns: 0 }, { headless: true });
   game.layout = {
     rooms: [
       { x: 300, y: 280 },

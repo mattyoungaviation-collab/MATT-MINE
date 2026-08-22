@@ -106,11 +106,10 @@ export class MattMineGame {
 
   startRun() {
     this.runtimeError = null;
-    const meta = this.profile.meta;
-    const maxHealth = CONFIG.basePlayerHealth + meta.health * 8;
+    const maxHealth = CONFIG.basePlayerHealth;
     this.run = {
       depth: 1,
-      rawNuggets: 0,
+      rawScore: 0,
       displayedScore: 0,
       kills: 0,
       oreBroken: 0,
@@ -130,8 +129,8 @@ export class MattMineGame {
       radius: CONFIG.playerRadius,
       maxHealth,
       health: maxHealth,
-      speed: CONFIG.basePlayerSpeed * (1 + meta.speed * 0.02),
-      damage: CONFIG.baseDamage * (1 + meta.damage * 0.05),
+      speed: CONFIG.basePlayerSpeed,
+      damage: CONFIG.baseDamage,
       attackCooldown: CONFIG.baseAttackCooldown,
       attackTimer: 0,
       attackRange: CONFIG.baseAttackRange,
@@ -188,7 +187,7 @@ export class MattMineGame {
     this.player.vy = 0;
     this.player.health = Math.min(this.player.maxHealth, this.player.health + this.player.maxHealth * 0.3);
 
-    const luck = this.profile.meta.luck || 0;
+    const luck = 0;
     const oreEntries = Object.entries(ORE_TYPES)
       .filter(([id]) => id !== 'cache')
       .map(([id, ore]) => ({ id, ...ore }));
@@ -267,7 +266,7 @@ export class MattMineGame {
       radius: 22 * scale,
       hp,
       maxHp: hp,
-      nuggets: Math.round(type.nuggets * (rich ? 2 : 1)),
+      scoreValue: Math.round(type.scoreValue * (rich ? 2 : 1)),
       xp: Math.round(type.xp * (rich ? 1.35 : 1)),
       color: type.color,
       rotation: randomRange(0, TAU),
@@ -582,13 +581,13 @@ export class MattMineGame {
     this.ores = this.ores.filter((entry) => entry.id !== ore.id);
     this.run.oreBroken += 1;
     this.gainXp(ore.xp);
-    const drops = Math.max(1, Math.ceil(ore.nuggets / (ore.kind === 'cache' ? 9 : 6)));
-    const baseDropValue = Math.floor(ore.nuggets / drops);
-    const remainder = ore.nuggets % drops;
+    const drops = Math.max(1, Math.ceil(ore.scoreValue / (ore.kind === 'cache' ? 9 : 6)));
+    const baseDropValue = Math.floor(ore.scoreValue / drops);
+    const remainder = ore.scoreValue % drops;
     for (let index = 0; index < drops; index += 1) {
       this.pickups.push({
         id: this.entityId++,
-        type: ore.kind === 'crystal' && index === 0 ? 'crystal' : 'nugget',
+        type: ore.kind === 'crystal' && index === 0 ? 'crystal' : 'score',
         x: ore.x + randomRange(-18, 18),
         y: ore.y + randomRange(-18, 18),
         radius: ore.kind === 'crystal' && index === 0 ? 11 : ore.kind === 'cache' ? 9 : 7,
@@ -613,7 +612,7 @@ export class MattMineGame {
     for (let index = 0; index < count; index += 1) {
       this.pickups.push({
         id: this.entityId++,
-        type: 'nugget',
+        type: 'score',
         x: enemy.x + randomRange(-enemy.radius, enemy.radius),
         y: enemy.y + randomRange(-enemy.radius, enemy.radius),
         radius: enemy.isBoss ? 9 : 7,
@@ -809,7 +808,7 @@ export class MattMineGame {
         pickup.y += Math.sin(angle) * pull * dt;
       }
       if (dist < pickup.radius + this.player.radius + 5) {
-        this.run.rawNuggets += pickup.value;
+        this.run.rawScore += pickup.value;
         if (pickup.type === 'crystal') {
           this.run.crystals += 1;
           this.addFloater(this.player.x, this.player.y - 52, 'MATT CRYSTAL', CONFIG.colors.crystal);
@@ -862,7 +861,7 @@ export class MattMineGame {
   }
 
   projectedPayout() {
-    return Math.floor(this.run.rawNuggets * this.depthMultiplier());
+    return Math.floor(this.run.rawScore * this.depthMultiplier());
   }
 
   descend() {
@@ -887,7 +886,6 @@ export class MattMineGame {
     if (!this.run || ['ended', 'menu'].includes(this.state)) return;
     const projected = this.projectedPayout();
     const banked = extracted ? projected : Math.floor(projected * CONFIG.deathKeepFraction);
-    this.profile.bankedNuggets += banked;
     this.profile.bestDepth = Math.max(this.profile.bestDepth, this.run.depth);
     this.profile.bestScore = Math.max(this.profile.bestScore, projected);
     this.profile.totalRuns += 1;

@@ -459,6 +459,26 @@ describe("MATT Mine NFT V2", function () {
     );
   });
 
+  it("configures XP per phase per map and snapshots it when the run begins", async function () {
+    const system = await networkHelpers.loadFixture(deploySystem);
+    await (await system.settlement.setMapPhaseXp(system.mapVersion, [20, 30, 40, 50, 60])).wait();
+    const active = await beginRun(system);
+    await (await system.settlement.setMapPhaseXp(system.mapVersion, [10, 10, 10, 10, 10])).wait();
+    const { result, signature } = await signRunResult(system, active, {
+      outcome: 0,
+      completedPhases: 5,
+      minedCrystalUnits: 1
+    });
+    await (await system.settlement.connect(system.gameOperator).settleRun(result, signature)).wait();
+    assert.equal((await system.miner.progressionOf(1n)).bankedXp, 200n);
+    assert.deepEqual((await system.settlement.phaseXpForMap(system.mapVersion)).map(Number), [10, 10, 10, 10, 10]);
+    await expectCustomError(
+      system.settlement.setMapPhaseXp(system.mapVersion, [100, 100, 100, 100, 101]),
+      system.settlement,
+      "InvalidConfiguration"
+    );
+  });
+
   it("freezes Miner transfer and loadout mutation for the exact active run snapshot", async function () {
     const system = await networkHelpers.loadFixture(deploySystem);
     const pickaxe = await mintEquipment(system, SLOT.Pickaxe, RARITY.Common, 7001);

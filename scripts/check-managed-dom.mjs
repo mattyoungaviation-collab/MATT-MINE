@@ -4,11 +4,8 @@ import { glob } from 'node:fs/promises';
 const reviewedLegacyLimits = new Map(Object.entries({
   'src/admin.js': 33,
   'src/adminCompetitionStudio.js': 9,
-  'src/adminEconomy.js': 4,
   'src/adminPlayerEditor.js': 3,
   'src/main.js': 40,
-  'src/nuggetShop.js': 8,
-  'src/practiceClaimFlow.js': 1,
   'src/game/mineHub.js': 7,
   'src/game/mineLoadingScreen.js': 1
 }));

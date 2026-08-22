@@ -1,32 +1,20 @@
-import { META_UPGRADES } from './config.js';
-
 export const PROFILE_STORAGE_KEY = 'matt-mine-profile-v1';
-
-const META_LIMITS = Object.fromEntries(META_UPGRADES.map((upgrade) => [upgrade.id, upgrade.max]));
 
 export function defaultProfile() {
   return {
-    bankedNuggets: 0,
     bestDepth: 0,
     bestScore: 0,
-    totalRuns: 0,
-    meta: Object.fromEntries(META_UPGRADES.map((upgrade) => [upgrade.id, 0]))
+    totalRuns: 0
   };
 }
 
 export function normalizeProfile(input = {}) {
   const source = isRecord(input) ? input : {};
-  const meta = isRecord(source.meta) ? source.meta : {};
   const base = defaultProfile();
   return {
-    bankedNuggets: safeInteger(source.bankedNuggets, base.bankedNuggets),
     bestDepth: safeInteger(source.bestDepth, base.bestDepth),
     bestScore: safeInteger(source.bestScore, base.bestScore),
-    totalRuns: safeInteger(source.totalRuns, base.totalRuns),
-    meta: Object.fromEntries(META_UPGRADES.map(({ id }) => [
-      id,
-      safeInteger(meta[id], base.meta[id], META_LIMITS[id] ?? 100)
-    ]))
+    totalRuns: safeInteger(source.totalRuns, base.totalRuns)
   };
 }
 

@@ -30,9 +30,7 @@ import {
 import {
   BLASTER_RUN_UPGRADES,
   CONFIG,
-  META_UPGRADES,
-  RUN_UPGRADES,
-  metaUpgradeCost
+  RUN_UPGRADES
 } from '../src/game/config.js';
 
 const NOW = Date.UTC(2026, 6, 25, 12, 0, 0);
@@ -101,7 +99,7 @@ function oreTarget(game, overrides = {}) {
     radius: 20,
     hp: 200,
     maxHp: 200,
-    nuggets: 10,
+    scoreValue: 10,
     xp: 1,
     color: '#888888',
     hitFlash: 0,
@@ -477,7 +475,7 @@ test('Prospector Luck and its loot multiplier are removed without replacement', 
   );
 
   game.startRun({ mode: RUN_MODES.PRACTICE, seed: 'NO-PROSPECTOR-LUCK' });
-  game.run.rawNuggets = 100;
+  game.run.rawScore = 100;
   assert.equal(Object.hasOwn(game.run, 'lootMultiplier'), false);
   assert.equal(game.projectedPayout(), 100);
   game.state = 'levelup';
@@ -613,15 +611,6 @@ test('Guardian slam aura cannot damage the player through mine walls', async () 
   game.player.invulnerability = 0;
   game.guardianSlam(guardian, 235, 30);
   assert.ok(game.player.health < healthBehindWall);
-});
-
-test('the expanded nugget workshop keeps legacy ranks and scales into long-term costs', () => {
-  const profile = defaultProfile();
-  assert.deepEqual(Object.keys(profile.meta), META_UPGRADES.map((upgrade) => upgrade.id));
-  assert.equal(META_UPGRADES.every((upgrade) => upgrade.max >= 15), true);
-  const health = META_UPGRADES.find((upgrade) => upgrade.id === 'health');
-  assert.equal(metaUpgradeCost(health, 0), 110);
-  assert.ok(metaUpgradeCost(health, 10) > metaUpgradeCost(health, 5));
 });
 
 test('player, enemy, expired, and wall projectile paths resolve without throwing', async () => {
@@ -858,27 +847,14 @@ test('profile saves recover invalid JSON and sanitize unsafe numeric fields', ()
 
   const invalidSchema = memoryStorage({
     [PROFILE_STORAGE_KEY]: JSON.stringify({
-      bankedNuggets: 'infinite',
       bestDepth: -4,
       bestScore: null,
-      totalRuns: 2.9,
-      meta: { health: 999, damage: -1, speed: 'fast', luck: 7.8 }
+      totalRuns: 2.9
     })
   });
   const recovered = loadProfile(invalidSchema);
-  assert.equal(recovered.bankedNuggets, 0);
   assert.equal(recovered.bestDepth, 0);
   assert.equal(recovered.totalRuns, 2);
-  assert.deepEqual(recovered.meta, {
-    health: 25,
-    damage: 0,
-    speed: 0,
-    luck: 7,
-    magnet: 0,
-    armor: 0,
-    dash: 0,
-    blaster: 0
-  });
   assert.deepEqual(JSON.parse(invalidSchema.value(PROFILE_STORAGE_KEY)), recovered);
 });
 

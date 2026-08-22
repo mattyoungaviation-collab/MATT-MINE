@@ -10,10 +10,6 @@ export const arenaCompatibilityMethods = {
     this.runContext.tuning = {
       ...defaultTuningPreset('arena'),
       ...suppliedTuning,
-      // The published Admin loadout is authoritative. Arena used to force a
-      // clean profile here even when permanent upgrades were enabled, which
-      // made the browser and server replay start from different player stats.
-      ignorePermanentUpgrades: suppliedTuning.ignorePermanentUpgrades === true,
       usePerDepthRoomSpawns: suppliedTuning.usePerDepthRoomSpawns === true
     };
     return balanceControlMethods.startRun.call(this);

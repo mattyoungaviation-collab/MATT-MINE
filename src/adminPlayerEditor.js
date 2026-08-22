@@ -56,7 +56,6 @@ function renderPlayerEditor(address, data) {
       <article class="editor-section">
         <h4>Gameplay profile</h4>
         <div class="compact-grid">
-          ${numberField('Banked nuggets', 'bankedNuggets', profile.bankedNuggets, 0, editor.limits?.bankedNuggets)}
           ${numberField('Best depth', 'bestDepth', profile.bestDepth, 0, editor.limits?.bestDepth)}
           ${numberField('Best score', 'bestScore', profile.bestScore, 0, editor.limits?.bestScore)}
           ${numberField('Total finished runs', 'totalRuns', profile.totalRuns, 0, editor.limits?.totalRuns)}
@@ -85,17 +84,6 @@ function renderPlayerEditor(address, data) {
         <label>Required correction reason<input data-score-field="reason" maxlength="240" placeholder="Example: verified failed extraction reported in support" required></label>
         <div class="action-row"><button type="button" data-score-override>Apply exact leaderboard score</button></div>
         <p class="score-override-status" aria-live="polite"></p>
-      </article>
-
-      <article class="editor-section">
-        <h4>Permanent upgrade ranks</h4>
-        <div class="compact-grid">
-          ${(editor.metaUpgrades || []).map((upgrade) => `
-            <label>${escapeHtml(upgrade.name)}
-              <input data-meta-upgrade="${escapeHtml(upgrade.id)}" type="number" min="0" max="${Number(upgrade.max)}" step="1" value="${Number(profile.meta?.[upgrade.id] || 0)}">
-              <small>${escapeHtml(upgrade.description || '')} · maximum ${Number(upgrade.max)}</small>
-            </label>`).join('')}
-        </div>
       </article>
 
       <article class="editor-section">
@@ -160,8 +148,6 @@ function renderPlayerEditor(address, data) {
       <p>These remove mutable server progression only. They never alter wallet funds, confirmed purchases, published claims, or completed leaderboard records.</p>
       <label>Required reset reason<input data-reset-reason maxlength="240" placeholder="Why is this player being reset?"></label>
       <div class="action-row">
-        <button type="button" class="ghost" data-player-reset="upgrades">Reset permanent upgrades</button>
-        <button type="button" class="ghost" data-player-reset="zero_nuggets">Zero nuggets</button>
         <button type="button" class="ghost" data-player-reset="achievements">Clear Pass achievements</button>
         <button type="button" class="ghost" data-player-reset="cosmetics">Remove cosmetics</button>
         <button type="button" class="ghost" data-player-reset="keybindings">Reset controls</button>
@@ -242,12 +228,9 @@ function renderPlayerEditor(address, data) {
 
 function collectExactPatch(section) {
   const profile = {};
-  for (const key of ['bankedNuggets', 'bestDepth', 'bestScore', 'totalRuns']) {
+  for (const key of ['bestDepth', 'bestScore', 'totalRuns']) {
     profile[key] = numericValue(section.querySelector(`[data-profile-field="${key}"]`));
   }
-  profile.meta = Object.fromEntries([...section.querySelectorAll('[data-meta-upgrade]')]
-    .map((input) => [input.dataset.metaUpgrade, numericValue(input)]));
-
   const claimedLevels = [...section.querySelectorAll('[data-claimed-level]:checked')]
     .map((input) => Number(input.dataset.claimedLevel));
   const cosmetics = [...section.querySelectorAll('[data-owned-cosmetic]:checked')]
@@ -281,7 +264,6 @@ function collectExactPatch(section) {
 }
 
 function resetPatch(action) {
-  if (action === 'zero_nuggets') return { profile: { bankedNuggets: 0 } };
   return { reset: { [action]: true } };
 }
 

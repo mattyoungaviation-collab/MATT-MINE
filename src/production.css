@@ -1435,92 +1435,6 @@ button,
   cursor: pointer;
 }
 
-.nugget-shop-panel {
-  width: min(1040px, calc(100vw - 42px));
-  max-height: min(90dvh, 820px);
-  padding: 20px;
-  overflow: auto;
-}
-
-.nugget-shop-panel h2 {
-  margin-top: 0;
-  font-size: clamp(30px, 3vw, 40px);
-}
-
-.nugget-shop-panel .panel-copy {
-  max-width: 820px;
-  margin: 0 auto 10px;
-  font-size: 12px;
-  line-height: 1.45;
-}
-
-.nugget-shop-panel .notice {
-  margin: 8px 0;
-  padding: 9px 12px;
-}
-
-.nugget-shop-panel .leaderboard-summary {
-  margin-top: 8px;
-  gap: 8px;
-}
-
-.nugget-shop-panel .leaderboard-summary > div {
-  min-height: 58px;
-  padding: 10px;
-}
-
-.nugget-package-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 12px;
-}
-
-.nugget-package-card {
-  min-height: 0;
-  padding: 18px;
-}
-
-.nugget-package-card h3 {
-  margin: 13px 0 2px;
-  font-size: clamp(26px, 3vw, 34px);
-}
-
-.nugget-package-card ul {
-  min-height: 0;
-  margin: 14px 0;
-  gap: 7px;
-}
-
-.nugget-package-card li {
-  font-size: 10px;
-  line-height: 1.35;
-}
-
-.nugget-package-actions {
-  display: grid;
-  gap: .5rem;
-  margin-top: .75rem;
-}
-
-.nugget-package-actions button:disabled {
-  opacity: .55;
-  cursor: not-allowed;
-}
-
-.nugget-history-panel {
-  margin-top: 12px;
-  padding: 12px;
-}
-
-.nugget-history-panel h3 {
-  margin: 0 0 8px;
-}
-
-.nugget-history-panel a {
-  color: inherit;
-  text-decoration: underline;
-}
-
 .mine-loading-shell { overflow: hidden; }
 .mine-loading-shell header { display: flex; justify-content: space-between; align-items: center; padding: 24px 28px; }
 .mine-loading-shell header > strong {
@@ -1556,18 +1470,6 @@ button,
   .mine-depth-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .mine-loading-shell header { padding: 18px; }
   .mine-loading-shell header > strong { width: 62px; height: 62px; font-size: 28px; }
-}
-
-@media (max-width: 760px) {
-  .nugget-shop-panel {
-    width: calc(100vw - 16px);
-    max-height: 96dvh;
-    padding: 15px;
-  }
-
-  .nugget-package-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 .competition-legacy-bridge {

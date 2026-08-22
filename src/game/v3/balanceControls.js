@@ -7,15 +7,6 @@ import { pickUnique } from '../utils.js';
 import { stateMethods } from './state.js';
 import { nftGameplayTraits } from '../nftTraits.js';
 
-const LEGACY_META_SCALE = Object.freeze({
-  health: 8,
-  damage: .05,
-  speed: .02,
-  luck: .01,
-  magnet: 6,
-  dash: .02
-});
-
 export const balanceControlMethods = {
   startRun() {
     const tuning = this.runContext?.tuning || {};
@@ -23,40 +14,22 @@ export const balanceControlMethods = {
     const runProfile = tuning._playerProfile && typeof tuning._playerProfile === 'object'
       ? tuning._playerProfile
       : browserProfile;
-    const originalMeta = runProfile?.meta || {};
     const nftTraits = nftGameplayTraits(this.runContext);
-    const ignorePermanent = tuning.ignorePermanentUpgrades === true || Boolean(nftTraits);
-    const meta = ignorePermanent
-      ? zeroMeta(originalMeta)
-      : effectiveMeta(originalMeta, tuning);
-
-    // Keep the server-pinned effective ranks for every depth. The profile is
-    // restored after startup so gameplay must not fall back to the unscaled
-    // browser profile when a later authored depth is generated.
-    this.effectivePermanentMeta = meta;
-    this.profile = { ...runProfile, meta };
+    this.profile = runProfile;
     try {
       stateMethods.startRun.call(this);
     } finally {
       this.profile = browserProfile;
     }
 
-    const permanentArmor = ignorePermanent
-      ? 0
-      : Number(originalMeta.armor || 0) * (tuning.permanentArmorPerRank ?? .008);
     this.player.armor = nftTraits
       ? 0
       : Math.min(
           tuning.armorMaximum ?? .45,
-          Math.max(0, permanentArmor + Number(this.runContext?.character?.armor || 0))
+          Math.max(0, Number(this.runContext?.character?.armor || 0))
         );
-
-    const permanentBlaster = ignorePermanent
-      ? 0
-      : Number(originalMeta.blaster || 0) * (tuning.permanentBlasterDamagePerRank ?? .03);
     this.player.blasterDamageScale =
       (tuning.blasterDamageMultiplier ?? CONFIG.blasterDamageScale) *
-      (1 + Math.max(0, permanentBlaster)) *
       Number(nftTraits ? 1 : this.runContext?.character?.blasterDamage || 1);
   },
 
@@ -204,28 +177,6 @@ export const balanceControlMethods = {
     });
   }
 };
-
-function effectiveMeta(meta, tuning) {
-  return {
-    ...meta,
-    health: scaledRank(meta.health, tuning.permanentHealthPerRank ?? 8, LEGACY_META_SCALE.health),
-    damage: scaledRank(meta.damage, tuning.permanentDamagePerRank ?? .05, LEGACY_META_SCALE.damage),
-    speed: scaledRank(meta.speed, tuning.permanentSpeedPerRank ?? .02, LEGACY_META_SCALE.speed),
-    luck: scaledRank(meta.luck, tuning.permanentLuckPerRank ?? .01, LEGACY_META_SCALE.luck),
-    magnet: scaledRank(meta.magnet, tuning.permanentMagnetPerRank ?? 6, LEGACY_META_SCALE.magnet),
-    dash: scaledRank(meta.dash, tuning.permanentDashPerRank ?? .02, LEGACY_META_SCALE.dash),
-    armor: 0,
-    blaster: 0
-  };
-}
-
-function scaledRank(rank, desiredPerRank, legacyPerRank) {
-  return Number(rank || 0) * Number(desiredPerRank || 0) / legacyPerRank;
-}
-
-function zeroMeta(meta) {
-  return Object.fromEntries(Object.keys(meta || {}).map((id) => [id, 0]));
-}
 
 function describeUpgrade(upgrade, tuning) {
   const descriptions = {

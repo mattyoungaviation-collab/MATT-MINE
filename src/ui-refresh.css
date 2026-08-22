@@ -81,8 +81,6 @@ a:focus-visible {
 #mine-pass,
 #daily-arena,
 #pass-cosmetics,
-#upgrade-shop,
-#nugget-shop,
 #miner-profile,
 #daily-mine,
 #pass-mine {
@@ -173,24 +171,6 @@ button:disabled {
   color: var(--ui-gold);
 }
 
-.launch-nugget-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  min-height: 44px;
-  padding: 0 16px;
-  border: 1px solid rgba(247, 196, 48, 0.65);
-  clip-path: var(--ui-cut);
-  color: var(--ui-gold);
-  background: rgba(21, 16, 4, 0.78);
-  letter-spacing: 0.04em;
-}
-
-.launch-nugget-button span {
-  font-size: 1.1rem;
-  text-shadow: 0 0 14px rgba(247, 196, 48, 0.7);
-}
-
 .launch-store-shortcut {
   display: flex;
   align-items: center;
@@ -276,8 +256,7 @@ button:disabled {
   border-color: rgba(56, 216, 255, 0.45);
 }
 
-.menu-nav-grid .secondary-button,
-#nugget-shop-button {
+.menu-nav-grid .secondary-button {
   min-height: 48px;
 }
 
@@ -847,24 +826,6 @@ button:disabled {
   color: var(--ui-gold);
 }
 
-.nugget-rail-card {
-  border-color: rgba(247, 196, 48, 0.55);
-  background:
-    radial-gradient(circle at 20% 20%, rgba(247, 196, 48, 0.14), transparent 55%),
-    #0a0c0f;
-}
-
-.nugget-rail-card > strong {
-  color: var(--ui-gold);
-  font-size: 2.2rem;
-}
-
-.nugget-rail-card button {
-  color: #17120a;
-  border-color: #ffe073;
-  background: linear-gradient(180deg, #ffdf5a, #dfa00e);
-}
-
 .profile-loadout-summary {
   display: grid;
   gap: 8px;
@@ -904,8 +865,6 @@ button:disabled {
 #daily-arena .arena-panel,
 #leaderboards .economy-panel,
 #pass-cosmetics .cosmetics-panel,
-#upgrade-shop .wide-panel,
-#nugget-shop .nugget-shop-panel,
 #sound-settings .audio-settings-panel,
 #run-end .panel,
 #level-up .panel,
@@ -923,7 +882,6 @@ button:disabled {
 .arena-clock-card,
 .reward-claim-card,
 .shop-card,
-.nugget-package-card,
 .practice-claim-card {
   border-radius: 0;
   clip-path: var(--ui-cut);
@@ -972,16 +930,6 @@ button:disabled {
 
 .arena-state-badge,
 .pass-state-label {
-  border-radius: 0;
-  clip-path: var(--ui-cut);
-}
-
-.nugget-package-grid {
-  gap: 14px;
-}
-
-.nugget-package-card button {
-  min-height: 44px;
   border-radius: 0;
   clip-path: var(--ui-cut);
 }
@@ -1103,10 +1051,6 @@ dialog#arena-eligibility-dialog {
 }
 
 @media (max-width: 1180px) {
-  .launch-nugget-button {
-    display: none;
-  }
-
   .profile-dashboard-layout {
     grid-template-columns: 240px minmax(0, 1fr);
   }
@@ -1228,8 +1172,6 @@ dialog#arena-eligibility-dialog {
   #daily-arena .arena-panel,
   #leaderboards .economy-panel,
   #pass-cosmetics .cosmetics-panel,
-  #upgrade-shop .wide-panel,
-  #nugget-shop .nugget-shop-panel,
   #sound-settings .audio-settings-panel,
   #run-end .panel,
   #level-up .panel,
@@ -1982,8 +1924,6 @@ h3,
 
 .profile-dashboard-shell,
 .economy-panel,
-.nugget-shop-panel,
-#upgrade-shop .wide-panel,
 .cosmetics-panel,
 .audio-settings-panel,
 .results-panel-v4,
@@ -2019,14 +1959,11 @@ h3,
   border-color: rgba(247, 196, 48, 0.52);
 }
 
-.nugget-shop-panel > h2,
-#upgrade-shop .wide-panel > h2,
 .cosmetics-panel > h2 {
   color: var(--ui-gold);
   font-size: clamp(3rem, 5vw, 5.5rem);
 }
 
-.nugget-package-card,
 .shop-card,
 .cosmetic-card {
   clip-path: var(--ui-cut);
@@ -2322,7 +2259,6 @@ h3,
     letter-spacing: 0.06em;
   }
 
-  .launch-nugget-button,
   .launch-enter-button {
     display: none;
   }

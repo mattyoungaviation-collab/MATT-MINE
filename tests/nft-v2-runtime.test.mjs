@@ -187,7 +187,7 @@ test('Pass replay consumes the same persisted V2 profile and Admin modifiers as 
   const browser = gameFor({
     playerSpeed: 333,
     scoreMultiplier: 1.7,
-    nuggetMultiplier: 2.2,
+    oreScoreMultiplier: 2.2,
     xpMultiplier: 1.4,
     passXpMultiplier: 1.8,
     depthScoreMultiplier: 1.3,

@@ -464,7 +464,6 @@ function renderCompetition() {
     ${field('Leaderboard title', 'rules.leaderboardTitle', draft.rules.leaderboardTitle, 'text')}
     ${field('Reward label', 'rules.rewardLabel', draft.rules.rewardLabel, 'text')}
     ${field('Player instructions', 'rules.instructions', draft.rules.instructions, 'text')}
-    ${nftGated ? '' : check('Permanent upgrades enabled', 'loadout.permanentUpgrades', draft.loadout.permanentUpgrades)}
     ${check('Run upgrades enabled', 'loadout.runUpgrades', draft.loadout.runUpgrades)}
     ${studio.slotId === 'practice' ? '' : check('Paid revive enabled', 'loadout.paidRevive', draft.loadout.paidRevive)}
     <section class="studio-monster-tuning">

@@ -3,11 +3,6 @@ import { ProductionMattMineService } from './production-service.js';
 import { ApiError, assertApi } from './errors.js';
 import { validateRunResult } from './service.js';
 import {
-  NUGGET_LEDGER_TYPES,
-  applyNuggetLedgerDelta,
-  findLedgerEntryByIdempotency
-} from './nugget-ledger.js';
-import {
   CHARACTER_IDS,
   EXPANSION_SCHEMA,
   defaultExpansionConfig,
@@ -19,23 +14,12 @@ import { PASS_CHEST_ID, PASS_COSMETICS } from '../src/game/passRewards.js';
 import { passLevel, utcWeekKey } from '../src/game/economy.js';
 import { endlessLeaderboard, weeklyLeaderboard } from './competition-engine.js';
 import {
-  awardVerifiedAdvertisement,
   confirmRevive,
-  createPendingRevive,
-  skipAdvertisement
+  createPendingRevive
 } from './bonus-engine.js';
+import { DisabledRevivePaymentVerifier } from './external-verifiers.js';
 import {
-  DisabledAdvertisementVerifier,
-  DisabledRevivePaymentVerifier
-} from './external-verifiers.js';
-import {
-  addEconomyAudit,
-  mergeNuggetEconomyConfig
-} from './nugget-economy.js';
-import {
-  applyEconomyLinksToExpansion,
   applyExpansionLinksToTuning,
-  economyShadowPatch,
   linkedAdminControlSnapshot,
   reconcileLinkedAdminControls
 } from './admin-control-links.js';
@@ -92,7 +76,6 @@ const ACTIVE_EXPANSION_SCHEMA = Object.freeze(
 export class CompleteProductionMattMineService extends ProductionMattMineService {
   constructor(database, options = {}) {
     super(database, options);
-    this.advertisementVerifier = options.advertisementVerifier || new DisabledAdvertisementVerifier();
     this.revivePaymentVerifier = options.revivePaymentVerifier || new DisabledRevivePaymentVerifier();
     this.reviveEligibilityValidator = options.reviveEligibilityValidator || null;
     this.competitiveReplayValidator = options.competitiveReplayValidator || null;
@@ -104,9 +87,8 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     if (this.adminControlLinkPromise) return this.adminControlLinkPromise;
     this.adminControlLinkPromise = (async () => {
       const timestamp = this.now();
-      const economy = this.nuggetEconomyStore ? await this.nuggetEconomyStore.read() : null;
       const reconciled = await this.database.transact((state) => {
-        const result = reconcileLinkedAdminControls(state, economy?.config, timestamp);
+        const result = reconcileLinkedAdminControls(state, null, timestamp);
         if (result.mainChanges.length) {
           appendAudit(state, 'ADMIN_CONTROLS_RECONCILED', result.mainChanges.join('; '), timestamp);
         }
@@ -115,23 +97,6 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
           expansionConfig: structuredClone(state.expansionConfig)
         };
       });
-      if (this.nuggetEconomyStore && reconciled.economyChanges.length) {
-        await this.nuggetEconomyStore.transact((state) => {
-          state.config = mergeNuggetEconomyConfig(
-            state.config,
-            reconciled.shadowPatch,
-            'SERVER_ADMIN_LINK_SYNC',
-            timestamp
-          );
-          addEconomyAudit(
-            state,
-            'SERVER_ADMIN_LINK_SYNC',
-            'LINKED_CONTROLS_RECONCILED',
-            reconciled.economyChanges.join('; '),
-            timestamp
-          );
-        });
-      }
       return reconciled;
     })().catch((error) => {
       this.adminControlLinkPromise = null;
@@ -144,15 +109,13 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     this.assertAdminKey(adminKey);
     await this.ensureAdminControlLinks();
     const overview = await super.adminOverview(adminKey);
-    const [state, economy, database] = await Promise.all([
+    const [state, database] = await Promise.all([
       this.database.read(),
-      this.nuggetEconomyStore ? this.nuggetEconomyStore.read() : Promise.resolve(null),
       this.database.healthCheck().catch(() => ({ ok: false, kind: this.database.kind || 'unknown' }))
     ]);
-    const controlLinks = linkedAdminControlSnapshot(state, economy?.config);
+    const controlLinks = linkedAdminControlSnapshot(state);
     const replay = this.competitiveReplayValidator?.publicStatus?.() || { configured: false, enabled: false };
     const reviveStatus = this.revivePaymentVerifier?.publicStatus?.() || { configured: false, enabled: false };
-    const advertisementStatus = this.advertisementVerifier?.publicStatus?.() || { configured: false, enabled: false };
     const arena = this.arenaService?.publicConfig?.() || { configured: false, enabled: false };
     const liveSafe = this.arenaService?.deployment || null;
     const treasurySafe = {
@@ -174,11 +137,6 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
         revive: {
           ...reviveStatus,
           eligibilityReady: Boolean(this.reviveEligibilityValidator)
-        },
-        advertisements: advertisementStatus,
-        nuggetPayments: {
-          configured: Boolean(this.nuggetEconomyStore && this.nuggetPaymentVerifier),
-          enabled: this.nuggetPaymentsEnabled
         },
         treasurySafe,
         controlLinks
@@ -204,7 +162,12 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
   async adminNftV2Protocol(adminKey) {
     this.assertAdminKey(adminKey);
     assertApi(this.nftV2AdminService, 503, 'nft_v2_admin_disabled', 'NFT V2 on-chain Admin controls are disabled.');
-    return { status: this.nftV2AdminService.publicStatus(), protocol: await this.nftV2AdminService.snapshot() };
+    const state = await this.database.read();
+    return {
+      status: this.nftV2AdminService.publicStatus(),
+      protocol: await this.nftV2AdminService.snapshot(),
+      mapDefaults: nftV2MapDefaults(state.competitionStudio, this.now())
+    };
   }
 
   async updateAdminNftV2Economy(adminKey, input) {
@@ -225,13 +188,32 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     this.assertAdminKey(adminKey);
     assertApi(this.nftV2AdminService, 503, 'nft_v2_admin_disabled', 'NFT V2 on-chain Admin controls are disabled.');
     const reason = adminReason(input?.reason);
-    const result = await this.nftV2AdminService.approveMap(input);
+    const stateBefore = await this.database.read();
+    const defaults = nftV2MapDefaults(stateBefore.competitionStudio, this.now());
+    const mode = String(input?.mode || '').toLowerCase();
+    const selected = defaults[mode];
+    assertApi(selected, 422, 'nft_map_snapshot_missing', 'Publish an active mine version before approving its on-chain map.');
+    const result = await this.nftV2AdminService.approveMap({ ...input, mapId: selected.mapId, contentHash: selected.contentHash });
     await this.database.transact((state) => {
       state.nftV2Protocol ||= { mapVersions: {} };
       state.nftV2Protocol.mapVersions[result.mode] = result.versionId;
       state.nftV2Protocol.updatedAt = this.now();
       appendAudit(state, 'NFT_V2_MAP_APPROVED', `${result.mode}; ${result.versionId}; ${result.transactionHash}; ${reason}`, this.now());
     });
+    return result;
+  }
+
+  async updateAdminNftV2PhaseXp(adminKey, input) {
+    this.assertAdminKey(adminKey);
+    assertApi(this.nftV2AdminService, 503, 'nft_v2_admin_disabled', 'NFT V2 on-chain Admin controls are disabled.');
+    const reason = adminReason(input?.reason);
+    const result = await this.nftV2AdminService.setPhaseXp(input);
+    await this.database.transact((state) => appendAudit(
+      state,
+      'NFT_V2_PHASE_XP_UPDATED',
+      `${result.mode}; ${result.versionId}; ${result.phaseXp.join('/')}; ${result.transactionHash}; ${reason}`,
+      this.now()
+    ));
     return result;
   }
 
@@ -583,9 +565,6 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
       snapshot.expansionConfig.settings.paidRevivesEnabled === true &&
       this.revivePaymentVerifier?.publicStatus?.().configured === true &&
       Boolean(this.reviveEligibilityValidator);
-    expansion.settings.advertisementRewardsEnabled =
-      snapshot.expansionConfig.settings.advertisementRewardsEnabled === true &&
-      this.advertisementVerifier?.publicStatus?.().configured === true;
     expansion.settings.weeklyCompetitionEnabled &&= Boolean(this.competitiveReplayValidator);
     expansion.settings.endlessEnabled &&= Boolean(this.competitiveReplayValidator);
     const interruptedNftPractice = Object.values(initial.runs || {})
@@ -606,13 +585,6 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
         startedAt: Number(interruptedNftPractice.startedAt || 0),
         expiresAt: Number(interruptedNftPractice.expiresAt || 0)
       } : null,
-      ...(player.nuggetEconomy ? { nuggetEconomy: {
-        ...player.nuggetEconomy,
-        pendingPracticeClaims: Object.values(wallet?.practiceClaims || {})
-          .filter((claim) => claim?.status === 'pending')
-          .sort((left, right) => Number(right.createdAt || 0) - Number(left.createdAt || 0))
-          .map((claim) => structuredClone(claim))
-      } } : {})
     };
   }
 
@@ -730,12 +702,7 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     const wallet = state.wallets[normalizedAddress];
     return {
       ...detail,
-      expansion: structuredClone(wallet?.expansion || {}),
-      nuggetEconomy: {
-        ...(detail.nuggetEconomy || {}),
-        ledger: structuredClone(wallet?.nuggetLedger || []),
-        pendingPracticeClaims: structuredClone(wallet?.practiceClaims || {})
-      }
+      expansion: structuredClone(wallet?.expansion || {})
     };
   }
 
@@ -748,9 +715,6 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
       state.expansionConfig.settings.paidRevivesEnabled === true &&
       this.revivePaymentVerifier?.publicStatus?.().configured === true &&
       Boolean(this.reviveEligibilityValidator);
-    expansion.settings.advertisementRewardsEnabled =
-      state.expansionConfig.settings.advertisementRewardsEnabled === true &&
-      this.advertisementVerifier?.publicStatus?.().configured === true;
     expansion.settings.weeklyCompetitionEnabled &&= Boolean(this.competitiveReplayValidator);
     expansion.settings.endlessEnabled &&= Boolean(this.competitiveReplayValidator);
     return expansion;
@@ -793,37 +757,6 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     });
   }
 
-  async purchaseCharacter(token, characterId) {
-    const session = await this.authenticate(token);
-    const id = String(characterId || '');
-    assertCharacter(id);
-    const timestamp = this.now();
-    return this.database.transact((state) => {
-      const wallet = state.wallets[session.address];
-      const character = state.expansionConfig.characters[id];
-      if (!character.enabled) throw new ApiError(409, 'character_disabled', 'That character is currently disabled.');
-      if (wallet.expansion.ownedCharacters.includes(id)) {
-        throw new ApiError(409, 'character_already_owned', 'That character is already owned.');
-      }
-      if (character.nuggetPrice <= 0) {
-        throw new ApiError(409, 'character_not_purchasable', 'That character unlocks through progression or the Pass.');
-      }
-      const update = applyNuggetLedgerDelta(wallet, -character.nuggetPrice, {
-        type: NUGGET_LEDGER_TYPES.CHARACTER_PURCHASE,
-        idempotencyKey: `character-purchase:${session.address}:${id}`,
-        details: `Permanent character unlock: ${id}`,
-        timestamp
-      });
-      if (update.skipped) throw new ApiError(409, 'character_purchase_duplicate', 'That character purchase was already processed.');
-      wallet.expansion.ownedCharacters.push(id);
-      wallet.expansion.characterHistory.push({ action: 'PURCHASED', characterId: id, timestamp });
-      wallet.expansion.characterHistory = wallet.expansion.characterHistory.slice(-500);
-      wallet.updatedAt = timestamp;
-      appendActivity(wallet, 'CHARACTER_PURCHASED', `${id}; ${character.nuggetPrice} nuggets`, timestamp);
-      return publicExpansion(wallet, state.expansionConfig);
-    });
-  }
-
   async betaAccess(token) {
     const session = await this.authenticate(token);
     const state = await this.database.read();
@@ -850,9 +783,6 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
         paidRevives: this.revivePaymentVerifier?.publicStatus?.().configured && this.reviveEligibilityValidator
           ? ''
           : 'Exact on-chain revive payment and death replay verifiers are not configured.',
-        advertisements: this.advertisementVerifier?.publicStatus?.().configured
-          ? ''
-          : 'Signed advertisement provider completion verifier is not configured.',
       },
       productionReadiness: {
         competitiveReplay: this.competitiveReplayValidator?.publicStatus?.() || {
@@ -860,10 +790,6 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
           enabled: false
         },
         paidRevivePayments: this.revivePaymentVerifier?.publicStatus?.() || {
-          configured: false,
-          enabled: false
-        },
-        advertisementRewards: this.advertisementVerifier?.publicStatus?.() || {
           configured: false,
           enabled: false
         },
@@ -909,12 +835,6 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
       ) {
         throw new ApiError(503, 'revive_payment_verifier_missing', 'Paid revives cannot be enabled until exact on-chain payment verification is configured.');
       }
-      if (
-        next.settings.advertisementRewardsEnabled &&
-        this.advertisementVerifier?.publicStatus?.().configured !== true
-      ) {
-        throw new ApiError(503, 'advertisement_provider_disabled', 'Advertisement rewards cannot be enabled until a signed provider verifier is configured.');
-      }
       if ((next.settings.weeklyCompetitionEnabled || next.settings.endlessEnabled) && !this.competitiveReplayValidator) {
         throw new ApiError(
           503,
@@ -936,27 +856,6 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
       return { config: structuredClone(next), linkedChanges, reason: normalizedReason };
     });
     this.adminControlLinkPromise = null;
-    if (this.nuggetEconomyStore) {
-      const shadowPatch = economyShadowPatch(result.config);
-      await this.nuggetEconomyStore.transact((state) => {
-        const before = {
-          advertisementRewardsEnabled: state.config.advertisementRewardsEnabled === true,
-          characterUnlockPrices: { ...state.config.characterUnlockPrices }
-        };
-        const next = mergeNuggetEconomyConfig(state.config, shadowPatch, 'SERVER_ADMIN_LINK_SYNC', timestamp);
-        const changed = JSON.stringify(before) !== JSON.stringify(shadowPatch);
-        state.config = next;
-        if (changed) {
-          addEconomyAudit(
-            state,
-            'SERVER_ADMIN_LINK_SYNC',
-            'LINKED_CONTROLS_SYNCHRONIZED',
-            `Expansion revision ${result.config.revision}; ${normalizedReason}`,
-            timestamp
-          );
-        }
-      });
-    }
     return result;
   }
 
@@ -1071,30 +970,14 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
         throw new ApiError(409, 'pass_chest_unavailable', 'No unopened Pass Chest is available.');
       }
       const openingNumber = chest.opened + 1;
-      const bonusSpan = config.chestBonusMax - config.chestBonusMin;
-      const bonus = bonusSpan > 0
-        ? config.chestBonusMin + deterministicNumber(`${wallet.address}:${openingNumber}`, bonusSpan + 1)
-        : config.chestBonusMin;
       let cosmeticId = config.chestCosmeticDropsEnabled ? config.chestCosmeticId : '';
       const alreadyOwned = cosmeticId && wallet.passInventory.cosmetics.includes(cosmeticId);
-      if (alreadyOwned && config.chestDuplicateCosmetic === 'reroll') {
+      if (alreadyOwned) {
         const unowned = Object.keys(PASS_COSMETICS).filter((id) => !wallet.passInventory.cosmetics.includes(id));
         cosmeticId = unowned.length
           ? unowned[deterministicNumber(`${wallet.address}:${openingNumber}:cosmetic`, unowned.length)]
           : '';
       }
-      const duplicateNuggets =
-        alreadyOwned && config.chestDuplicateCosmetic === 'nuggets'
-          ? config.chestDuplicateNuggets
-          : 0;
-      const nuggets = config.chestBaseNuggets + bonus + duplicateNuggets;
-      const ledgerUpdate = applyNuggetLedgerDelta(wallet, nuggets, {
-        type: NUGGET_LEDGER_TYPES.CHEST_REWARD,
-        idempotencyKey: `pass-chest:${wallet.address}:${PASS_CHEST_ID}:${openingNumber}`,
-        details: `Pass chest opening ${PASS_CHEST_ID}`,
-        timestamp
-      });
-      if (ledgerUpdate.skipped) throw new ApiError(409, 'duplicate_chest_reward', 'That Pass chest reward was already awarded.');
       chest.available -= 1;
       chest.opened = openingNumber;
       chest.lastOpenedAt = timestamp;
@@ -1106,15 +989,11 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
         wallet.passInventory.equipped[cosmetic.slot] = cosmeticId;
       }
       wallet.updatedAt = timestamp;
-      appendActivity(wallet, 'PASS_CHEST_OPENED', `${cosmetic?.name || 'No cosmetic'} and ${nuggets} nuggets`, timestamp);
+      appendActivity(wallet, 'PASS_CHEST_OPENED', cosmetic?.name || 'No new cosmetic', timestamp);
       return {
         chestId: PASS_CHEST_ID,
         rewards: {
-          cosmetic: cosmetic ? structuredClone(cosmetic) : null,
-          nuggets,
-          baseNuggets: config.chestBaseNuggets,
-          bonus,
-          duplicateNuggets
+          cosmetic: cosmetic ? structuredClone(cosmetic) : null
         },
         profile: structuredClone(wallet.profile),
         passInventory: structuredClone(wallet.passInventory)
@@ -1385,121 +1264,6 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     });
   }
 
-  async skipAdvertisementBonus(token, runId) {
-    const session = await this.authenticate(token);
-    const timestamp = this.now();
-    return this.database.transact((state) => {
-      const run = state.runs[String(runId || '')];
-      if (!run || run.address !== session.address) throw new ApiError(404, 'run_not_found', 'The finished run was not found.');
-      try {
-        return skipAdvertisement(run, timestamp);
-      } catch (error) {
-        throw bonusError(error);
-      }
-    });
-  }
-
-  async confirmAdvertisementBonus(token, input = {}) {
-    const session = await this.authenticate(token);
-    if (!this.advertisementVerifier?.publicStatus?.().configured) {
-      throw new ApiError(503, 'advertisement_provider_disabled', 'Advertisement rewards require a signed provider completion verifier.');
-    }
-    const timestamp = this.now();
-    return this.database.transact(async (state) => {
-      const run = state.runs[String(input.runId || '')];
-      const wallet = state.wallets[session.address];
-      if (!run || run.address !== session.address) throw new ApiError(404, 'run_not_found', 'The finished run was not found.');
-      const config = state.expansionConfig.settings;
-      if (!advertisementModeEligible(run.mode, config)) {
-        throw new ApiError(409, 'advertisement_mode_ineligible', 'This run mode is not eligible for an advertisement bonus.');
-      }
-      const dayStart = Math.floor(timestamp / 86_400_000) * 86_400_000;
-      const awardedToday = Object.values(wallet.expansion.adCompletions || {})
-        .filter((entry) => Number(entry.timestamp || 0) >= dayStart).length;
-      if (awardedToday >= config.advertisementDailyWalletLimit) {
-        throw new ApiError(409, 'advertisement_daily_limit', 'This wallet reached its UTC daily advertisement reward limit.');
-      }
-      try {
-        return await awardVerifiedAdvertisement({
-          wallet,
-          run,
-          completion: input.completion,
-          config,
-          verifier: this.advertisementVerifier,
-          timestamp
-        });
-      } catch (error) {
-        throw bonusError(error);
-      }
-    });
-  }
-
-  async adminNuggetEconomy(adminKey) {
-    await this.ensureAdminControlLinks();
-    return super.adminNuggetEconomy(adminKey);
-  }
-
-  async updateAdminNuggetEconomy(adminKey, patch, reason) {
-    this.assertAdminKey(adminKey);
-    if (
-      patch?.advertisementRewardsEnabled === true &&
-      this.advertisementVerifier?.publicStatus?.().configured !== true
-    ) {
-      throw new ApiError(
-        503,
-        'advertisement_provider_disabled',
-        'Advertisement rewards cannot be enabled until a signed provider or server-to-server completion verifier is configured.'
-      );
-    }
-    const normalizedReason = adminReason(reason);
-    const timestamp = this.now();
-    const result = await super.updateAdminNuggetEconomy(adminKey, patch, normalizedReason);
-    this.adminControlLinkPromise = null;
-    const linkedChanges = await this.database.transact((state) => {
-      const changes = applyEconomyLinksToExpansion(state, result.editableConfig, timestamp);
-      applyExpansionLinksToTuning(state);
-      if (changes.length) {
-        appendAudit(
-          state,
-          'LINKED_ADMIN_CONTROLS_UPDATED',
-          `${changes.join('; ')}; ${normalizedReason}`,
-          timestamp
-        );
-      }
-      return changes;
-    });
-    return { ...result, linkedChanges };
-  }
-
-  async quoteNuggetPurchase(token, input = {}) {
-    await this.pruneExpiredPaymentReservations();
-    return super.quoteNuggetPurchase(token, input);
-  }
-
-  async quotePracticeClaim(token, input = {}) {
-    await this.pruneExpiredPaymentReservations();
-    return super.quotePracticeClaim(token, input);
-  }
-
-  async reserveQuote(input) {
-    await this.pruneExpiredPaymentReservations();
-    return super.reserveQuote(input);
-  }
-
-  async practiceRunClaim(token, payload = {}) {
-    const result = await super.practiceRunClaim(token, payload);
-    if (!result?.alreadyConfirmed || result.profile) return result;
-    const player = await super.me(token);
-    const state = await this.database.read();
-    const wallet = state.wallets[player.address];
-    const claim = wallet?.practiceClaims?.[payload.runId];
-    return {
-      ...result,
-      practiceClaim: structuredClone(claim || result.practiceClaim),
-      profile: structuredClone(wallet?.profile || player.profile)
-    };
-  }
-
   async finishRun(token, payload) {
     let verifiedPayload = payload;
     const pendingRun = (await this.database.read()).runs?.[String(payload?.runId || '')];
@@ -1557,70 +1321,7 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     ) {
       await this.competitiveReplayValidator.finalize(runId, 'finished').catch(() => undefined);
     }
-    const finished = result?.run?.result;
-    const isDeathRetention =
-      result?.accepted === true &&
-      finished &&
-      finished.extracted === false &&
-      result.run?.mode !== 'practice' &&
-      Number(finished.banked || 0) > 0;
-    if (!isDeathRetention) return result;
-
-    const timestamp = this.now();
-    const corrected = await this.database.transact((state) => {
-      const run = state.runs[runId];
-      const wallet = run ? state.wallets[run.address] : null;
-      if (!wallet) return null;
-      const sourceKey = `run-complete:${runId}:banked`;
-      const source = findLedgerEntryByIdempotency(wallet.nuggetLedger, sourceKey);
-      if (!source || source.type !== NUGGET_LEDGER_TYPES.RUN_EXTRACTION) return null;
-
-      const correctionKey = `run-death-retention:${runId}:reverse`;
-      const creditKey = `run-death-retention:${runId}:credit`;
-      if (findLedgerEntryByIdempotency(wallet.nuggetLedger, creditKey)) {
-        return structuredClone(wallet.profile);
-      }
-
-      applyNuggetLedgerDelta(wallet, -source.amount, {
-        type: NUGGET_LEDGER_TYPES.ADMIN_ADJUSTMENT,
-        runId,
-        idempotencyKey: correctionKey,
-        adminActor: 'SYSTEM_CLASSIFICATION',
-        details: `Append-only reversal of legacy extraction classification for knockout run ${runId}`,
-        timestamp
-      });
-      applyNuggetLedgerDelta(wallet, source.amount, {
-        type: NUGGET_LEDGER_TYPES.RUN_DEATH_RETENTION,
-        runId,
-        idempotencyKey: creditKey,
-        adminActor: 'SYSTEM_CLASSIFICATION',
-        details: `Server-validated knockout retention for run ${runId}`,
-        timestamp
-      });
-      wallet.updatedAt = timestamp;
-      wallet.activity ||= [];
-      wallet.activity.push({
-        id: `activity-${timestamp}-${wallet.activity.length + 1}`,
-        action: 'RUN_DEATH_RETENTION_RECORDED',
-        details: `${runId}; retained ${source.amount} nuggets`,
-        timestamp
-      });
-      wallet.activity = wallet.activity.slice(-500);
-      state.audit ||= [];
-      state.audit.push({
-        id: `audit-${timestamp}-${state.audit.length + 1}`,
-        actor: 'SYSTEM_CLASSIFICATION',
-        action: 'RUN_DEATH_RETENTION_RECORDED',
-        details: `${runId}; retained ${source.amount} nuggets using append-only correction`,
-        timestamp
-      });
-      state.audit = state.audit.slice(-2_000);
-      return structuredClone(wallet.profile);
-    });
-
-    return corrected
-      ? { ...result, profile: corrected, ...(nftSettlement ? { nftSettlement } : {}) }
-      : result;
+    return result;
   }
 
   async abandonRun(token, payload) {
@@ -1643,26 +1344,6 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     return abandoned;
   }
 
-  async pruneExpiredPaymentReservations() {
-    if (!this.nuggetEconomyStore) return;
-    const timestamp = this.now();
-    await this.nuggetEconomyStore.transact((state) => {
-      for (const quote of Object.values(state.quotes || {})) {
-        if (quote.status !== 'verifying' || quote.expiresAt > timestamp) continue;
-        quote.status = 'expired';
-        quote.failureCode = 'quote_expired';
-        const hash = quote.transactionHash;
-        quote.transactionHash = '';
-        if (
-          hash &&
-          state.usedTransactions?.[hash]?.quoteId === quote.id &&
-          !state.usedTransactions[hash].confirmedAt
-        ) {
-          delete state.usedTransactions[hash];
-        }
-      }
-    });
-  }
 }
 
 export function arenaStudioAllowsPaidRevives(snapshot, settings = {}, infrastructureReady = false) {
@@ -1691,11 +1372,12 @@ function selectedMinerId(value) {
 }
 
 export function recordNftCrystalBank(wallet, input = {}) {
+  // Remove obsolete claim payloads that may still exist in pre-retirement JSON rows.
+  if (Object.hasOwn(wallet, 'practiceClaims')) delete wallet.practiceClaims;
   wallet.nftCrystalLedger ||= [];
   const runId = String(input.runId || '').slice(0, 120);
   const id = `nft-run-bank:${runId}`;
-  // NFT-enabled Practice replaces the legacy nugget claim with MATT Crystals.
-  if (wallet.practiceClaims?.[runId]) delete wallet.practiceClaims[runId];
+  // NFT-enabled runs settle MATT Crystals through the V2 gameplay service.
   if (wallet.nftCrystalLedger.some((entry) => entry.id === id)) return false;
   const amount = Math.max(0, Math.floor(Number(input.amount || 0)));
   wallet.nftCrystalBalance = Math.max(0, Math.floor(Number(wallet.nftCrystalBalance || 0))) + amount;
@@ -1731,19 +1413,10 @@ function publicExpansion(wallet, config) {
     ])),
     settings: {
       paidRevivesEnabled: false,
-      advertisementRewardsEnabled: false,
       weeklyCompetitionEnabled: config?.settings?.weeklyCompetitionEnabled === true,
       endlessEnabled: config?.settings?.endlessEnabled === true
     }
   };
-}
-
-function advertisementModeEligible(mode, config) {
-  return (
-    (mode === 'practice' && config.advertisementPracticeEligible) ||
-    (mode === 'free' && config.advertisementFreeEligible) ||
-    (mode === 'paid' && config.advertisementPaidEligible)
-  );
 }
 
 function syncEarnedCharacters(wallet, config, timestamp) {
@@ -1799,6 +1472,24 @@ function adminReason(value) {
   const reason = typeof value === 'string' ? value.trim().slice(0, 240) : '';
   if (reason.length < 4) throw new ApiError(400, 'admin_reason_required', 'Provide a short written reason.');
   return reason;
+}
+
+function nftV2MapDefaults(studio, timestamp) {
+  return Object.fromEntries([['arena', 'arena'], ['paid', 'pass']].flatMap(([mode, slot]) => {
+    const snapshot = resolveCompetitionSnapshot(studio, slot, timestamp);
+    if (!snapshot) return [];
+    const seed = String(snapshot.id || `${slot}-${timestamp}`);
+    const mapId = sha256Bytes32(`matt-mine-map:${mode}:${seed}`);
+    const fingerprint = String(snapshot.fingerprint || '').replace(/^0x/, '');
+    const contentHash = /^[a-f0-9]{64}$/i.test(fingerprint)
+      ? `0x${fingerprint.toLowerCase()}`
+      : sha256Bytes32(JSON.stringify(snapshot));
+    return [[mode, { seed, mapId, contentHash, snapshotName: snapshot.name || snapshot.title || seed }]];
+  }));
+}
+
+function sha256Bytes32(value) {
+  return `0x${createHash('sha256').update(String(value)).digest('hex')}`;
 }
 
 function normalizedWallet(value) {

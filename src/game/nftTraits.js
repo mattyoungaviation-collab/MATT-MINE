@@ -108,7 +108,7 @@ export function gameplayRuntimeSnapshot(game = {}) {
     adminModifiers: {
       playerSpeed: finite(tuning.playerSpeed, CONFIG.basePlayerSpeed),
       scoreMultiplier: finite(tuning.scoreMultiplier, 1),
-      minedOreValueMultiplier: finite(tuning.nuggetMultiplier, 1),
+      minedOreValueMultiplier: finite(tuning.oreScoreMultiplier, 1),
       inRunXpMultiplier: finite(tuning.xpMultiplier, 1),
       passXpMultiplier: finite(tuning.passXpMultiplier, 1),
       depthScoreMultiplier: finite(tuning.depthScoreMultiplier, 1),

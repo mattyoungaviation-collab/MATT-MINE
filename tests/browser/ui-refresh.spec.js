@@ -32,7 +32,7 @@ async function installSignedInMiner(page, options = {}) {
       session: {
         token: 'd'.repeat(64),
         address: NFT_TEST_ADDRESS,
-        profile: { bankedNuggets: 0, bestDepth: 0, bestScore: 0, totalRuns: 0, meta: {} },
+        profile: { bestDepth: 0, bestScore: 0, totalRuns: 0 },
         identity: { name: 'V2 Browser Miner', requiresSetup: false },
         entitlements: { freeRunAvailable: true },
         suspended: false,
@@ -110,13 +110,6 @@ test('desktop player navigation opens every redesigned public surface', async ({
   await installSignedInMiner(page);
   await page.goto('/');
 
-  await expect(page.locator('.launch-home-store')).toBeVisible();
-  await page.locator('.launch-home-store').click();
-  await expect(page.locator('#nugget-shop')).toHaveClass(/active/);
-  await expect(page.locator('#nugget-shop-status')).toContainText('Sign in with Ronin Wallet');
-  await page.locator('#nugget-shop-close').click();
-  await expect(page.locator('#launch')).toHaveClass(/active/);
-
   await enterNftMineMenu(page);
   await expect(page.locator('[data-mine-slot="practice"]')).toContainText('Practice Mine');
   await expect(page.locator('[data-mine-slot="arena"]')).toContainText('MATT Arena');
@@ -164,7 +157,7 @@ test('fresh sign-in selects an owned Miner by number without visiting the loadou
   await expect(page.locator('#menu')).toHaveClass(/active/);
 });
 
-test('profile tabs, store return path, and shared color accents remain usable', async ({ page }) => {
+test('profile tabs and shared color accents remain usable', async ({ page }) => {
   await page.goto('/');
   await page.evaluate(() => {
     document.querySelectorAll('.screen').forEach((screen) => screen.classList.toggle('active', screen.id === 'miner-profile'));
@@ -172,15 +165,10 @@ test('profile tabs, store return path, and shared color accents remain usable', 
   });
   await expect(page.locator('#miner-profile')).toHaveClass(/active/);
 
-  for (const tab of ['upgrades', 'loadout', 'history', 'controls', 'overview']) {
+  for (const tab of ['loadout', 'history', 'controls', 'overview']) {
     await page.locator(`[data-profile-tab="${tab}"]`).click();
     await expect(page.locator(`[data-profile-panel="${tab}"]`)).toHaveClass(/active/);
   }
-
-  await page.locator('#profile-open-store-button').click();
-  await expect(page.locator('#nugget-shop')).toHaveClass(/active/);
-  await page.locator('#nugget-shop-close').click();
-  await expect(page.locator('#miner-profile')).toHaveClass(/active/);
 
   const colors = await page.evaluate(() => {
     const style = getComputedStyle(document.documentElement);

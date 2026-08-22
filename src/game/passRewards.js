@@ -1,5 +1,4 @@
 export const PASS_CHEST_ID = 'season_one_pass_chest';
-export const PASS_CHEST_BONUS_NUGGETS = 250_000;
 
 export const COSMETIC_SLOTS = Object.freeze([
   'badge',

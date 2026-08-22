@@ -14,7 +14,6 @@ export const stateMethods = {
     this.runtimeError = null;
     this.entityId = 1;
     const isArena = this.runContext?.mode === 'arena';
-    const meta = this.effectivePermanentMeta || this.profile.meta;
     const tuning = this.runContext?.tuning || {};
     const character = this.runContext?.character || {};
     const nftTraits = nftGameplayTraits(this.runContext);
@@ -23,10 +22,10 @@ export const stateMethods = {
       ? Math.max(1, Number(tuning.playerMaxHealth || CONFIG.basePlayerHealth))
       : 0);
     const maxHealth = nftHealth ||
-      ((tuning.playerMaxHealth || CONFIG.basePlayerHealth) + (meta.health || 0) * 8) * characterHealthScale;
+      (tuning.playerMaxHealth || CONFIG.basePlayerHealth) * characterHealthScale;
     this.run = {
       depth: this.runContext?.startingDepth || 1,
-      rawNuggets: 0,
+      rawScore: 0,
       displayedScore: 0,
       kills: 0,
       oreBroken: 0,
@@ -60,8 +59,8 @@ export const stateMethods = {
       health: maxHealth,
       maxShield: nftTraits?.armorShield || 0,
       shield: nftTraits?.armorShield || 0,
-      speed: (tuning.playerSpeed || CONFIG.basePlayerSpeed) * (1 + (meta.speed || 0) * 0.02) * Number(nftTraits ? 1 : character.movementSpeed || 1),
-      damage: nftTraits?.pickaxeAttack || ((tuning.playerBaseDamage || CONFIG.baseDamage) * (1 + (meta.damage || 0) * 0.05) * Number(character.pickaxeDamage || 1)),
+      speed: (tuning.playerSpeed || CONFIG.basePlayerSpeed) * Number(nftTraits ? 1 : character.movementSpeed || 1),
+      damage: nftTraits?.pickaxeAttack || ((tuning.playerBaseDamage || CONFIG.baseDamage) * Number(character.pickaxeDamage || 1)),
       blasterBaseDamage: nftTraits?.blasterAttack || 0,
       dynamiteBaseDamage: nftTraits?.dynamiteAttack || 0,
       healAmount: nftTraits?.healAmount || 0,
@@ -73,8 +72,8 @@ export const stateMethods = {
       attackTimer: 0,
       attackRange: tuning.pickaxeRange || CONFIG.baseAttackRange,
       critChance: tuning.playerCritChance ?? CONFIG.baseCritChance,
-      magnetRange: ((tuning.playerMagnetRange || CONFIG.baseMagnetRange) + (meta.magnet || 0) * 6) * Number(nftTraits ? 1 : character.magnetRange || 1),
-      armor: nftTraits ? 0 : Math.min(0.8, (meta.armor || 0) * 0.01 + Number(character.armor || 0)),
+      magnetRange: (tuning.playerMagnetRange || CONFIG.baseMagnetRange) * Number(nftTraits ? 1 : character.magnetRange || 1),
+      armor: nftTraits ? 0 : Math.min(0.8, Number(character.armor || 0)),
       level: 1,
       xp: 0,
       nextXp: 45,
@@ -83,7 +82,7 @@ export const stateMethods = {
       invulnerable: 0,
       swingTimer: 0,
       dashCooldown: 0,
-      dashCooldownMax: ((tuning.dashCooldown || CONFIG.baseDashCooldown) / (1 + (meta.dash || 0) * 0.02)) * Number(nftTraits ? 1 : character.dashCooldown || 1),
+      dashCooldownMax: (tuning.dashCooldown || CONFIG.baseDashCooldown) * Number(nftTraits ? 1 : character.dashCooldown || 1),
       dashTimer: 0,
       dashSpeed: (tuning.dashSpeed || CONFIG.baseDashSpeed) * Number(nftTraits ? 1 : character.dashStrength || 1),
       lastMoveX: 1,
@@ -99,7 +98,7 @@ export const stateMethods = {
       blasterEnergy: (tuning.blasterEnergy || CONFIG.blasterEnergyMax) * (Number(nftTraits ? 100 : character.blasterEnergy || 100) / 100),
       blasterEnergyMax: (tuning.blasterEnergy || CONFIG.blasterEnergyMax) * (Number(nftTraits ? 100 : character.blasterEnergy || 100) / 100),
       blasterEnergyRegen: tuning.blasterRecharge || CONFIG.blasterEnergyRegen,
-      blasterDamageScale: (tuning.blasterDamageMultiplier || CONFIG.blasterDamageScale) * (1 + (meta.blaster || 0) * 0.03) * Number(nftTraits ? 1 : character.blasterDamage || 1),
+      blasterDamageScale: (tuning.blasterDamageMultiplier || CONFIG.blasterDamageScale) * Number(nftTraits ? 1 : character.blasterDamage || 1),
       blasterVolley: 1,
       emptyWeaponToast: 0
     };
@@ -175,7 +174,7 @@ export const stateMethods = {
     this.run.safeStartUntil = this.run.elapsed +
       (arenaMode ? CONFIG.arenaSafeStartSeconds : (tuning.safeStartSeconds ?? CONFIG.safeStartSeconds));
 
-    const luck = this.effectivePermanentMeta?.luck || 0;
+    const luck = 0;
     if (authoredMap) {
       this.populateCompetitionMap(this.layout.objects, luck);
       this.updateObjective();
@@ -323,7 +322,7 @@ export const stateMethods = {
       radius: 22 * scale,
       hp,
       maxHp: hp,
-      nuggets: Math.round(type.nuggets * (rich ? 2 : 1) * treasureMultiplier * (tuning[`${type.id}ValueMultiplier`] ?? 1) * (tuning.nuggetMultiplier ?? 1)),
+      scoreValue: Math.round(type.scoreValue * (rich ? 2 : 1) * treasureMultiplier * (tuning[`${type.id}ValueMultiplier`] ?? 1) * (tuning.oreScoreMultiplier ?? 1)),
       xp: Math.round(type.xp * (rich ? 1.35 : 1) * treasureMultiplier),
       color: type.color,
       rotation: randomRange(0, Math.PI * 2),
@@ -335,7 +334,7 @@ export const stateMethods = {
   projectedPayout() {
     const tuning = this.runContext?.tuning || {};
     return Math.floor(
-      this.run.rawNuggets *
+      this.run.rawScore *
       this.depthMultiplier() *
       (tuning.scoreMultiplier ?? 1) *
       (1 + (this.run.depth - 1) * ((tuning.depthScoreMultiplier ?? 1) - 1))
@@ -570,7 +569,7 @@ export const stateMethods = {
           this.gainXp(this.player.nextXp);
           this.addFloater(this.player.x, this.player.y - 52, 'UPGRADE READY', '#68e6ff');
         } else {
-          this.run.rawNuggets += pickup.value;
+          this.run.rawScore += pickup.value;
         }
         if (pickup.type === 'crystal') {
           const carryLimit = Number(this.runContext?.tuning?.nftCrystalCarryLimit || Number.MAX_SAFE_INTEGER);
@@ -602,7 +601,6 @@ export const stateMethods = {
       ? projected
       : Math.floor(projected * (this.runContext?.tuning?.deathKeepFraction ?? CONFIG.deathKeepFraction));
     if (this.runContext?.mode !== 'arena' && !this.headless) {
-      this.profile.bankedNuggets += banked;
       this.profile.bestDepth = Math.max(this.profile.bestDepth, this.run.depth);
       this.profile.bestScore = Math.max(this.profile.bestScore, projected);
       this.profile.totalRuns += 1;

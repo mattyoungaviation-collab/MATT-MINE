@@ -42,7 +42,7 @@ See [`docs/COMPETITION_STUDIO_V31.md`](docs/COMPETITION_STUDIO_V31.md).
 ## v3.0 production expansion
 
 - Tune every real Guardian attack independently across all three phases with deterministic, per-boss cooldown scheduling and completed-run telemetry.
-- Increase the configurable Pass Chest default to 250,000 server-ledger nuggets with atomic opening and duplicate-cosmetic rules.
+- Keep Pass Chests cosmetic-only with atomic opening and duplicate-safe rerolls.
 - Add server-owned playable characters, unlocks, purchases, Admin grants, balance controls, and character usage telemetry.
 - Add wallet-saved controller remapping, dead zones, aiming, vibration, menu navigation, controller-safe pause, and resume.
 - Add a rewardless, entitled Beta Testing mine with developer controls and audited tester access.
@@ -60,7 +60,7 @@ See [`docs/PRODUCTION_EXPANSION_V30.md`](docs/PRODUCTION_EXPANSION_V30.md).
 - Fine-tune player movement and health, every weapon, enemy families, Guardian behavior, room dimensions, ore, XP, scoring, and knockout rules.
 - Snapshot settings into every run so changing future rules cannot alter an active or completed run.
 - Apply tuning immediately to every new run while preserving the exact pinned rules of runs already in progress.
-- Search permanent miner names or wallet addresses, inspect individual activity, and grant audited nuggets, Pass XP, chests, or cosmetics.
+- Search permanent miner names or wallet addresses, inspect individual activity, and grant audited Pass XP, chests, or cosmetics.
 - Let every miner create unique keyboard controls and save them to their server profile.
 
 ## v2.5 combat clarity and run control
@@ -104,7 +104,7 @@ See [`docs/PRODUCTION_EXPANSION_V30.md`](docs/PRODUCTION_EXPANSION_V30.md).
 - Add ranged Spitters, stronger shield-beetle flanking rules, frontal pickaxe recoil, Blaster/drone resistance, and dynamite weakness.
 - Expand and strengthen the Guardian encounter with a larger vault, wider evasive volleys, faster pressure, and relentless reinforcements.
 - Add persistent music/effects volume controls, mute, a distinct player-damage sound, red hit feedback, clean post-run camera shake, and a four-drone orbit.
-- Expand permanent progression to eight upgrade tracks with substantially longer rank caps and escalating server-authoritative nugget costs.
+- Use Miner NFT levels and traits as the sole source of permanent gameplay progression.
 
 ## v2.0 deterministic Daily Arena
 
@@ -162,7 +162,7 @@ See [`docs/DAILY_ARENA_V18.md`](docs/DAILY_ARENA_V18.md).
 
 - Deliver all eight Pass levels from server-owned XP into a permanent wallet inventory.
 - Unlock the Starter Badge, Gold Trail, Crystal Skin, Founder Frame, Guardian Aura, Ore Reactor title, and Season One Trophy.
-- Open the level-three Pass Chest for the exclusive Molten Pickaxe and a configurable 250,000-nugget default award.
+- Open the level-three Pass Chest for a permanent cosmetic, including the exclusive Molten Pickaxe.
 - Equip or remove every owned cosmetic through the MATT Mine Loadout screen.
 - Show equipped skins, auras, trails, and pickaxes directly during gameplay.
 - Show equipped frames, badges, titles, and trophies on server-verified leaderboard rows.
@@ -174,7 +174,7 @@ See [`docs/DAILY_ARENA_V18.md`](docs/DAILY_ARENA_V18.md).
 - Verify each 95 RON Pass purchase against the exact Ronin transaction, approved Pass contract call, purchasing wallet, payment amount, and `PassPurchased` event.
 - Store confirmed Pass purchases and progression per wallet in PostgreSQL-backed server state with replay-safe confirmation.
 - Award 25 server-owned Pass XP for an active holder's daily Free ranked run and 100 XP for every completed Pass ranked run or server-verified MATT Arena run.
-- Snapshot an active Mine Pass at run start and apply 2x run XP and nugget values in every playable mine, including Practice, MATT Arena, Daily, Pass, and Seven-Day. Arena replay uses the same server-pinned multiplier.
+- Snapshot an active Mine Pass at run start and apply its Pass XP multiplier consistently in browser and server replay.
 - Return live Pass level, XP progress, and reward-track unlocks instead of displaying browser-only test progression.
 - Keep Pass leaderboard access and paid-run credits gated by current onchain Pass ownership.
 
@@ -293,7 +293,7 @@ See [`docs/REWARD_PIPELINE_V12.md`](docs/REWARD_PIPELINE_V12.md).
 - Repair corrupt or malformed profile and economy saves with validated defaults.
 - Cover the Pickaxe, Pocket Dynamite, Crystal Blaster, enemy projectile, wall collision, and expired-projectile paths with regression tests.
 - Keep Free and Pass leaderboard totals separate and count only the best score from each day.
-- Credit knocked-out ranked runs only for secured, banked nuggets rather than projected extraction loot.
+- Record knocked-out ranked runs using only server-validated retained score.
 - Block suspended wallets from ranked access, paid-run purchases, and ranked score submission while preserving Practice mode.
 - Reject unknown settings, malformed values, and cross-role changes in the local admin controls.
 

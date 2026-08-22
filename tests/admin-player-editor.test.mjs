@@ -56,20 +56,9 @@ test('admin can exactly edit or remove all mutable player progression with an au
       patch: {
         identity: { name: 'EditedMiner', clearAvatar: true },
         profile: {
-          bankedNuggets: 777,
           bestDepth: 5,
           bestScore: 12345,
-          totalRuns: 9,
-          meta: {
-            health: 4,
-            damage: 3,
-            speed: 2,
-            luck: 1,
-            magnet: 5,
-            armor: 6,
-            dash: 7,
-            blaster: 8
-          }
+          totalRuns: 9
         },
         pass: {
           xp: 900,
@@ -88,15 +77,13 @@ test('admin can exactly edit or remove all mutable player progression with an au
   );
 
   assert.equal(result.wallet.identity.name, 'EditedMiner');
-  assert.equal(result.wallet.profile.bankedNuggets, 777);
-  assert.equal(result.wallet.profile.meta.armor, 6);
+  assert.equal(result.wallet.profile.bestScore, 12345);
   assert.equal(result.wallet.passProgress.xp, 900);
   assert.deepEqual(result.wallet.passInventory.claimedLevels, [1, 2]);
   assert.deepEqual(result.wallet.passInventory.cosmetics, ['starter_badge', 'gold_trail']);
   assert.equal(result.wallet.passInventory.equipped.trail, 'gold_trail');
   assert.equal(result.wallet.passInventory.chests.season_one_pass_chest.available, 3);
   assert.equal(result.wallet.freeRunUsedToday, true);
-  assert.ok(result.editor.metaUpgrades.some((upgrade) => upgrade.id === 'blaster'));
   assert.ok(result.editor.passRewards.some((reward) => reward.name === 'Gold Trail'));
 
   const detail = await service.adminWallet('admin-secret', address);
@@ -106,7 +93,7 @@ test('admin can exactly edit or remove all mutable player progression with an au
   assert.match(audit.entries[0].details, /Beta progression calibration/);
 });
 
-test('beta reset actions can zero nuggets, remove achievements, reset upgrades, and restore base progression', async () => {
+test('beta reset actions can remove achievements and restore base progression', async () => {
   const { service } = harness();
   await signIn(service);
   const address = account.address.toLowerCase();
@@ -114,7 +101,7 @@ test('beta reset actions can zero nuggets, remove achievements, reset upgrades, 
   await service.adminAwardPlayer('admin-secret', address, {
     type: 'state_patch',
     patch: {
-      profile: { bankedNuggets: 5000, meta: { health: 10, armor: 10, blaster: 10 } },
+      profile: { bestDepth: 5, bestScore: 5000, totalRuns: 10 },
       pass: {
         xp: 5000,
         claimedLevels: [1, 2, 3, 4],
@@ -128,14 +115,11 @@ test('beta reset actions can zero nuggets, remove achievements, reset upgrades, 
   let reset = await service.adminAwardPlayer('admin-secret', address, {
     type: 'state_patch',
     patch: {
-      profile: { bankedNuggets: 0 },
-      reset: { upgrades: true, achievements: true, cosmetics: true }
+      reset: { achievements: true, cosmetics: true }
     },
     reason: 'Test clean new-player combat'
   }, 'Test clean new-player combat');
 
-  assert.equal(reset.wallet.profile.bankedNuggets, 0);
-  assert.ok(Object.values(reset.wallet.profile.meta).every((rank) => rank === 0));
   assert.deepEqual(reset.wallet.passInventory.claimedLevels, []);
   assert.deepEqual(reset.wallet.passInventory.cosmetics, []);
   assert.ok(Object.values(reset.wallet.passInventory.equipped).every((id) => id === ''));
@@ -147,7 +131,6 @@ test('beta reset actions can zero nuggets, remove achievements, reset upgrades, 
     reason: 'Return complete beta profile to baseline'
   }, 'Return complete beta profile to baseline');
 
-  assert.equal(reset.wallet.profile.bankedNuggets, 0);
   assert.equal(reset.wallet.profile.bestDepth, 0);
   assert.equal(reset.wallet.passProgress.xp, 0);
   assert.deepEqual(reset.wallet.passInventory.claimedLevels, []);
@@ -163,7 +146,7 @@ test('player edits are blocked during an active run so a live run cannot change 
   await assert.rejects(
     () => service.adminAwardPlayer('admin-secret', account.address, {
       type: 'state_patch',
-      patch: { reset: { upgrades: true } },
+      patch: { reset: { allProgress: true } },
       reason: 'Attempt while active'
     }, 'Attempt while active'),
     (error) => error.code === 'player_state_active_run'
@@ -179,13 +162,12 @@ test('Admin can explicitly end active runs and apply an authoritative player edi
     type: 'state_patch',
     patch: {
       terminateActiveRuns: true,
-      profile: { bankedNuggets: 321 },
-      reset: { upgrades: true }
+      profile: { bestScore: 321 }
     },
     reason: 'Immediate operator correction'
   }, 'Immediate operator correction');
 
-  assert.equal(result.wallet.profile.bankedNuggets, 321);
+  assert.equal(result.wallet.profile.bestScore, 321);
   assert.equal(result.terminatedActiveRuns, 1);
   const state = await database.read();
   assert.equal(state.runs[run.runId].status, 'expired');
@@ -254,8 +236,6 @@ test('the command center loads a complete editor with exact fields and destructi
   assert.match(html, /Search all controls/);
   assert.match(html, /Filter this page/);
   assert.match(script, /Save exact player state/);
-  assert.match(script, /Reset permanent upgrades/);
-  assert.match(script, /Zero nuggets/);
   assert.match(script, /Clear Pass achievements/);
   assert.match(script, /Reset all off-chain progression/);
   assert.match(script, /End active runs and apply now/);

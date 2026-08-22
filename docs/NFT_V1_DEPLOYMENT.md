@@ -132,4 +132,4 @@ Only after every readback matches the approved deployment record should `0xF799â
 
 The server defaults to `MATT_MINE_NFT_ENABLED=false`. After contracts are fully configured and verified, record all seven deployed addresses in the environment, deploy the server integration release, test one controlled Miner and each equipment flow, and then enable the feature.
 
-The existing nugget economy remains separate until its audited migration into the Crystal banking ledger is implemented. It must not be renamed or deleted as part of the contract deployment.
+The retired browser currency is not part of NFT V2. MATT Crystal banking and Miner progression remain the only gameplay progression systems.
