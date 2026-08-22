@@ -319,11 +319,11 @@ The existing MATT Crystals token is an external upgradeable dependency. Its owne
 - Miner and Equipment ERC-721 ownership contracts are permanently non-upgradeable.
 - Gameplay settlement, Chest, Crystal Bank, and passive payout modules use governed upgradeable proxies.
 - Only the `0xF79913cB83Cc9CABD95D0ba9250103fbb939f984` root authority may schedule and execute an upgrade.
-- Every upgrade has a public 48-hour delay between scheduling and execution.
+- The already-deployed implementations require one final public 48-hour transition; the replacement implementations authorize direct Root-admin upgrades.
 - Routine server, keeper, and operator keys cannot upgrade any module.
 - The emergency pauser may pause immediately but cannot upgrade, reconfigure economics, move Treasury funds, or unpause without the required governing authority.
-- A deliberate Root-approved UUPS upgrade can change the future behavior of Settlement, Chest, Crystal Bank, or Passive Rewards after the 48-hour notice period. Therefore phase-XP awards, the per-run and withdrawal ceilings, chest odds, and the unassigned passive-rate distribution are immutable to routine server configuration but not immune to an explicit governance upgrade.
-- The 1,000 Miner supply cap, Miner level thresholds and derived traits, already assigned passive rates, Equipment bonuses and state, Loadout custody rules, and the 48-hour delay itself live in non-upgradeable contracts and cannot be rewritten through a module upgrade.
+- A deliberate Root-approved UUPS upgrade can change the future behavior of Settlement, Chest, Crystal Bank, or Passive Rewards. Therefore phase-XP awards, the per-run and withdrawal ceilings, chest odds, and the unassigned passive-rate distribution are immutable to routine server configuration but not immune to an explicit governance upgrade.
+- The 1,000 Miner supply cap, Miner level thresholds and derived traits, already assigned passive rates, Equipment bonuses and state, and Loadout custody rules live in non-upgradeable contracts and cannot be rewritten through a module upgrade.
 
 ## Metadata and media availability
 

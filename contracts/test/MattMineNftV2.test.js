@@ -776,7 +776,7 @@ describe("MATT Mine NFT V2", function () {
     assert.ok((await system.crystal.balanceOf(system.buyer.address)) > 0n);
   });
 
-  it("blocks shared signer/operator activation and enforces the 48-hour UUPS upgrade delay", async function () {
+  it("blocks shared signer/operator activation and permits direct Root-admin upgrades", async function () {
     const system = await networkHelpers.loadFixture(deploySystem);
     await (await system.settlement.pause()).wait();
     await (await system.settlement.grantRole(OPERATOR_ROLE, system.rewardSigner.address)).wait();
@@ -785,10 +785,13 @@ describe("MATT Mine NFT V2", function () {
     await (await system.settlement.unpause()).wait();
 
     await expectCustomError(
-      system.bank.upgradeToAndCall(system.bankImplementation.target, "0x"),
+      system.bank.connect(system.outsider).upgradeToAndCall(system.bankImplementation.target, "0x"),
       system.bank,
       "UnauthorizedUpgrade"
     );
+    const directImplementation = await deploy("MattV2CrystalBank", [system.timelock.target]);
+    await (await system.bank.upgradeToAndCall(directImplementation.target, "0x")).wait();
+    assert.equal(await system.bank.tokenUnit(), ethers.parseEther("1"));
     const salt = ethers.id("bank-v2-upgrade-test");
     const operation = [system.bank.target, system.bankImplementation.target, "0x", salt];
     await (await system.timelock.schedule(...operation)).wait();

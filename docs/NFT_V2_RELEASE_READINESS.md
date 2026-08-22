@@ -14,7 +14,7 @@ This file defines the code state that must exist before the first Ronin Mainnet 
 - Passive earnings accrue only after verified weekly play and are paid to the owner at the UTC boundary with prorating.
 - Player EIP-712 run authorization, independent server Reward Signer, server Operator, immutable active-run snapshot, one-time nonces, and processed-run replay protection are enforced.
 - Map conversion and payout are admin configurable inside immutable 100,000-token per-unit/per-run ceilings; withdrawals have immutable wallet/global ceilings.
-- UUPS upgrades require the fixed 48-hour upgrade timelock.
+- The first transition upgrade uses the existing fixed 48-hour timelock; afterward the Root/default admin can upgrade directly.
 
 ## Game and server
 

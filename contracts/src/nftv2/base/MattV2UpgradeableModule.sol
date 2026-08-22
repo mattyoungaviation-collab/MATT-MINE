@@ -48,7 +48,12 @@ abstract contract MattV2UpgradeableModule is
 
     function _validateUnpause() internal view virtual {}
 
+    /// @dev Existing proxies need one final legacy-timelock upgrade to receive
+    /// this authorization path. Afterward the Root/default admin can upgrade
+    /// directly, while already-scheduled legacy operations remain executable.
     function _authorizeUpgrade(address) internal view override {
-        if (msg.sender != UPGRADE_TIMELOCK) revert UnauthorizedUpgrade();
+        if (msg.sender != UPGRADE_TIMELOCK && !hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) {
+            revert UnauthorizedUpgrade();
+        }
     }
 }

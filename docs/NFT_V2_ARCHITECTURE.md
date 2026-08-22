@@ -56,7 +56,7 @@ flowchart LR
 ### `MattV2UpgradeTimelock`
 
 - Root-controlled, non-upgradeable scheduler for UUPS upgrades.
-- Every upgrade requires an immutable 48-hour delay.
+- Existing deployed proxies require one final 48-hour transition upgrade. Implementations installed afterward permit direct Root-admin upgrades.
 - Upgrade identifiers bind chain, timelock, proxy, implementation address, implementation bytecode hash, calldata, and salt.
 
 ## Governed UUPS modules
