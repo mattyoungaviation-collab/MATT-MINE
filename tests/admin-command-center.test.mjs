@@ -14,6 +14,11 @@ test('Admin command center exposes only controls backed by active game systems',
   assert.match(html, /Game Balance/i);
   assert.match(html, /Mine Operations/i);
   assert.match(script, /game-tuning/);
+  assert.match(html, /id="nft-v2-map-current"/);
+  assert.match(html, /id="nft-v2-economy-validation"/);
+  assert.match(registry, /nft-v2:maps/);
+  assert.match(registry, /nft-v2:phase-xp/);
+  assert.doesNotMatch(script, /nft-v2-retire-version'\)\.value\s*=\s*result\.versionId/);
 });
 
 test('Admin page element identifiers remain unique', async () => {

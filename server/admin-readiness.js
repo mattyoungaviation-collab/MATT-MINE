@@ -6,6 +6,7 @@ export function buildAdminReadiness(input = {}) {
   const replay = input.replay || {};
   const revive = input.revive || {};
   const controlLinks = input.controlLinks || {};
+  const nft = input.nft || {};
   const monitors = [
     monitor(
       'database',
@@ -89,6 +90,28 @@ export function buildAdminReadiness(input = {}) {
       false,
       'Features'
     ),
+    ...(nft.enabled ? [
+      monitor(
+        'nft-metadata-chain',
+        'Miner metadata chain reads',
+        nft.metadata?.ok === true ? 'ready' : 'blocked',
+        nft.metadata?.ok === true
+          ? `Ronin chain ${Number(nft.metadata.chainId || 0)} responding${Number.isFinite(nft.metadata.latencyMs) ? ` · ${nft.metadata.latencyMs} ms` : ''}`
+          : `Metadata/RPC validation failed${nft.metadata?.error ? ` · ${nft.metadata.error}` : ''}`,
+        true,
+        'NFT V2'
+      ),
+      monitor(
+        'nft-gameplay-settlement',
+        'NFT gameplay settlement',
+        nft.gameplay?.ok === true ? 'ready' : 'blocked',
+        nft.gameplay?.ok === true
+          ? `Settlement, roles, signer, and active maps verified${Number.isFinite(nft.gameplay.latencyMs) ? ` · ${nft.gameplay.latencyMs} ms` : ''}`
+          : `Settlement operator health failed${nft.gameplay?.error ? ` · ${nft.gameplay.error}` : ''}`,
+        true,
+        'NFT V2'
+      )
+    ] : []),
     monitor(
       'treasury-safe',
       'Treasury Safe',

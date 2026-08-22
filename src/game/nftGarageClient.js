@@ -4,17 +4,14 @@ export const NFT_GARAGE_CONTRACTS = Object.freeze({
   loadout: '0xb88C219C792cFa07749E0E5D939DbbbF1E62C7b5',
   chest: '0x693525e7fD76949834cad56d67D469bAAd6687F6',
   crystalBank: '0x8C640Cd91Ea6616cDD07B8323492E76e5c9ffE78',
+  crystal: '0x2D2034e55900D285dc05d30a0c14846D7a30285B',
   matt: '0xa5450417BDCa0BDfB058ffE41205400FfDA1174d'
 });
 
 export const NFT_GARAGE_SELECTORS = Object.freeze({
-  nextTokenId: '0x75794a3c',
   ownerOf: '0x6352211e',
-  tokenURI: '0xc87b56dd',
   loadoutOf: '0x44752a35',
-  equipmentData: '0xc6452e13',
   isRunLocked: '0x2259acda',
-  bonusFor: '0x213b4056',
   balanceOf: '0x70a08231',
   allowance: '0xdd62ed3e',
   approve: '0x095ea7b3',
@@ -28,6 +25,11 @@ export const NFT_GARAGE_SELECTORS = Object.freeze({
   repairArmor: '0x9981f16d',
   bankBalance: '0x9839fa4a',
   minimumWithdrawal: '0x738b31b5',
+  walletDailyLimit: '0xb4c0f7f7',
+  globalDailyLimit: '0xace89f6d',
+  walletWithdrawn: '0xeced2bc2',
+  globalWithdrawn: '0x31a2d974',
+  paused: '0x5c975abb',
   withdraw: '0x2e1a7d4d'
 });
 
@@ -50,11 +52,19 @@ export const NFT_GARAGE_CHESTS = Object.freeze([
 ]);
 
 export const NFT_GARAGE_RARITIES = Object.freeze(['COMMON', 'UNCOMMON', 'RARE', 'MYTHIC', 'LEGENDARY']);
+export const NFT_GARAGE_EQUIPMENT_PAGE_SIZE = 50;
+
+const EQUIPMENT_INVENTORY_DRIFT_CODES = new Set([
+  'nft_equipment_inventory_changed',
+  'nft_equipment_index_changed'
+]);
 
 export class NftGarageClient {
   constructor(options = {}) {
     this.wallet = options.wallet;
+    this.api = options.api || options.apiClient || null;
     this.fetch = options.fetch || globalThis.fetch?.bind(globalThis);
+    this.now = options.now || (() => Date.now());
     this.rpcRequestId = 0;
     if (!this.wallet) throw new Error('NFT Garage requires the connected MATT Mine wallet.');
     if (!this.fetch) throw new Error('NFT Garage requires browser fetch support.');
@@ -69,22 +79,20 @@ export class NftGarageClient {
     ));
     if (!sameAddress(owner, player)) throw new Error(`Miner #${selectedMinerId} is not owned by the signed-in wallet.`);
 
-    const [loadoutValue, runLockedValue, mattBalanceValue, crystalBalanceValue, minimumWithdrawalValue, equipmentApprovalValue] = await Promise.all([
+    const [loadoutValue, runLockedValue, equipmentApprovalValue, wallet] = await Promise.all([
       this.call(NFT_GARAGE_CONTRACTS.loadout, encodeCall(NFT_GARAGE_SELECTORS.loadoutOf, uintWord(selectedMinerId))),
       this.call(NFT_GARAGE_CONTRACTS.miner, encodeCall(NFT_GARAGE_SELECTORS.isRunLocked, uintWord(selectedMinerId))),
-      this.call(NFT_GARAGE_CONTRACTS.matt, encodeCall(NFT_GARAGE_SELECTORS.balanceOf, addressWord(player))),
-      this.call(NFT_GARAGE_CONTRACTS.crystalBank, encodeCall(NFT_GARAGE_SELECTORS.bankBalance, addressWord(player))),
-      this.call(NFT_GARAGE_CONTRACTS.crystalBank, NFT_GARAGE_SELECTORS.minimumWithdrawal),
       this.call(
         NFT_GARAGE_CONTRACTS.equipment,
         encodeCall(NFT_GARAGE_SELECTORS.isApprovedForAll, addressWord(player), addressWord(NFT_GARAGE_CONTRACTS.loadout))
-      )
+      ),
+      this.walletSnapshot({ address: player })
     ]);
     const loadoutWords = splitAbiWords(loadoutValue);
     const loadout = Object.fromEntries(NFT_GARAGE_SLOTS.map((slot, index) => [slot.key, Number(BigInt(`0x${loadoutWords[index]}`))]));
-    const allOwnedMinerIds = new Set(ownedMinerIds.map(Number).filter(Number.isSafeInteger));
-    allOwnedMinerIds.add(selectedMinerId);
-    const equipment = await this.loadEquipment(player, allOwnedMinerIds);
+    const equipmentPage = await this.loadEquipment(player, {
+      priorityTokenIds: Object.values(loadout).filter((tokenId) => tokenId > 0)
+    });
     const chestPrices = await Promise.all(NFT_GARAGE_CHESTS.map(async (product) => ({
       ...product,
       priceRaw: decodeAbiUint(await this.call(
@@ -99,52 +107,125 @@ export class NftGarageClient {
       minerId: selectedMinerId,
       runLocked: decodeAbiUint(runLockedValue) !== 0n,
       loadout,
-      equipment,
-      mattBalanceRaw: decodeAbiUint(mattBalanceValue),
-      crystalBalanceRaw: decodeAbiUint(crystalBalanceValue),
-      minimumWithdrawalRaw: decodeAbiUint(minimumWithdrawalValue),
+      equipment: equipmentPage.items,
+      equipmentNextCursor: equipmentPage.nextCursor,
+      equipmentTotal: equipmentPage.total,
+      equipmentIndexedToBlock: equipmentPage.indexedToBlock,
+      ...wallet,
       equipmentOperatorApproved: decodeAbiUint(equipmentApprovalValue) !== 0n,
       repairPriceRaw,
       chestPrices
     };
   }
 
-  async loadEquipment(player, ownedMinerIds) {
-    const nextTokenId = Number(decodeAbiUint(await this.call(
-      NFT_GARAGE_CONTRACTS.equipment,
-      NFT_GARAGE_SELECTORS.nextTokenId
-    )));
-    const candidates = Array.from({ length: Math.max(0, nextTokenId - 1) }, (_, index) => index + 1);
-    const equipment = await Promise.all(candidates.map(async (tokenId) => {
+  async walletSnapshot({ address }) {
+    const player = normalizedAddress(address);
+    const utcDay = Math.floor(this.now() / 86_400_000);
+    const [
+      mattBalanceValue,
+      walletCrystalBalanceValue,
+      crystalBalanceValue,
+      minimumWithdrawalValue,
+      walletDailyLimitValue,
+      globalDailyLimitValue,
+      walletWithdrawnValue,
+      globalWithdrawnValue,
+      pausedValue
+    ] = await Promise.all([
+      this.call(NFT_GARAGE_CONTRACTS.matt, encodeCall(NFT_GARAGE_SELECTORS.balanceOf, addressWord(player))),
+      this.call(NFT_GARAGE_CONTRACTS.crystal, encodeCall(NFT_GARAGE_SELECTORS.balanceOf, addressWord(player))),
+      this.call(NFT_GARAGE_CONTRACTS.crystalBank, encodeCall(NFT_GARAGE_SELECTORS.bankBalance, addressWord(player))),
+      this.call(NFT_GARAGE_CONTRACTS.crystalBank, NFT_GARAGE_SELECTORS.minimumWithdrawal),
+      this.call(NFT_GARAGE_CONTRACTS.crystalBank, NFT_GARAGE_SELECTORS.walletDailyLimit),
+      this.call(NFT_GARAGE_CONTRACTS.crystalBank, NFT_GARAGE_SELECTORS.globalDailyLimit),
+      this.call(
+        NFT_GARAGE_CONTRACTS.crystalBank,
+        encodeCall(NFT_GARAGE_SELECTORS.walletWithdrawn, uintWord(utcDay), addressWord(player))
+      ),
+      this.call(
+        NFT_GARAGE_CONTRACTS.crystalBank,
+        encodeCall(NFT_GARAGE_SELECTORS.globalWithdrawn, uintWord(utcDay))
+      ),
+      this.call(NFT_GARAGE_CONTRACTS.crystalBank, NFT_GARAGE_SELECTORS.paused)
+    ]);
+    return crystalWithdrawalAvailability({
+      address: player,
+      utcDay,
+      nextUtcResetAt: (utcDay + 1) * 86_400_000,
+      mattBalanceRaw: decodeAbiUint(mattBalanceValue),
+      walletCrystalBalanceRaw: decodeAbiUint(walletCrystalBalanceValue),
+      crystalBalanceRaw: decodeAbiUint(crystalBalanceValue),
+      minimumWithdrawalRaw: decodeAbiUint(minimumWithdrawalValue),
+      walletDailyLimitRaw: decodeAbiUint(walletDailyLimitValue),
+      globalDailyLimitRaw: decodeAbiUint(globalDailyLimitValue),
+      walletWithdrawnRaw: decodeAbiUint(walletWithdrawnValue),
+      globalWithdrawnRaw: decodeAbiUint(globalWithdrawnValue),
+      crystalBankPaused: decodeAbiUint(pausedValue) !== 0n
+    });
+  }
+
+  async loadEquipment(playerInput = '', options = {}) {
+    if (typeof this.api?.equipmentInventory !== 'function') {
+      throw new Error('Sign in to MATT Mine to load the server-indexed Equipment inventory.');
+    }
+    const player = playerInput ? normalizedAddress(playerInput) : '';
+    const cursor = String(options.cursor || '');
+    const limit = Math.min(
+      NFT_GARAGE_EQUIPMENT_PAGE_SIZE,
+      positiveInteger(options.limit || NFT_GARAGE_EQUIPMENT_PAGE_SIZE, 'Equipment page size')
+    );
+    const priorityTokenIds = uniquePositiveIntegers(options.priorityTokenIds || []);
+    const attempts = cursor ? 1 : 2;
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
       try {
-        const [ownerValue, dataValue, uriValue, bonusValue] = await Promise.all([
-          this.call(NFT_GARAGE_CONTRACTS.equipment, encodeCall(NFT_GARAGE_SELECTORS.ownerOf, uintWord(tokenId))),
-          this.call(NFT_GARAGE_CONTRACTS.equipment, encodeCall(NFT_GARAGE_SELECTORS.equipmentData, uintWord(tokenId))),
-          this.call(NFT_GARAGE_CONTRACTS.equipment, encodeCall(NFT_GARAGE_SELECTORS.tokenURI, uintWord(tokenId))),
-          this.call(NFT_GARAGE_CONTRACTS.equipment, encodeCall(NFT_GARAGE_SELECTORS.bonusFor, uintWord(tokenId)))
-        ]);
-        const owner = decodeAbiAddress(ownerValue);
-        const words = splitAbiWords(dataValue);
-        const equippedToMiner = Number(BigInt(`0x${words[1]}`));
-        if (!sameAddress(owner, player) && !ownedMinerIds.has(equippedToMiner)) return null;
-        const tokenUri = decodeAbiString(uriValue);
+        const page = await this.api.equipmentInventory(cursor, limit, priorityTokenIds);
+        if (player && !sameAddress(page?.owner, player)) {
+          throw new Error('The signed-in server session does not match the connected Ronin wallet. Sign in again.');
+        }
+        const items = (page?.items || []).map((item) => ({
+          ...item,
+          tokenId: positiveInteger(item?.tokenId, 'Equipment token number')
+        }));
+        const total = nonnegativeInteger(page?.total ?? items.length, 'Equipment inventory total');
         return {
-          tokenId,
-          owner,
-          definitionId: Number(BigInt(`0x${words[0]}`)),
-          equippedToMiner,
-          slot: Number(BigInt(`0x${words[2]}`)),
-          rarity: Number(BigInt(`0x${words[3]}`)),
-          damaged: BigInt(`0x${words[4]}`) !== 0n,
-          bonus: Number(decodeAbiUint(bonusValue)),
-          tokenUri,
-          metadata: await this.metadata(tokenUri)
+          items: dedupeEquipment(items),
+          nextCursor: String(page?.nextCursor || ''),
+          total: Math.max(total, items.length),
+          indexedToBlock: page?.indexedToBlock ?? null
         };
-      } catch {
-        return null;
+      } catch (error) {
+        if (attempt === 0 && EQUIPMENT_INVENTORY_DRIFT_CODES.has(error?.code)) continue;
+        throw error;
       }
-    }));
-    return equipment.filter(Boolean).sort((left, right) => left.tokenId - right.tokenId);
+    }
+    throw new Error('The Equipment inventory could not be loaded.');
+  }
+
+  async loadMoreEquipment(snapshot) {
+    if (!snapshot?.equipmentNextCursor) return snapshot;
+    const priorityTokenIds = Object.values(snapshot.loadout || {}).filter((tokenId) => Number(tokenId) > 0);
+    let page;
+    let reset = false;
+    try {
+      page = await this.loadEquipment(snapshot.address, {
+        cursor: snapshot.equipmentNextCursor
+      });
+    } catch (error) {
+      if (!EQUIPMENT_INVENTORY_DRIFT_CODES.has(error?.code)) throw error;
+      reset = true;
+      page = await this.loadEquipment(snapshot.address, { priorityTokenIds });
+    }
+    const equipment = reset
+      ? page.items
+      : dedupeEquipment([...(snapshot.equipment || []), ...page.items]);
+    return {
+      ...snapshot,
+      equipment,
+      equipmentNextCursor: page.nextCursor,
+      equipmentTotal: Math.max(page.total, equipment.length),
+      equipmentIndexedToBlock: page.indexedToBlock,
+      equipmentInventoryReset: reset
+    };
   }
 
   async equip(snapshot, item) {
@@ -202,14 +283,19 @@ export class NftGarageClient {
     );
   }
 
-  async withdrawCrystals(snapshot, amountRaw) {
+  async withdrawCrystals(snapshot, amountRaw, options = {}) {
     const amount = BigInt(amountRaw);
+    const availability = crystalWithdrawalAvailability(snapshot);
+    if (availability.crystalBankPaused) throw new Error('MATT Crystal withdrawals are temporarily paused. Banked Crystals remain safe.');
     if (amount < snapshot.minimumWithdrawalRaw) throw new Error(`Minimum withdrawal is ${formatTokenUnits(snapshot.minimumWithdrawalRaw)} MATT Crystals.`);
-    if (amount > snapshot.crystalBalanceRaw) throw new Error('Withdrawal exceeds the banked MATT Crystal balance.');
+    if (amount > availability.withdrawableRaw) {
+      throw new Error(`Only ${formatTokenUnits(availability.withdrawableRaw)} MATT Crystals are currently withdrawable before the UTC daily reset.`);
+    }
     await this.send(
       NFT_GARAGE_CONTRACTS.crystalBank,
       encodeCall(NFT_GARAGE_SELECTORS.withdraw, uintWord(amount)),
-      'crystal-withdrawal'
+      'crystal-withdrawal',
+      options
     );
   }
 
@@ -229,10 +315,10 @@ export class NftGarageClient {
     );
   }
 
-  async send(to, data, kind) {
+  async send(to, data, kind, options = {}) {
     return this.wallet.sendPreparedTransaction(
       { to, value: '0x0', data, kind },
-      { allowZeroValue: true }
+      { allowZeroValue: true, ...options }
     );
   }
 
@@ -279,6 +365,38 @@ export function formatTokenUnits(value, decimals = 18, maximumFractionDigits = 4
   const whole = amount / base;
   const fraction = (amount % base).toString().padStart(decimals, '0').slice(0, maximumFractionDigits).replace(/0+$/, '');
   return fraction ? `${whole}.${fraction}` : whole.toString();
+}
+
+export function crystalWithdrawalAvailability(snapshot = {}) {
+  const banked = nonNegativeBigInt(snapshot.crystalBalanceRaw);
+  const walletBalance = nonNegativeBigInt(snapshot.walletCrystalBalanceRaw);
+  const minimum = nonNegativeBigInt(snapshot.minimumWithdrawalRaw);
+  const walletLimit = nonNegativeBigInt(snapshot.walletDailyLimitRaw);
+  const globalLimit = nonNegativeBigInt(snapshot.globalDailyLimitRaw);
+  const walletUsed = nonNegativeBigInt(snapshot.walletWithdrawnRaw);
+  const globalUsed = nonNegativeBigInt(snapshot.globalWithdrawnRaw);
+  const walletRemainingRaw = walletLimit > walletUsed ? walletLimit - walletUsed : 0n;
+  const globalRemainingRaw = globalLimit > globalUsed ? globalLimit - globalUsed : 0n;
+  const withdrawableRaw = snapshot.crystalBankPaused
+    ? 0n
+    : [banked, walletRemainingRaw, globalRemainingRaw].reduce(
+        (smallest, value) => value < smallest ? value : smallest,
+        banked
+      );
+  return {
+    ...snapshot,
+    walletCrystalBalanceRaw: walletBalance,
+    crystalBalanceRaw: banked,
+    minimumWithdrawalRaw: minimum,
+    walletDailyLimitRaw: walletLimit,
+    globalDailyLimitRaw: globalLimit,
+    walletWithdrawnRaw: walletUsed,
+    globalWithdrawnRaw: globalUsed,
+    walletRemainingRaw,
+    globalRemainingRaw,
+    withdrawableRaw,
+    withdrawalAvailable: !snapshot.crystalBankPaused && withdrawableRaw >= minimum && minimum > 0n
+  };
 }
 
 export function parseTokenUnits(value, decimals = 18) {
@@ -345,6 +463,30 @@ function positiveInteger(value, label) {
   const number = Number(value);
   if (!Number.isSafeInteger(number) || number < 1) throw new Error(`${label} is invalid.`);
   return number;
+}
+
+function nonnegativeInteger(value, label) {
+  const number = Number(value);
+  if (!Number.isSafeInteger(number) || number < 0) throw new Error(`${label} is invalid.`);
+  return number;
+}
+
+function uniquePositiveIntegers(values) {
+  return [...new Set((Array.isArray(values) ? values : []).map(Number).filter((value) => Number.isSafeInteger(value) && value > 0))];
+}
+
+function dedupeEquipment(items) {
+  return [...new Map(items.map((item) => [item.tokenId, item])).values()]
+    .sort((left, right) => left.tokenId - right.tokenId);
+}
+
+function nonNegativeBigInt(value) {
+  try {
+    const number = BigInt(value || 0);
+    return number > 0n ? number : 0n;
+  } catch {
+    return 0n;
+  }
 }
 
 function sameAddress(left, right) {

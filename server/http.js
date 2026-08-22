@@ -6,6 +6,7 @@ import { ApiError, assertApi } from './errors.js';
 import { normalizeOrigin } from './auth-message.js';
 import { isTransientPostgresError } from './postgres-resilience.js';
 import { observeHttpRequest } from './observability.js';
+import { requestClientKey } from './request-client-key.js';
 import { nftRpcUrlFromEnvironment } from './nft-rpc-url.js';
 
 const MIME_TYPES = Object.freeze({
@@ -22,6 +23,17 @@ const MIME_TYPES = Object.freeze({
   '.txt': 'text/plain; charset=utf-8'
 });
 
+const PUBLIC_ROOT_FILES = new Set([
+  'index.html',
+  'admin.html',
+  'admin.css',
+  'nft-lab.html',
+  'robots.txt'
+]);
+const PUBLIC_SOURCE_EXTENSIONS = new Set(['.js', '.css']);
+const PUBLIC_ASSET_EXTENSIONS = new Set(['.png', '.webp', '.svg', '.ico', '.mp3']);
+const PUBLIC_LEGAL_FILES = new Set(['legal/matt-mine-arena-rules-v0.01.txt']);
+
 const RETIRED_ARENA_RULES_PATH = 'legal/matt-mine-arena-rules-v0.01.pdf';
 const PUBLIC_ARENA_RULES_PATH = '/legal/matt-mine-arena-rules-v0.01.txt';
 const NFT_LAB_MAINNET_RPC_URL = nftRpcUrlFromEnvironment();
@@ -33,6 +45,7 @@ const NFT_LAB_RPC_CONTRACTS = new Set([
   '0x693525e7fd76949834cad56d67d469baad6687f6',
   '0x21bee81adc4c87e3ea4686dd8a38a64c8ea5b95c',
   '0x8c640cd91ea6616cdd07b8323492e76e5c9ffe78',
+  '0x2d2034e55900d285dc05d30a0c14846d7a30285b',
   '0xa5450417bdca0bdfb058ffe41205400ffda1174d'
 ]);
 
@@ -71,7 +84,7 @@ async function handleApiRequest({
   rateLimiter,
   maxRequestBytes
 }) {
-  const clientKey = request.socket.remoteAddress || 'unknown';
+  const clientKey = requestClientKey(request);
   const stricter = requestUrl.pathname === '/api/auth/challenge';
   const nftLabRpc = requestUrl.pathname === '/api/nft-lab/rpc';
   const limiterName = stricter ? 'challenge' : nftLabRpc ? 'nft-lab-rpc' : 'api';
@@ -315,6 +328,15 @@ async function handleApiRequest({
   if (method === 'GET' && ownedMinerMatch) {
     const miner = await service.ownedMiner(bearerToken(request), ownedMinerMatch[1]);
     sendJson(response, 200, { ok: true, miner });
+    return;
+  }
+  if (method === 'GET' && path === '/api/me/equipment') {
+    const inventory = await service.equipmentInventory(bearerToken(request), {
+      cursor: requestUrl.searchParams.get('cursor') || '',
+      limit: requestUrl.searchParams.get('limit') || '',
+      priorityTokenIds: requestUrl.searchParams.get('priority') || ''
+    });
+    sendJson(response, 200, { ok: true, inventory });
     return;
   }
   const profileAvatarMatch = path.match(/^\/api\/profiles\/(0x[a-fA-F0-9]{40})\/avatar$/);
@@ -617,6 +639,14 @@ async function handleApiRequest({
     sendJson(response, 200, { ok: true, ...result });
     return;
   }
+  if (method === 'GET' && path === '/api/admin/operations-health') {
+    const result = await service.adminOperationsHealth(
+      request.headers['x-matt-admin-key'],
+      { force: requestUrl.searchParams.get('refresh') === 'true' }
+    );
+    sendJson(response, 200, { ok: true, report: result });
+    return;
+  }
   if (method === 'GET' && path === '/api/admin/wallets') {
     const result = await service.adminWallets(
       request.headers['x-matt-admin-key'],
@@ -911,6 +941,7 @@ async function serveStatic(request, response, pathname, root) {
   const decoded = decodeURIComponent(pathname);
   assertApi(!decoded.includes('\0'), 400, 'invalid_path', 'The requested path is invalid.');
   const requestedPath = decoded === '/' ? 'index.html' : decoded.replace(/^[/\\]+/, '');
+  const normalizedRequestedPath = requestedPath.replace(/\\/g, '/').toLowerCase();
   if (requestedPath === RETIRED_ARENA_RULES_PATH) {
     response.writeHead(302, {
       location: PUBLIC_ARENA_RULES_PATH,
@@ -919,6 +950,7 @@ async function serveStatic(request, response, pathname, root) {
     response.end();
     return;
   }
+  assertApi(isPublicStaticPath(normalizedRequestedPath), 404, 'file_not_found', 'Not found.');
   let filePath = resolve(root, requestedPath);
   const rootRelativePath = relative(root, filePath);
   assertApi(
@@ -947,6 +979,16 @@ async function serveStatic(request, response, pathname, root) {
     } : {})
   });
   response.end(request.method === 'HEAD' ? undefined : body);
+}
+
+function isPublicStaticPath(pathname) {
+  if (!pathname || pathname.split('/').some((segment) => !segment || segment.startsWith('.'))) return false;
+  if (PUBLIC_ROOT_FILES.has(pathname) || PUBLIC_LEGAL_FILES.has(pathname)) return true;
+  const extension = extname(pathname);
+  if (pathname.startsWith('src/')) return PUBLIC_SOURCE_EXTENSIONS.has(extension);
+  if (pathname.startsWith('assets/')) return PUBLIC_ASSET_EXTENSIONS.has(extension);
+  if (pathname.startsWith('generated/walletconnect/')) return extension === '.js';
+  return false;
 }
 
 function requestOrigin(request, configuredOrigin) {
@@ -1080,7 +1122,11 @@ function sendError(response, error) {
     : databaseUnavailable
       ? 'MATT Mine is reconnecting to its database. Please retry in a moment.'
       : 'The MATT Mine server encountered an unexpected error.';
-  if (status === 429) response.setHeader('retry-after', String(error?.retryAfter || 60));
+  if (Number.isFinite(error?.retryAfter)) {
+    response.setHeader('retry-after', String(Math.max(1, Math.ceil(error.retryAfter))));
+  } else if (status === 429) {
+    response.setHeader('retry-after', '60');
+  }
   if (databaseUnavailable) {
     response.setHeader('retry-after', '2');
     console.warn('[MATT Mine server] PostgreSQL temporarily unavailable.', error?.code || error?.message || error);

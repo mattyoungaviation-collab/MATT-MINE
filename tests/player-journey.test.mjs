@@ -32,5 +32,6 @@ test('rewarded mine choices preserve their destination through Miner selection',
   assert.match(source, /#arena-button'[\s\S]*openMineRoute\('arena'\)/);
   assert.match(source, /mattmine:slot-enter'[\s\S]*openMineRoute\('arena'\)[\s\S]*openMineRoute\('pass-mine'\)/);
   assert.match(source, /const destination = pendingMineDestination;[\s\S]*openArena\(\)[\s\S]*openPassMine\(\)/);
-  assert.match(source, /#miner-select-home'[\s\S]*pendingMineDestination = '';[\s\S]*openMines\(\)/);
+  assert.match(source, /#miner-select-home'[\s\S]*rememberPendingMineDestination\(\);[\s\S]*openMines\(\)/);
+  assert.match(source, /matt-mine:pending-mine-destination/);
 });

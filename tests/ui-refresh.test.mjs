@@ -15,7 +15,7 @@ test('approved UI refresh exposes every player dashboard and unique control id',
     'miner-select', 'miner-number-form', 'miner-number-input', 'miner-number-submit',
     'miner-select-grid', 'select-loadout-button', 'enter-mines-button',
     'miner-command-center', 'garage-crystal-balance', 'garage-loadout-slots',
-    'garage-equipment-list', 'garage-repair-button', 'garage-withdraw-button',
+    'garage-equipment-list', 'garage-equipment-load-more', 'garage-repair-button', 'garage-withdraw-button',
     'how-to-play', 'how-to-title', 'launch-mine-select-title',
     'practice-run-button', 'arena-button',
     'mines-how-to-button', 'mines-miner-button',
@@ -53,7 +53,7 @@ test('UI controls are wired to existing run, Pass, leaderboard, and loadout flow
   assert.match(source, /apiClient\.ownedMiner\(minerId\)/);
   assert.match(source, /apiClient\.startRun\(mode, minerId, approval\)/);
   assert.match(source, /openMinerCommandCenter\(\)/);
-  assert.match(source, /nftGarage\.withdrawCrystals\(snapshot, amountRaw\)/);
+  assert.match(source, /nftGarage\.withdrawCrystals\(snapshot, amountRaw, \{/);
   assert.match(source, /renderLeaderboardPodium\(rows\)/);
   assert.match(source, /mode === ARENA_LEADERBOARD_MODE/);
   assert.match(source, /await refreshArena\(true\)/);

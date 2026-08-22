@@ -44,6 +44,13 @@ const SETTLEMENT_ABI = parseAbi([
   'function mapVersions(bytes32 versionId) view returns (bytes32 mapId,bytes32 contentHash,uint128 conversionRate,uint128 maximumPayout,uint32 mineableCrystalUnits,uint32 runTimeout,bool approved,bool retired)'
 ]);
 const SLOT_NAMES = Object.freeze(['armor', 'pickaxe', 'blaster', 'dynamite', 'helmet', 'backpack']);
+const MAP_VERSION_FIELDS = Object.freeze([
+  'mapId', 'contentHash', 'conversionRate', 'maximumPayout',
+  'mineableCrystalUnits', 'runTimeout', 'approved', 'retired'
+]);
+const TOKEN_UNIT = 10n ** 18n;
+const MAX_WALLET_DAILY_WITHDRAWAL = 1_000_000n * TOKEN_UNIT;
+const MAX_GLOBAL_DAILY_WITHDRAWAL = 100_000_000n * TOKEN_UNIT;
 
 export class NftV2AdminService {
   constructor(options = {}) {
@@ -91,10 +98,23 @@ export class NftV2AdminService {
       Promise.all(Object.keys(this.addresses).map(async (name) => [name, await this.#read(name, 'paused')]))
     ]);
     const activeMapVersions = { ...(this.gameplayService?.mapVersions || {}) };
+    const activeMaps = {};
     const phaseXp = {};
     let phaseXpConfigurable = true;
     for (const [mode, versionId] of Object.entries(activeMapVersions)) {
       if (!versionId) continue;
+      const map = normalizeMapVersion(await this.#read('settlement', 'mapVersions', [versionId]));
+      activeMaps[mode] = {
+        versionId,
+        mapId: String(map.mapId || ''),
+        contentHash: String(map.contentHash || ''),
+        conversionRateRaw: BigInt(map.conversionRate || 0).toString(),
+        maximumPayoutRaw: BigInt(map.maximumPayout || 0).toString(),
+        mineableCrystalUnits: Number(map.mineableCrystalUnits || 0),
+        runTimeoutSeconds: Number(map.runTimeout || 0),
+        approved: map.approved === true,
+        retired: map.retired === true
+      };
       try {
         phaseXp[mode] = (await this.#read('settlement', 'phaseXpForMap', [versionId])).map(Number);
       } catch {
@@ -112,6 +132,7 @@ export class NftV2AdminService {
       chestPrices: Object.fromEntries(SLOT_NAMES.map((slot, index) => [slot, prices[index].toString()])),
       paused: Object.fromEntries(paused),
       activeMapVersions,
+      activeMaps,
       phaseXp,
       phaseXpConfigurable,
       phaseXpCaps: { perPhase: 250, perRun: 500 }
@@ -120,29 +141,52 @@ export class NftV2AdminService {
 
   async setEconomy(input = {}) {
     return this.#serialize(async () => {
+      const current = await this.snapshot();
       const planned = [];
       const transactions = [];
       if (input.repairPriceRaw !== undefined) {
-        planned.push(['loadout', 'setRepairPrice', [boundedUint128(input.repairPriceRaw, 'repair price')]]);
+        const repairPrice = boundedUint128(input.repairPriceRaw, 'repair price');
+        if (repairPrice !== BigInt(current.repairPriceRaw)) {
+          planned.push(['loadout', 'setRepairPrice', [repairPrice]]);
+        }
       }
       if (input.withdrawal) {
-        const minimum = positiveUint(input.withdrawal.minimumRaw, 'minimum withdrawal');
-        const wallet = positiveUint(input.withdrawal.walletDailyRaw, 'wallet daily limit');
-        const global = positiveUint(input.withdrawal.globalDailyRaw, 'global daily limit');
-        if (minimum < 10n ** 18n || minimum > wallet || global < wallet || wallet > 1_000_000n * 10n ** 18n || global > 100_000_000n * 10n ** 18n) {
-          throw new ApiError(422, 'nft_withdrawal_limits_invalid', 'Withdrawal limits exceed the contract ceilings.');
+        const { minimum, wallet, global } = validateWithdrawalConfiguration(input.withdrawal);
+        if (
+          minimum !== BigInt(current.withdrawal.minimumRaw)
+          || wallet !== BigInt(current.withdrawal.walletDailyRaw)
+          || global !== BigInt(current.withdrawal.globalDailyRaw)
+        ) {
+          planned.push(['bank', 'setWithdrawalConfiguration', [minimum, wallet, global]]);
         }
-        planned.push(['bank', 'setWithdrawalConfiguration', [minimum, wallet, global]]);
       }
       for (const [slot, raw] of Object.entries(input.chestPrices || {})) {
         const index = SLOT_NAMES.indexOf(slot);
         if (index < 0) throw new ApiError(422, 'nft_chest_slot_invalid', `Unknown equipment slot ${slot}.`);
-        planned.push(['chest', 'setChestPrice', [index, boundedUint128(raw, `${slot} chest price`)]]);
+        const price = boundedUint128(raw, `${slot} chest price`);
+        if (price !== BigInt(current.chestPrices[slot])) {
+          planned.push(['chest', 'setChestPrice', [index, price]]);
+        }
       }
       if (!planned.length) {
-        throw new ApiError(422, 'nft_economy_patch_empty', 'Change at least one NFT V2 economy control.');
+        throw new ApiError(422, 'nft_economy_patch_empty', 'Change at least one NFT V2 economy control; every submitted value already matches Ronin.');
       }
-      for (const [name, functionName, args] of planned) transactions.push(await this.#write(name, functionName, args));
+      for (const [name, functionName, args] of planned) {
+        try {
+          transactions.push(await this.#write(name, functionName, args));
+        } catch {
+          const error = new ApiError(
+            503,
+            transactions.length ? 'nft_economy_partial_failure' : 'nft_economy_update_failed',
+            transactions.length
+              ? `${transactions.length} NFT economy transaction(s) confirmed before a later control failed. Reload the live values before retrying.`
+              : 'The NFT economy transaction was not confirmed. Reload the live values before retrying.'
+          );
+          error.confirmedTransactions = [...transactions];
+          error.failedControl = `${name}.${functionName}`;
+          throw error;
+        }
+      }
       return { transactions, protocol: await this.snapshot() };
     });
   }
@@ -242,6 +286,32 @@ function mapVersionId(args) {
     parseAbiParameters('bytes32,bytes32,uint32,uint256,uint256,uint32'),
     args
   ));
+}
+export function validateWithdrawalConfiguration(value = {}) {
+  const minimum = positiveUint(value.minimumRaw, 'minimum withdrawal');
+  const wallet = positiveUint(value.walletDailyRaw, 'wallet daily limit');
+  const global = positiveUint(value.globalDailyRaw, 'global daily limit');
+  if (minimum < TOKEN_UNIT) {
+    throw new ApiError(422, 'nft_withdrawal_limits_invalid', 'Minimum withdrawal must be at least 1 MATT Crystal.');
+  }
+  if (minimum > wallet) {
+    throw new ApiError(422, 'nft_withdrawal_limits_invalid', 'Minimum withdrawal cannot exceed the wallet daily limit.');
+  }
+  if (wallet > global) {
+    throw new ApiError(422, 'nft_withdrawal_limits_invalid', 'Wallet daily limit cannot exceed the global daily limit.');
+  }
+  if (wallet > MAX_WALLET_DAILY_WITHDRAWAL || global > MAX_GLOBAL_DAILY_WITHDRAWAL) {
+    throw new ApiError(422, 'nft_withdrawal_limits_invalid', 'Withdrawal limits exceed the immutable contract ceilings.');
+  }
+  return { minimum, wallet, global };
+}
+
+function normalizeMapVersion(value) {
+  const source = value && typeof value === 'object' ? value : {};
+  return Object.fromEntries(MAP_VERSION_FIELDS.map((field, index) => [
+    field,
+    source[field] ?? source[index]
+  ]));
 }
 function requiredAddress(value, label) { try { return getAddress(String(value || '')); } catch { throw new Error(`${label} is invalid.`); } }
 function requiredUrl(value, label) { const url = new URL(String(value || '')); if (url.protocol !== 'https:') throw new Error(`${label} must use HTTPS.`); return url.href; }

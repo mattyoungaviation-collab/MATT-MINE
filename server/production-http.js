@@ -5,6 +5,7 @@ import { normalizeOrigin } from './auth-message.js';
 import { createMattMineHttpServer } from './http.js';
 import { isTransientPostgresError } from './postgres-resilience.js';
 import { observeHttpRequest } from './observability.js';
+import { requestClientKey } from './request-client-key.js';
 
 const PRODUCTION_PATHS = new Set([
   '/api/expansion/status',
@@ -41,7 +42,7 @@ export function createProductionMattMineHttpServer({ root, service, maxRequestBy
     applySecurityHeaders(response);
     try {
       enforceSameOrigin(request, service.publicOrigin);
-      const clientKey = request.socket.remoteAddress || 'unknown';
+      const clientKey = requestClientKey(request);
       limiter.consume(`${clientKey}:${requestUrl.pathname}`, 30, 60_000);
       const method = request.method || 'GET';
       const path = requestUrl.pathname;

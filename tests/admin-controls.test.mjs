@@ -301,6 +301,26 @@ test('player search uses permanent names and audited Pass XP awards appear in in
   const search = await harness.service.adminWallets('admin-secret', 'AdminTester');
   assert.equal(search.wallets.length, 1);
   assert.equal(search.wallets[0].address, account.address.toLowerCase());
+  const runId = `run_${'a'.repeat(24)}`;
+  await harness.database.transact((state) => {
+    state.runs[runId] = {
+      id: runId,
+      tokenHash: 'test-token',
+      address: account.address.toLowerCase(),
+      mode: SERVER_RUN_MODES.PAID,
+      status: 'active',
+      startedAt: START,
+      expiresAt: START + 60_000,
+      nftRun: {
+        minerId: 1_000,
+        runId: `0x${'b'.repeat(64)}`
+      }
+    };
+  });
+  const minerSearch = await harness.service.adminWallets('admin-secret', 'Miner #1000');
+  assert.equal(minerSearch.wallets[0].address, account.address.toLowerCase());
+  const runSearch = await harness.service.adminWallets('admin-secret', runId);
+  assert.equal(runSearch.wallets[0].address, account.address.toLowerCase());
   await harness.service.adminAwardPlayer(
     'admin-secret',
     account.address,

@@ -641,6 +641,22 @@ export class DailyArenaService {
     return this.store.activeRuns(address);
   }
 
+  async adminReserveRuns(runIds = [], reason = 'administrative termination') {
+    return this.store.reserveAdminTermination(runIds, this.now(), reason);
+  }
+
+  async adminClearRunReservations(runIds = []) {
+    return this.store.clearAdminTermination(runIds);
+  }
+
+  async adminExpireRuns(runIds = []) {
+    const runs = await this.store.expireAdminTermination(runIds, this.now());
+    return {
+      affected: runs.length,
+      runIds: runs.map((run) => run.runId)
+    };
+  }
+
   async adminExpireActiveRuns(address = '') {
     const runs = await this.store.expireActiveRuns(address, this.now());
     return {
@@ -1090,6 +1106,12 @@ export class DailyArenaService {
 
   async #assertRunOpen(run, timestamp) {
     assertApi(run.status === 'active', 409, 'arena_run_not_active', 'The Daily Arena run is no longer active.');
+    assertApi(
+      !run.tuning?._adminTerminationPending,
+      409,
+      'arena_admin_termination_pending',
+      'An administrator is ending this Arena run. Wait for that operation to finish before reviving or changing it.'
+    );
     if (run.expiresAt <= timestamp || dayEndMs(run.day) <= timestamp) {
       await this.store.expireRun(run.runId, timestamp);
       throw new ApiError(410, 'arena_run_expired', 'The Daily Arena run expired before submission.');

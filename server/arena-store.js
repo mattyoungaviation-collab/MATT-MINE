@@ -148,6 +148,53 @@ export class MemoryArenaStore {
       .map(clone);
   }
 
+  async reserveAdminTermination(runIds, timestamp, reason) {
+    return this.#mutate(() => {
+      const selected = new Set(runIds || []);
+      const reserved = [];
+      for (const run of this.runs.values()) {
+        if (run.status !== 'active' || !selected.has(run.runId)) continue;
+        run.tuning ||= {};
+        run.tuning._adminTerminationPending = {
+          requestedAt: timestamp,
+          reason: String(reason || '').slice(0, 500)
+        };
+        reserved.push(clone(run));
+      }
+      return reserved;
+    });
+  }
+
+  async clearAdminTermination(runIds) {
+    return this.#mutate(() => {
+      const selected = new Set(runIds || []);
+      const cleared = [];
+      for (const run of this.runs.values()) {
+        if (run.status !== 'active' || !selected.has(run.runId)) continue;
+        if (run.tuning?._adminTerminationPending) {
+          delete run.tuning._adminTerminationPending;
+          cleared.push(clone(run));
+        }
+      }
+      return cleared;
+    });
+  }
+
+  async expireAdminTermination(runIds, timestamp) {
+    return this.#mutate(() => {
+      const selected = new Set(runIds || []);
+      const expired = [];
+      for (const run of this.runs.values()) {
+        if (run.status !== 'active' || !selected.has(run.runId)) continue;
+        assertAdminTerminationPending(run);
+        run.status = 'expired';
+        run.finishedAt = timestamp;
+        expired.push(clone(run));
+      }
+      return expired;
+    });
+  }
+
   async getEvents(runId) {
     await this.queue;
     return clone(this.events.get(runId) || []);
@@ -158,6 +205,7 @@ export class MemoryArenaStore {
       const run = this.runs.get(runId);
       assertApi(run, 404, 'arena_run_missing', 'The Daily Arena run was not found.');
       assertApi(run.status === 'active', 409, 'arena_run_not_active', 'The Daily Arena run is no longer active.');
+      assertNotAdminTerminating(run);
       assertApi(run.throughSeq === expectedThroughSeq, 409, 'arena_checkpoint_stale', 'The Daily Arena checkpoint is stale.');
       const transcript = this.events.get(runId) || [];
       transcript.push(...clone(events));
@@ -171,6 +219,7 @@ export class MemoryArenaStore {
     return this.#mutate(() => {
       const run = this.runs.get(runId);
       if (run?.status === 'active') {
+        assertNotAdminTerminating(run);
         run.status = 'expired';
         run.finishedAt = timestamp;
       }
@@ -184,6 +233,7 @@ export class MemoryArenaStore {
       assertApi(run, 404, 'arena_run_missing', 'The Daily Arena run was not found.');
       assertApi(run.address === address, 403, 'arena_run_owner_mismatch', 'This Daily Arena run belongs to another wallet.');
       assertApi(run.status === 'active', 409, 'arena_run_not_active', 'The Daily Arena run is no longer active.');
+      assertNotAdminTerminating(run);
       run.tuning ||= {};
       run.tuning._nftRun = clone(nftRun);
       return clone(run);
@@ -213,6 +263,7 @@ export class MemoryArenaStore {
       const run = this.runs.get(runId);
       assertApi(run, 404, 'arena_run_missing', 'The Daily Arena run was not found.');
       assertApi(run.status === 'active', 409, 'arena_run_not_active', 'The Daily Arena run is no longer active.');
+      assertNotAdminTerminating(run);
       assertResumableArenaFailure(error);
       run.result = replayRecoveryResult(error, timestamp);
       return { run: clone(run), resumable: true, attemptRestored: false, alreadyRecovered: false };
@@ -224,6 +275,7 @@ export class MemoryArenaStore {
       const expired = [];
       for (const run of this.runs.values()) {
         if (run.status !== 'active' || (address && run.address !== address)) continue;
+        if (run.tuning?._nftRun || run.tuning?._adminTerminationPending) continue;
         run.status = 'expired';
         run.finishedAt = timestamp;
         expired.push(clone(run));
@@ -238,6 +290,7 @@ export class MemoryArenaStore {
       assertApi(run, 404, 'arena_run_missing', 'The Daily Arena run was not found.');
       if (run.status === 'finished') return { run: clone(run), alreadyFinished: true };
       assertApi(run.status === 'active', 409, 'arena_run_not_active', 'The Daily Arena run is no longer active.');
+      assertNotAdminTerminating(run);
       run.status = 'finished';
       run.finishedAt = timestamp;
       run.result = clone(result);
@@ -596,6 +649,59 @@ export class PostgresArenaStore {
     return result.rows.map(formatRunRow);
   }
 
+  async reserveAdminTermination(runIds, timestamp, reason) {
+    await this.init();
+    const selected = [...new Set((runIds || []).map(String).filter(Boolean))];
+    if (!selected.length) return [];
+    const marker = JSON.stringify({
+      requestedAt: safeInteger(timestamp),
+      reason: String(reason || '').slice(0, 500)
+    });
+    const result = await this.pool.query(
+      `UPDATE matt_mine_arena.runs
+       SET tuning=jsonb_set(
+         COALESCE(tuning, '{}'::jsonb),
+         '{_adminTerminationPending}',
+         $2::jsonb,
+         true
+       )
+       WHERE run_id=ANY($1::text[]) AND status='active'
+       RETURNING *`,
+      [selected, marker]
+    );
+    return result.rows.map(formatRunRow);
+  }
+
+  async clearAdminTermination(runIds) {
+    await this.init();
+    const selected = [...new Set((runIds || []).map(String).filter(Boolean))];
+    if (!selected.length) return [];
+    const result = await this.pool.query(
+      `UPDATE matt_mine_arena.runs
+       SET tuning=COALESCE(tuning, '{}'::jsonb)-'_adminTerminationPending'
+       WHERE run_id=ANY($1::text[]) AND status='active'
+       RETURNING *`,
+      [selected]
+    );
+    return result.rows.map(formatRunRow);
+  }
+
+  async expireAdminTermination(runIds, timestamp) {
+    await this.init();
+    const selected = [...new Set((runIds || []).map(String).filter(Boolean))];
+    if (!selected.length) return [];
+    const result = await this.pool.query(
+      `UPDATE matt_mine_arena.runs
+       SET status='expired',finished_at_ms=$2,
+           tuning=COALESCE(tuning, '{}'::jsonb)-'_adminTerminationPending'
+       WHERE run_id=ANY($1::text[]) AND status='active'
+         AND tuning ? '_adminTerminationPending'
+       RETURNING *`,
+      [selected, timestamp]
+    );
+    return result.rows.map(formatRunRow);
+  }
+
   async getEvents(runId) {
     await this.init();
     const result = await this.pool.query(
@@ -617,6 +723,7 @@ export class PostgresArenaStore {
       assertApi(selected.rows[0], 404, 'arena_run_missing', 'The Daily Arena run was not found.');
       const run = formatRunRow(selected.rows[0]);
       assertApi(run.status === 'active', 409, 'arena_run_not_active', 'The Daily Arena run is no longer active.');
+      assertNotAdminTerminating(run);
       assertApi(run.throughSeq === expectedThroughSeq, 409, 'arena_checkpoint_stale', 'The Daily Arena checkpoint is stale.');
       const eventBatch = events.map((event) => ({
         seq: event.seq,
@@ -666,12 +773,32 @@ export class PostgresArenaStore {
 
   async expireRun(runId, timestamp) {
     await this.init();
-    await this.pool.query(
-      `UPDATE matt_mine_arena.runs SET status='expired',finished_at_ms=$2
-       WHERE run_id=$1 AND status='active'`,
-      [runId, timestamp]
-    );
-    return this.getRun(runId);
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const selected = await client.query(
+        'SELECT * FROM matt_mine_arena.runs WHERE run_id=$1 FOR UPDATE',
+        [runId]
+      );
+      const run = selected.rows[0] ? formatRunRow(selected.rows[0]) : null;
+      if (run?.status === 'active') {
+        assertNotAdminTerminating(run);
+        await client.query(
+          `UPDATE matt_mine_arena.runs SET status='expired',finished_at_ms=$2
+           WHERE run_id=$1`,
+          [runId, timestamp]
+        );
+        run.status = 'expired';
+        run.finishedAt = timestamp;
+      }
+      await client.query('COMMIT');
+      return run;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async attachNftRun(runId, address, nftRun) {
@@ -687,6 +814,7 @@ export class PostgresArenaStore {
       const run = formatRunRow(selected.rows[0]);
       assertApi(run.address === address, 403, 'arena_run_owner_mismatch', 'This Daily Arena run belongs to another wallet.');
       assertApi(run.status === 'active', 409, 'arena_run_not_active', 'The Daily Arena run is no longer active.');
+      assertNotAdminTerminating(run);
       run.tuning ||= {};
       run.tuning._nftRun = clone(nftRun);
       await client.query(
@@ -769,6 +897,7 @@ export class PostgresArenaStore {
       assertApi(selected.rows[0], 404, 'arena_run_missing', 'The Daily Arena run was not found.');
       const run = formatRunRow(selected.rows[0]);
       assertApi(run.status === 'active', 409, 'arena_run_not_active', 'The Daily Arena run is no longer active.');
+      assertNotAdminTerminating(run);
       assertResumableArenaFailure(error);
       const result = replayRecoveryResult(error, timestamp);
       await client.query(
@@ -799,6 +928,8 @@ export class PostgresArenaStore {
           `UPDATE matt_mine_arena.runs
            SET status='expired',finished_at_ms=$2
            WHERE address=$1 AND status='active'
+             AND NOT (tuning ? '_nftRun')
+             AND NOT (tuning ? '_adminTerminationPending')
            RETURNING *`,
           [address, timestamp]
         )
@@ -806,6 +937,8 @@ export class PostgresArenaStore {
           `UPDATE matt_mine_arena.runs
            SET status='expired',finished_at_ms=$1
            WHERE status='active'
+             AND NOT (tuning ? '_nftRun')
+             AND NOT (tuning ? '_adminTerminationPending')
            RETURNING *`,
           [timestamp]
         );
@@ -834,6 +967,7 @@ export class PostgresArenaStore {
         return { run, alreadyFinished: true };
       }
       assertApi(run.status === 'active', 409, 'arena_run_not_active', 'The Daily Arena run is no longer active.');
+      assertNotAdminTerminating(run);
       await client.query(
         `UPDATE matt_mine_arena.runs SET status='finished',finished_at_ms=$2,result=$3::jsonb
          WHERE run_id=$1`,
@@ -1318,6 +1452,24 @@ function normalizeRun(input) {
     tuning: input.tuning && typeof input.tuning === 'object' ? clone(input.tuning) : {},
     result: input.result ? clone(input.result) : null
   };
+}
+
+function assertNotAdminTerminating(run) {
+  assertApi(
+    !run?.tuning?._adminTerminationPending,
+    409,
+    'arena_admin_termination_pending',
+    'An administrator is ending this Arena run. Wait for that operation to finish before submitting or changing it.'
+  );
+}
+
+function assertAdminTerminationPending(run) {
+  assertApi(
+    run?.tuning?._adminTerminationPending,
+    409,
+    'arena_admin_termination_missing',
+    'This Arena run was not reserved for administrative termination.'
+  );
 }
 
 function scoreRecord(run) {

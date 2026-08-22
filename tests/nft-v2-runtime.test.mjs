@@ -166,7 +166,7 @@ test('V2 health pickups and completed phases restore the fixed Miner Heal trait'
 test('V2 carry and retention normalize from the selected Miner snapshot', () => {
   const context = { nftRun: v2Run(), tuning: { nftCrystalCarryLimit: 10 } };
   assert.deepEqual(nftGameplayTraits(context), { version: 2, ...TRAITS });
-  assert.equal(nftCarryCapacity(context), TRAITS.carryCapacity);
+  assert.equal(nftCarryCapacity(context), 10, 'the active map cap wins when lower than the Miner capacity');
 });
 
 test('V2 runs scale every in-run XP source once and never offer legacy Rock Armor', () => {

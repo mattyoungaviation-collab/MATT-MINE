@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { stat } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it } from 'node:test';
@@ -189,7 +190,17 @@ describe('NFT metadata service', function () {
       { trait_type: 'Rarity', value: 'Rare' },
       { display_type: 'number', trait_type: 'Definition', value: 1102 }
     ]);
-    assert.equal(service.minerContractMetadata().name, 'MATT Mine Miners');
+    const minerCollection = service.minerContractMetadata();
+    assert.equal(minerCollection.name, 'MATT Mine Miners');
+    assert.match(minerCollection.image, /rookie-miner-collection-960-v1\.png$/);
+    const collectionImagePath = resolve(ROOT, new URL(minerCollection.image).pathname.slice(1));
+    const [collectionFile, collectionImage] = await Promise.all([
+      stat(collectionImagePath),
+      sharp(collectionImagePath).metadata()
+    ]);
+    assert.ok(collectionFile.size < 1_000_000);
+    assert.equal(collectionImage.width, 960);
+    assert.equal(collectionImage.height, 960);
     assert.equal(service.equipmentContractMetadata().name, 'MATT Mine Equipment');
   });
 
@@ -208,6 +219,14 @@ describe('NFT metadata service', function () {
     assert.equal(metadataResponse.status, 200);
     assert.match(metadataResponse.headers.get('cache-control'), /max-age=30/);
     assert.equal((await metadataResponse.json()).name, 'MATT Mine Miner #1');
+
+    const collectionResponse = await fetch(`${origin}/api/nft/v2/contracts/miners.json`);
+    assert.equal(collectionResponse.status, 200);
+    const collection = await collectionResponse.json();
+    const collectionImageResponse = await fetch(`${origin}${new URL(collection.image).pathname}`);
+    assert.equal(collectionImageResponse.status, 200);
+    assert.equal(collectionImageResponse.headers.get('access-control-allow-origin'), '*');
+    assert.ok((await collectionImageResponse.arrayBuffer()).byteLength < 1_000_000);
 
     const imageResponse = await fetch(`${origin}/api/nft/miners/1/image.png`);
     assert.equal(imageResponse.status, 200);

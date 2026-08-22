@@ -188,6 +188,14 @@ const nftMetadataService = nftMetadataEnabled
       chainId: Number(process.env.MATT_MINE_NFT_CHAIN_ID || 2020),
       rpcUrl: nftRpcUrl,
       timeoutMs: Number(process.env.MATT_MINE_RPC_TIMEOUT_MS || 10_000),
+      minerDeploymentBlock: process.env.MATT_MINE_NFT_MINER_DEPLOYMENT_BLOCK || 59_628_599,
+      equipmentDeploymentBlock: process.env.MATT_MINE_NFT_EQUIPMENT_DEPLOYMENT_BLOCK || 59_628_601,
+      equipmentIndexChunkSize: Number(process.env.MATT_MINE_NFT_EQUIPMENT_INDEX_CHUNK_SIZE || 20_000),
+      equipmentIndexRefreshMs: Number(process.env.MATT_MINE_NFT_EQUIPMENT_INDEX_REFRESH_MS || 5_000),
+      equipmentIndexConfirmations: Number(process.env.MATT_MINE_NFT_EQUIPMENT_INDEX_CONFIRMATIONS || 12),
+      equipmentIndexMaxChunks: Number(process.env.MATT_MINE_NFT_EQUIPMENT_INDEX_MAX_CHUNKS || 25),
+      equipmentIndexStartupWaitMs: Number(process.env.MATT_MINE_NFT_EQUIPMENT_INDEX_STARTUP_WAIT_MS || 1_500),
+      equipmentSnapshotTtlMs: Number(process.env.MATT_MINE_NFT_EQUIPMENT_SNAPSHOT_TTL_MS || 120_000),
       addresses: {
         miner: process.env.MATT_MINE_NFT_MINER_ADDRESS,
         equipment: process.env.MATT_MINE_NFT_EQUIPMENT_ADDRESS,
@@ -234,6 +242,8 @@ const service = new CompleteProductionMattMineService(database, {
   nftMetadataService,
   nftGameplayService,
   nftV2AdminService,
+  operationsStage: process.env.MATT_MINE_OPERATIONS_STAGE || 'public',
+  operationsMonitorCacheMs: Number(process.env.MATT_MINE_OPERATIONS_CACHE_MS || 20_000),
   ...(revivePaymentVerifier && competitiveReplayValidator ? {
     revivePaymentVerifier,
     reviveEligibilityValidator: {

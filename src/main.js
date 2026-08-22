@@ -60,6 +60,7 @@ import {
   NFT_GARAGE_CHESTS,
   NFT_GARAGE_RARITIES,
   NFT_GARAGE_SLOTS,
+  crystalWithdrawalAvailability,
   formatTokenUnits as formatGarageTokenUnits,
   garageImageUrl,
   parseTokenUnits
@@ -118,10 +119,14 @@ let nftPracticeRecoveryBusy = false;
 let lockedMinerRecoveryBusy = false;
 let nftGarageBusy = false;
 let nftGarageSnapshot = null;
+let nftCrystalBankBusy = false;
+let nftWalletSnapshot = null;
+let nftCrystalTransactionHash = '';
+const SELECTED_MINER_STORAGE_KEY = 'matt-mine:selected-nft-miner';
+const PENDING_MINE_STORAGE_KEY = 'matt-mine:pending-mine-destination';
 let selectedNftMinerId = 0;
 let minerSelectionBusy = false;
-let pendingMineDestination = '';
-const SELECTED_MINER_STORAGE_KEY = 'matt-mine:selected-nft-miner';
+let pendingMineDestination = restoredPendingMineDestination();
 let paymentStatus = null;
 let publicPaymentStatus = null;
 let walletBusy = false;
@@ -155,14 +160,19 @@ const wallet = new RoninWalletAdapter({
     activeServerRun = null;
     activeArenaRun = null;
     activeArenaTranscript = null;
+    nftGarageSnapshot = null;
+    nftWalletSnapshot = null;
+    nftCrystalTransactionHash = '';
     arenaPlayer = normalizeArenaPlayer();
     profile = loadProfile();
     game?.setProfile(profile);
+    showCrystalTransaction('');
+    renderWalletCrystalBank();
     updateMenu();
     toast(reason);
   }
 });
-const nftGarage = new NftGarageClient({ wallet });
+const nftGarage = new NftGarageClient({ wallet, api: apiClient });
 
 const ui = {
   healthText: $('#health-text'),
@@ -239,6 +249,7 @@ async function refreshVisibleDashboard(screenId) {
     updateMenu();
     if (screenId === 'daily-arena') await refreshArena(true);
     if (screenId === 'leaderboards') await renderServerLeaderboard(activeBoard);
+    if (screenId === 'miner-select') await refreshWalletCrystalBank(true);
     const liveState = $('#profile-live-state');
     if (liveState) liveState.textContent = `LIVE · ${new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
   } finally {
@@ -453,9 +464,9 @@ function renderInterruptedNftPractice() {
   const interrupted = serverPlayer?.interruptedNftPractice;
   panel.hidden = !interrupted;
   if (!interrupted) return;
-  copy.textContent = `Miner #${interrupted.minerId} is locked to an interrupted Practice run. Resume safely from Phase 1.`;
+  copy.textContent = `Miner #${interrupted.minerId} is locked to a legacy run that cannot be resumed. Forfeiting applies the on-chain death rules, then starts public Practice.`;
   button.disabled = nftPracticeRecoveryBusy;
-  button.textContent = nftPracticeRecoveryBusy ? 'RESTORING MINERâ€¦' : 'RESUME MINER RUN';
+  button.textContent = nftPracticeRecoveryBusy ? 'FORFEITING OLD RUN…' : 'FORFEIT OLD RUN & START PRACTICE';
 }
 
 function renderMineBriefings({ connected, freeAccess, passActive, remainingPassDays, paidCredits, paidRunsToday, paidRunPrice }) {
@@ -691,7 +702,7 @@ function selectedOwnedMiner() {
 function openMineRoute(destination) {
   const selected = selectedOwnedMiner();
   if (selected && selected.gameplay?.runLocked !== true) {
-    pendingMineDestination = '';
+    rememberPendingMineDestination();
     if (destination === 'arena') {
       void openArena();
       return;
@@ -701,7 +712,7 @@ function openMineRoute(destination) {
       return;
     }
   }
-  pendingMineDestination = destination;
+  rememberPendingMineDestination(destination);
   void openMinerSelect();
 }
 
@@ -907,6 +918,34 @@ async function refreshPaymentStatus(silent = false) {
   }
 }
 
+function applyAcceptedNftSettlement(accepted = {}) {
+  const settlement = accepted.nftSettlement || null;
+  const miner = settlement?.profile;
+  if (serverPlayer && miner?.minerId) {
+    cacheOwnedMiner(miner);
+    serverPlayer.nftMiner = miner;
+  }
+  if (serverPlayer && accepted.nftCrystals) serverPlayer.nftCrystals = accepted.nftCrystals;
+  return settlement;
+}
+
+function nftSettlementMarkup(settlement) {
+  if (!settlement) return '';
+  const outcome = String(settlement.outcome || 'settled').replaceAll('_', ' ').toUpperCase();
+  const minerId = Number(settlement.minerId);
+  const crystalsBanked = Number(settlement.crystalsBanked);
+  const xpBanked = Number(settlement.xpBanked);
+  const miner = Number.isFinite(minerId) ? `MINER #${formatNumber(minerId)}` : 'MINER';
+  const rewardsKnown = settlement.crystalsBanked != null && settlement.xpBanked != null &&
+    Number.isFinite(crystalsBanked) && Number.isFinite(xpBanked);
+  const rewardCopy = rewardsKnown
+    ? `${formatNumber(crystalsBanked)} MATT CRYSTALS BANKED · +${formatNumber(xpBanked)} XP`
+    : settlement.alreadySettled === true
+      ? 'ON-CHAIN SETTLEMENT ALREADY CONFIRMED'
+      : 'ON-CHAIN SETTLEMENT CONFIRMED';
+  return `<small>${miner} · ${escapeHtml(outcome)} · ${rewardCopy}</small>`;
+}
+
 async function submitServerRun(serverRun, result) {
   if (runFinalizationBusy) return;
   runFinalizationBusy = true;
@@ -964,17 +1003,7 @@ async function submitServerRun(serverRun, result) {
         serverPlayer.scores[serverRun.mode] = playerScore;
       }
     }
-    if (accepted.nftSettlement) {
-      if (serverPlayer) serverPlayer.nftMiner = accepted.nftSettlement.profile;
-      if (serverPlayer && Array.isArray(serverPlayer.nftMiners)) {
-        serverPlayer.nftMiners = serverPlayer.nftMiners.map((miner) =>
-          miner.minerId === accepted.nftSettlement.profile?.minerId
-            ? accepted.nftSettlement.profile
-            : miner
-        );
-      }
-      if (serverPlayer && accepted.nftCrystals) serverPlayer.nftCrystals = accepted.nftCrystals;
-    }
+    const nftSettlement = applyAcceptedNftSettlement(accepted);
     if (paymentStatus && accepted.passProgress) paymentStatus.passProgress = accepted.passProgress;
     applyPassInventory(accepted.passInventory);
     const boardName = serverRun.mode === RUN_MODES.FREE
@@ -997,12 +1026,7 @@ async function submitServerRun(serverRun, result) {
       <span>Weekly ${boardName} score: ${formatNumber(leaderboard.playerScore)}${passXpCopy}${unlockedCopy}</span>
       <small>Entitlement, Pass status, one-time run token, telemetry limits, secured-loot rule, and duplicate submission checks passed.</small>
     `;
-    if (accepted.nftSettlement) {
-      const settlement = accepted.nftSettlement;
-      $('#economy-result').innerHTML += `
-        <small>NFT MINER #${settlement.minerId} · ${settlement.outcome.toUpperCase()} · ${formatNumber(settlement.crystalsBanked)} MATT CRYSTALS BANKED · +${settlement.xpBanked} XP</small>
-      `;
-    }
+    if (nftSettlement) $('#economy-result').innerHTML += nftSettlementMarkup(nftSettlement);
     if (serverRun.mode === RUN_MODES.PRACTICE) {
       activePracticeClaim = accepted.practiceClaim || null;
       renderPracticeClaimPanel(activePracticeClaim, result);
@@ -1088,6 +1112,7 @@ async function submitArenaRun(run) {
       paymentStatus.passProgress = accepted.passProgress;
     }
     applyPassInventory(accepted.passInventory);
+    const nftSettlement = applyAcceptedNftSettlement(accepted);
     const passXpCopy = accepted.passXpAwarded
       ? ` · +${accepted.passXpAwarded} Pass XP`
       : '';
@@ -1099,8 +1124,10 @@ async function submitArenaRun(run) {
       <span>Authoritative score: ${formatNumber(result.score || arenaPlayer.bestScore)}${passXpCopy}${unlockedCopy}</span>
       <small>The signed transcript was replayed against today's deterministic challenge. Browser-reported score totals were not trusted.</small>
     `;
+    if (nftSettlement) $('#economy-result').innerHTML += nftSettlementMarkup(nftSettlement);
     toast('MATT Arena score verified');
-    await refreshArena(true);
+    if (nftSettlement) await refreshServerPlayer();
+    else await refreshArena(true);
   } catch (error) {
     const retryable = isRetryableAppendError(error);
     if (retryable) {
@@ -1315,6 +1342,7 @@ async function declinePracticeRewards() {
 
 async function startRunMode(mode, options = {}) {
   const useServer =
+    options.restartInterruptedNftPractice === true ||
     (mode === RUN_MODES.PAID && serverConfig?.paidRunsEnabled === true) ||
     mode === RUN_MODES.BETA;
   activePracticeClaim = null;
@@ -1431,7 +1459,7 @@ async function openMinerSelect() {
   }
   const miners = ownedNftMiners();
   if (!miners.some((miner) => miner.minerId === selectedNftMinerId)) {
-    selectedNftMinerId = miners[0]?.minerId || 0;
+    rememberSelectedMiner(miners[0]?.minerId || 0);
   }
   renderMinerSelect();
   const storedMinerId = Number(sessionStorage.getItem(SELECTED_MINER_STORAGE_KEY) || 0);
@@ -1439,6 +1467,8 @@ async function openMinerSelect() {
     $('#miner-number-input').value = String(storedMinerId);
   }
   showScreen('miner-select');
+  renderWalletCrystalBank();
+  void refreshWalletCrystalBank();
 }
 
 function ownedNftMiners() {
@@ -1447,10 +1477,33 @@ function ownedNftMiners() {
 }
 
 function rememberSelectedMiner(minerId) {
-  selectedNftMinerId = minerId;
+  const normalizedMinerId = Number.isSafeInteger(Number(minerId)) && Number(minerId) > 0
+    ? Number(minerId)
+    : 0;
+  selectedNftMinerId = normalizedMinerId;
   try {
-    sessionStorage.setItem(SELECTED_MINER_STORAGE_KEY, String(minerId));
+    if (normalizedMinerId) sessionStorage.setItem(SELECTED_MINER_STORAGE_KEY, String(normalizedMinerId));
+    else sessionStorage.removeItem(SELECTED_MINER_STORAGE_KEY);
   } catch {}
+}
+
+function restoredPendingMineDestination() {
+  try {
+    const destination = sessionStorage.getItem(PENDING_MINE_STORAGE_KEY) || '';
+    return ['arena', 'pass-mine'].includes(destination) ? destination : '';
+  } catch {
+    return '';
+  }
+}
+
+function rememberPendingMineDestination(destination = '') {
+  const normalizedDestination = ['arena', 'pass-mine'].includes(destination) ? destination : '';
+  pendingMineDestination = normalizedDestination;
+  try {
+    if (normalizedDestination) sessionStorage.setItem(PENDING_MINE_STORAGE_KEY, normalizedDestination);
+    else sessionStorage.removeItem(PENDING_MINE_STORAGE_KEY);
+  } catch {}
+  return normalizedDestination;
 }
 
 function cacheOwnedMiner(miner) {
@@ -1555,6 +1608,9 @@ function renderMinerSelect() {
   image.hidden = !selected;
   empty.hidden = Boolean(selected);
   if (selected) image.src = minerImageUrl(selected);
+  else empty.textContent = serverPlayer
+    ? 'NO MINER NFT SELECTED\nCRYSTAL BANK AVAILABLE BELOW'
+    : 'CONNECT RONIN\nTO LOAD MINERS';
   $('#selected-miner-name').textContent = selected ? `MATT MINE MINER #${selected.minerId}` : 'NO MINER SELECTED';
   const stats = $('#selected-miner-stats');
   stats.replaceChildren();
@@ -1594,7 +1650,7 @@ function renderMinerSelect() {
   const minerLocked = selected?.gameplay?.runLocked === true;
   enter.disabled = !selected || lockedMinerRecoveryBusy;
   enter.textContent = minerLocked
-    ? lockedMinerRecoveryBusy ? 'UNLOCKING MINER...' : 'END LOCKED RUN'
+    ? lockedMinerRecoveryBusy ? 'FORFEITING LOCKED RUN...' : 'FORFEIT LOCKED RUN'
     : pendingMineDestination === 'arena'
       ? 'ENTER MATT ARENA'
       : pendingMineDestination === 'pass-mine'
@@ -1633,6 +1689,12 @@ function minerImageUrl(miner) {
 
 async function resumeInterruptedNftPractice() {
   if (nftPracticeRecoveryBusy || !serverPlayer?.interruptedNftPractice) return;
+  const minerId = Number(serverPlayer.interruptedNftPractice.minerId || 0);
+  const approved = window.confirm(
+    `Forfeit Miner #${minerId}'s legacy run and start public Practice?\n\n` +
+    'The old run cannot be resumed. It will be ended under the on-chain death rules: no XP or Crystals, the active Backpack burns, and equipped Armor is damaged.'
+  );
+  if (!approved) return;
   nftPracticeRecoveryBusy = true;
   updateMenu();
   try {
@@ -1646,7 +1708,7 @@ async function resumeInterruptedNftPractice() {
 async function recoverLockedMinerRun(minerId) {
   if (lockedMinerRecoveryBusy || !minerId) return;
   const approved = window.confirm(
-    `End Miner #${minerId}'s locked run? The contract will record this as a death with no XP or Crystals. Any active backpack will be burned and equipped armor will be damaged.`
+    `Forfeit Miner #${minerId}'s locked run? This does not resume the run. The contract will record a death with no XP or Crystals. Any active Backpack will be burned and equipped Armor will be damaged.`
   );
   if (!approved) return;
   lockedMinerRecoveryBusy = true;
@@ -1656,8 +1718,8 @@ async function recoverLockedMinerRun(minerId) {
     if (recovery.profile) cacheOwnedMiner(recovery.profile);
     else cacheOwnedMiner(await apiClient.ownedMiner(minerId));
     renderMinerSelect();
-    setMinerNumberStatus(`Miner #${minerId} is unlocked and ready.`, 'success');
-    toast(`Miner #${minerId} unlocked`);
+    setMinerNumberStatus(`Miner #${minerId}'s prior run was forfeited. The Miner is unlocked and ready.`, 'success');
+    toast(`Miner #${minerId} run forfeited and unlocked`);
   } catch (error) {
     toast(error?.message || `Miner #${minerId} could not be unlocked.`);
   } finally {
@@ -1681,6 +1743,108 @@ function closeMinerCommandCenter() {
   $('#selected-miner-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
+async function refreshWalletCrystalBank(silent = false) {
+  if (nftCrystalBankBusy || !serverPlayer) return null;
+  nftCrystalBankBusy = true;
+  if (!silent) setCrystalBankStatus('Reading your wallet-owned Crystal Bank and today\'s live withdrawal limits from Ronin...', 'busy');
+  renderWalletCrystalBank();
+  try {
+    nftWalletSnapshot = await nftGarage.walletSnapshot({ address: serverPlayer.address });
+    if (!silent) setCrystalBankStatus('Wallet Crystal Bank synchronized with Ronin Mainnet.');
+    return nftWalletSnapshot;
+  } catch (error) {
+    setCrystalBankStatus(error?.message || 'The Wallet Crystal Bank could not be loaded.', 'error');
+    return null;
+  } finally {
+    nftCrystalBankBusy = false;
+    renderWalletCrystalBank();
+  }
+}
+
+function renderWalletCrystalBank() {
+  const snapshot = nftWalletSnapshot ? crystalWithdrawalAvailability(nftWalletSnapshot) : null;
+  $('#garage-crystal-wallet-balance').textContent = snapshot
+    ? `${formatGarageTokenUnits(snapshot.walletCrystalBalanceRaw)} CRYSTALS`
+    : '--';
+  $('#garage-crystal-balance').textContent = snapshot
+    ? `${formatGarageTokenUnits(snapshot.crystalBalanceRaw)} CRYSTALS`
+    : '--';
+  $('#garage-crystal-withdrawable').textContent = snapshot
+    ? `${formatGarageTokenUnits(snapshot.withdrawableRaw)} CRYSTALS`
+    : '--';
+  $('#garage-crystal-wallet-remaining').textContent = snapshot
+    ? `${formatGarageTokenUnits(snapshot.walletRemainingRaw)} CRYSTALS`
+    : '--';
+  $('#garage-crystal-reset').textContent = snapshot ? formatCrystalReset(snapshot.nextUtcResetAt) : '--';
+
+  const state = $('#garage-crystal-state');
+  if (state) {
+    state.textContent = nftCrystalBankBusy
+      ? 'SYNCING'
+      : !snapshot
+        ? 'NOT LOADED'
+        : snapshot.crystalBankPaused
+          ? 'PAUSED'
+          : snapshot.withdrawalAvailable
+            ? 'READY'
+            : snapshot.crystalBalanceRaw < snapshot.minimumWithdrawalRaw
+              ? 'BELOW MINIMUM'
+              : 'DAILY LIMIT REACHED';
+  }
+
+  const copy = $('#garage-withdraw-copy');
+  if (copy) {
+    copy.textContent = !snapshot
+      ? 'Connect Ronin Wallet to load the live Crystal Bank balance and withdrawal limits.'
+      : snapshot.crystalBankPaused
+        ? 'Withdrawals are temporarily paused. Your banked MATT Crystals remain safe on-chain.'
+        : `Minimum ${formatGarageTokenUnits(snapshot.minimumWithdrawalRaw)}. ` +
+          `Your wallet has ${formatGarageTokenUnits(snapshot.walletRemainingRaw)} left today; ` +
+          `${formatGarageTokenUnits(snapshot.globalRemainingRaw)} remains in today\'s network-wide limit. ` +
+          `Limits reset at ${formatCrystalReset(snapshot.nextUtcResetAt)}.`;
+  }
+
+  const max = $('#garage-withdraw-all-button');
+  max.disabled = nftCrystalBankBusy || !snapshot?.withdrawalAvailable;
+  max.textContent = nftCrystalBankBusy ? 'READING LIMITS...' : 'USE MAX AVAILABLE';
+  syncCrystalWithdrawalButton();
+}
+
+function syncCrystalWithdrawalButton() {
+  const button = $('#garage-withdraw-button');
+  const snapshot = nftWalletSnapshot ? crystalWithdrawalAvailability(nftWalletSnapshot) : null;
+  let amount = 0n;
+  try {
+    amount = parseTokenUnits($('#garage-withdraw-input').value);
+  } catch {}
+  const valid = Boolean(
+    snapshot?.withdrawalAvailable &&
+    amount >= snapshot.minimumWithdrawalRaw &&
+    amount <= snapshot.withdrawableRaw
+  );
+  button.disabled = nftCrystalBankBusy || !valid;
+  button.textContent = nftCrystalBankBusy ? 'WAITING FOR RONIN...' : 'WITHDRAW CRYSTALS';
+  return valid;
+}
+
+function setCrystalBankStatus(message, state = '') {
+  const status = $('#garage-crystal-status');
+  if (!status) return;
+  status.textContent = message;
+  status.className = `garage-status${state ? ` ${state}` : ''}`;
+}
+
+function showCrystalTransaction(transactionHash) {
+  nftCrystalTransactionHash = transactionHash;
+  const link = $('#garage-crystal-receipt');
+  if (!link) return;
+  link.hidden = !transactionHash;
+  if (transactionHash) {
+    link.href = `https://explorer.roninchain.com/tx/${encodeURIComponent(transactionHash)}`;
+    link.textContent = `VIEW ${abbreviateHash(transactionHash)} ON RONIN`;
+  }
+}
+
 async function refreshNftGarage() {
   if (nftGarageBusy || !serverPlayer || !selectedNftMinerId || $('#miner-command-center').hidden) return;
   nftGarageBusy = true;
@@ -1693,9 +1857,36 @@ async function refreshNftGarage() {
       minerId: selectedNftMinerId,
       ownedMinerIds: serverPlayer.nftMinerIds || ownedNftMiners().map((miner) => miner.minerId)
     });
+    nftWalletSnapshot = crystalWithdrawalAvailability(nftGarageSnapshot);
     setGarageStatus(`Miner #${selectedNftMinerId} is synchronized with Ronin Mainnet.`);
   } catch (error) {
     setGarageStatus(error?.message || 'The Miner Command Center could not load.', 'error');
+  } finally {
+    nftGarageBusy = false;
+    renderMinerSelect();
+    renderNftGarage();
+    renderWalletCrystalBank();
+  }
+}
+
+async function loadMoreNftGarageEquipment() {
+  const snapshot = nftGarageSnapshot?.minerId === selectedNftMinerId ? nftGarageSnapshot : null;
+  if (nftGarageBusy || !snapshot?.equipmentNextCursor) return;
+  nftGarageBusy = true;
+  setGarageStatus(`Loading more Equipment NFTs for Miner #${snapshot.minerId}...`, 'busy');
+  renderMinerSelect();
+  renderNftGarage();
+  try {
+    const nextSnapshot = await nftGarage.loadMoreEquipment(snapshot);
+    if (selectedNftMinerId !== snapshot.minerId) return;
+    nftGarageSnapshot = nextSnapshot;
+    const loaded = nextSnapshot.equipment.length;
+    const total = Math.max(Number(nextSnapshot.equipmentTotal || 0), loaded);
+    setGarageStatus(nextSnapshot.equipmentInventoryReset
+      ? `Equipment ownership changed while loading. Inventory was safely refreshed from the first page (${loaded} of ${total}).`
+      : `Loaded ${loaded} of ${total} Equipment NFTs.`);
+  } catch (error) {
+    setGarageStatus(error?.message || 'More Equipment NFTs could not be loaded.', 'error');
   } finally {
     nftGarageBusy = false;
     renderMinerSelect();
@@ -1705,15 +1896,19 @@ async function refreshNftGarage() {
 
 function renderNftGarage() {
   const snapshot = nftGarageSnapshot?.minerId === selectedNftMinerId ? nftGarageSnapshot : null;
+  const loadedEquipment = snapshot?.equipment?.length || 0;
+  const totalEquipment = snapshot ? Math.max(Number(snapshot.equipmentTotal || 0), loadedEquipment) : 0;
   $('#garage-matt-balance').textContent = snapshot ? `${formatGarageTokenUnits(snapshot.mattBalanceRaw)} MATT` : '--';
-  $('#garage-crystal-balance').textContent = snapshot ? `${formatGarageTokenUnits(snapshot.crystalBalanceRaw)} CRYSTALS` : '--';
   $('#garage-miner-state').textContent = snapshot ? snapshot.runLocked ? 'LOCKED IN RUN' : 'READY' : '--';
-  $('#garage-equipment-count').textContent = snapshot ? `${snapshot.equipment.length} ITEMS` : '--';
-  $('#garage-inventory-state').textContent = nftGarageBusy ? 'SYNCING' : snapshot ? 'LIVE' : 'NOT LOADED';
+  $('#garage-equipment-count').textContent = snapshot
+    ? `${loadedEquipment}${totalEquipment > loadedEquipment ? ` / ${totalEquipment}` : ''} ITEMS`
+    : '--';
+  $('#garage-inventory-state').textContent = nftGarageBusy
+    ? 'SYNCING'
+    : snapshot?.equipmentNextCursor ? `${totalEquipment - loadedEquipment} MORE` : snapshot ? 'LIVE' : 'NOT LOADED';
   renderGarageLoadout(snapshot);
   renderGarageEquipment(snapshot);
   renderGarageArmor(snapshot);
-  renderGarageCrystalBank(snapshot);
   renderGarageChests(snapshot);
 }
 
@@ -1747,7 +1942,11 @@ function renderGarageLoadout(snapshot) {
 
 function renderGarageEquipment(snapshot) {
   const container = $('#garage-equipment-list');
+  const loadMore = $('#garage-equipment-load-more');
   container.replaceChildren();
+  loadMore.hidden = !snapshot?.equipmentNextCursor;
+  loadMore.disabled = nftGarageBusy || !snapshot?.equipmentNextCursor;
+  loadMore.textContent = nftGarageBusy && snapshot?.equipmentNextCursor ? 'LOADING EQUIPMENT...' : 'LOAD MORE EQUIPMENT';
   if (!snapshot?.equipment.length) {
     const empty = document.createElement('p');
     empty.className = 'garage-inventory-empty';
@@ -1807,16 +2006,6 @@ function renderGarageArmor(snapshot) {
         : armor.damaged
           ? `${armor.metadata?.name || `Armor #${armor.tokenId}`} is damaged and provides no shield.`
           : `${armor.metadata?.name || `Armor #${armor.tokenId}`} is healthy and provides +${armor.bonus} shield.`;
-}
-
-function renderGarageCrystalBank(snapshot) {
-  const button = $('#garage-withdraw-button');
-  const full = $('#garage-withdraw-all-button');
-  button.disabled = nftGarageBusy || !snapshot || snapshot.crystalBalanceRaw < snapshot.minimumWithdrawalRaw;
-  full.disabled = nftGarageBusy || !snapshot || snapshot.crystalBalanceRaw === 0n;
-  $('#garage-withdraw-copy').textContent = !snapshot
-    ? 'Load the live Crystal Bank balance first.'
-    : `Minimum withdrawal: ${formatGarageTokenUnits(snapshot.minimumWithdrawalRaw)} MATT Crystals. Withdrawing mints the token into this wallet.`;
 }
 
 function renderGarageChests(snapshot) {
@@ -1898,29 +2087,42 @@ async function repairGarageArmor() {
 }
 
 async function withdrawGarageCrystals() {
-  const snapshot = nftGarageSnapshot;
-  if (nftGarageBusy || !snapshot) return;
+  const snapshot = nftWalletSnapshot ? crystalWithdrawalAvailability(nftWalletSnapshot) : null;
+  if (nftCrystalBankBusy || !snapshot) return;
   let amountRaw;
   try {
     amountRaw = parseTokenUnits($('#garage-withdraw-input').value);
   } catch (error) {
-    setGarageStatus(error.message, 'error');
+    setCrystalBankStatus(error.message, 'error');
     return;
   }
-  nftGarageBusy = true;
-  renderNftGarage();
-  setGarageStatus(`Withdrawing ${formatGarageTokenUnits(amountRaw)} MATT Crystals to the connected wallet...`, 'busy');
+  if (amountRaw < snapshot.minimumWithdrawalRaw || amountRaw > snapshot.withdrawableRaw) {
+    setCrystalBankStatus(
+      `Enter an amount from ${formatGarageTokenUnits(snapshot.minimumWithdrawalRaw)} to ${formatGarageTokenUnits(snapshot.withdrawableRaw)} MATT Crystals.`,
+      'error'
+    );
+    syncCrystalWithdrawalButton();
+    return;
+  }
+  nftCrystalBankBusy = true;
+  renderWalletCrystalBank();
+  setCrystalBankStatus(`Withdrawing ${formatGarageTokenUnits(amountRaw)} MATT Crystals to the connected wallet...`, 'busy');
   try {
-    await nftGarage.withdrawCrystals(snapshot, amountRaw);
+    await nftGarage.withdrawCrystals(snapshot, amountRaw, {
+      onBroadcast(transactionHash) {
+        showCrystalTransaction(transactionHash);
+        setCrystalBankStatus(`Withdrawal ${abbreviateHash(transactionHash)} was submitted. Waiting for Ronin confirmation...`, 'busy');
+      }
+    });
     $('#garage-withdraw-input').value = '';
-    nftGarageBusy = false;
-    await refreshNftGarage();
-    setGarageStatus('MATT Crystals were minted into the connected wallet.');
+    nftCrystalBankBusy = false;
+    await refreshWalletCrystalBank(true);
+    setCrystalBankStatus('MATT Crystals were withdrawn from the bank and minted into the connected wallet.');
   } catch (error) {
-    setGarageStatus(error?.message || 'Crystal withdrawal failed.', 'error');
+    setCrystalBankStatus(error?.message || 'Crystal withdrawal failed.', 'error');
   } finally {
-    nftGarageBusy = false;
-    renderNftGarage();
+    nftCrystalBankBusy = false;
+    renderWalletCrystalBank();
   }
 }
 
@@ -2153,7 +2355,7 @@ const game = new MattMineGame(canvas, profile, {
     $('#menu-button').hidden = false;
     const mode = result.mode || RUN_MODES.PRACTICE;
     resultScreenMode = mode;
-    $('#menu-button').textContent = mode === RUN_MODES.PRACTICE ? 'BACK TO BASE' : 'BACK TO MINER';
+    $('#menu-button').textContent = mode === RUN_MODES.PRACTICE ? 'BACK TO BASE' : 'MINER & CRYSTAL BANK';
     const serverRun = activeServerRun && activeServerRun.mode === mode ? activeServerRun : null;
     const arenaRun = activeArenaRun && mode === 'arena' ? activeArenaRun : null;
     const recorded = serverRun || arenaRun
@@ -2173,7 +2375,7 @@ const game = new MattMineGame(canvas, profile, {
     $('#run-mode-result').dataset.mode = mode;
     $('#run-cosmetic-result').innerHTML = renderRunCosmeticResult();
     $('#end-stats').innerHTML = `
-      <div><span>Banked</span><strong>${formatNumber(result.banked)}</strong></div>
+      <div><span>Banked Score</span><strong>${formatNumber(result.banked)}</strong></div>
       <div><span>${result.extracted ? 'Run Score' : 'Lost Loot'}</span><strong>${formatNumber(result.extracted ? result.projected : result.lost)}</strong></div>
       <div><span>Depth</span><strong>${result.depth}</strong></div>
       <div><span>Enemies</span><strong>${result.kills}</strong></div>
@@ -2359,12 +2561,12 @@ mobileWalletConnectCancel.addEventListener('click', () => {
 
 $('#home-button').addEventListener('click', () => openLaunch(true));
 $('#miner-select-home').addEventListener('click', () => {
-  pendingMineDestination = '';
+  rememberPendingMineDestination();
   openMines();
 });
 $('#mines-how-to-button').addEventListener('click', () => showScreen('how-to-play'));
 $('#mines-miner-button').addEventListener('click', () => {
-  pendingMineDestination = '';
+  rememberPendingMineDestination();
   void openMinerSelect();
 });
 $('#miner-number-form').addEventListener('submit', (event) => {
@@ -2380,7 +2582,7 @@ $('#enter-mines-button').addEventListener('click', () => {
   }
   rememberSelectedMiner(selectedNftMinerId);
   const destination = pendingMineDestination;
-  pendingMineDestination = '';
+  rememberPendingMineDestination();
   if (destination === 'arena') {
     void openArena();
     return;
@@ -2393,12 +2595,17 @@ $('#enter-mines-button').addEventListener('click', () => {
 });
 $('#select-loadout-button').addEventListener('click', () => void openMinerCommandCenter());
 $('#garage-refresh-button').addEventListener('click', () => void refreshNftGarage());
+$('#garage-equipment-load-more').addEventListener('click', () => void loadMoreNftGarageEquipment());
+$('#garage-crystal-refresh-button').addEventListener('click', () => void refreshWalletCrystalBank());
 $('#garage-close-button').addEventListener('click', closeMinerCommandCenter);
 $('#garage-repair-button').addEventListener('click', () => void repairGarageArmor());
 $('#garage-withdraw-button').addEventListener('click', () => void withdrawGarageCrystals());
+$('#garage-withdraw-input').addEventListener('input', syncCrystalWithdrawalButton);
 $('#garage-withdraw-all-button').addEventListener('click', () => {
-  if (!nftGarageSnapshot) return;
-  $('#garage-withdraw-input').value = formatGarageTokenUnits(nftGarageSnapshot.crystalBalanceRaw, 18, 18);
+  if (!nftWalletSnapshot) return;
+  const availability = crystalWithdrawalAvailability(nftWalletSnapshot);
+  $('#garage-withdraw-input').value = formatGarageTokenUnits(availability.withdrawableRaw, 18, 18);
+  syncCrystalWithdrawalButton();
 });
 $('#practice-run-button').addEventListener('click', () => void startRunMode(RUN_MODES.PRACTICE));
 $('#resume-nft-practice-button').addEventListener('click', () => void resumeInterruptedNftPractice());
@@ -2512,6 +2719,10 @@ $('#shake-toggle-button').addEventListener('click', () => {
   toast(gameplayPreferences.screenShake ? 'Screen shake on' : 'Screen shake off');
 });
 $('#profile-button').addEventListener('click', () => openMinerProfile(false));
+$('#crystal-bank-button').addEventListener('click', async () => {
+  await openMinerSelect();
+  requestAnimationFrame(() => $('#wallet-crystal-bank')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+});
 $('#profile-back-button').addEventListener('click', () => { showScreen('menu'); updateMenu(); });
 $('#profile-manage-loadout-button').addEventListener('click', () => void openCosmetics());
 $('#profile-loadout-button').addEventListener('click', () => void openCosmetics());
@@ -4087,6 +4298,17 @@ function formatTime(seconds) {
   return `${minutes}:${String(remaining).padStart(2, '0')}`;
 }
 
+function formatCrystalReset(timestamp) {
+  const value = Number(timestamp);
+  if (!Number.isFinite(value) || value <= 0) return '00:00 UTC';
+  const date = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'UTC',
+    month: 'short',
+    day: 'numeric'
+  }).format(new Date(value)).toUpperCase();
+  return `${date} · 00:00 UTC`;
+}
+
 function trimNumber(value) {
   return Number(value).toLocaleString('en-US', { maximumFractionDigits: 2 });
 }
@@ -4186,6 +4408,12 @@ window.addEventListener('mattmine:slot-enter', (event) => {
   if (mode) void startRunMode(mode);
 });
 
+window.addEventListener('beforeunload', (event) => {
+  if (!activeServerRun && !activeArenaRun) return;
+  event.preventDefault();
+  event.returnValue = '';
+});
+
 async function bootstrapServer() {
   try {
     serverConfig = await apiClient.config();
@@ -4226,6 +4454,7 @@ async function bootstrapServer() {
     await openMinerSelect();
     toast(`Miner #${selectedNftMinerId} loadout confirmed · Ronin Mainnet restored`);
   }
+  else if (serverPlayer && pendingMineDestination) await openMinerSelect();
   await startCompetitionStudioTest();
 }
 

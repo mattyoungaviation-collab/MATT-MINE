@@ -7,6 +7,9 @@
     "coordinateOrigin": "top-left"
   },
   "publicBaseUrl": "/assets/nft",
+  "collectionImages": {
+    "miners": "renders/rookie-miner-collection-960-v1.png"
+  },
   "renderOrder": [
     "backpack",
     "baseEvolutionOrArmor",

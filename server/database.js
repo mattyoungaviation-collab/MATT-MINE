@@ -15,12 +15,14 @@ import {
 
 const { Pool } = pg;
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const NFT_LIFECYCLE_LOCK_KEYS = Object.freeze([0x4d415454, 0x4d494e45]);
 
 export class MemoryDatabase {
   constructor(initialState = defaultServerState()) {
     this.kind = 'memory';
     this.state = normalizeServerState(initialState);
     this.queue = Promise.resolve();
+    this.nftLifecycleGate = new AsyncReadWriteGate();
   }
 
   async init() {
@@ -53,6 +55,14 @@ export class MemoryDatabase {
   }
 
   async persist() {}
+
+  async withNftLifecycleStart(operation) {
+    return this.nftLifecycleGate.withShared(operation);
+  }
+
+  async withNftLifecycleMutation(operation) {
+    return this.nftLifecycleGate.withExclusive(operation);
+  }
 
   async healthCheck() {
     return { ok: true, kind: this.kind };
@@ -112,7 +122,7 @@ export class PostgresDatabase {
       throw new TypeError('A PostgreSQL connection string is required.');
     }
     this.kind = 'postgresql';
-    this.pool = options.pool || new Pool({
+    const poolOptions = {
       connectionString,
       max: positiveInteger(options.maxConnections, 10),
       idleTimeoutMillis: positiveInteger(options.idleTimeoutMillis, 30_000),
@@ -120,8 +130,21 @@ export class PostgresDatabase {
       keepAlive: true,
       keepAliveInitialDelayMillis: positiveInteger(options.keepAliveInitialDelayMillis, 10_000),
       ...(options.ssl ? { ssl: { rejectUnauthorized: options.rejectUnauthorized === true } } : {})
-    });
+    };
+    this.pool = options.pool || new Pool(poolOptions);
     this.ownsPool = !options.pool;
+    // Advisory locks are session-scoped. Holding one on the normal request
+    // pool while the protected operation performs its own reads/transactions
+    // can exhaust a small pool and deadlock every NFT start. Production gets a
+    // dedicated one-connection lock pool; injected test pools may provide one
+    // explicitly and otherwise use the process-local gate below.
+    this.nftLifecycleLockPool = options.nftLifecycleLockPool || (
+      this.ownsPool
+        ? new Pool({ ...poolOptions, max: 1, application_name: 'matt-mine-nft-lifecycle-lock' })
+        : null
+    );
+    this.ownsNftLifecycleLockPool = this.ownsPool && !options.nftLifecycleLockPool;
+    this.nftLifecycleGate = new AsyncReadWriteGate();
     this.normalizedMigrationsEnabled = options.normalizedMigrationsEnabled ?? this.ownsPool;
     this.now = options.now || Date.now;
     this.initialized = false;
@@ -140,6 +163,9 @@ export class PostgresDatabase {
           );
         };
     this.poolGuard = guardPostgresPool(this.pool, { onError: reportPoolError });
+    this.nftLifecycleLockPoolGuard = this.ownsNftLifecycleLockPool
+      ? guardPostgresPool(this.nftLifecycleLockPool, { onError: reportPoolError })
+      : null;
   }
 
   async init() {
@@ -290,6 +316,66 @@ export class PostgresDatabase {
     });
   }
 
+  async withNftLifecycleStart(operation) {
+    return this.#withNftLifecycleLock('shared', operation);
+  }
+
+  async withNftLifecycleMutation(operation) {
+    return this.#withNftLifecycleLock('exclusive', operation);
+  }
+
+  async #withNftLifecycleLock(mode, operation) {
+    await this.init();
+    if (!this.nftLifecycleLockPool) {
+      return mode === 'shared'
+        ? this.nftLifecycleGate.withShared(operation)
+        : this.nftLifecycleGate.withExclusive(operation);
+    }
+
+    // A single process never needs more than one dedicated advisory-lock
+    // connection. Cross-instance shared/exclusive behavior is still enforced
+    // by PostgreSQL, while the request pool remains completely available to
+    // the protected operation.
+    return this.nftLifecycleGate.withExclusive(async () => {
+      const client = await this.nftLifecycleLockPool.connect();
+      let locked = false;
+      let releaseError = null;
+      const shared = mode === 'shared';
+      try {
+        try {
+          await client.query(
+            `SELECT pg_advisory_lock${shared ? '_shared' : ''}($1,$2)`,
+            NFT_LIFECYCLE_LOCK_KEYS
+          );
+        } catch (error) {
+          releaseError = error;
+          throw error;
+        }
+        locked = true;
+        return await operation();
+      } finally {
+        try {
+          if (locked) {
+            try {
+              await client.query(
+                `SELECT pg_advisory_unlock${shared ? '_shared' : ''}($1,$2)`,
+                NFT_LIFECYCLE_LOCK_KEYS
+              );
+            } catch (error) {
+              releaseError = error;
+              throw error;
+            }
+          }
+        } finally {
+          // A failed unlock leaves a session-scoped lock in an unknown state.
+          // Passing the error makes node-postgres destroy that connection
+          // instead of returning a poisoned session to the dedicated pool.
+          client.release(releaseError || undefined);
+        }
+      }
+    });
+  }
+
   async transact(mutator) {
     await this.init();
     const client = await this.pool.connect();
@@ -344,7 +430,9 @@ export class PostgresDatabase {
   }
 
   async close() {
+    if (this.ownsNftLifecycleLockPool) await this.nftLifecycleLockPool.end();
     if (this.ownsPool) await this.pool.end();
+    this.nftLifecycleLockPoolGuard?.close();
     this.poolGuard.close();
   }
 
@@ -1021,6 +1109,60 @@ function formatLeaderboard({
     totalScore: totalScore === null ? null : safeIntegerValue(totalScore),
     runCount: runCount === null ? null : safeIntegerValue(runCount)
   };
+}
+
+class AsyncReadWriteGate {
+  constructor() {
+    this.activeReaders = 0;
+    this.activeWriter = false;
+    this.waiting = [];
+  }
+
+  async withShared(operation) {
+    await this.#acquire('shared');
+    try {
+      return await operation();
+    } finally {
+      this.activeReaders -= 1;
+      this.#drain();
+    }
+  }
+
+  async withExclusive(operation) {
+    await this.#acquire('exclusive');
+    try {
+      return await operation();
+    } finally {
+      this.activeWriter = false;
+      this.#drain();
+    }
+  }
+
+  #acquire(mode) {
+    if (
+      this.waiting.length === 0 &&
+      !this.activeWriter &&
+      (mode === 'shared' || this.activeReaders === 0)
+    ) {
+      if (mode === 'shared') this.activeReaders += 1;
+      else this.activeWriter = true;
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => this.waiting.push({ mode, resolve }));
+  }
+
+  #drain() {
+    if (this.activeWriter || this.activeReaders > 0 || this.waiting.length === 0) return;
+    if (this.waiting[0].mode === 'exclusive') {
+      this.activeWriter = true;
+      this.waiting.shift().resolve();
+      return;
+    }
+    while (this.waiting[0]?.mode === 'shared') {
+      this.activeReaders += 1;
+      this.waiting.shift().resolve();
+    }
+  }
 }
 
 function suspendedAddresses(state) {

@@ -58,6 +58,10 @@ const STATIC_CONTROLS = Object.freeze([
   entry('arena', 'arena:settlement', 'MATT Arena settlement', 'Prepare the full-pool settlement Safe file for verified winners.', 'MATT Arena'),
   entry('arena', 'arena:cancellation', 'MATT Arena cancellation', 'Prepare an atomic cancellation and player refund Safe file.', 'MATT Arena'),
   entry('arena', 'arena:emergency', 'MATT Arena emergency controls', 'Prepare entry and settlement pause calldata.', 'MATT Arena'),
+  entry('nft-v2', 'nft-v2:economy', 'NFT V2 economy controls', 'Set repair, withdrawal, and chest prices within the protocol safety limits.', 'NFT V2 Protocol'),
+  entry('nft-v2', 'nft-v2:maps', 'NFT V2 map approval', 'Approve and route a Studio-published Arena or Pass Mine version with its onchain economy.', 'NFT V2 Protocol'),
+  entry('nft-v2', 'nft-v2:phase-xp', 'NFT V2 phase XP', 'Configure the five phase XP awards for the active Arena or Pass Mine map.', 'NFT V2 Protocol'),
+  entry('nft-v2', 'nft-v2:routes', 'NFT V2 active map economics', 'Inspect each active map version, content hash, crystal cap, conversion rate, payout cap, and force-abandon delay.', 'NFT V2 Protocol'),
   entry('contracts', 'contracts:transactions', 'Onchain transaction builder', 'Prepare reviewed Ronin contract calldata and Safe JSON.', 'Chain'),
   entry('audit', 'audit:trail', 'Audit trail', 'Search every server-authoritative admin action and reason.', 'Audit')
 ]);

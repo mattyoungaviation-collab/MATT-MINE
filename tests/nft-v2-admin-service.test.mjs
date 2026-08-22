@@ -4,7 +4,8 @@ import { createHash } from 'node:crypto';
 import { privateKeyToAccount } from 'viem/accounts';
 import {
   createNftV2AdminServiceFromEnvironment,
-  NftV2AdminService
+  NftV2AdminService,
+  validateWithdrawalConfiguration
 } from '../server/nft-v2-admin-service.js';
 
 const KEY = `0x${createHash('sha256').update('matt-mine-v2-config-operator').digest('hex')}`;
@@ -47,10 +48,20 @@ function serviceHarness() {
       if (functionName === 'paused') return true;
       if (functionName === 'repairPrice') return 500_000n * 10n ** 18n;
       if (functionName === 'minimumWithdrawal') return 1n * 10n ** 18n;
-      if (functionName === 'walletDailyLimit') return 3_000_000n * 10n ** 18n;
-      if (functionName === 'globalDailyLimit') return 10_000_000n * 10n ** 18n;
+      if (functionName === 'walletDailyLimit') return 300_000n * 10n ** 18n;
+      if (functionName === 'globalDailyLimit') return 1_000_000n * 10n ** 18n;
       if (functionName === 'chestPrice') return BigInt(Number(args[0]) + 1) * 10n ** 18n;
       if (functionName === 'phaseXpForMap') return [10n, 15n, 20n, 25n, 30n];
+      if (functionName === 'mapVersions') return [
+        `0x${'01'.repeat(32)}`,
+        `0x${'02'.repeat(32)}`,
+        10n ** 18n,
+        500n * 10n ** 18n,
+        2_500,
+        7_200,
+        true,
+        false
+      ];
       throw new Error(`Unexpected read ${functionName}`);
     },
     async waitForTransactionReceipt() { return { status: 'success' }; }
@@ -86,6 +97,9 @@ test('NFT V2 Admin reads every live contract value and verifies CONFIG_ROLE', as
   assert.equal(snapshot.withdrawal.minimumRaw, (1n * 10n ** 18n).toString());
   assert.deepEqual(snapshot.paused, { loadout: true, bank: true, chest: true, settlement: true });
   assert.deepEqual(snapshot.activeMapVersions, { arena: `0x${'aa'.repeat(32)}`, paid: `0x${'bb'.repeat(32)}` });
+  assert.equal(snapshot.activeMaps.arena.versionId, `0x${'aa'.repeat(32)}`);
+  assert.equal(snapshot.activeMaps.arena.mineableCrystalUnits, 2_500);
+  assert.equal(snapshot.activeMaps.paid.maximumPayoutRaw, (500n * 10n ** 18n).toString());
   assert.deepEqual(snapshot.phaseXp.arena, [10, 15, 20, 25, 30]);
   assert.equal(snapshot.phaseXpConfigurable, true);
 });
@@ -138,4 +152,45 @@ test('NFT V2 Admin rejects values above immutable map and withdrawal ceilings be
     withdrawal: { minimumRaw: '1', walletDailyRaw: (1_000_001n * 10n ** 18n).toString(), globalDailyRaw: (1_000_001n * 10n ** 18n).toString() }
   }), { code: 'nft_withdrawal_limits_invalid' });
   assert.equal(writes.length, 0);
+});
+
+test('NFT V2 Admin skips economy values that already match Ronin', async () => {
+  const { service, writes } = serviceHarness();
+  await assert.rejects(() => service.setEconomy({
+    repairPriceRaw: (500_000n * 10n ** 18n).toString(),
+    withdrawal: {
+      minimumRaw: (1n * 10n ** 18n).toString(),
+      walletDailyRaw: (300_000n * 10n ** 18n).toString(),
+      globalDailyRaw: (1_000_000n * 10n ** 18n).toString()
+    },
+    chestPrices: {
+      armor: (1n * 10n ** 18n).toString(),
+      backpack: (6n * 10n ** 18n).toString()
+    }
+  }), { code: 'nft_economy_patch_empty' });
+  assert.equal(writes.length, 0);
+});
+
+test('NFT V2 withdrawal limits preserve the minimum, wallet, and global relationship', () => {
+  const unit = 10n ** 18n;
+  assert.deepEqual(validateWithdrawalConfiguration({
+    minimumRaw: unit.toString(),
+    walletDailyRaw: (2n * unit).toString(),
+    globalDailyRaw: (3n * unit).toString()
+  }), { minimum: unit, wallet: 2n * unit, global: 3n * unit });
+  assert.throws(() => validateWithdrawalConfiguration({
+    minimumRaw: (2n * unit).toString(),
+    walletDailyRaw: unit.toString(),
+    globalDailyRaw: (3n * unit).toString()
+  }), { code: 'nft_withdrawal_limits_invalid' });
+  assert.throws(() => validateWithdrawalConfiguration({
+    minimumRaw: unit.toString(),
+    walletDailyRaw: (4n * unit).toString(),
+    globalDailyRaw: (3n * unit).toString()
+  }), { code: 'nft_withdrawal_limits_invalid' });
+  assert.throws(() => validateWithdrawalConfiguration({
+    minimumRaw: (unit - 1n).toString(),
+    walletDailyRaw: unit.toString(),
+    globalDailyRaw: unit.toString()
+  }), { code: 'nft_withdrawal_limits_invalid' });
 });

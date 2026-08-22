@@ -950,6 +950,92 @@ button.danger {
   text-transform: uppercase;
 }
 
+.operations-health {
+  margin-top: 18px;
+  border-color: var(--line-bright);
+}
+
+.operations-health[data-status="healthy"] {
+  border-color: #38554b;
+}
+
+.operations-health[data-status="degraded"] {
+  border-color: #72552f;
+}
+
+.operations-health[data-status="critical"] {
+  border-color: #75383b;
+}
+
+.operations-health-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.operations-health-heading h2,
+.operations-health-heading p {
+  margin-bottom: 6px;
+}
+
+.operations-health-counts {
+  flex: 0 0 auto;
+  padding: 8px 11px;
+  border: 1px solid var(--line-bright);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.operations-health[data-status="healthy"] .operations-health-counts {
+  color: var(--green);
+}
+
+.operations-health[data-status="degraded"] .operations-health-counts {
+  color: var(--orange);
+}
+
+.operations-health[data-status="critical"] .operations-health-counts {
+  color: var(--red);
+}
+
+.operations-health-alerts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.operations-health-alert {
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--orange);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+
+.operations-health-alert[data-severity="critical"] {
+  border-left-color: var(--red);
+}
+
+.operations-health-alert > span {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--muted);
+  font-size: 0.62rem;
+  font-weight: 850;
+  letter-spacing: 0.07em;
+}
+
+.operations-health-alert p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
 .readiness-monitor strong {
   display: block;
   max-width: calc(100% - 18px);
@@ -1158,6 +1244,73 @@ button.danger {
 
 .save-bar button {
   min-width: 180px;
+}
+
+.validation-message {
+  min-height: 1.35em;
+  margin: 12px 0 0;
+  color: var(--green);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.validation-message.error {
+  color: var(--red);
+}
+
+.current-config {
+  display: grid;
+  gap: 7px;
+  padding: 13px;
+  border: 1px solid #28634f;
+  border-radius: 11px;
+  background: #122c24;
+}
+
+.current-config.warning {
+  border-color: #745324;
+  background: #332718;
+}
+
+.current-config > strong,
+.protocol-route-heading {
+  color: var(--gold);
+  letter-spacing: 0.02em;
+}
+
+.current-config small {
+  margin-top: 3px;
+}
+
+#nft-v2-map-routes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.protocol-route {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface-soft);
+}
+
+.protocol-route-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 3px;
+}
+
+.protocol-route .kv span:last-child,
+.current-config .kv span:last-child {
+  overflow-wrap: anywhere;
+  text-align: right;
 }
 
 .table-wrap {
