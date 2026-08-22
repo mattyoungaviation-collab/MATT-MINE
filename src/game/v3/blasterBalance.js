@@ -1,5 +1,6 @@
 import { CONFIG } from '../config.js';
 import { clamp } from '../utils.js';
+import { nftMinerActionDuration } from './nftMinerAnimation.js';
 
 export const blasterBalanceMethods = {
   fireBlaster() {
@@ -15,7 +16,7 @@ export const blasterBalanceMethods = {
 
     const cooldownMultiplier = tuning.blasterCooldownMultiplier ?? .48;
     this.player.attackTimer = Math.max(.08, this.player.attackCooldown * cooldownMultiplier);
-    this.player.swingTimer = Math.max(this.player.swingTimer, .14);
+    this.player.swingTimer = Math.max(this.player.swingTimer, nftMinerActionDuration('blaster'));
     this.player.blasterEnergy -= energyCost;
 
     // Raw engine tests and unsnapshotted legacy runs retain the former two-beam
