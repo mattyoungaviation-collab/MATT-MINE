@@ -35,7 +35,7 @@ This checklist deliberately separates schema change, application cutover and fin
 
 - [ ] Reconciliation has no paid-not-credited, credited-not-finalized, duplicate or unknown-COMMIT records.
 - [ ] Arena entry conservation and revive resume reports clean.
-- [ ] Browser/server replay, map/depth, permanent-upgrade and Pass 2x parity sampled.
+- [ ] Browser/server replay, map/depth, NFT-trait, and Pass XP parity sampled.
 - [ ] Alerts and on-call coverage active.
 - [ ] If failed: apply lossless legacy-read rollback, preserve normalized history, reconcile chain payments.
 

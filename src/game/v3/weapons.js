@@ -287,13 +287,13 @@ export const weaponsMethods = {
       targetId: ore.id
     });
     this.gainXp(ore.xp);
-    const drops = Math.max(1, Math.ceil(ore.nuggets / (ore.kind === 'cache' ? 9 : 6)));
-    const baseDropValue = Math.floor(ore.nuggets / drops);
-    const remainder = ore.nuggets % drops;
+    const drops = Math.max(1, Math.ceil(ore.scoreValue / (ore.kind === 'cache' ? 9 : 6)));
+    const baseDropValue = Math.floor(ore.scoreValue / drops);
+    const remainder = ore.scoreValue % drops;
     for (let index = 0; index < drops; index += 1) {
       this.pickups.push({
         id: this.entityId++,
-        type: ore.kind === 'crystal' && index === 0 ? 'crystal' : 'nugget',
+        type: ore.kind === 'crystal' && index === 0 ? 'crystal' : 'score',
         x: ore.x + randomRange(-18, 18),
         y: ore.y + randomRange(-18, 18),
         radius: ore.kind === 'crystal' && index === 0 ? 11 : ore.kind === 'cache' ? 9 : 7,

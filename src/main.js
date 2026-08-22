@@ -1,6 +1,5 @@
 import { MattMineGame } from './game/GameV4.js';
 import { apiClient } from './game/apiClient.js';
-import { META_UPGRADES, metaUpgradeCost } from './game/config.js';
 import { prepareProfileImage } from './game/profileImage.js';
 import { KEYBIND_ACTIONS, defaultKeybindings, normalizeKeybindings } from './game/keybindings.js';
 import { CONTROLLER_ACTIONS, defaultControllerProfile, normalizeControllerProfile } from './game/expansionConfig.js';
@@ -32,7 +31,6 @@ import {
 import { formatNumber } from './game/utils.js';
 import { nftGameplayTraits } from './game/nftTraits.js';
 import {
-  PASS_CHEST_BONUS_NUGGETS,
   PASS_CHEST_ID,
   PASS_COSMETICS,
   PASS_REWARD_LEVELS,
@@ -200,7 +198,6 @@ function showScreen(id = null) {
       (action === 'how-to-play' && id === 'how-to-play') ||
       (action === 'leaderboards' && id === 'leaderboards') ||
       (action === 'pass' && (id === 'mine-pass' || id === 'pass-mine' || id === 'pass-cosmetics')) ||
-      (action === 'store' && id === 'nugget-shop') ||
       (action === 'account' && (id === 'miner-profile' || id === 'miner-select'));
     button.classList.toggle('active', active);
   }
@@ -384,10 +381,6 @@ function updateMenu() {
                   : 'Buy a run credit'
       }
     : runAccess(state, RUN_MODES.PAID);
-  $('#menu-nuggets').textContent = formatNumber(profile.bankedNuggets);
-  if ($('#launch-nugget-balance')) $('#launch-nugget-balance').textContent = `${formatNumber(profile.bankedNuggets)} NUGGETS`;
-  if ($('#profile-nugget-value')) $('#profile-nugget-value').textContent = formatNumber(profile.bankedNuggets);
-  if ($('#profile-store-balance')) $('#profile-store-balance').textContent = formatNumber(profile.bankedNuggets);
   $('#menu-depth').textContent = String(profile.bestDepth);
   $('#menu-score').textContent = formatNumber(profile.bestScore);
   $('#wallet-label').textContent = connected
@@ -477,7 +470,6 @@ function renderMineBriefings({ connected, freeAccess, passActive, remainingPassD
   }
   if ($('#daily-attempt-value')) $('#daily-attempt-value').textContent = freeAccess.allowed ? '1 READY' : 'USED';
   if ($('#daily-best-value')) $('#daily-best-value').textContent = formatNumber(serverPlayer?.scores?.free || 0);
-  if ($('#daily-nugget-value')) $('#daily-nugget-value').textContent = formatNumber(profile.bankedNuggets);
   if (dailyStart) {
     dailyStart.disabled = connected && !freeAccess.allowed;
     dailyStart.textContent = !connected
@@ -519,10 +511,8 @@ function renderMineBriefings({ connected, freeAccess, passActive, remainingPassD
 }
 
 function renderProfileDashboard() {
-  if (!$('#profile-nugget-value')) return;
+  if (!$('#profile-best-score')) return;
   const currentProfile = serverPlayer?.profile || profile;
-  $('#profile-nugget-value').textContent = formatNumber(currentProfile.bankedNuggets || 0);
-  $('#profile-store-balance').textContent = formatNumber(currentProfile.bankedNuggets || 0);
   $('#profile-best-score').textContent = formatNumber(currentProfile.bestScore || 0);
   $('#profile-best-depth').textContent = formatNumber(currentProfile.bestDepth || 0);
   $('#profile-total-runs').textContent = formatNumber(currentProfile.totalRuns || 0);
@@ -544,17 +534,6 @@ function renderProfileDashboard() {
   $('#profile-pass-days').textContent = activePass ? `${days} DAYS LEFT` : 'PASS INACTIVE';
   $('#profile-pass-badge').textContent = activePass ? `PASS ACTIVE · ${days} DAYS LEFT` : 'FREE TIER';
 
-  const upgradeMarkup = META_UPGRADES.map((upgrade) => {
-    const rank = Number(currentProfile.meta?.[upgrade.id] || 0);
-    const percent = Math.round(Math.min(1, rank / upgrade.max) * 100);
-    return `<div class="profile-upgrade-row"><strong>${escapeHtml(upgrade.name)}</strong><div class="profile-upgrade-bar"><i style="width:${percent}%"></i></div><span>RANK ${rank} / ${upgrade.max}</span></div>`;
-  }).join('');
-  replaceProfileMarkup($('#profile-upgrade-summary'), META_UPGRADES.slice(0, 3).map((upgrade) => {
-    const rank = Number(currentProfile.meta?.[upgrade.id] || 0);
-    const percent = Math.round(Math.min(1, rank / upgrade.max) * 100);
-    return `<div class="profile-upgrade-row"><strong>${escapeHtml(upgrade.name)}</strong><div class="profile-upgrade-bar"><i style="width:${percent}%"></i></div><span>RANK ${rank}</span></div>`;
-  }).join(''));
-  replaceProfileMarkup($('#profile-upgrade-grid'), upgradeMarkup);
 
   const recentRuns = Array.isArray(serverPlayer?.recentRuns) ? serverPlayer.recentRuns : [];
   const compactRows = recentRuns.slice(0, 4).map((run) => `<tr>
@@ -621,10 +600,6 @@ function activateProfileTab(tabId) {
 function openPassMine() {
   updateMenu();
   showScreen('pass-mine');
-}
-
-function requestNuggetShop() {
-  window.dispatchEvent(new CustomEvent('mattmine:open-nugget-shop'));
 }
 
 window.addEventListener('mattmine:screen-change', (event) => {
@@ -1119,12 +1094,9 @@ async function submitArenaRun(run) {
     const unlockedCopy = accepted.passRewardsUnlocked?.length
       ? ` · UNLOCKED ${accepted.passRewardsUnlocked.map((reward) => reward.name).join(', ')}`
       : '';
-    const nuggetsCopy = accepted.arenaNuggetsBanked > 0
-      ? ` · +${formatNumber(accepted.arenaNuggetsBanked)} nuggets banked`
-      : '';
     $('#economy-result').innerHTML = `
       <strong>ARENA SCORE VERIFIED${arenaPlayer.rank ? ` · #${arenaPlayer.rank}` : ''}</strong>
-      <span>Authoritative score: ${formatNumber(result.score || arenaPlayer.bestScore)}${nuggetsCopy}${passXpCopy}${unlockedCopy}</span>
+      <span>Authoritative score: ${formatNumber(result.score || arenaPlayer.bestScore)}${passXpCopy}${unlockedCopy}</span>
       <small>The signed transcript was replayed against today's deterministic challenge. Browser-reported score totals were not trusted.</small>
     `;
     toast('MATT Arena score verified');
@@ -1222,12 +1194,12 @@ function renderPracticeClaimPanel(claim, result) {
     return;
   }
   panel.hidden = false;
-  const projected = Math.max(0, Math.floor(claim.projectedNuggets || result?.projected || 0));
+  const projected = Math.max(0, Math.floor(result?.projected || 0));
   const isExpired = claim.status === 'pending' && claim.expiresAt <= Date.now();
   const paymentsEnabled = serverConfig?.realPaymentsEnabled === true;
 
   if (claim.status === 'claimed') {
-    info.innerHTML = `<strong>Practice rewards claimed.</strong><span>Earned ${formatNumber(projected)} nuggets.</span>`;
+    info.innerHTML = `<strong>Practice has no currency rewards.</strong><span>Final score: ${formatNumber(projected)}.</span>`;
     if (claimButton) claimButton.disabled = true;
     if (declineButton) declineButton.disabled = true;
     if (hashInput) hashInput.disabled = true;
@@ -1260,7 +1232,7 @@ function renderPracticeClaimPanel(claim, result) {
   if (hashInput) hashInput.disabled = !paymentsEnabled;
   info.innerHTML = `
     <strong>Practice rewards are available.</strong>
-    <span>Projected nuggets: ${formatNumber(projected)}</span>
+    <span>Projected score: ${formatNumber(projected)}</span>
     <span>Approximate claim price: ${formatNumber(PRACTICE_CLAIM_PLACEHOLDER_PRICE)} MATT</span>
     <small>If you decline, the projected reward is discarded. Exact reward rates are configured and server-verified once payment integration is live.</small>
   `;
@@ -1404,7 +1376,7 @@ async function startRunMode(mode, options = {}) {
         nftRun: run.nftRun || null
       });
       if (run.tuning?._minePassBenefits?.active === true) {
-        toast('Mine Pass active · 2× XP and nuggets');
+        toast('Mine Pass active · 2× Pass XP');
       }
       if (mode === RUN_MODES.BETA) {
         const entitlement = await apiClient.betaAccess();
@@ -2159,7 +2131,7 @@ const game = new MattMineGame(canvas, profile, {
     toast(`${upgrade.name} equipped`);
   },
   onDepthChoice(data) {
-    $('#depth-summary').textContent = `You can bank ${formatNumber(data.projectedPayout)} nuggets now, or descend for a x${data.nextMultiplier.toFixed(1)} total loot multiplier.`;
+    $('#depth-summary').textContent = `You can secure ${formatNumber(data.projectedPayout)} score now, or descend for a x${data.nextMultiplier.toFixed(1)} total score multiplier.`;
     $('#descend-button').textContent = activeServerRun?.mode === RUN_MODES.ENDLESS
       ? 'DESCEND ENDLESS'
       : data.depth >= 5 ? 'MAX DEPTH — EXTRACT' : 'DESCEND DEEPER';
@@ -2337,7 +2309,6 @@ for (const button of document.querySelectorAll('[data-site-action]')) {
     if (action === 'how-to-play') return showScreen('how-to-play');
     if (action === 'leaderboards') return openLeaderboards(ARENA_LEADERBOARD_MODE);
     if (action === 'pass') return openPass();
-    if (action === 'store') return window.dispatchEvent(new CustomEvent('mattmine:open-nugget-shop'));
     if (action === 'mines') {
       return openMines();
     }
@@ -2509,8 +2480,6 @@ $('#menu-button').addEventListener('click', () => {
   returnToMinerAfterRun = resultScreenMode !== RUN_MODES.PRACTICE;
   game.backToMenu();
 });
-$('#practice-claim-button').addEventListener('click', () => void claimPracticeRewards());
-$('#practice-decline-button').addEventListener('click', () => void declinePracticeRewards());
 $('#paid-revive-button').addEventListener('click', () => void purchasePaidRevive());
 $('#paid-revive-decline').addEventListener('click', declinePaidRevive);
 $('#abandon-run-button').addEventListener('click', () => {
@@ -2529,10 +2498,6 @@ $('#abandon-run-button').addEventListener('click', () => {
 });
 $('#extract-button').addEventListener('click', () => game.extract());
 $('#descend-button').addEventListener('click', () => game.descend());
-$('#upgrades-button').addEventListener('click', () => {
-  renderShop();
-  showScreen('upgrade-shop');
-});
 $('#sound-button').addEventListener('click', () => {
   renderAudioSettings();
   showScreen('sound-settings');
@@ -2548,8 +2513,6 @@ $('#shake-toggle-button').addEventListener('click', () => {
 });
 $('#profile-button').addEventListener('click', () => openMinerProfile(false));
 $('#profile-back-button').addEventListener('click', () => { showScreen('menu'); updateMenu(); });
-$('#profile-manage-upgrades-button').addEventListener('click', () => { renderShop(); showScreen('upgrade-shop'); });
-$('#profile-open-upgrades-button').addEventListener('click', () => { renderShop(); showScreen('upgrade-shop'); });
 $('#profile-manage-loadout-button').addEventListener('click', () => void openCosmetics());
 $('#profile-loadout-button').addEventListener('click', () => void openCosmetics());
 $('#profile-pass-button').addEventListener('click', openPass);
@@ -3216,7 +3179,7 @@ async function startArenaRun() {
       nftRun: run.nftRun || null
     });
     if (run.challenge?.tuning?._minePassBenefits?.active === true) {
-      toast('Mine Pass active · 2× XP and nuggets');
+      toast('Mine Pass active · 2× Pass XP');
     }
   } catch (error) {
     leaveGameplayFullscreen();
@@ -3432,7 +3395,7 @@ function renderCosmetics() {
     <div>
       <span class="eyebrow">LEVEL 3 REWARD</span>
       <h3>Pass Chest</h3>
-      <p>Contains the exclusive Molten Pickaxe and ${formatNumber(PASS_CHEST_BONUS_NUGGETS)} permanent nuggets.</p>
+      <p>Contains a permanent cosmetic reward, including the exclusive Molten Pickaxe.</p>
     </div>
     <div class="pass-chest-actions">
       <strong>${chest.available || 0} UNOPENED</strong>
@@ -3494,7 +3457,7 @@ async function openPassChest() {
     saveProfile(profile);
     game.setProfile(profile);
     applyPassInventory(result.passInventory);
-    toast(`Pass Chest opened · Molten Pickaxe + ${formatNumber(result.rewards.nuggets)} nuggets`);
+    toast(`Pass Chest opened · ${result.rewards.cosmetic?.name || 'cosmetic collection complete'}`);
     updateMenu();
   } catch (error) {
     toast(error.message);
@@ -3793,65 +3756,12 @@ function economyResultMarkup(mode, result, recorded) {
   const weekly = weeklyUserScore(economy.state, mode);
   const scoreNote = result.extracted
     ? 'Successful extraction counted at full run score'
-    : `Knockout counted only ${formatNumber(result.banked)} secured nuggets`;
+    : `Knockout counted ${formatNumber(result.banked)} retained score`;
   return `
     <strong>${mode === RUN_MODES.PAID ? 'PASS LEADERBOARD' : 'FREE LEADERBOARD'} · #${player?.rank || '—'}</strong>
     <span>Weekly score: ${formatNumber(weekly)} · Projected leaderboard share: ${formatNumber(reward)} MATT</span>
     <small>${scoreNote} · ${mode === RUN_MODES.PAID ? `2× reward weight · Pass XP ${formatNumber(recorded.passXp || economy.state.player.passXp)}` : 'One free ranked run consumed for today'} · Rewards remain estimates until verified and published.</small>
   `;
-}
-
-function renderShop() {
-  const grid = $('#shop-grid');
-  grid.innerHTML = '';
-  for (const upgrade of META_UPGRADES) {
-    const rank = profile.meta[upgrade.id] || 0;
-    const cost = metaUpgradeCost(upgrade, rank);
-    const maxed = rank >= upgrade.max;
-    const card = document.createElement('article');
-    card.className = 'shop-card';
-    card.innerHTML = `
-      <div class="shop-card-top"><strong>${upgrade.name}</strong><span>Rank ${rank}/${upgrade.max}</span></div>
-      <p>${upgrade.description}</p>
-      <button class="buy-button" ${maxed || profile.bankedNuggets < cost ? 'disabled' : ''}>
-        ${maxed ? 'MAXED' : `${formatNumber(cost)} NUGGETS`}
-      </button>
-    `;
-    const button = card.querySelector('button');
-    button.addEventListener('click', async () => {
-      if (maxed || profile.bankedNuggets < cost) return;
-      if (serverPlayer) {
-        button.disabled = true;
-        try {
-          const result = await apiClient.purchaseUpgrade(upgrade.id);
-          profile = result.profile;
-          serverPlayer.profile = result.profile;
-          saveProfile(profile);
-          game.setProfile(profile);
-          updateMenu();
-          renderShop();
-          toast(`${upgrade.name} upgraded · server saved`);
-        } catch (error) {
-          toast(error.message);
-          await refreshServerPlayer();
-          renderShop();
-        }
-        return;
-      }
-      profile.bankedNuggets -= cost;
-      profile.meta[upgrade.id] = rank + 1;
-      saveProfile(profile);
-      game.setProfile(profile);
-      updateMenu();
-      renderShop();
-      toast(`${upgrade.name} upgraded`);
-    });
-    grid.appendChild(card);
-  }
-  const balance = document.createElement('p');
-  balance.className = 'shop-balance';
-  balance.textContent = `Available: ${formatNumber(profile.bankedNuggets)} nuggets`;
-  grid.appendChild(balance);
 }
 
 function modeLabel(mode, rewardWeight = 0) {
@@ -3927,16 +3837,12 @@ function renderCharacters() {
     ${CHARACTER_PORTRAIT_IDS.has(id) ? `<span class="character-portrait character-portrait-${id}" role="img" aria-label="${escapeHtml(character.name)}"></span>` : ''}
     <div><strong>${escapeHtml(character.name)}</strong><small>${escapeHtml(character.description)}</small></div>
     <p>HP ${Math.round(character.baseHealth)} · SPEED ${Number(character.movementSpeed).toFixed(2)}× · PICKAXE ${Number(character.pickaxeDamage).toFixed(2)}× · BLASTER ${Number(character.blasterDamage).toFixed(2)}×</p>
-    <button type="button" data-character-select="${id}" ${!character.enabled ? 'disabled' : ''}>${character.owned ? (selected === id ? 'SELECTED' : 'SELECT') : character.nuggetPrice > 0 ? `UNLOCK · ${Number(character.nuggetPrice).toLocaleString()} NUGGETS` : 'LOCKED'}</button>
+    <button type="button" data-character-select="${id}" ${!character.enabled ? 'disabled' : ''}>${selected === id ? 'SELECTED' : 'SELECT'}</button>
   </article>`).join('') || '<p class="preview-note">Sign in to load your server-owned characters.</p>';
   document.querySelectorAll('[data-character-select]').forEach((button) => button.addEventListener('click', async () => {
     const id = button.dataset.characterSelect;
     const character = serverPlayer.expansion.characters[id];
     try {
-      if (!character.owned && character.nuggetPrice > 0) {
-        serverPlayer.expansion = await apiClient.purchaseCharacter(id);
-        serverPlayer.profile.bankedNuggets -= character.nuggetPrice;
-      }
       const result = await apiClient.selectCharacter(id);
       serverPlayer.expansion.selectedCharacter = result.selectedCharacter;
       renderCharacters();
@@ -4256,7 +4162,6 @@ async function startCompetitionStudioTest() {
       _competitionSnapshot: snapshot,
       safeStartSeconds: snapshot.rules?.safeStartSeconds ?? 4,
       maximumDrones: snapshot.loadout?.maximumDrones ?? 4,
-      ignorePermanentUpgrades: snapshot.loadout?.permanentUpgrades === false,
       disableRunUpgrades: snapshot.loadout?.runUpgrades === false
     },
     competitionSnapshot: snapshot,

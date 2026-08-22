@@ -5,7 +5,6 @@ export function buildAdminReadiness(input = {}) {
   const arena = input.arena || {};
   const replay = input.replay || {};
   const revive = input.revive || {};
-  const advertisements = input.advertisements || {};
   const controlLinks = input.controlLinks || {};
   const monitors = [
     monitor(
@@ -79,20 +78,6 @@ export function buildAdminReadiness(input = {}) {
       'Competition'
     ),
     monitor(
-      'nugget-payments',
-      'Nugget purchases',
-      input.nuggetPayments?.configured
-        ? input.nuggetPayments.enabled ? 'ready' : 'warning'
-        : 'blocked',
-      input.nuggetPayments?.configured
-        ? input.nuggetPayments.enabled
-          ? 'Exact receipt verification enabled'
-          : 'Verifier configured; purchases disabled'
-        : 'Exact nugget-payment verifier unavailable',
-      false,
-      'Economy'
-    ),
-    monitor(
       'paid-revives',
       'Paid revives',
       revive.configured && revive.eligibilityReady ? revive.enabled ? 'ready' : 'warning' : 'blocked',
@@ -101,16 +86,6 @@ export function buildAdminReadiness(input = {}) {
           ? 'Exact payment and death replay verification ready'
           : 'Payment verifier ready; death replay gate missing'
         : 'Exact revive-payment verifier unavailable',
-      false,
-      'Features'
-    ),
-    monitor(
-      'advertisements',
-      'Advertisement rewards',
-      advertisements.configured ? advertisements.enabled ? 'ready' : 'warning' : 'blocked',
-      advertisements.configured
-        ? `${advertisements.verification || advertisements.provider || 'provider verification'} ready`
-        : 'Signed provider completion verifier unavailable',
       false,
       'Features'
     ),

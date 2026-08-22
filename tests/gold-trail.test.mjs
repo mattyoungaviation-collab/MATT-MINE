@@ -35,13 +35,7 @@ function installBrowserStubs() {
     addEventListener() {},
     getBoundingClientRect: () => ({ left: 0, top: 0, width: 1280, height: 720 })
   };
-  const profile = {
-    bankedNuggets: 0,
-    bestDepth: 0,
-    bestScore: 0,
-    totalRuns: 0,
-    meta: { health: 0, damage: 0, speed: 0, luck: 0 }
-  };
+  const profile = { bestDepth: 0, bestScore: 0, totalRuns: 0 };
   return { canvas, profile, context, calls };
 }
 

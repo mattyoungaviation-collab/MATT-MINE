@@ -4,11 +4,6 @@ import { fileURLToPath } from 'node:url';
 import { JsonFileDatabase, PostgresDatabase } from '../server/database.js';
 import { createProductionMattMineHttpServer } from '../server/production-http.js';
 import { RoninPaymentVerifier, RONIN_PAYMENT_CONTRACTS } from '../server/payment-verifier.js';
-import { DirectRoninNuggetPaymentVerifier } from '../server/nugget-payment-verifier.js';
-import {
-  JsonNuggetEconomyStore,
-  PostgresNuggetEconomyStore
-} from '../server/nugget-economy.js';
 import { RoninRewardChain } from '../server/reward-chain.js';
 import { RewardManager } from '../server/reward-manager.js';
 import { MemoryRewardStore, PostgresRewardStore } from '../server/reward-store.js';
@@ -27,8 +22,7 @@ import {
 import { CompetitiveReplayService } from '../server/competitive-replay-service.js';
 import { resolveCompetitionSnapshot } from '../src/game/competitionStudio.js';
 import {
-  DirectRoninRevivePaymentVerifier,
-  HmacAdvertisementVerifier
+  DirectRoninRevivePaymentVerifier
 } from '../server/external-verifiers.js';
 import { PaidCompetitionEligibilityPolicy } from '../server/eligibility.js';
 import { NftMetadataService } from '../server/nft-metadata-service.js';
@@ -44,26 +38,13 @@ const packageMetadata = JSON.parse(
 const appVersion = String(packageMetadata.version || 'unknown');
 const port = Number(process.env.PORT || 4173);
 const dataFile = resolve(root, process.env.MATT_MINE_DATA_FILE || 'data/matt-mine-store.json');
-const nuggetEconomyFile = resolve(
-  root,
-  process.env.MATT_MINE_NUGGET_ECONOMY_FILE || 'data/matt-mine-nugget-economy.json'
-);
 const databaseUrl = process.env.DATABASE_URL?.trim();
 const roninRpcUrls = (process.env.RONIN_RPC_URLS || process.env.RONIN_RPC_URL || '')
   .split(',').map((value) => value.trim()).filter(Boolean);
 const mainnetTransactionsEnabled =
   process.env.MATT_MINE_MAINNET_TRANSACTIONS_ENABLED === 'true';
-const nuggetPaymentsRequested =
-  process.env.MATT_MINE_NUGGET_PAYMENTS_ENABLED === 'true';
 const paymentVerifier = mainnetTransactionsEnabled
   ? new RoninPaymentVerifier({
-      rpcUrls: roninRpcUrls,
-      rpcTimeoutMs: Number(process.env.MATT_MINE_RPC_TIMEOUT_MS || 10_000),
-      confirmations: Number(process.env.MATT_MINE_PAYMENT_CONFIRMATIONS || 3)
-    })
-  : null;
-const nuggetPaymentVerifier = mainnetTransactionsEnabled && nuggetPaymentsRequested
-  ? new DirectRoninNuggetPaymentVerifier({
       rpcUrls: roninRpcUrls,
       rpcTimeoutMs: Number(process.env.MATT_MINE_RPC_TIMEOUT_MS || 10_000),
       confirmations: Number(process.env.MATT_MINE_PAYMENT_CONFIRMATIONS || 3)
@@ -87,12 +68,6 @@ const initializeStore = (store, label) => database.kind === 'postgresql'
       }
     )
   : store.init();
-const nuggetEconomyStore = await initializeStore(
-  database.kind === 'postgresql'
-    ? new PostgresNuggetEconomyStore(database)
-    : new JsonNuggetEconomyStore(nuggetEconomyFile),
-  'nugget economy startup'
-);
 const rewardStore = await initializeStore(
   database.kind === 'postgresql'
     ? new PostgresRewardStore(database)
@@ -162,7 +137,6 @@ const arenaService = arenaEnabled
           tuning.playerMaxHealth = competitionSnapshot.loadout.startingHealth;
           tuning.dynamiteStartAmmo = competitionSnapshot.loadout.startingDynamite;
           tuning.blasterEnergy = competitionSnapshot.loadout.blasterEnergy;
-          tuning.ignorePermanentUpgrades = competitionSnapshot.loadout.permanentUpgrades === false;
           tuning.disableRunUpgrades = competitionSnapshot.loadout.runUpgrades === false;
           tuning.maximumDrones = competitionSnapshot.loadout.maximumDrones;
         }
@@ -204,17 +178,6 @@ const revivePaymentVerifier = mainnetTransactionsEnabled && revivePaymentsReques
         MATT_MINE_ADMIN_CONTRACTS.safe
     })
   : null;
-const advertisementSecret = process.env.MATT_MINE_ADVERTISEMENT_HMAC_SECRET || '';
-const advertisementProvider = process.env.MATT_MINE_ADVERTISEMENT_PROVIDER || '';
-const advertisementVerifier =
-  process.env.MATT_MINE_ADVERTISEMENT_REWARDS_ENABLED === 'true' &&
-  advertisementSecret.length >= 32 &&
-  advertisementProvider
-    ? new HmacAdvertisementVerifier({
-        secret: advertisementSecret,
-        provider: advertisementProvider
-      })
-    : null;
 const nftMetadataEnabled = process.env.MATT_MINE_NFT_ENABLED === 'true';
 const nftRpcUrl = nftRpcUrlFromEnvironment();
 const nftMetadataService = nftMetadataEnabled
@@ -267,9 +230,6 @@ const service = new CompleteProductionMattMineService(database, {
   paymentVerifier,
   rewardManager,
   arenaService,
-  nuggetEconomyStore,
-  nuggetPaymentVerifier,
-  nuggetPaymentsEnabled: mainnetTransactionsEnabled && nuggetPaymentsRequested,
   competitiveReplayValidator,
   nftMetadataService,
   nftGameplayService,
@@ -280,7 +240,6 @@ const service = new CompleteProductionMattMineService(database, {
       validate: (input) => competitiveReplayValidator.validateDeath(input)
     }
   } : {}),
-  ...(advertisementVerifier ? { advertisementVerifier } : {})
 });
 const server = createProductionMattMineHttpServer({ root, service });
 
@@ -288,7 +247,6 @@ server.listen(port, '0.0.0.0', () => {
   console.log(`MATT Mine v${appVersion} running at http://localhost:${port}`);
   console.log(`Ranked wallet network: ${service.config().chainName} (${service.config().chainId})`);
   console.log(`Mainnet transaction mode: ${mainnetTransactionsEnabled ? 'ENABLED (real RON)' : 'disabled'}`);
-  console.log(`Nugget payments: ${service.nuggetPaymentsEnabled ? 'EXACT VERIFICATION ENABLED' : 'disabled by release blocker'}`);
   console.log(`Reward publication: ${rewardManager.publicationEnabled ? 'PILOT ENABLED' : 'DRY RUN'}`);
   console.log(`Daily Arena: ${arenaEnabled
     ? `exact deployment pinned (${arenaContractAddress}); deterministic replay ${arenaLiveRequested ? 'LIVE' : 'ready, live mode disabled'}`
@@ -297,13 +255,11 @@ server.listen(port, '0.0.0.0', () => {
     ? `ENABLED (${competitiveReplayStore.kind})`
     : 'disabled until MATT_MINE_COMPETITIVE_REPLAY_SECRET is configured'}`);
   console.log(`Paid revive verifier: ${revivePaymentVerifier ? 'EXACT RON TRANSFER ENABLED' : 'disabled'}`);
-  console.log(`Advertisement verifier: ${advertisementVerifier ? `SIGNED ${advertisementProvider}` : 'disabled'}`);
   console.log(`NFT metadata: ${nftMetadataService ? `ENABLED (chain ${nftMetadataService.chainId})` : 'disabled'}`);
   console.log(`NFT gameplay: ${nftGameplayService ? 'ENABLED (Ronin V2)' : 'disabled'}`);
   console.log(`NFT V2 Admin controls: ${nftV2AdminService ? 'ENABLED' : 'disabled'}`);
   console.log(`Saigon chest keeper: ${saigonChestKeeper ? 'ENABLED' : 'disabled'}`);
   console.log(`Server data: ${database.kind}${databaseUrl ? '' : ` (${dataFile})`}`);
-  console.log(`Nugget economy data: ${nuggetEconomyStore.kind}${databaseUrl ? '' : ` (${nuggetEconomyFile})`}`);
 });
 
 let closing = false;
@@ -316,7 +272,6 @@ function closeServer() {
     process.exit(0);
   }
   server.close(async () => {
-    await nuggetEconomyStore.close();
     await competitiveReplayStore.close();
     await database.close();
     process.exit(0);

@@ -37,7 +37,6 @@ test('Competition Studio map files preserve a complete editable five-depth mine 
   draft.depths[2].map.rooms[1].width = 1.75;
   draft.depths[2].map.objects.find((object) => object.type === 'slime').quantity = 11;
   draft.monsterTuning.depth3SlimeHealth = 321;
-  draft.loadout.permanentUpgrades = true;
 
   const file = createCompetitionMapFile(draft, 'arena', NOW);
   const imported = parseCompetitionMapFile(JSON.stringify(file), 'arena');
@@ -52,7 +51,6 @@ test('Competition Studio map files preserve a complete editable five-depth mine 
   assert.equal(imported.draft.depths[2].map.rooms[1].width, 1.75);
   assert.equal(imported.draft.depths[2].map.objects.find((object) => object.type === 'slime').quantity, 11);
   assert.equal(imported.draft.monsterTuning.depth3SlimeHealth, 321);
-  assert.equal(imported.draft.loadout.permanentUpgrades, false);
   assert.match(competitionMapFileName(file), /^matt-mine-arena-crystal-gauntlet-47-2026-07-28T18-00-00\.mattmine\.json$/);
 });
 
@@ -133,13 +131,11 @@ test('Competition Studio normalizes controls to the mine flows that can consume 
   arena.rules.attemptLimit = 12;
   arena.loadout.characterId = 'orc';
   arena.loadout.startingHealth = 999;
-  arena.loadout.permanentUpgrades = true;
   const normalizedArena = normalizeCompetitionDraft(arena, 'arena');
   assert.equal(normalizedArena.guardianAiMode, 'legacy');
   assert.equal(normalizedArena.rules.attemptLimit, 0);
   assert.equal(normalizedArena.loadout.characterId, 'matt');
   assert.equal(normalizedArena.loadout.startingHealth, 100);
-  assert.equal(normalizedArena.loadout.permanentUpgrades, false);
 
   const pass = structuredClone(studio.slots.pass.draft);
   pass.guardianAiMode = 'legacy';
@@ -156,7 +152,7 @@ test('state migration adds safe Competition Studio drafts without disturbing leg
     wallets: {
       [address]: {
         ...defaultWalletState(address, NOW),
-        profile: { ...defaultProfile(), bankedNuggets: 42 }
+        profile: { ...defaultProfile(), bestScore: 42 }
       }
     }
   });

@@ -1,11 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createHmac } from 'node:crypto';
-
-import {
-  DirectRoninRevivePaymentVerifier,
-  HmacAdvertisementVerifier
-} from '../server/external-verifiers.js';
+import { DirectRoninRevivePaymentVerifier } from '../server/external-verifiers.js';
 import { MemoryCompetitiveReplayStore } from '../server/competitive-replay-store.js';
 import { CompetitiveReplayService } from '../server/competitive-replay-service.js';
 import {
@@ -167,30 +162,6 @@ test('competitive replay checkpoints are signed, ordered, persisted, and bound t
   assert.equal(replayReads, 2);
 });
 
-test('signed advertisement completions bind provider, wallet, run, expiry, and percent', async () => {
-  const secret = 'advertisement-test-secret-that-is-long-enough';
-  const verifier = new HmacAdvertisementVerifier({ secret, provider: 'test-provider' });
-  const payload = {
-    provider: 'test-provider',
-    completionId: 'completion_12345',
-    address: ADDRESS,
-    runId: 'run_123',
-    expiresAt: 2_000_000,
-    percent: 5
-  };
-  const encoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
-  const token = `${encoded}.${createHmac('sha256', secret).update(encoded).digest('hex')}`;
-  const verified = await verifier.verifyCompletion(
-    { token },
-    { address: ADDRESS, runId: 'run_123' }
-  );
-  assert.equal(verified.completionId, payload.completionId);
-  await assert.rejects(
-    verifier.verifyCompletion({ token }, { address: ADDRESS, runId: 'run_other' }),
-    (error) => error.code === 'advertisement_completion_mismatch'
-  );
-});
-
 test('paid revive creates an exact direct-RON Treasury transaction and delegates receipt verification', async () => {
   const calls = [];
   const verifier = new DirectRoninRevivePaymentVerifier({
@@ -264,16 +235,15 @@ test('paid revive preserves the same run and resumes once at a safe full-health 
   assert.equal(events.at(-1).type, 'finish');
 });
 
-test('competitive replay uses the server-owned permanent-upgrade snapshot', () => {
-  const profile = defaultProfile();
-  profile.meta.health = 2;
+test('competitive replay uses the server-owned score profile snapshot', () => {
+  const profile = { ...defaultProfile(), bestScore: 250 };
   const replayed = replayArenaTranscript(
     buildArenaChallenge('a'.repeat(64)),
     [],
     { mode: 'free', profile }
   );
 
-  assert.equal(replayed.maximumHealth, 116);
+  assert.equal(replayed.maximumHealth, 100);
 });
 
 test('queued Blaster offers remain deterministic after choosing a run upgrade', () => {

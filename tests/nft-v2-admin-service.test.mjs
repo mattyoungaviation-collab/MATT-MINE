@@ -50,6 +50,7 @@ function serviceHarness() {
       if (functionName === 'walletDailyLimit') return 3_000_000n * 10n ** 18n;
       if (functionName === 'globalDailyLimit') return 10_000_000n * 10n ** 18n;
       if (functionName === 'chestPrice') return BigInt(Number(args[0]) + 1) * 10n ** 18n;
+      if (functionName === 'phaseXpForMap') return [10n, 15n, 20n, 25n, 30n];
       throw new Error(`Unexpected read ${functionName}`);
     },
     async waitForTransactionReceipt() { return { status: 'success' }; }
@@ -85,6 +86,18 @@ test('NFT V2 Admin reads every live contract value and verifies CONFIG_ROLE', as
   assert.equal(snapshot.withdrawal.minimumRaw, (1n * 10n ** 18n).toString());
   assert.deepEqual(snapshot.paused, { loadout: true, bank: true, chest: true, settlement: true });
   assert.deepEqual(snapshot.activeMapVersions, { arena: `0x${'aa'.repeat(32)}`, paid: `0x${'bb'.repeat(32)}` });
+  assert.deepEqual(snapshot.phaseXp.arena, [10, 15, 20, 25, 30]);
+  assert.equal(snapshot.phaseXpConfigurable, true);
+});
+
+test('NFT V2 Admin controls five phase XP values independently for Arena and Pass Mine', async () => {
+  const { service, writes, gameplayService } = serviceHarness();
+  const result = await service.setPhaseXp({ mode: 'paid', phaseXp: [20, 30, 40, 50, 60] });
+  assert.equal(result.versionId, gameplayService.mapVersions.paid);
+  assert.deepEqual(result.phaseXp, [20, 30, 40, 50, 60]);
+  assert.equal(writes.at(-1).functionName, 'setMapPhaseXp');
+  assert.deepEqual(writes.at(-1).args, [gameplayService.mapVersions.paid, [20, 30, 40, 50, 60]]);
+  await assert.rejects(() => service.setPhaseXp({ mode: 'paid', phaseXp: [100, 100, 100, 100, 101] }), { code: 'nft_phase_xp_invalid' });
 });
 
 test('NFT V2 Admin sends bounded economy writes and routes approved/retired maps immediately', async () => {

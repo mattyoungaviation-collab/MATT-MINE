@@ -22,13 +22,7 @@ function browserStubs() {
     addEventListener() {},
     getBoundingClientRect: () => ({ left: 0, top: 0, width: 1280, height: 720 })
   };
-  const profile = {
-    bankedNuggets: 0,
-    bestDepth: 0,
-    bestScore: 0,
-    totalRuns: 0,
-    meta: { health: 0, damage: 0, speed: 0, luck: 0 }
-  };
+  const profile = { bestDepth: 0, bestScore: 0, totalRuns: 0 };
   return { canvas, profile };
 }
 
@@ -57,7 +51,7 @@ test('v0.4 run results carry leaderboard and reward metadata', async () => {
   let result;
   const game = new MattMineGame(canvas, profile, { onRunEnd(value) { result = value; } });
   game.startRun({ mode: 'paid', seed: 'PAID-SEED', day: '2026-07-25', week: '2026-07-20', rewardWeight: 2 });
-  game.run.rawNuggets = 100;
+  game.run.rawScore = 100;
   game.endRun(true);
   assert.equal(result.mode, 'paid');
   assert.equal(result.seed, 'PAID-SEED');
@@ -103,7 +97,7 @@ test('Arena reaches its authoritative clock limit, extracts, and emits a termina
     seed: 'ARENA-TIME-LIMIT',
     roundDurationMs: 40
   });
-  game.run.rawNuggets = 123;
+  game.run.rawScore = 123;
   game.update(0.04);
 
   assert.equal(game.state, 'ended');

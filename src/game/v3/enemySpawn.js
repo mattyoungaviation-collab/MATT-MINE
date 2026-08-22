@@ -92,7 +92,7 @@ export const enemySpawnMethods = {
     const tuning = this.runContext?.tuning || {};
     this.enemies = this.enemies.filter((entry) => entry.id !== enemy.id);
     this.run.kills += 1;
-    this.run.rawNuggets += enemy.isBoss
+    this.run.rawScore += enemy.isBoss
       ? Math.max(0, Math.round(tuning.bossPointValue || 0))
       : Math.max(0, Math.round(tuning.killPointValue || 0));
     this.hooks.onArenaEvent?.({
@@ -108,7 +108,7 @@ export const enemySpawnMethods = {
     for (let index = 0; index < count; index += 1) {
       this.pickups.push({
         id: this.entityId++,
-        type: 'nugget',
+        type: 'score',
         x: enemy.x + randomRange(-enemy.radius, enemy.radius),
         y: enemy.y + randomRange(-enemy.radius, enemy.radius),
         radius: enemy.isBoss ? 9 : 7,

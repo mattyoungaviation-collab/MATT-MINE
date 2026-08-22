@@ -9,7 +9,6 @@ import { SERVER_STATE_VERSION } from './constants.js';
 import { normalizeIdentity } from './identity.js';
 import { defaultGameTuning, normalizeGameTuning } from '../src/game/tuning.js';
 import { defaultKeybindings, normalizeKeybindings } from '../src/game/keybindings.js';
-import { normalizeMigrationWalletState, normalizeNuggetLedger } from './nugget-ledger.js';
 import {
   defaultExpansionConfig,
   defaultPlayerExpansion,
@@ -50,10 +49,8 @@ export function defaultWalletState(address, timestamp = Date.now()) {
     address,
     identity: normalizeIdentity(),
     profile: defaultProfile(),
-    nuggetLedger: [],
     nftCrystalBalance: 0,
     nftCrystalLedger: [],
-    practiceClaims: {},
     passProgress: defaultPassProgress(),
     passInventory: defaultPassInventory(),
     keybindings: defaultKeybindings(),
@@ -250,23 +247,12 @@ function normalizeWallets(input) {
     .map(([address, wallet]) => {
       const normalizedAddress = address.toLowerCase();
       const profile = normalizeProfile(wallet.profile);
-      const migration = normalizeMigrationWalletState(
-        normalizedAddress,
-        profile.bankedNuggets,
-        wallet.nuggetLedger,
-        safeTimestamp(wallet.updatedAt)
-      );
       return [normalizedAddress, {
         address: normalizedAddress,
         identity: normalizeIdentity(wallet.identity),
-        profile: {
-          ...profile,
-          bankedNuggets: migration.balance
-        },
-        nuggetLedger: normalizeNuggetLedger(migration.ledger, normalizedAddress),
+        profile,
         nftCrystalBalance: safeBoundedInteger(wallet.nftCrystalBalance, Number.MAX_SAFE_INTEGER),
         nftCrystalLedger: normalizeNftCrystalLedger(wallet.nftCrystalLedger, normalizedAddress),
-        practiceClaims: normalizePracticeClaims(wallet.practiceClaims, safeTimestamp(wallet.updatedAt)),
         passProgress: normalizePassProgress(wallet.passProgress),
         passInventory: normalizePassInventory(wallet.passInventory),
         keybindings: safeKeybindings(wallet.keybindings),
@@ -447,35 +433,6 @@ function normalizeDaily(input) {
       freeRunUsed: value.freeRunUsed === true,
       freeRunId: typeof value.freeRunId === 'string' ? value.freeRunId.slice(0, 120) : ''
     }]));
-}
-
-function normalizePracticeClaims(input = {}, now = Date.now()) {
-  if (!isRecord(input)) return {};
-  const normalized = {};
-  for (const [runId, claim] of Object.entries(input)) {
-    if (!isRecord(claim)) continue;
-    const safeRunId = String(runId).slice(0, 120);
-    if (!safeRunId) continue;
-    const status = typeof claim.status === 'string' && ['pending', 'claimed', 'discarded'].includes(claim.status)
-      ? claim.status
-      : '';
-    if (!status) continue;
-    const projectedNuggets = safeInteger(claim.projectedNuggets, 0, true);
-    const createdAt = safeInteger(claim.createdAt, now);
-    const expiresAt = safeInteger(claim.expiresAt, createdAt);
-    const settledAt = safeInteger(claim.settledAt, 0);
-    const transactionHash = normalizeTransactionHash(claim.transactionHash);
-    normalized[safeRunId] = {
-      runId: safeRunId,
-      status,
-      createdAt,
-      expiresAt,
-      projectedNuggets,
-      settledAt,
-      transactionHash
-    };
-  }
-  return normalized;
 }
 
 function normalizeRecords(input, limit) {

@@ -34,19 +34,14 @@ import {
   weeklyLeaderboard
 } from '../server/competition-engine.js';
 import {
-  DisabledAdvertisementVerifier,
   DisabledRevivePaymentVerifier,
-  calculateAdvertisementBonus,
   calculateDeathRetention
 } from '../server/external-verifiers.js';
-import { setNuggetLedgerBalance } from '../server/nugget-ledger.js';
 import { PASS_CHEST_ID } from '../src/game/passRewards.js';
 import { normalizeBetaConfiguration } from '../src/game/betaTools.js';
 import {
-  awardVerifiedAdvertisement,
   confirmRevive,
-  createPendingRevive,
-  skipAdvertisement
+  createPendingRevive
 } from '../server/bonus-engine.js';
 import { defaultGameTuning } from '../src/game/tuning.js';
 import { MattMineGame } from '../src/game/GameV4.js';
@@ -113,7 +108,6 @@ test('boss phases expose every real attack and enforce independent deterministic
   const disabled = { bossPhase2SlamEnabled: false, bossPhase2VolleyEnabled: false, bossPhase2RadialEnabled: false, bossPhase2SummonEnabled: false };
   assert.equal(selectBossAttack({ id: 9 }, disabled, 2, 10, 0), null);
 });
-
 test('default Guardian durability targets a readable final encounter under a fixed upgraded build', () => {
   const tuning = defaultGameTuning().free;
   const guardianHealth = 820 * tuning.bossHealthMultiplier;
@@ -124,9 +118,8 @@ test('default Guardian durability targets a readable final encounter under a fix
   assert.ok(estimatedSeconds >= 24 && estimatedSeconds <= 42, `estimated fight was ${estimatedSeconds.toFixed(2)} seconds`);
 });
 
-test('expansion schema rejects unknown and unsafe settings while preserving verifier blockers', async () => {
+test('expansion schema rejects unknown settings while preserving revive blockers', async () => {
   const defaults = defaultExpansionConfig();
-  assert.equal(defaults.settings.chestBaseNuggets, 250_000);
   assert.equal(defaults.settings.deathRetentionFree, 50);
   assert.equal(defaults.settings.paidRevivesEnabled, false);
   assert.throws(() => normalizeExpansionPatch({ settings: { mystery: 1 } }, defaults), /Unknown/);
@@ -137,17 +130,12 @@ test('expansion schema rejects unknown and unsafe settings while preserving veri
     (error) => error.code === 'revive_payment_verifier_missing'
   );
   await assert.rejects(
-    () => service.updateAdminExpansion('admin-test-key', { settings: { advertisementRewardsEnabled: true } }, 'attempt live ads'),
-    (error) => error.code === 'advertisement_provider_disabled'
-  );
-  await assert.rejects(
     () => service.updateAdminExpansion('admin-test-key', { settings: { weeklyCompetitionEnabled: true } }, 'attempt unverified weekly'),
     (error) => error.code === 'mine_control_retired'
   );
   const admin = await service.adminExpansion('admin-test-key');
   assert.equal(admin.schema.some((entry) => entry.category === 'Weekly Competition'), false);
   assert.equal(admin.schema.some((entry) => entry.category === 'Endless Mode'), false);
-  assert.equal(admin.schema.some((entry) => entry.id === 'advertisementPracticeEligible'), false);
 });
 
 test('Admin controller defaults initialize new wallets and remain player-overridable', async () => {
@@ -172,21 +160,18 @@ test('Admin controller defaults initialize new wallets and remain player-overrid
   assert.equal(updated.controller.deadZone, .12);
 });
 
-test('Pass chest awards the configured 250,000 through the server ledger exactly once', async () => {
+test('Pass chest awards its cosmetic exactly once', async () => {
   const { database, service } = harness();
   const token = await login(service);
   await database.transact((state) => {
     state.wallets[ADDRESS].passInventory.chests[PASS_CHEST_ID].available = 1;
   });
   const opened = await service.openPassChest(token, PASS_CHEST_ID);
-  assert.equal(opened.rewards.nuggets, 250_000);
-  assert.equal(opened.profile.bankedNuggets, 250_000);
+  assert.ok(opened.rewards.cosmetic);
   await assert.rejects(
     () => service.openPassChest(token, PASS_CHEST_ID),
     (error) => error.code === 'pass_chest_unavailable'
   );
-  const state = await database.read();
-  assert.equal(state.wallets[ADDRESS].nuggetLedger.filter((entry) => entry.type === 'CHEST_REWARD').length, 1);
 });
 
 test('beta access is server entitled, audited, and never available to an ordinary wallet', async () => {
@@ -204,7 +189,7 @@ test('beta access is server entitled, audited, and never available to an ordinar
   assert.ok(state.audit.some((entry) => entry.action === 'BETA_ACCESS_GRANTED'));
 });
 
-test('Beta completion awards no nuggets, Pass XP, profile progress, or leaderboard result', async () => {
+test('Beta completion awards no Pass XP, profile progress, or leaderboard result', async () => {
   const { database, service } = harness();
   const token = await login(service);
   await service.updateAdminExpansion('admin-test-key', { settings: { betaModeEnabled: true } }, 'open rewardless beta');
@@ -224,10 +209,8 @@ test('Beta completion awards no nuggets, Pass XP, profile progress, or leaderboa
     }
   });
   const wallet = (await database.read()).wallets[ADDRESS];
-  assert.equal(wallet.profile.bankedNuggets, 0);
   assert.equal(wallet.profile.totalRuns, 0);
   assert.equal(wallet.passProgress.xp, 0);
-  assert.equal(wallet.nuggetLedger.length, 0);
   assert.deepEqual(finished.leaderboard.rows, []);
 });
 
@@ -247,27 +230,11 @@ test('Beta remains private while Weekly and Endless stay retired', async () => {
   await assert.rejects(() => service.startRun(token, 'endless'), (error) => error.code === 'mine_retired');
 });
 
-test('characters require ownership and purchases use the authoritative nugget ledger', async () => {
-  const { database, service } = harness();
+test('all launch characters are available without a browser-currency purchase', async () => {
+  const { service } = harness();
   const token = await login(service);
-  await assert.rejects(() => service.selectCharacter(token, 'ronke'), (error) => error.code === 'character_not_owned');
-  await database.transact((state) => {
-    setNuggetLedgerBalance(state.wallets[ADDRESS], 500_000, {
-      type: 'ADMIN_ADJUSTMENT',
-      adminActor: 'TEST',
-      idempotencyKey: 'test-character-funds'
-    });
-  });
-  const purchased = await service.purchaseCharacter(token, 'ronke');
-  assert.ok(purchased.ownedCharacters.includes('ronke'));
-  assert.equal((await database.read()).wallets[ADDRESS].profile.bankedNuggets, 100_000);
   const selected = await service.selectCharacter(token, 'ronke');
   assert.equal(selected.selectedCharacter, 'ronke');
-  await service.grantCharacter('admin-test-key', ADDRESS, 'ronke', false, 'balance review');
-  assert.equal((await database.read()).wallets[ADDRESS].expansion.selectedCharacter, 'matt');
-  await database.transact((state) => {
-    state.wallets[ADDRESS].passProgress.xp = 3_800;
-  });
   const player = await service.me(token);
   assert.ok(player.expansion.ownedCharacters.includes('adl-dyno'));
 });
@@ -334,8 +301,7 @@ test('production profile and Admin surfaces expose remapping and every expansion
   assert.match(admin, /tab-expansion/);
   assert.match(admin, /reset-expansion/);
   for (const section of [
-    'Chest Rewards', 'Death and Revives', 'Controller Defaults',
-    'Advertisement Rewards', 'Beta Testing', 'Weekly Competition', 'Endless Mode'
+    'Death and Revives', 'Controller Defaults', 'Beta Testing'
   ]) {
     assert.ok(EXPANSION_SCHEMA.some((entry) => entry.category === section), `${section} missing`);
   }
@@ -382,10 +348,8 @@ test('Endless scaling is safeguarded and its leaderboard stays separate and dete
   assert.equal(board.length, 2);
 });
 
-test('death retention floors to 50 percent and external reward interfaces fail closed', async () => {
+test('death retention floors to 50 percent and revive verification fails closed', async () => {
   assert.deepEqual(calculateDeathRetention(101, 50), { earned: 101, retained: 50, lost: 51 });
-  assert.equal(calculateAdvertisementBonus(101, 5), 5);
-  await assert.rejects(() => new DisabledAdvertisementVerifier().verifyCompletion(), /signed advertisement/);
   await assert.rejects(() => new DisabledRevivePaymentVerifier().verifyPayment(), /on-chain revive/);
 });
 
@@ -523,35 +487,4 @@ test('Arena revive payment is authoritative, retry-safe, and recorded exactly on
   assert.equal(state.arenaReviveRuns[runId].revives.length, 1);
   assert.equal(Object.keys(state.revivePayments).length, 1);
   assert.equal(state.revivePayments[transactionHash].runId, runId);
-});
-
-test('advertisement bonuses require a verified provider completion and remain idempotent per run', async () => {
-  const wallet = {
-    address: ADDRESS,
-    profile: { bankedNuggets: 0 },
-    nuggetLedger: [],
-    expansion: defaultPlayerExpansion()
-  };
-  const run = { id: 'run-ad', status: 'finished', result: { banked: 10_000 } };
-  const config = {
-    advertisementRewardsEnabled: true,
-    advertisementBonusMinPercent: 1,
-    advertisementBonusMaxPercent: 5
-  };
-  const verifier = {
-    async verifyCompletion() {
-      return { completionId: 'provider-1', percent: 5, expiresAt: START + 1000 };
-    }
-  };
-  const result = await awardVerifiedAdvertisement({
-    wallet, run, completion: { token: 'signed' }, config, verifier, timestamp: START
-  });
-  assert.equal(result.amount, 500);
-  assert.equal(wallet.profile.bankedNuggets, 500);
-  await assert.rejects(
-    () => awardVerifiedAdvertisement({ wallet, run, completion: {}, config, verifier, timestamp: START }),
-    /already/
-  );
-  const skipped = skipAdvertisement({ id: 'other', status: 'finished', result: { banked: 10 } }, START);
-  assert.equal(skipped.status, 'skipped');
 });

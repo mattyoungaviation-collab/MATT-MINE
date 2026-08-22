@@ -99,7 +99,7 @@ export const spawnTuningMethods = {
     this.run.safeStartUntil = this.run.elapsed +
       (arenaMode ? CONFIG.arenaSafeStartSeconds : (tuning.safeStartSeconds ?? CONFIG.safeStartSeconds));
 
-    const luck = arenaMode ? 0 : this.profile.meta.luck || 0;
+    const luck = 0;
     const oreEntries = Object.entries(ORE_TYPES)
       .filter(([id]) => id !== 'cache')
       .map(([id, ore]) => ({ id, ...ore }));
@@ -291,7 +291,7 @@ export const spawnTuningMethods = {
     this.enemies = this.enemies.filter((entry) => entry.id !== enemy.id);
     this.run.kills += 1;
     this.run.bossKills = Math.max(0, Math.floor(this.run.bossKills || 0)) + 1;
-    this.run.rawNuggets += Math.max(0, Math.round(tuning.bossPointValue || 0));
+    this.run.rawScore += Math.max(0, Math.round(tuning.bossPointValue || 0));
     this.hooks.onArenaEvent?.({
       type: 'guardian_defeated',
       tick: Math.round(this.run.elapsed * 1_000),
@@ -306,7 +306,7 @@ export const spawnTuningMethods = {
     for (let index = 0; index < count; index += 1) {
       this.pickups.push({
         id: this.entityId++,
-        type: 'nugget',
+        type: 'score',
         x: enemy.x + randomRange(-enemy.radius, enemy.radius),
         y: enemy.y + randomRange(-enemy.radius, enemy.radius),
         radius: 9,

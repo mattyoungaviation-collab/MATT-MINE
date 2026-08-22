@@ -292,18 +292,6 @@ export class MattMineApiClient {
     });
   }
 
-  async practiceRunClaim(runId, action, transactionHash = '') {
-    return this.request('/api/runs/practice/claim', {
-      method: 'POST',
-      authenticated: true,
-      body: {
-        runId,
-        action,
-        transactionHash
-      }
-    });
-  }
-
   async updateKeybindings(keybindings) {
     const response = await this.request('/api/profile/keybindings', {
       method: 'PUT',
@@ -333,15 +321,6 @@ export class MattMineApiClient {
       authenticated: true,
       body: { characterId }
     });
-  }
-
-  async purchaseCharacter(characterId) {
-    const response = await this.request('/api/characters/purchase', {
-      method: 'POST',
-      authenticated: true,
-      body: { characterId }
-    });
-    return response.expansion;
   }
 
   async betaAccess() {
@@ -380,24 +359,6 @@ export class MattMineApiClient {
     return response.revive;
   }
 
-  async confirmAdvertisement(runId, completion) {
-    const response = await this.request('/api/advertisements/confirm', {
-      method: 'POST',
-      authenticated: true,
-      body: { runId, completion }
-    });
-    return response.advertisement;
-  }
-
-  async skipAdvertisement(runId) {
-    const response = await this.request('/api/advertisements/skip', {
-      method: 'POST',
-      authenticated: true,
-      body: { runId }
-    });
-    return response.advertisement;
-  }
-
   async gameTuning(lobby) {
     const response = await this.request(`/api/game-tuning/${encodeURIComponent(lobby)}`);
     return response.preset;
@@ -432,14 +393,6 @@ export class MattMineApiClient {
       method: 'POST',
       authenticated: true,
       body: {}
-    });
-  }
-
-  async purchaseUpgrade(upgradeId) {
-    return this.request('/api/profile/upgrades', {
-      method: 'POST',
-      authenticated: true,
-      body: { upgradeId }
     });
   }
 

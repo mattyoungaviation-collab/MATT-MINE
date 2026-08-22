@@ -9,7 +9,6 @@ import {MattV2Miner} from "./MattV2Miner.sol";
 import {MattV2Loadout} from "./MattV2Loadout.sol";
 import {IMattV2CrystalBank} from "./interfaces/IMattV2CrystalBank.sol";
 import {IMattV2PassiveRewards} from "./interfaces/IMattV2PassiveRewards.sol";
-import {MattV2Math} from "./libraries/MattV2Math.sol";
 import {MattV2Types} from "./libraries/MattV2Types.sol";
 
 /// @title MATT Mine Game Settlement V2
@@ -20,6 +19,8 @@ contract MattV2GameSettlement is MattV2UpgradeableModule, EIP712Upgradeable {
 
     uint256 public constant HARD_RUN_PAYOUT_TOKENS = 100_000;
     uint256 public constant HARD_CONVERSION_TOKENS = 100_000;
+    uint16 public constant MAX_PHASE_XP = 250;
+    uint16 public constant MAX_RUN_XP = 500;
     uint32 public constant MIN_RUN_TIMEOUT = 5 minutes;
     uint32 public constant MAX_RUN_TIMEOUT = 24 hours;
 
@@ -89,6 +90,8 @@ contract MattV2GameSettlement is MattV2UpgradeableModule, EIP712Upgradeable {
     mapping(uint256 minerId => ActiveRun run) private _activeRuns;
     mapping(address player => uint256 nonce) public playerNonces;
     mapping(bytes32 runId => bool processed) public processedRuns;
+    mapping(bytes32 versionId => uint16[5] phaseXp) private _mapPhaseXp;
+    mapping(bytes32 runId => uint16[5] phaseXp) private _runPhaseXp;
 
     event MapVersionApproved(
         bytes32 indexed versionId,
@@ -100,6 +103,7 @@ contract MattV2GameSettlement is MattV2UpgradeableModule, EIP712Upgradeable {
         uint32 runTimeout
     );
     event MapVersionRetired(bytes32 indexed versionId);
+    event MapPhaseXpUpdated(bytes32 indexed versionId, uint16[5] phaseXp, uint16 totalXp);
     event RunStarted(
         bytes32 indexed runId,
         address indexed player,
@@ -225,6 +229,24 @@ contract MattV2GameSettlement is MattV2UpgradeableModule, EIP712Upgradeable {
         emit MapVersionRetired(versionId);
     }
 
+    function setMapPhaseXp(bytes32 versionId, uint16[5] calldata phaseXp) external onlyRole(CONFIG_ROLE) {
+        MapVersion storage version = mapVersions[versionId];
+        if (!version.approved || version.retired) revert InvalidMapVersion();
+        uint16 totalXp;
+        for (uint256 index; index < phaseXp.length; ++index) {
+            if (phaseXp[index] == 0 || phaseXp[index] > MAX_PHASE_XP) revert InvalidConfiguration();
+            totalXp += phaseXp[index];
+        }
+        if (totalXp > MAX_RUN_XP) revert InvalidConfiguration();
+        _mapPhaseXp[versionId] = phaseXp;
+        emit MapPhaseXpUpdated(versionId, phaseXp, totalXp);
+    }
+
+    function phaseXpForMap(bytes32 versionId) public view returns (uint16[5] memory phaseXp) {
+        phaseXp = _mapPhaseXp[versionId];
+        if (phaseXp[0] == 0) phaseXp = [uint16(10), 15, 20, 25, 30];
+    }
+
     function beginRun(RunAuthorization calldata authorization, bytes calldata playerSignature)
         external
         onlyRole(OPERATOR_ROLE)
@@ -257,6 +279,7 @@ contract MattV2GameSettlement is MattV2UpgradeableModule, EIP712Upgradeable {
             )
         );
         if (processedRuns[runId]) revert RunAlreadyProcessed();
+        _runPhaseXp[runId] = phaseXpForMap(authorization.mapVersion);
         playerNonces[authorization.player] = authorization.nonce + 1;
         _activeRuns[authorization.minerId] = ActiveRun({
             runId: runId,
@@ -316,12 +339,14 @@ contract MattV2GameSettlement is MattV2UpgradeableModule, EIP712Upgradeable {
 
         uint256 xpBanked;
         uint256 crystalsBanked;
+        uint16[5] memory phaseXp = _runPhaseXp[result.runId];
         processedRuns[result.runId] = true;
         delete _activeRuns[result.minerId];
+        delete _runPhaseXp[result.runId];
 
         uint8 oldLevel = miner.traitsOf(result.minerId).level;
         if (result.outcome == MattV2Types.Outcome.Extraction) {
-            xpBanked = MattV2Math.xpForPhases(result.completedPhases);
+            xpBanked = _xpForCompletedPhases(phaseXp, result.completedPhases);
             crystalsBanked = converted;
             miner.applyXp(result.minerId, xpBanked);
         } else {
@@ -356,6 +381,7 @@ contract MattV2GameSettlement is MattV2UpgradeableModule, EIP712Upgradeable {
         if (block.timestamp < uint256(active.startedAt) + active.runTimeout) revert ForceAbandonTooEarly();
         processedRuns[active.runId] = true;
         delete _activeRuns[minerId];
+        delete _runPhaseXp[active.runId];
         loadout.applyDeath(minerId);
         miner.setRunLocked(minerId, false);
         emit RunForceAbandoned(active.runId, active.player, minerId);
@@ -363,6 +389,15 @@ contract MattV2GameSettlement is MattV2UpgradeableModule, EIP712Upgradeable {
 
     function activeRun(uint256 minerId) external view returns (ActiveRun memory) {
         return _activeRuns[minerId];
+    }
+
+    function _xpForCompletedPhases(uint16[5] memory phaseXp, uint8 completedPhases)
+        private
+        pure
+        returns (uint256 xp)
+    {
+        if (phaseXp[0] == 0) phaseXp = [uint16(10), 15, 20, 25, 30];
+        for (uint256 index; index < completedPhases; ++index) xp += phaseXp[index];
     }
 
     function setRewardSigner(address signer) external onlyRole(DEFAULT_ADMIN_ROLE) whenPaused {

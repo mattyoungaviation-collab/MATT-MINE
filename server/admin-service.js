@@ -4,7 +4,6 @@ import { ApiError, assertApi } from './errors.js';
 import { validateUsername } from './identity.js';
 import { MattMineService } from './service.js';
 import { utcDayKey, utcWeekKey } from '../src/game/economy.js';
-import { META_UPGRADES } from '../src/game/config.js';
 import { defaultKeybindings, normalizeKeybindings } from '../src/game/keybindings.js';
 import {
   COSMETIC_SLOTS,
@@ -14,10 +13,6 @@ import {
   defaultPassInventory
 } from '../src/game/passRewards.js';
 import { defaultProfile } from '../src/game/storage.js';
-import {
-  NUGGET_LEDGER_TYPES,
-  setNuggetLedgerBalance
-} from './nugget-ledger.js';
 
 const MAX_PLAYER_VALUE = 1_000_000_000;
 
@@ -240,11 +235,7 @@ function applyResets(wallet, input, changes) {
   }
   if (input.profile === true) {
     resetWalletProfile(wallet, { profileOnly: true });
-    changes.push('reset gameplay profile and nuggets');
-  }
-  if (input.upgrades === true) {
-    wallet.profile.meta = defaultProfile().meta;
-    changes.push('reset permanent upgrades');
+    changes.push('reset gameplay profile');
   }
   if (input.pass === true) {
     wallet.passProgress = { xp: 0, updatedAt: 0 };
@@ -300,17 +291,6 @@ function applyIdentity(state, wallet, input, address, timestamp, changes) {
 
 function applyProfile(wallet, input, changes) {
   if (!isRecord(input)) return;
-  setInteger(input, 'bankedNuggets', 0, MAX_PLAYER_VALUE, (value) => {
-    const target = Math.min(value, MAX_PLAYER_VALUE);
-    const ledger = setNuggetLedgerBalance(wallet, target, {
-      type: NUGGET_LEDGER_TYPES.ADMIN_ADJUSTMENT,
-      details: `Admin profile banked nuggets set to ${target}`,
-      adminActor: 'SERVER_ADMIN',
-      idempotencyKey: `admin-profile-balance:${wallet.address}:${target}`
-    });
-    wallet.profile.bankedNuggets = target;
-    changes.push(`banked nuggets=${value}`);
-  });
   setInteger(input, 'bestDepth', 0, 100, (value) => {
     wallet.profile.bestDepth = value;
     changes.push(`best depth=${value}`);
@@ -323,36 +303,10 @@ function applyProfile(wallet, input, changes) {
     wallet.profile.totalRuns = value;
     changes.push(`total runs=${value}`);
   });
-
-  if (isRecord(input.meta)) {
-    for (const upgrade of META_UPGRADES) {
-      if (!Object.hasOwn(input.meta, upgrade.id)) continue;
-      const rank = strictInteger(input.meta[upgrade.id], `meta_${upgrade.id}`, 0, upgrade.max);
-      wallet.profile.meta[upgrade.id] = rank;
-      changes.push(`${upgrade.id} rank=${rank}`);
-    }
-  }
 }
 
-function resetWalletProfile(wallet, options = {}) {
-  const previousBalance = wallet.profile?.bankedNuggets || 0;
-  const profile = defaultProfile();
-  wallet.profile = {
-    ...profile,
-    meta: { ...profile.meta }
-  };
-
-  if (previousBalance > 0) {
-    const cleared = setNuggetLedgerBalance(wallet, 0, {
-      type: NUGGET_LEDGER_TYPES.ADMIN_ADJUSTMENT,
-      details: `Profile reset${options.profileOnly ? '' : ' with progression'}`,
-      adminActor: 'SERVER_ADMIN',
-      idempotencyKey: `admin-profile-reset:${wallet.address}:${previousBalance}:${options.profileOnly ? 'partial' : 'full'}`
-    });
-    if (cleared.entry) wallet.profile.bankedNuggets = cleared.newBalance;
-  } else {
-    wallet.profile.bankedNuggets = 0;
-  }
+function resetWalletProfile(wallet) {
+  wallet.profile = defaultProfile();
 }
 
 function applyPass(wallet, input, timestamp, changes) {
@@ -440,12 +394,6 @@ function applyKeybindings(wallet, input, changes) {
 
 function playerEditorMetadata() {
   return {
-    metaUpgrades: META_UPGRADES.map((upgrade) => ({
-      id: upgrade.id,
-      name: upgrade.name,
-      max: upgrade.max,
-      description: upgrade.description
-    })),
     cosmetics: Object.values(PASS_COSMETICS).map((cosmetic) => ({
       id: cosmetic.id,
       slot: cosmetic.slot,
@@ -455,7 +403,6 @@ function playerEditorMetadata() {
     passRewards: PASS_REWARD_LEVELS.map((reward) => ({ ...reward })),
     chestId: PASS_CHEST_ID,
     limits: {
-      bankedNuggets: MAX_PLAYER_VALUE,
       bestDepth: 100,
       bestScore: MAX_RUN_SCORE,
       weeklyScore: MAX_RUN_SCORE * 7,

@@ -59,10 +59,6 @@
             <button type="button" data-launch-action="leaderboards">LEADERBOARDS</button>
           </nav>
           <div class="launch-nav-actions">
-            <button id="launch-nugget-button" class="launch-nugget-button" type="button" data-open-nugget-shop>
-              <span aria-hidden="true">◆</span>
-              <strong id="launch-nugget-balance">0 NUGGETS</strong>
-            </button>
             <button id="launch-wallet-button" class="launch-wallet-button" type="button">
               <span class="status-dot"></span>
               <span id="launch-wallet-label">CONNECT WALLET</span>
@@ -129,10 +125,6 @@
                 <div><span>PASS RUN</span><strong><span id="launch-run-price">10</span> RON</strong></div>
               </div>
               <button type="button" data-launch-action="mines">VIEW THE THREE MINES</button>
-              <button class="launch-store-shortcut" type="button" data-open-nugget-shop>
-                <span><b>NUGGET STORE</b><small>Verified packages · Live balance</small></span>
-                <strong>OPEN STORE →</strong>
-              </button>
             </aside>
 
             <div class="launch-scroll-cue" aria-hidden="true"><span></span> DESCEND</div>
@@ -155,9 +147,6 @@
             </div>
             <button class="journey-continue" type="button" data-launch-action="how-to-play">
               <span>NOT SURE WHICH MINE?</span><strong>SEE HOW A RUN WORKS →</strong>
-            </button>
-            <button class="launch-home-store" type="button" data-open-nugget-shop>
-              <span><i aria-hidden="true">◆</i><strong>NUGGET STORE</strong><small>Live server balance · Verified packages</small></span><b>OPEN STORE →</b>
             </button>
           </section>
 
@@ -197,7 +186,7 @@
                 <b>04</b>
                 <span class="loop-icon">⇧</span>
                 <h3>EXTRACT</h3>
-                <p>Bank your nuggets, climb the leaderboard, earn Pass XP, and return for tomorrow's seed.</p>
+                <p>Climb the leaderboard, earn Pass XP, and return for tomorrow's seed.</p>
               </article>
             </div>
 
@@ -570,7 +559,6 @@
 
           <div class="menu-bottom-deck">
             <div class="menu-stats compact-stats">
-              <div><span>Banked Nuggets</span><strong id="menu-nuggets">0</strong></div>
               <div><span>Best Depth</span><strong id="menu-depth">0</strong></div>
               <div><span>Best Run</span><strong id="menu-score">0</strong></div>
             </div>
@@ -578,7 +566,6 @@
             <div class="menu-nav-grid" aria-label="Player menu">
               <button id="leaderboards-button" class="secondary-button">LEADERBOARDS</button>
               <button id="pass-button" class="secondary-button">MINE PASS</button>
-              <button id="upgrades-button" class="secondary-button">UPGRADES</button>
               <button id="profile-button" class="secondary-button">PROFILE</button>
               <button id="controls-button" class="secondary-button controls-nav-button">CONTROLS</button>
               <button id="sound-button" class="secondary-button">SOUND</button>
@@ -668,7 +655,6 @@
             <main class="profile-dashboard-main">
               <nav class="profile-tabs" aria-label="Miner profile sections">
                 <button class="active" type="button" data-profile-tab="overview">OVERVIEW</button>
-                <button type="button" data-profile-tab="upgrades">PERMANENT UPGRADES</button>
                 <button type="button" data-profile-tab="loadout">LOADOUT</button>
                 <button type="button" data-profile-tab="history">RUN HISTORY</button>
                 <button type="button" data-profile-tab="controls">CONTROLS</button>
@@ -676,15 +662,10 @@
 
               <section class="profile-tab-panel active" data-profile-panel="overview">
                 <div class="dashboard-metrics four">
-                  <div><span>BANKED NUGGETS</span><strong id="profile-nugget-value">0</strong></div>
                   <div><span>BEST SCORE</span><strong id="profile-best-score">0</strong></div>
                   <div><span>BEST DEPTH</span><strong id="profile-best-depth">0</strong></div>
                   <div><span>TOTAL RUNS</span><strong id="profile-total-runs">0</strong></div>
                 </div>
-                <article class="profile-section-card">
-                  <div class="section-heading-row"><h3>PERMANENT UPGRADES</h3><button id="profile-manage-upgrades-button" type="button">MANAGE UPGRADES</button></div>
-                  <div id="profile-upgrade-summary" class="profile-upgrade-summary"></div>
-                </article>
                 <article class="profile-section-card">
                   <div class="section-heading-row"><h3>RECENT RUNS</h3><span id="profile-history-status">SERVER VERIFIED</span></div>
                   <div class="leaderboard-table-wrap compact-history-wrap">
@@ -692,12 +673,8 @@
                   </div>
                 </article>
                 <div class="run-mode-grid expansion-lobbies" aria-label="Additional competitive modes">
-                  <button id="beta-run-button" class="run-mode-card" hidden><span class="mode-kicker">BETA TESTING</span><strong>Developer test mine</strong><small>No nuggets, MATT, Pass XP, achievements, or permanent progress.</small><b>ENTER BETA</b></button>
+                  <button id="beta-run-button" class="run-mode-card" hidden><span class="mode-kicker">BETA TESTING</span><strong>Developer test mine</strong><small>No MATT Crystals, Pass XP, achievements, or saved progress.</small><b>ENTER BETA</b></button>
                 </div>
-              </section>
-
-              <section class="profile-tab-panel" data-profile-panel="upgrades">
-                <article class="profile-section-card"><div class="section-heading-row"><h3>PERMANENT UPGRADES</h3><span>SERVER-SAVED</span></div><p>Spend banked nuggets on persistent miner upgrades. Ranked modes still obey their configured rules.</p><div id="profile-upgrade-grid" class="profile-upgrade-grid"></div><button id="profile-open-upgrades-button" class="primary-button gold-button">OPEN UPGRADE WORKSHOP</button></article>
               </section>
 
               <section class="profile-tab-panel" data-profile-panel="loadout">
@@ -721,7 +698,6 @@
             <aside class="profile-dashboard-rail">
               <article class="profile-rail-card pass-rail-card"><span>MINE PASS</span><strong>LEVEL <b id="profile-pass-level">1</b></strong><div class="bar"><div id="profile-pass-fill" class="bar-fill pass-xp-fill"></div></div><small id="profile-pass-xp">0 XP</small><small id="profile-pass-days">PASS INACTIVE</small><button id="profile-pass-button" type="button">VIEW PASS REWARDS</button></article>
               <article class="profile-rail-card loadout-rail-card"><span>EQUIPPED LOADOUT</span><strong id="profile-character-name">MATT</strong><small id="profile-weapon-name">STANDARD PICKAXE</small><small id="profile-frame-name">STANDARD FRAME</small><button id="profile-loadout-button" type="button">MANAGE LOADOUT</button></article>
-              <article class="profile-rail-card nugget-rail-card"><span>NUGGET STORE</span><strong id="profile-store-balance">0</strong><small>BUY VERIFIED NUGGET PACKAGES</small><button id="profile-open-store-button" type="button" data-open-nugget-shop>VIEW NUGGET PACKAGES</button></article>
             </aside>
           </div>
         </div>
@@ -751,7 +727,7 @@
               </ul>
             </div>
           </div>
-          <div class="pass-feature-rail" aria-label="Mine Pass benefits"><span>♛ <b>PREMIUM PASS<br />LEADERBOARD</b></span><span>⚒ <b>PAID RANKED<br />RUNS</b></span><span>2× <b>RUN XP &amp;<br />NUGGETS</b></span><span>◆ <b>PERMANENT<br />REWARDS</b></span></div>
+          <div class="pass-feature-rail" aria-label="Mine Pass benefits"><span>♛ <b>PREMIUM PASS<br />LEADERBOARD</b></span><span>⚒ <b>PAID RANKED<br />RUNS</b></span><span>2× <b>RUN PASS XP</b></span><span>◆ <b>PERMANENT<br />COSMETICS</b></span></div>
           <div class="pass-progress-card">
             <div class="label-row"><span>PASS LEVEL <strong id="pass-level">1</strong></span><span id="pass-xp-text">0 XP</span></div>
             <div class="bar"><div id="pass-xp-fill" class="bar-fill pass-xp-fill"></div></div>
@@ -937,16 +913,6 @@
         </div>
       </section>
 
-      <section id="upgrade-shop" class="screen" aria-labelledby="shop-title">
-        <div class="panel wide-panel">
-          <button class="close-button" data-close="upgrade-shop" aria-label="Close">×</button>
-          <p class="eyebrow">SPEND BANKED NUGGETS</p>
-          <h2 id="shop-title">Permanent Upgrades</h2>
-          <p class="panel-copy">Signed-in upgrades are saved by the server. Offline Practice upgrades remain in this browser.</p>
-          <div id="shop-grid" class="shop-grid"></div>
-        </div>
-      </section>
-
       <section id="sound-settings" class="screen" aria-labelledby="sound-title">
         <div class="panel audio-settings-panel">
           <button class="close-button" data-close="sound-settings" aria-label="Close">×</button>
@@ -1009,16 +975,6 @@
                 <button id="paid-revive-button" class="primary-button" type="button">REVIVE WITH RON</button>
                 <button id="paid-revive-decline" class="secondary-button" type="button">KEEP 50% AND END RUN</button>
               </section>
-              <section id="practice-claim-panel" class="practice-claim-card" hidden>
-                <p class="eyebrow">PRACTICE CLAIM</p>
-                <div id="practice-claim-info" class="run-claim-info"></div>
-                <label class="input-wrap">
-                  <span>Practice reward transaction hash</span>
-                  <input id="practice-claim-hash" type="text" inputmode="latin" autocomplete="off" placeholder="0x..." />
-                </label>
-                <button id="practice-claim-button" class="primary-button" type="button">CLAIM PRACTICE REWARDS</button>
-                <button id="practice-decline-button" class="secondary-button" type="button">DECLINE REWARDS</button>
-              </section>
             </div>
           </div>
           <div class="results-actions">
@@ -1048,7 +1004,7 @@
           <div class="depth-badge">DEPTH <strong id="depth-text">1</strong></div>
           <div class="loot-block">
             <span>UNBANKED</span>
-            <strong><span id="loot-text">0</span> NUGGETS</strong>
+            <strong><span id="loot-text">0</span> SCORE</strong>
             <small>x<span id="multiplier-text">1.0</span> depth bonus</small>
           </div>
         </div>

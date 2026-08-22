@@ -39,6 +39,8 @@ const SETTLEMENT_ABI = parseAbi([
   ...CONFIG_ABI_LINES,
   'function approveMapVersion(bytes32 mapId,bytes32 contentHash,uint32 mineableCrystalUnits,uint256 conversionRate,uint256 maximumPayout,uint32 runTimeout) returns (bytes32)',
   'function retireMapVersion(bytes32 versionId)',
+  'function phaseXpForMap(bytes32 versionId) view returns (uint16[5])',
+  'function setMapPhaseXp(bytes32 versionId,uint16[5] phaseXp)',
   'function mapVersions(bytes32 versionId) view returns (bytes32 mapId,bytes32 contentHash,uint128 conversionRate,uint128 maximumPayout,uint32 mineableCrystalUnits,uint32 runTimeout,bool approved,bool retired)'
 ]);
 const SLOT_NAMES = Object.freeze(['armor', 'pickaxe', 'blaster', 'dynamite', 'helmet', 'backpack']);
@@ -88,6 +90,18 @@ export class NftV2AdminService {
       Promise.all(SLOT_NAMES.map((_slot, index) => this.#read('chest', 'chestPrice', [index]))),
       Promise.all(Object.keys(this.addresses).map(async (name) => [name, await this.#read(name, 'paused')]))
     ]);
+    const activeMapVersions = { ...(this.gameplayService?.mapVersions || {}) };
+    const phaseXp = {};
+    let phaseXpConfigurable = true;
+    for (const [mode, versionId] of Object.entries(activeMapVersions)) {
+      if (!versionId) continue;
+      try {
+        phaseXp[mode] = (await this.#read('settlement', 'phaseXpForMap', [versionId])).map(Number);
+      } catch {
+        phaseXpConfigurable = false;
+        phaseXp[mode] = [10, 15, 20, 25, 30];
+      }
+    }
     return {
       repairPriceRaw: repairPrice.toString(),
       withdrawal: {
@@ -97,7 +111,10 @@ export class NftV2AdminService {
       },
       chestPrices: Object.fromEntries(SLOT_NAMES.map((slot, index) => [slot, prices[index].toString()])),
       paused: Object.fromEntries(paused),
-      activeMapVersions: { ...(this.gameplayService?.mapVersions || {}) }
+      activeMapVersions,
+      phaseXp,
+      phaseXpConfigurable,
+      phaseXpCaps: { perPhase: 250, perRun: 500 }
     };
   }
 
@@ -151,6 +168,23 @@ export class NftV2AdminService {
       const versionId = mapVersionId(args);
       this.gameplayService?.setMapVersion?.(mode, versionId);
       return { mode, versionId, transactionHash: hash, protocol: await this.snapshot() };
+    });
+  }
+
+  async setPhaseXp(input = {}) {
+    return this.#serialize(async () => {
+      const mode = ['arena', 'paid'].includes(String(input.mode || '').toLowerCase()) ? String(input.mode).toLowerCase() : '';
+      if (!mode) throw new ApiError(422, 'nft_map_mode_invalid', 'Choose arena or paid.');
+      const versionId = this.gameplayService?.mapVersions?.[mode];
+      if (!versionId) throw new ApiError(422, 'nft_map_inactive', `Approve an active ${mode} map first.`);
+      const phaseXp = validatePhaseXp(input.phaseXp);
+      try {
+        await this.#read('settlement', 'phaseXpForMap', [versionId]);
+      } catch {
+        throw new ApiError(409, 'nft_phase_xp_upgrade_required', 'The settlement contract must be upgraded before phase XP can be changed.');
+      }
+      const transactionHash = await this.#write('settlement', 'setMapPhaseXp', [versionId, phaseXp]);
+      return { mode, versionId, phaseXp, transactionHash, protocol: await this.snapshot() };
     });
   }
 
@@ -217,3 +251,9 @@ function positiveUint(value, label) { let result; try { result = BigInt(value); 
 function boundedUint128(value, label) { const result = positiveUint(value, label); if (result > (1n << 128n) - 1n) throw new ApiError(422, 'nft_uint_invalid', `${label} exceeds the contract ceiling.`); return result; }
 function positiveInteger(value, label) { const result = Number(value); if (!Number.isSafeInteger(result) || result <= 0) throw new Error(`${label} must be positive.`); return result; }
 function positiveNumber(value, label, maximum) { const result = Number(value); if (!Number.isSafeInteger(result) || result <= 0 || result > maximum) throw new ApiError(422, 'nft_number_invalid', `${label} is outside 1-${maximum}.`); return result; }
+function validatePhaseXp(value) {
+  if (!Array.isArray(value) || value.length !== 5) throw new ApiError(422, 'nft_phase_xp_invalid', 'Enter XP for all five phases.');
+  const result = value.map((entry, index) => positiveNumber(entry, `phase ${index + 1} XP`, 250));
+  if (result.reduce((sum, entry) => sum + entry, 0) > 500) throw new ApiError(422, 'nft_phase_xp_invalid', 'Total XP per run cannot exceed 500.');
+  return result;
+}

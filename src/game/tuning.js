@@ -12,7 +12,6 @@ export const MAX_TUNED_DEPTH = 5;
 // a second editable copy in Game Balance made the controls appear live even
 // though the published Studio snapshot always won at run start.
 const STUDIO_OWNED_SETTING_IDS = new Set([
-  'ignorePermanentUpgrades',
   'disableRunUpgrades',
   'usePerDepthRoomSpawns',
   'playerMaxHealth',
@@ -40,14 +39,6 @@ const STUDIO_OWNED_SETTING_IDS = new Set([
 export const V2_TRAIT_SUPERSEDED_SETTING_IDS = Object.freeze([
   'playerBaseDamage',
   'dynamiteDamage',
-  'permanentHealthPerRank',
-  'permanentDamagePerRank',
-  'permanentSpeedPerRank',
-  'permanentLuckPerRank',
-  'permanentMagnetPerRank',
-  'permanentArmorPerRank',
-  'permanentDashPerRank',
-  'permanentBlasterDamagePerRank',
   'armorUpgradePerLevel',
   'armorMaximum'
 ]);
@@ -83,7 +74,6 @@ const depthSpawnSchema = Array.from({ length: MAX_TUNED_DEPTH }, (_, index) => i
   )));
 
 export const GAME_TUNING_SCHEMA = Object.freeze([
-  toggle('ignorePermanentUpgrades', 'Beta testing', 'Ignore permanent upgrades', false, 'New runs use a clean new-player profile without deleting the wallet’s saved upgrades.'),
   toggle('disableRunUpgrades', 'Beta testing', 'Disable all in-run upgrades', false, 'Level-ups continue, but no upgrade selection screen appears and no temporary talents are applied.'),
   toggle('disableBlasterUpgrades', 'Beta testing', 'Disable Prospector Cache Blaster upgrades', false, 'The cache still refills the Blaster, but it does not offer Battery, Charger, Core, or Volley talents.'),
   toggle('usePerDepthRoomSpawns', 'Beta testing', 'Use editable per-depth room spawns', true, 'Uses the room-by-room spawn plan below. Saving applies this choice to the next new run; runs already in progress keep their pinned plan.'),
@@ -101,15 +91,6 @@ export const GAME_TUNING_SCHEMA = Object.freeze([
   number('dashDuration', 'Player', 'Dash duration', CONFIG.dashDuration, .05, .8, .01),
   number('safeStartSeconds', 'Player', 'Safe-start seconds', CONFIG.safeStartSeconds, 0, 30, .5),
   number('safeStartDistance', 'Player', 'Safe-start enemy distance', CONFIG.safeStartEnemyDistance, 0, 900, 10),
-
-  number('permanentHealthPerRank', 'Permanent upgrade scaling', 'Health per permanent rank', 8, 0, 100, 1),
-  number('permanentDamagePerRank', 'Permanent upgrade scaling', 'Damage per permanent rank', .05, 0, .5, .005),
-  number('permanentSpeedPerRank', 'Permanent upgrade scaling', 'Speed per permanent rank', .02, 0, .25, .005),
-  number('permanentLuckPerRank', 'Permanent upgrade scaling', 'Rich-ore chance per permanent rank', .01, 0, .1, .0025),
-  number('permanentMagnetPerRank', 'Permanent upgrade scaling', 'Pickup range per permanent rank', 6, 0, 50, 1),
-  number('permanentArmorPerRank', 'Permanent upgrade scaling', 'Armor per permanent rank', .008, 0, .05, .001, 'Damage reduction added by each permanent Reinforced Plates rank.'),
-  number('permanentDashPerRank', 'Permanent upgrade scaling', 'Dash recharge per permanent rank', .02, 0, .2, .005),
-  number('permanentBlasterDamagePerRank', 'Permanent upgrade scaling', 'Blaster damage per permanent rank', .03, 0, .25, .005),
 
   number('runPowerPerLevel', 'Run upgrade scaling', 'Heavy Pick damage per level', .25, 0, 2, .01),
   number('runSpeedPerLevel', 'Run upgrade scaling', 'Fast Boots speed per level', .12, 0, 1, .01),
@@ -187,7 +168,7 @@ export const GAME_TUNING_SCHEMA = Object.freeze([
   number('treasureAmountMultiplier', 'Mine layout', 'Treasure amount multiplier', 1, 0, 5, .05),
 
   number('scoreMultiplier', 'Rewards and scoring', 'Leaderboard score multiplier', 1, 0, 10, .05, 'Scales the final server-replayed run score.'),
-  number('nuggetMultiplier', 'Rewards and scoring', 'Mined ore score-value multiplier', 1, 0, 10, .05, 'Scales score value released by mined ore and treasure. It does not mint MATT Crystals.'),
+  number('oreScoreMultiplier', 'Rewards and scoring', 'Mined ore score-value multiplier', 1, 0, 10, .05, 'Scales leaderboard score released by mined ore and treasure.'),
   number('xpMultiplier', 'Rewards and scoring', 'In-run upgrade XP multiplier', 1, 0, 10, .05, 'Scales temporary XP earned inside a run from every source. V2 Miner lifetime XP remains the immutable five-phase contract table.'),
   number('passXpMultiplier', 'Rewards and scoring', 'Mine Pass progression XP multiplier', 1, 0, 10, .05, 'Scales separate Mine Pass progression after a verified run. It does not change Miner NFT lifetime XP.'),
   number('killPointValue', 'Rewards and scoring', 'Bonus points per enemy', 0, 0, 10000),
@@ -262,8 +243,7 @@ export function defaultTuningPreset(lobby = 'practice') {
       blasterVolleyTwoDamageMultiplier: 1,
       blasterVolleyThreeDamageMultiplier: 1,
       armorUpgradePerLevel: .12,
-      armorMaximum: .6,
-      permanentArmorPerRank: .01
+      armorMaximum: .6
     });
   }
   return preset;

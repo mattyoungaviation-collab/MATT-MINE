@@ -63,8 +63,8 @@ test('normalized migrations, dual-write backfill, validation, and lossless rollb
     assert.equal(disabledChallenge.rows[0].count, 0);
     const legacy = await database.query('SELECT data FROM matt_mine_state WHERE id=1');
     assert.equal(legacy.rowCount, 1);
-    const financial = await database.query('SELECT COUNT(*)::integer AS count FROM matt_mine_normalized.nugget_ledger');
-    assert.ok(financial.rows[0].count >= 0);
+    const retiredCurrencyTable = await database.query("SELECT to_regclass('matt_mine_normalized.nugget_ledger') AS table_name");
+    assert.equal(retiredCurrencyTable.rows[0].table_name, null);
     const payment = {
       idempotencyKey: 'integration:payment:1',
       requestHash: 'request-hash-1',

@@ -6,22 +6,14 @@ import { createMattMineHttpServer } from './http.js';
 import { isTransientPostgresError } from './postgres-resilience.js';
 import { observeHttpRequest } from './observability.js';
 
-const ECONOMY_PATHS = new Set([
-  '/api/nuggets/status',
-  '/api/nuggets/purchases/quote',
-  '/api/nuggets/purchases/confirm',
-  '/api/nuggets/practice/quote',
-  '/api/admin/nugget-economy',
+const PRODUCTION_PATHS = new Set([
   '/api/expansion/status',
   '/api/profile/controller',
   '/api/characters/select',
-  '/api/characters/purchase',
   '/api/revives/request',
   '/api/revives/confirm',
   '/api/revives/resume',
   '/api/revives/cancel',
-  '/api/advertisements/confirm',
-  '/api/advertisements/skip',
   '/api/beta/access',
   '/api/admin/expansion',
   '/api/admin/beta-testers',
@@ -40,7 +32,7 @@ export function createProductionMattMineHttpServer({ root, service, maxRequestBy
 
   return http.createServer(async (request, response) => {
     const requestUrl = new URL(request.url || '/', requestOrigin(request, service.publicOrigin));
-    if (!ECONOMY_PATHS.has(requestUrl.pathname)) {
+    if (!PRODUCTION_PATHS.has(requestUrl.pathname)) {
       baseHandler(request, response);
       return;
     }
@@ -87,11 +79,6 @@ export function createProductionMattMineHttpServer({ root, service, maxRequestBy
         sendJson(response, 200, { ok: true, ...(await service.selectCharacter(bearerToken(request), body.characterId)) });
         return;
       }
-      if (method === 'POST' && path === '/api/characters/purchase') {
-        const body = await readJson(request, maxRequestBytes);
-        sendJson(response, 200, { ok: true, expansion: await service.purchaseCharacter(bearerToken(request), body.characterId) });
-        return;
-      }
       if (method === 'POST' && path === '/api/revives/request') {
         const body = await readJson(request, maxRequestBytes);
         sendJson(response, 201, { ok: true, revive: await service.requestPaidRevive(bearerToken(request), body) });
@@ -113,16 +100,6 @@ export function createProductionMattMineHttpServer({ root, service, maxRequestBy
           ok: true,
           revive: await service.cancelPaidRevive(bearerToken(request), body.runId)
         });
-        return;
-      }
-      if (method === 'POST' && path === '/api/advertisements/confirm') {
-        const body = await readJson(request, maxRequestBytes);
-        sendJson(response, 200, { ok: true, advertisement: await service.confirmAdvertisementBonus(bearerToken(request), body) });
-        return;
-      }
-      if (method === 'POST' && path === '/api/advertisements/skip') {
-        const body = await readJson(request, maxRequestBytes);
-        sendJson(response, 200, { ok: true, advertisement: await service.skipAdvertisementBonus(bearerToken(request), body.runId) });
         return;
       }
       if (method === 'POST' && path === '/api/beta/access') {
@@ -169,45 +146,7 @@ export function createProductionMattMineHttpServer({ root, service, maxRequestBy
         return;
       }
 
-      if (method === 'GET' && path === '/api/nuggets/status') {
-        const result = await service.nuggetEconomyStatus(bearerToken(request));
-        sendJson(response, 200, { ok: true, economy: result });
-        return;
-      }
-      if (method === 'POST' && path === '/api/nuggets/purchases/quote') {
-        const body = await readJson(request, maxRequestBytes);
-        const result = await service.quoteNuggetPurchase(bearerToken(request), body);
-        sendJson(response, 201, { ok: true, ...result });
-        return;
-      }
-      if (method === 'POST' && path === '/api/nuggets/purchases/confirm') {
-        const body = await readJson(request, maxRequestBytes);
-        const result = await service.confirmNuggetPurchase(bearerToken(request), body);
-        sendJson(response, 200, { ok: true, ...result });
-        return;
-      }
-      if (method === 'POST' && path === '/api/nuggets/practice/quote') {
-        const body = await readJson(request, maxRequestBytes);
-        const result = await service.quotePracticeClaim(bearerToken(request), body);
-        sendJson(response, 201, { ok: true, ...result });
-        return;
-      }
-      if (method === 'GET' && path === '/api/admin/nugget-economy') {
-        const result = await service.adminNuggetEconomy(request.headers['x-matt-admin-key']);
-        sendJson(response, 200, { ok: true, economy: result });
-        return;
-      }
-      if (method === 'PUT' && path === '/api/admin/nugget-economy') {
-        const body = await readJson(request, maxRequestBytes);
-        const result = await service.updateAdminNuggetEconomy(
-          request.headers['x-matt-admin-key'],
-          body.patch,
-          body.reason
-        );
-        sendJson(response, 200, { ok: true, economy: result });
-        return;
-      }
-      throw new ApiError(405, 'method_not_allowed', 'That nugget economy route does not support this method.');
+      throw new ApiError(405, 'method_not_allowed', 'That production route does not support this method.');
     } catch (error) {
       sendError(response, error);
     }
@@ -294,7 +233,7 @@ function sendError(response, error) {
     response.setHeader('retry-after', '2');
     console.warn('[MATT Mine economy] PostgreSQL temporarily unavailable.', error?.code || error?.message || error);
   } else if (!(error instanceof ApiError)) {
-    console.error('[MATT Mine nugget economy]', error);
+    console.error('[MATT Mine production API]', error);
   }
   sendJson(response, status, {
     ok: false,

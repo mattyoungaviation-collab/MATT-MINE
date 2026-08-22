@@ -41,7 +41,6 @@
         <button data-tab="expansion"><span>Features &amp; Practice</span><small>Gates, controllers &amp; roster</small></button>
         <span class="nav-label">Economy</span>
         <button data-tab="nft-v2"><span>NFT V2 Protocol</span><small>On-chain maps &amp; economy</small></button>
-        <button data-tab="nugget-economy"><span>Nugget Economy</span><small>Prices &amp; packages</small></button>
         <button data-tab="arena"><span>MATT Arena</span><small>Pool &amp; settlement</small></button>
         <span class="nav-label">System</span>
         <button data-tab="contracts"><span>Onchain Actions</span><small>Safe transaction files</small></button>
@@ -152,7 +151,7 @@
           <div><p class="eyebrow">MODERATION</p><h2>Players and wallets</h2></div>
           <form id="wallet-search"><input id="wallet-query" placeholder="Search miner name or wallet"><button>Search</button></form>
         </div>
-        <div class="panel table-wrap"><table><thead><tr><th>Wallet</th><th>Status</th><th>Nuggets</th><th>Runs</th><th>Credits</th><th>Action</th></tr></thead><tbody id="wallet-rows"></tbody></table></div>
+        <div class="panel table-wrap"><table><thead><tr><th>Wallet</th><th>Status</th><th>Runs</th><th>Credits</th><th>Action</th></tr></thead><tbody id="wallet-rows"></tbody></table></div>
         <div id="wallet-detail" class="panel" hidden></div>
       </section>
 
@@ -271,16 +270,16 @@
 
         <form id="nft-v2-economy-form">
           <details class="panel structured-card" open>
-            <summary><strong>Repair and withdrawal limits</strong><span>Raw 18-decimal token units</span></summary>
+            <summary><strong>Repair and withdrawal limits</strong><span>Enter normal token amounts</span></summary>
             <div class="tuning-grid">
-              <label class="tuning-field">Armor repair price (MATT wei)<input id="nft-v2-repair" inputmode="numeric" pattern="[0-9]+" required></label>
-              <label class="tuning-field">Minimum withdrawal (Crystal wei)<input id="nft-v2-withdraw-min" inputmode="numeric" pattern="[0-9]+" required></label>
-              <label class="tuning-field">Wallet daily limit (Crystal wei)<input id="nft-v2-withdraw-wallet" inputmode="numeric" pattern="[0-9]+" required></label>
-              <label class="tuning-field">Global daily limit (Crystal wei)<input id="nft-v2-withdraw-global" inputmode="numeric" pattern="[0-9]+" required></label>
+              <label class="tuning-field">Armor repair price (MATT)<input id="nft-v2-repair" type="number" min="0.000001" step="0.000001" required></label>
+              <label class="tuning-field">Minimum withdrawal (MATT Crystals)<input id="nft-v2-withdraw-min" type="number" min="0.000001" step="0.000001" required></label>
+              <label class="tuning-field">Wallet daily limit (MATT Crystals)<input id="nft-v2-withdraw-wallet" type="number" min="0.000001" step="0.000001" required></label>
+              <label class="tuning-field">Global daily limit (MATT Crystals)<input id="nft-v2-withdraw-global" type="number" min="0.000001" step="0.000001" required></label>
             </div>
           </details>
           <details class="panel structured-card" open>
-            <summary><strong>Equipment chest prices</strong><span>Raw MATT wei</span></summary>
+            <summary><strong>Equipment chest prices</strong><span>MATT per chest</span></summary>
             <div id="nft-v2-chest-prices" class="tuning-grid"></div>
           </details>
           <article class="panel save-bar">
@@ -293,13 +292,14 @@
           <form id="nft-v2-map-form" class="panel">
             <h2>Approve and activate map version</h2>
             <label>Mine<select id="nft-v2-map-mode"><option value="arena">MATT Arena</option><option value="paid">Pass Mine</option></select></label>
-            <label>Map ID (bytes32)<input id="nft-v2-map-id" maxlength="66" spellcheck="false" required placeholder="0x…"></label>
-            <label>Content hash (bytes32)<input id="nft-v2-content-hash" maxlength="66" spellcheck="false" required placeholder="0x…"></label>
+            <label>Current mine seed<input id="nft-v2-map-seed" readonly></label>
+            <label>Map ID (automatic)<input id="nft-v2-map-id" readonly></label>
+            <label>Content hash (automatic)<input id="nft-v2-content-hash" readonly></label>
             <div class="compact-grid">
               <label>Mineable units<input id="nft-v2-mineable" type="number" min="1" max="1000000" step="1" required></label>
-              <label>Run timeout seconds<input id="nft-v2-timeout" type="number" min="300" max="86400" step="1" required></label>
-              <label>Conversion (Crystal wei/unit)<input id="nft-v2-conversion" inputmode="numeric" pattern="[0-9]+" required></label>
-              <label>Maximum payout (Crystal wei)<input id="nft-v2-max-payout" inputmode="numeric" pattern="[0-9]+" required></label>
+              <label>Run timeout (minutes)<input id="nft-v2-timeout" type="number" min="5" max="1440" step="1" required></label>
+              <label>MATT Crystals per mined Crystal<input id="nft-v2-conversion" type="number" min="0.000001" max="100000" step="0.000001" required></label>
+              <label>Maximum payout (MATT Crystals)<input id="nft-v2-max-payout" type="number" min="0.000001" max="100000" step="0.000001" required></label>
             </div>
             <label>Required reason<input id="nft-v2-map-reason" maxlength="240" required></label>
             <button type="submit">Approve + route new runs</button>
@@ -312,79 +312,16 @@
             <button class="danger" type="submit">Retire map version</button>
           </form>
         </div>
-        <article class="panel"><h2>Active routes</h2><div id="nft-v2-map-routes"></div></article>
-      </section>
-
-      <section id="tab-nugget-economy" class="tab">
-        <div class="section-heading">
-          <div><p class="eyebrow">NUGGET ECONOMY</p><h2>Prices, packages, and verified payments</h2><p>Server-authoritative purchase rules and permanent character unlock prices.</p></div>
-          <button id="refresh-nugget-economy" class="ghost" type="button">Refresh</button>
-        </div>
-        <div id="nugget-economy-blocker" class="notice warning" hidden></div>
-        <div id="nugget-economy-metrics" class="metrics"></div>
-        <form id="nugget-economy-form">
-          <details class="panel structured-card" open>
-            <summary><strong>Release gates</strong><span>4 controls</span></summary>
-            <div class="toggle-grid">
-              <label class="toggle">Nugget purchases<input id="economy-purchases-enabled" type="checkbox"></label>
-              <input id="economy-practice-enabled" type="checkbox" hidden disabled aria-hidden="true">
-              <label class="toggle linked-field"><span class="toggle-copy">Advertisement rewards<span class="link-chip">Linked · Features &amp; Practice</span></span><input id="economy-ads-enabled" type="checkbox" data-linked-control="advertisement-rewards-enabled"></label>
-              <label class="toggle">Accept MATT<input id="economy-asset-matt" type="checkbox"></label>
-              <label class="toggle">Accept RON<input id="economy-asset-ron" type="checkbox"></label>
-            </div>
-            <p class="muted">Paid features stay blocked unless the exact Ronin receipt verifier is live. Linked controls update together.</p>
-          </details>
-
-          <details class="panel structured-card" open>
-            <summary><strong>Canonical value and limits</strong><span>6 controls</span></summary>
-            <div class="tuning-grid">
-              <label class="tuning-field">Nuggets per MATT<input id="economy-nuggets-per-matt" type="number" min="0.000001" max="1000000000" step="0.000001"></label>
-              <label class="tuning-field">MATT per nugget<input id="economy-matt-per-nugget" type="number" step="0.000000001" readonly></label>
-              <label class="tuning-field">USD reference per 1,000,000 nuggets<input id="economy-usd-reference" type="number" min="0" max="1000000" step="0.01"></label>
-              <label class="tuning-field">UTC daily purchase cap<input id="economy-daily-cap" type="number" min="0" max="1000000000" step="1"></label>
-              <label class="tuning-field">Quote lifetime (seconds)<input id="economy-quote-seconds" type="number" min="30" max="1800" step="1"></label>
-              <label class="tuning-field">Approved recipient<input id="economy-recipient" maxlength="42" spellcheck="false"></label>
-            </div>
-          </details>
-
-          <details class="panel structured-card" hidden>
-            <summary><strong>Retired Practice claim price</strong><span>Not used</span></summary>
-            <div class="tuning-grid">
-              <label class="tuning-field">Payment asset<select id="economy-practice-asset"><option value="MATT">MATT</option><option value="RON">RON</option></select></label>
-              <label class="tuning-field">Token amount<input id="economy-practice-amount" type="number" min="0" step="0.000000000000000001"></label>
-            </div>
-          </details>
-
-          <details class="panel structured-card" open>
-            <summary><strong>Purchase packages</strong><span>Exact verified quotes</span></summary>
-            <div class="action-row section-actions"><p>Each enabled package needs a positive price in an accepted asset.</p><button id="economy-add-package" class="ghost" type="button">Add package</button></div>
-            <div id="economy-package-list" class="cards"></div>
-          </details>
-
-          <details class="panel structured-card">
-            <summary><strong>Character unlock prices</strong><span class="link-chip">Linked · Playable roster</span></summary>
-            <div class="tuning-grid">
-              <label class="tuning-field linked-field">Ronke nuggets<span class="link-chip">Linked</span><input id="economy-character-ronke" data-linked-control="character-price-ronke" type="number" min="0" max="1000000000" step="1"></label>
-              <label class="tuning-field linked-field">ADL Dyno nuggets<span class="link-chip">Linked</span><input id="economy-character-adl" data-linked-control="character-price-adl-dyno" type="number" min="0" max="1000000000" step="1"></label>
-              <label class="tuning-field linked-field">Axie nuggets<span class="link-chip">Linked</span><input id="economy-character-axie" data-linked-control="character-price-axie" type="number" min="0" max="1000000000" step="1"></label>
-              <label class="tuning-field linked-field">Orc nuggets<span class="link-chip">Linked</span><input id="economy-character-orc" data-linked-control="character-price-orc" type="number" min="0" max="1000000000" step="1"></label>
-            </div>
-          </details>
-
-          <article class="panel save-bar">
-            <label>Required reason<input id="economy-reason" maxlength="240" placeholder="Why are these economy rules changing?" required></label>
-            <button type="submit">Save nugget economy</button>
-          </article>
+        <form id="nft-v2-xp-form" class="panel">
+          <h2>NFT XP per completed phase</h2>
+          <p class="muted">Set each mine separately. Pass Mine can award more XP. A run locks these values when it starts.</p>
+          <label>Mine<select id="nft-v2-xp-mode"><option value="arena">MATT Arena</option><option value="paid">Pass Mine</option></select></label>
+          <div id="nft-v2-phase-xp" class="tuning-grid"></div>
+          <p id="nft-v2-xp-total" class="notice"></p>
+          <label>Required reason<input id="nft-v2-xp-reason" maxlength="240" required placeholder="Why is this mine's XP changing?"></label>
+          <button id="nft-v2-xp-submit" type="submit">Save phase XP on-chain</button>
         </form>
-
-        <details class="panel structured-card" open>
-          <summary><strong>Recent verified purchases</strong><span>Latest 250</span></summary>
-          <div class="table-wrap"><table><thead><tr><th>UTC time</th><th>Wallet</th><th>Package</th><th>Nuggets</th><th>Paid</th><th>Transaction</th></tr></thead><tbody id="economy-purchase-rows"></tbody></table></div>
-        </details>
-        <details class="panel structured-card">
-          <summary><strong>Economy audit</strong><span>Latest changes</span></summary>
-          <div id="economy-audit-list" class="timeline"></div>
-        </details>
+        <article class="panel"><h2>Active routes</h2><div id="nft-v2-map-routes"></div></article>
       </section>
 
       <section id="tab-arena" class="tab">
@@ -479,7 +416,6 @@
   </dialog>
   <script type="module" src="/src/admin.js"></script>
   <script type="module" src="/src/adminPlayerEditor.js"></script>
-  <script type="module" src="/src/adminEconomy.js"></script>
   <script type="module" src="/src/adminCompetitionStudio.js"></script>
 </body>
 </html>

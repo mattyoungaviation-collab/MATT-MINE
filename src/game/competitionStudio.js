@@ -485,7 +485,6 @@ function defaultLoadout() {
     startingHealth: 100,
     startingDynamite: 0,
     blasterEnergy: 115,
-    permanentUpgrades: true,
     runUpgrades: true,
     maximumDrones: 4,
     paidRevive: false
@@ -510,7 +509,6 @@ function normalizeLoadout(input, slotId = 'practice') {
     startingHealth: nftGated ? 100 : boundedNumber(source.startingHealth, 1, 1000, 100),
     startingDynamite: boundedInteger(source.startingDynamite, 0, 99, 0),
     blasterEnergy: boundedNumber(source.blasterEnergy, 1, 1000, 115),
-    permanentUpgrades: nftGated ? false : source.permanentUpgrades !== false,
     runUpgrades: source.runUpgrades !== false,
     maximumDrones: boundedInteger(source.maximumDrones, 0, 4, 4),
     paidRevive: slotId !== 'practice' && source.paidRevive === true

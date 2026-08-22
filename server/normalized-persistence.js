@@ -80,41 +80,6 @@ export async function backfillNormalizedState(client, state, options = {}) {
         [address, avatar.mime, avatar.content, sha256(avatar.content), wallet.identity.avatarUpdatedAt || 0]
       );
     }
-    const ledger = Array.isArray(wallet.nuggetLedger) ? wallet.nuggetLedger : [];
-    for (let index = 0; index < ledger.length; index += 1) {
-      const entry = ledger[index];
-      const amount = Math.abs(Number(entry.amount || 0));
-      if (!entry.id || !amount) continue;
-      await client.query(
-        `INSERT INTO matt_mine_normalized.nugget_ledger
-         (entry_id,address,sequence,idempotency_key,transaction_hash,amount,balance_after,entry_type,run_id,created_at_ms,payload)
-         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)
-         ON CONFLICT(entry_id) DO NOTHING`,
-        [entry.id, address, index + 1, entry.idempotencyKey || `legacy:${address}:${entry.id}`,
-          entry.transactionHash || null, entry.direction === 'debit' ? -amount : amount,
-          Math.max(0, Number(entry.newBalance || 0)), entry.type || 'legacy', entry.runId || null,
-          entry.timestamp || 0, JSON.stringify(entry)]
-      );
-    }
-    await client.query(
-      `INSERT INTO matt_mine_normalized.nugget_balances(address,balance,ledger_sequence,updated_at_ms)
-       VALUES($1,$2,$3,$4) ON CONFLICT(address) DO UPDATE SET
-       balance=EXCLUDED.balance,ledger_sequence=EXCLUDED.ledger_sequence,updated_at_ms=EXCLUDED.updated_at_ms`,
-      [address, Math.max(0, Number(wallet.profile?.bankedNuggets || 0)), ledger.length, wallet.updatedAt || 0]
-    );
-    for (const claim of Object.values(wallet.practiceClaims || {})) {
-      await client.query(
-        `INSERT INTO matt_mine_normalized.practice_claims
-         (run_id,address,status,transaction_hash,quote_id,projected_nuggets,created_at_ms,expires_at_ms,settled_at_ms,payload)
-         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)
-         ON CONFLICT(run_id) DO UPDATE SET status=EXCLUDED.status,
-         transaction_hash=EXCLUDED.transaction_hash,quote_id=EXCLUDED.quote_id,
-         settled_at_ms=EXCLUDED.settled_at_ms,payload=EXCLUDED.payload`,
-        [claim.runId, address, claim.status, claim.transactionHash || null, claim.quoteId || null,
-          claim.projectedNuggets || 0, claim.createdAt || 0, claim.expiresAt || 0,
-          claim.settledAt || null, JSON.stringify(claim)]
-      );
-    }
     for (const activity of wallet.activity || []) {
       if (!activity.id) continue;
       await client.query(
@@ -231,19 +196,11 @@ export async function backfillNormalizedState(client, state, options = {}) {
 }
 
 export async function validateNormalizedState(client, state) {
-  const [wallets, runs, ledger] = await Promise.all([
+  const [wallets, runs] = await Promise.all([
     client.query('SELECT COUNT(*)::integer AS count FROM matt_mine_normalized.wallets'),
-    client.query('SELECT COUNT(*)::integer AS count FROM matt_mine_normalized.runs'),
-    client.query(`SELECT address,balance,ledger_sequence FROM matt_mine_normalized.nugget_balances ORDER BY address`)
+    client.query('SELECT COUNT(*)::integer AS count FROM matt_mine_normalized.runs')
   ]);
   const discrepancies = [];
-  for (const row of ledger.rows) {
-    const legacy = state.wallets?.[row.address];
-    if (!legacy) discrepancies.push({ type: 'normalized_wallet_missing_in_legacy', address: row.address });
-    else if (Number(row.balance) !== Number(legacy.profile?.bankedNuggets || 0)) {
-      discrepancies.push({ type: 'nugget_balance_mismatch', address: row.address, normalized: Number(row.balance), legacy: Number(legacy.profile?.bankedNuggets || 0) });
-    }
-  }
   await client.query(`UPDATE matt_mine_normalized.cutover_state SET last_validation_at=NOW(),updated_at=NOW() WHERE singleton=TRUE`);
   return {
     ok: discrepancies.length === 0,
@@ -269,7 +226,7 @@ async function upsertRun(client, run) {
       run.startedAt || 0, run.expiresAt || 0, run.finishedAt || null, run.buildCommit || process.env.RENDER_GIT_COMMIT || 'unknown',
       run.engineVersion || 'game-v4', run.replaySchemaVersion || 'matt-competitive-input-v1', snapshot?.id || null,
       snapshot ? sha256(stableJson(snapshot)) : null, run.tuningVersion || null, sha256(stableJson(tuning)),
-      JSON.stringify(run.playerProfile || {}), JSON.stringify(run.passMultipliers || tuning._minePassBenefits || { xp: 1, nuggets: 1 }),
+      JSON.stringify(run.playerProfile || {}), JSON.stringify(run.passMultipliers || tuning._minePassBenefits || { xp: 1 }),
       JSON.stringify(run.authoritativeCheckpoint || run.playerState || {}), JSON.stringify(run)]
   );
 }
@@ -277,9 +234,7 @@ async function upsertRun(client, run) {
 function withoutAvatar(wallet) {
   const copy = structuredClone(wallet);
   if (copy.identity) delete copy.identity.avatarDataUrl;
-  delete copy.nuggetLedger;
   delete copy.activity;
-  delete copy.practiceClaims;
   return copy;
 }
 

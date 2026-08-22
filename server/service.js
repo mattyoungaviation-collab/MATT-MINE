@@ -1,6 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { getAddress, verifyMessage } from 'viem';
-import { META_UPGRADES, metaUpgradeCost } from '../src/game/config.js';
 import {
   ADMIN_GAME_TUNING_SCHEMA,
   ACTIVE_GAMEPLAY_LOBBIES,
@@ -12,7 +11,6 @@ import { normalizeControllerProfile } from '../src/game/expansionConfig.js';
 import { passLevel, utcDayKey, utcWeekKey } from '../src/game/economy.js';
 import {
   COSMETIC_SLOTS,
-  PASS_CHEST_BONUS_NUGGETS,
   PASS_CHEST_ID,
   PASS_COSMETICS,
   PASS_REWARD_LEVELS,
@@ -41,10 +39,6 @@ import {
   MATT_MINE_ADMIN_CONTRACTS,
   prepareAdminContractTransactions
 } from './admin-controls.js';
-import {
-  NUGGET_LEDGER_TYPES,
-  applyNuggetLedgerDelta
-} from './nugget-ledger.js';
 import { applyTuningLinksToExpansion } from './admin-control-links.js';
 import {
   consumeWeeklyAttempt,
@@ -552,25 +546,18 @@ export class MattMineService {
       chest.lastOpenedAt = timestamp;
       unlockCosmetic(wallet, 'molten_pickaxe');
       if (!wallet.passInventory.equipped.weapon) wallet.passInventory.equipped.weapon = 'molten_pickaxe';
-      const ledgerUpdate = applyNuggetLedgerDelta(wallet, PASS_CHEST_BONUS_NUGGETS, {
-        type: NUGGET_LEDGER_TYPES.CHEST_REWARD,
-        idempotencyKey: `pass-chest:${wallet.address}:${PASS_CHEST_ID}:${chest.opened}`,
-        details: `Pass chest opening ${PASS_CHEST_ID}`
-      });
-      assertApi(!ledgerUpdate.skipped, 409, 'duplicate_chest_reward', 'That Pass chest reward was already awarded.');
       wallet.updatedAt = timestamp;
       addAudit(
         state,
         session.address,
         'PASS_CHEST_OPENED',
-        `Molten Pickaxe and ${PASS_CHEST_BONUS_NUGGETS} nuggets`,
+        'Molten Pickaxe cosmetic',
         timestamp
       );
       return {
         chestId: PASS_CHEST_ID,
         rewards: {
-          cosmetic: structuredClone(PASS_COSMETICS.molten_pickaxe),
-          nuggets: PASS_CHEST_BONUS_NUGGETS
+          cosmetic: structuredClone(PASS_COSMETICS.molten_pickaxe)
         },
         profile: structuredClone(wallet.profile),
         passInventory: publicPassInventory(wallet)
@@ -809,7 +796,6 @@ export class MattMineService {
         baseTuning.playerMaxHealth = competitionSnapshot.loadout.startingHealth;
         baseTuning.dynamiteStartAmmo = competitionSnapshot.loadout.startingDynamite;
         baseTuning.blasterEnergy = competitionSnapshot.loadout.blasterEnergy;
-        baseTuning.ignorePermanentUpgrades = competitionSnapshot.loadout.permanentUpgrades === false;
         baseTuning.disableRunUpgrades = competitionSnapshot.loadout.runUpgrades === false;
         baseTuning.maximumDrones = competitionSnapshot.loadout.maximumDrones;
       }
@@ -915,7 +901,7 @@ export class MattMineService {
           accepted: true,
           alreadyFinished: true,
           run: publicRun(run),
-          practiceClaim: structuredClone(wallet.practiceClaims?.[runId] || null),
+          practiceClaim: null,
           profile: structuredClone(wallet.profile),
           passProgress: publicPassProgress(wallet),
           passInventory: publicPassInventory(wallet),
@@ -939,21 +925,6 @@ export class MattMineService {
       run.finishedAt = timestamp;
       run.result = result;
       const practiceClaim = null;
-      if (run.mode === SERVER_RUN_MODES.PRACTICE && wallet.practiceClaims?.[runId]) {
-        // Keep the public Practice lane permanently rewardless. Historical
-        // claims can still be resolved through their original records, but a
-        // newly finished Practice run can never create one.
-        delete wallet.practiceClaims[runId];
-      } else if ([SERVER_RUN_MODES.FREE, SERVER_RUN_MODES.PAID].includes(run.mode)) {
-        const _ledgerUpdate = applyNuggetLedgerDelta(wallet, result.banked, {
-          type: NUGGET_LEDGER_TYPES.RUN_EXTRACTION,
-          runId,
-          idempotencyKey: `run-complete:${runId}:banked`
-        });
-        if (_ledgerUpdate.skipped) {
-          // If the same submission is retried after a restart, keep the same outcome without mutation.
-        }
-      }
       if (run.mode === SERVER_RUN_MODES.WEEKLY) {
         finishWeeklyAttempt(
           state.weeklyCompetition,
@@ -1041,65 +1012,6 @@ export class MattMineService {
       passRewardsUnlocked: completed.passRewardsUnlocked,
       leaderboard
     };
-  }
-
-  async practiceRunClaim(token, payload) {
-    const session = await this.authenticate(token);
-    assertApi(payload && typeof payload === 'object' && !Array.isArray(payload), 400, 'invalid_claim_request', 'A structured claim request is required.');
-    const runId = typeof payload.runId === 'string' ? payload.runId : '';
-    const action = typeof payload.action === 'string' ? payload.action : '';
-    assertApi(/^(claim|decline)$/.test(action), 400, 'invalid_claim_action', 'Claim action must be claim or decline.');
-    const rawTransactionHash = typeof payload.transactionHash === 'string' ? payload.transactionHash : '';
-    const transactionHash = normalizeTransactionHash(rawTransactionHash);
-
-    return this.database.transact((state) => {
-      const wallet = requireWallet(state, session.address);
-      wallet.practiceClaims ||= {};
-      const claim = wallet.practiceClaims[runId];
-      assertApi(claim && claim.runId === runId, 404, 'claim_record_not_found', 'No pending claim is available for that run.');
-      assertApi(claim.status === 'pending', 409, 'claim_already_resolved', 'This practice claim has already been resolved.');
-      assertApi(claim.expiresAt > this.now(), 409, 'practice_claim_expired', 'This practice claim has expired.');
-
-      if (action === 'decline') {
-        claim.status = 'discarded';
-        claim.settledAt = this.now();
-        wallet.updatedAt = this.now();
-        addPlayerActivity(wallet, 'PRACTICE_CLAIM_DISCARDED', `${runId} projected ${claim.projectedNuggets}`, this.now());
-        addAudit(state, session.address, 'SERVER_PRACTICE_CLAIM_DISCARDED', `${runId} nugget_reward=${claim.projectedNuggets}`, this.now());
-        return {
-          practiceClaim: { ...claim },
-          profile: structuredClone(wallet.profile)
-        };
-      }
-
-      assertApi(this.mainnetTransactionsEnabled, 503, 'practice_claims_disabled', 'Practice claims are currently blocked until verified payment integration is enabled.');
-      assertMineOperationOpen(state.operations, 'practice', 'payments', 'Practice reward payments are paused.');
-      assertMineOperationOpen(state.operations, 'practice', 'rewards', 'Practice reward finalization is paused.');
-      assertApi(transactionHash, 400, 'invalid_transaction_hash', 'A valid payment transaction hash is required to claim practice rewards.');
-      const duplicate = findPracticeClaimByTransactionHash(wallet.practiceClaims, transactionHash);
-      assertApi(!duplicate || duplicate.runId === runId, 409, 'transaction_duplicate', 'This transaction hash was already used for another practice claim.');
-
-      if (claim.projectedNuggets > 0) {
-        const ledgerUpdate = applyNuggetLedgerDelta(wallet, claim.projectedNuggets, {
-          type: NUGGET_LEDGER_TYPES.PRACTICE_CLAIM,
-          runId,
-          transactionHash,
-          idempotencyKey: `practice-claim:${runId}`
-        });
-        assertApi(!ledgerUpdate.skipped, 409, 'practice_claim_already_processed', 'This practice claim was already finalized.');
-      }
-
-      claim.status = 'claimed';
-      claim.settledAt = this.now();
-      claim.transactionHash = transactionHash;
-      wallet.updatedAt = this.now();
-      addPlayerActivity(wallet, 'PRACTICE_CLAIM_PAID', `${runId} ${claim.projectedNuggets} nuggets`, this.now());
-      addAudit(state, session.address, 'SERVER_PRACTICE_CLAIM_PAID', `${runId} ${claim.projectedNuggets} nuggets`, this.now());
-      return {
-        practiceClaim: { ...claim },
-        profile: structuredClone(wallet.profile)
-      };
-    });
   }
 
   async abandonRun(token, payload) {
@@ -1403,11 +1315,7 @@ export class MattMineService {
     const arenaActiveRuns = await Promise.resolve(this.arenaService?.adminActiveRuns?.()).catch(() => []) || [];
     const mineCards = ACTIVE_MINE_IDS.map((mine) => {
       const mineRuns = runs.filter((run) => mineForRunMode(run.mode) === mine);
-      const payments = mine === 'pass'
-        ? Object.values(state.paidEntitlements)
-        : mine === 'practice'
-          ? Object.values(state.wallets).flatMap((wallet) => Object.values(wallet.practiceClaims || {}))
-          : [];
+      const payments = mine === 'pass' ? Object.values(state.paidEntitlements) : [];
       return {
         id: mine,
         name: mineDisplayName(mine),
@@ -1451,30 +1359,6 @@ export class MattMineService {
     } catch {
       return player;
     }
-  }
-
-  async purchaseUpgrade(token, upgradeId) {
-    const session = await this.authenticate(token);
-    const upgrade = META_UPGRADES.find((entry) => entry.id === upgradeId);
-    assertApi(upgrade, 400, 'unknown_upgrade', 'Unknown permanent upgrade.');
-    const timestamp = this.now();
-    return this.database.transact((state) => {
-      const wallet = requireWallet(state, session.address);
-      const rank = wallet.profile.meta[upgrade.id] || 0;
-      assertApi(rank < upgrade.max, 409, 'upgrade_maxed', 'This permanent upgrade is already maxed.');
-      const cost = metaUpgradeCost(upgrade, rank);
-      assertApi(wallet.profile.bankedNuggets >= cost, 409, 'insufficient_nuggets', 'Not enough banked nuggets.');
-      const ledgerUpdate = applyNuggetLedgerDelta(wallet, -cost, {
-        type: NUGGET_LEDGER_TYPES.ADMIN_ADJUSTMENT,
-        details: `Purchase permanent upgrade ${upgrade.id}`,
-        idempotencyKey: `upgrade:${wallet.address}:${upgrade.id}:${rank + 1}`
-      });
-      assertApi(!ledgerUpdate.skipped, 409, 'duplicate_upgrade_payment', 'This upgrade purchase was already applied.');
-      wallet.profile.meta[upgrade.id] = rank + 1;
-      wallet.updatedAt = timestamp;
-      addAudit(state, session.address, 'SERVER_UPGRADE_PURCHASED', `${upgrade.id} rank ${rank + 1}`, timestamp);
-      return { profile: structuredClone(wallet.profile), upgradeId, rank: rank + 1, cost };
-    });
   }
 
   async setWalletSuspension(adminKey, address, suspended, reason = 'Administrative review') {
@@ -1652,17 +1536,7 @@ export class MattMineService {
     return this.database.transact((state) => {
       const wallet = requireWallet(state, normalizedAddress);
       let details = '';
-      if (type === 'nuggets') {
-        const amount = strictInteger(Number(input.amount), 'award_amount', 1, 10_000_000);
-        const ledgerUpdate = applyNuggetLedgerDelta(wallet, amount, {
-          type: NUGGET_LEDGER_TYPES.ADMIN_ADJUSTMENT,
-          adminActor: 'SERVER_ADMIN',
-          details: `Admin award ${amount} nuggets`,
-          idempotencyKey: `admin-award:${normalizedAddress}:${timestamp}:${type}:${amount}`
-        });
-        assertApi(!ledgerUpdate.skipped, 409, 'duplicate_admin_award', 'That admin nugget award was already recorded.');
-        details = `${amount} banked nuggets`;
-      } else if (type === 'pass_xp') {
+      if (type === 'pass_xp') {
         const amount = strictInteger(Number(input.amount), 'award_amount', 1, 1_000_000);
         wallet.passProgress.xp += amount;
         wallet.passProgress.updatedAt = timestamp;
@@ -1678,7 +1552,7 @@ export class MattMineService {
         wallet.passInventory.chests[PASS_CHEST_ID].available += amount;
         details = `${amount} Pass chest${amount === 1 ? '' : 's'}`;
       } else {
-        throw new ApiError(422, 'award_type_unknown', 'Choose nuggets, Pass XP, a cosmetic, or a chest.');
+        throw new ApiError(422, 'award_type_unknown', 'Choose Pass XP, a cosmetic, or a chest.');
       }
       wallet.updatedAt = timestamp;
       addPlayerActivity(wallet, 'ADMIN_AWARD', `${details}; ${normalizedReason}`, timestamp);
@@ -2008,10 +1882,6 @@ export class MattMineService {
             : 1
         ))
       : 0;
-    const arenaNuggets = Math.max(
-      0,
-      Math.min(MAX_RUN_SCORE, Math.floor(Number(result.result?.banked || 0)))
-    );
     const passAward = await this.database.transact((currentState) => {
       const currentWallet = requireWallet(currentState, session.address);
       currentState.arenaPassXpAwards ||= {};
@@ -2055,37 +1925,12 @@ export class MattMineService {
           timestamp
         );
       }
-      const nuggetUpdate = applyNuggetLedgerDelta(currentWallet, arenaNuggets, {
-        type: NUGGET_LEDGER_TYPES.ARENA_RUN,
-        runId: progression.runId,
-        idempotencyKey: `arena-run:${progression.runId}`,
-        details: 'Server-replayed Daily Arena banked nuggets',
-        timestamp
-      });
-      if (!nuggetUpdate.duplicate && arenaNuggets > 0) {
-        currentWallet.updatedAt = timestamp;
-        addPlayerActivity(
-          currentWallet,
-          'ARENA_NUGGETS_BANKED',
-          `${progression.runId} +${arenaNuggets} nuggets`,
-          timestamp
-        );
-        addAudit(
-          currentState,
-          session.address,
-          'ARENA_NUGGETS_BANKED',
-          `${progression.runId}: +${arenaNuggets} nuggets`,
-          timestamp
-        );
-      }
       return {
         passXpAwarded: awardedXp,
         passXpAlreadyAwarded: Boolean(existing),
         passProgress: publicPassProgress(currentWallet),
         passInventory: publicPassInventory(currentWallet),
         passRewardsUnlocked,
-        arenaNuggetsBanked: nuggetUpdate.entry?.amount || 0,
-        arenaNuggetsAlreadyAwarded: nuggetUpdate.duplicate,
         profile: structuredClone(currentWallet.profile)
       };
     });
@@ -3037,14 +2882,6 @@ function safeTokenEqual(left, right) {
   const leftBuffer = Buffer.from(String(left));
   const rightBuffer = Buffer.from(String(right));
   return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
-}
-
-function findPracticeClaimByTransactionHash(practiceClaims, transactionHash) {
-  if (!practiceClaims || !transactionHash) return null;
-  for (const claim of Object.values(practiceClaims)) {
-    if (claim.status === 'claimed' && claim.transactionHash === transactionHash) return claim;
-  }
-  return null;
 }
 
 function normalizeTransactionHash(value) {

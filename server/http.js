@@ -503,12 +503,6 @@ async function handleApiRequest({
     sendJson(response, 200, { ok: true, ...result });
     return;
   }
-  if (method === 'POST' && path === '/api/runs/practice/claim') {
-    const body = await readJson(request, maxRequestBytes);
-    const result = await service.practiceRunClaim(bearerToken(request), body);
-    sendJson(response, 200, { ok: true, ...result });
-    return;
-  }
   if (method === 'POST' && path === '/api/runs/abandon') {
     const body = await readJson(request, maxRequestBytes);
     const result = await service.abandonRun(bearerToken(request), body);
@@ -537,12 +531,6 @@ async function handleApiRequest({
       bearerToken(request),
       claimPrepareMatch[1]
     );
-    sendJson(response, 200, { ok: true, ...result });
-    return;
-  }
-  if (method === 'POST' && path === '/api/profile/upgrades') {
-    const body = await readJson(request, maxRequestBytes);
-    const result = await service.purchaseUpgrade(bearerToken(request), body.upgradeId);
     sendJson(response, 200, { ok: true, ...result });
     return;
   }
@@ -680,6 +668,12 @@ async function handleApiRequest({
   if (method === 'PUT' && path === '/api/admin/nft-v2/economy') {
     const body = await readJson(request, maxRequestBytes);
     const result = await service.updateAdminNftV2Economy(request.headers['x-matt-admin-key'], body);
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
+  if (method === 'PUT' && path === '/api/admin/nft-v2/phase-xp') {
+    const body = await readJson(request, maxRequestBytes);
+    const result = await service.updateAdminNftV2PhaseXp(request.headers['x-matt-admin-key'], body);
     sendJson(response, 200, { ok: true, ...result });
     return;
   }
@@ -998,7 +992,7 @@ function clearAdminCookie(response) {
 }
 
 function requiresAdminStepUp(path) {
-  return /\/suspension$|\/awards$|\/contracts\/prepare$|\/nft-v2\/(economy|maps\/(approve|retire))$|\/rewards\/drafts\/[^/]+\/approve$|\/competition-studio\/[^/]+\/(publish|versions\/[^/]+\/activate)$/.test(path);
+  return /\/suspension$|\/awards$|\/contracts\/prepare$|\/nft-v2\/(economy|phase-xp|maps\/(approve|retire))$|\/rewards\/drafts\/[^/]+\/approve$|\/competition-studio\/[^/]+\/(publish|versions\/[^/]+\/activate)$/.test(path);
 }
 
 function bearerToken(request) {

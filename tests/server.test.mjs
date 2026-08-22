@@ -168,7 +168,7 @@ test('a verified Arena run awards an active pass exactly once and honors the Are
     finishRun: async () => ({
       accepted: true,
       alreadyFinished: finishCalls++ > 0,
-      result: { score: 12_345, banked: 4_321 },
+      result: { score: 12_345 },
       leaderboard: { rows: [], playerScore: 12_345, playerRank: 1 },
       progression: {
         runId,
@@ -185,17 +185,11 @@ test('a verified Arena run awards an active pass exactly once and honors the Are
   assert.equal(first.passXpAwarded, 150);
   assert.equal(first.passXpAlreadyAwarded, false);
   assert.equal(first.passProgress.xp, 150);
-  assert.equal(first.arenaNuggetsBanked, 4_321);
-  assert.equal(first.arenaNuggetsAlreadyAwarded, false);
-  assert.equal(first.profile.bankedNuggets, 4_321);
 
   const retry = await harness.service.finishArenaRun(session.token, payload);
   assert.equal(retry.passXpAwarded, 150);
   assert.equal(retry.passXpAlreadyAwarded, true);
   assert.equal(retry.passProgress.xp, 150);
-  assert.equal(retry.arenaNuggetsBanked, 4_321);
-  assert.equal(retry.arenaNuggetsAlreadyAwarded, true);
-  assert.equal(retry.profile.bankedNuggets, 4_321);
 
   const state = await harness.database.read();
   assert.deepEqual(state.arenaPassXpAwards[runId], {
@@ -208,11 +202,6 @@ test('a verified Arena run awards an active pass exactly once and honors the Are
       .filter((entry) => entry.action === 'ARENA_PASS_XP_AWARDED').length,
     1
   );
-  assert.equal(
-    state.wallets[account.address.toLowerCase()].nuggetLedger
-      .filter((entry) => entry.type === 'ARENA_RUN').length,
-    1
-  );
 });
 
 test('Arena completion does not award Pass XP when the pass was inactive at run start', async () => {
@@ -221,7 +210,7 @@ test('Arena completion does not award Pass XP when the pass was inactive at run 
     publicConfig: () => ({ enabled: true }),
     finishRun: async () => ({
       accepted: true,
-      result: { score: 2_500, banked: 250 },
+      result: { score: 2_500 },
       leaderboard: { rows: [], playerScore: 2_500, playerRank: 1 },
       progression: {
         runId,
@@ -241,8 +230,6 @@ test('Arena completion does not award Pass XP when the pass was inactive at run 
 
   assert.equal(completed.passXpAwarded, 0);
   assert.equal(completed.passProgress.xp, 0);
-  assert.equal(completed.arenaNuggetsBanked, 250);
-  assert.equal(completed.profile.bankedNuggets, 250);
   const state = await harness.database.read();
   assert.equal(state.arenaPassXpAwards[runId].xp, 0);
 });
@@ -564,7 +551,7 @@ test('the server owns the free entitlement, run token, replay protection, profil
   harness.advance(60_000);
   const accepted = await finish(harness.service, session, run, extractedResult());
   assert.equal(accepted.run.result.score, 1_000);
-  assert.equal(accepted.profile.bankedNuggets, 1_000);
+  assert.equal(accepted.profile.bestScore, 1_000);
   assert.equal(accepted.profile.totalRuns, 1);
   assert.equal(accepted.leaderboard.playerRank, 1);
   assert.equal(accepted.leaderboard.playerScore, 1_000);
@@ -593,7 +580,7 @@ test('the server owns the free entitlement, run token, replay protection, profil
   assert.equal(retried.accepted, true);
   assert.equal(retried.alreadyFinished, true);
   assert.equal(retried.run.result.score, 1_000);
-  assert.equal(retried.profile.bankedNuggets, 1_000);
+  assert.equal(retried.profile.bestScore, 1_000);
   assert.equal(retried.profile.totalRuns, 1);
   await assert.rejects(
     () => harness.service.startRun(session.token, SERVER_RUN_MODES.FREE),
@@ -723,8 +710,6 @@ test('Pass levels permanently deliver cosmetics, chest contents, and server-owne
 
   const chest = await harness.service.openPassChest(session.token, PASS_CHEST_ID);
   assert.equal(chest.rewards.cosmetic.id, 'molten_pickaxe');
-  assert.equal(chest.rewards.nuggets, 250_000);
-  assert.equal(chest.profile.bankedNuggets, 250_000);
   assert.equal(chest.passInventory.chests[PASS_CHEST_ID].available, 0);
   assert.equal(chest.passInventory.chests[PASS_CHEST_ID].opened, 1);
   assert.equal(chest.passInventory.cosmetics.length, 8);
@@ -1066,7 +1051,7 @@ test('ranked knockouts score only the exact secured 50 percent loot amount', asy
     elapsed: 30
   }));
   assert.equal(accepted.run.result.score, 500);
-  assert.equal(accepted.profile.bankedNuggets, 500);
+  assert.equal(accepted.profile.bestScore, 500);
 });
 
 test('server suspension blocks ranked issuance and submission but keeps Practice available', async () => {
@@ -1091,31 +1076,14 @@ test('server suspension blocks ranked issuance and submission but keeps Practice
   );
 });
 
-test('permanent upgrades spend only server-owned banked nuggets', async () => {
+test('competitive runs preserve the authoritative score profile for replay', async () => {
   const harness = createHarness();
   const { session } = await signIn(harness);
-  const run = await harness.service.startRun(session.token, SERVER_RUN_MODES.FREE);
-  harness.advance(60_000);
-  await finish(harness.service, session, run, extractedResult());
-  const upgraded = await harness.service.purchaseUpgrade(session.token, 'health');
-  assert.equal(upgraded.cost, 110);
-  assert.equal(upgraded.rank, 1);
-  assert.equal(upgraded.profile.bankedNuggets, 890);
-  assert.equal(upgraded.profile.meta.health, 1);
-});
-
-test('competitive runs preserve the authoritative player profile for replay', async () => {
-  const harness = createHarness();
-  const { session } = await signIn(harness);
-  await harness.database.transact((state) => {
-    state.wallets[account.address.toLowerCase()].profile.meta.health = 3;
-  });
-
   const run = await harness.service.startRun(session.token, SERVER_RUN_MODES.FREE);
   const state = await harness.database.read();
 
-  assert.equal(state.runs[run.runId].playerProfile.meta.health, 3);
-  assert.equal(run.tuning._playerProfile.meta.health, 3);
+  assert.deepEqual(state.runs[run.runId].playerProfile, { bestDepth: 0, bestScore: 0, totalRuns: 0 });
+  assert.deepEqual(run.tuning._playerProfile, { bestDepth: 0, bestScore: 0, totalRuns: 0 });
   assert.notEqual(state.runs[run.runId].playerProfile, state.wallets[account.address.toLowerCase()].profile);
 });
 
@@ -1132,7 +1100,7 @@ test('JSON server storage persists profiles and recovers corrupt state safely', 
 
   const reloaded = await new JsonFileDatabase(filePath).init();
   const persisted = await reloaded.read();
-  assert.equal(persisted.wallets[account.address.toLowerCase()].profile.bankedNuggets, 1_000);
+  assert.equal(persisted.wallets[account.address.toLowerCase()].profile.bestScore, 1_000);
 
   await writeFile(filePath, '{broken-json', 'utf8');
   const recovered = await new JsonFileDatabase(filePath, { now: () => START + 1 }).init();

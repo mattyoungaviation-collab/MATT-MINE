@@ -19,7 +19,7 @@ It is not linked from the public game and search engines are told not to index i
 - Competition Studio drafts that remain private until **Apply Live Version**, plus one-click immediate restoration of any prior published version
 - Exact live-source panels and public mine cards that use the same published map, character, starting weapon, and rules as new runs
 - Permanent-name or wallet lookup with a per-player activity timeline
-- Audited player awards for banked nuggets, Pass XP, Pass chests, and existing cosmetics
+- Audited player awards for Pass XP, Pass chests, and existing cosmetics
 - A guided Free + Pass payout desk covering finalized snapshots, immutable obligations, independent approval, Safe output, Ronin synchronization, deadlines, and per-wallet paid/unpaid status
 - Prepared Ronin transactions for contract pauses, unpauses, price updates, treasury destinations, swap executor changes, and expired/unallocated reward recovery
 - Searchable audit history with a required written reason for every mutation

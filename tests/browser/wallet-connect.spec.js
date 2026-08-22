@@ -43,7 +43,7 @@ test('ordinary browsers can sign in through the WalletConnect fallback', async (
       session: {
         token: 'd'.repeat(64),
         address: ADDRESS,
-        profile: { bankedNuggets: 0, bestDepth: 0, bestScore: 0, totalRuns: 0, meta: {} },
+        profile: { bestDepth: 0, bestScore: 0, totalRuns: 0 },
         identity: { name: 'WalletConnect Miner', requiresSetup: false },
         entitlements: { freeRunAvailable: true },
         suspended: false

@@ -289,10 +289,8 @@ test('NFT crystal pickups stop at the active backpack capacity and results carry
   assert.equal(completedPhaseCount(result), 3);
 });
 
-test('NFT armor health overrides legacy character and permanent-health bonuses exactly', () => {
-  const boosted = defaultProfile();
-  boosted.meta.health = 10;
-  const game = new MattMineGame({ getContext() {} }, boosted, { headless: true });
+test('NFT armor health overrides the browser character health exactly', () => {
+  const game = new MattMineGame({ getContext() {} }, defaultProfile(), { headless: true });
   game.startRun({
     mode: 'practice',
     seed: 'NFT-ARMOR-HEALTH',
@@ -349,12 +347,11 @@ test('a lost settlement HTTP response retries idempotently against processedRuns
   assert.equal(result.transactionHash, null);
 });
 
-test('verified NFT settlement banks crystals once and removes the legacy Practice nugget claim', () => {
+test('verified NFT settlement banks crystals exactly once', () => {
   const wallet = {
     address: PLAYER.toLowerCase(),
     nftCrystalBalance: 7,
-    nftCrystalLedger: [],
-    practiceClaims: { run_abc: { status: 'pending', projectedNuggets: 999 } }
+    nftCrystalLedger: []
   };
   const settlement = {
     address: PLAYER,
@@ -368,5 +365,4 @@ test('verified NFT settlement banks crystals once and removes the legacy Practic
   assert.equal(wallet.nftCrystalBalance, 19);
   assert.equal(wallet.nftCrystalLedger.length, 1);
   assert.equal(wallet.nftCrystalLedger[0].amount, 12);
-  assert.equal(wallet.practiceClaims.run_abc, undefined);
 });

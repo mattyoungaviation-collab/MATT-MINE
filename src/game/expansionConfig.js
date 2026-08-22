@@ -10,7 +10,7 @@ export const CHARACTER_DEFAULTS = Object.freeze({
     baseHealth: 82, movementSpeed: 1.16, dashCooldown: .76, dashStrength: 1.08,
     pickaxeDamage: .94, miningSpeed: 1.05, blasterDamage: 1, blasterEnergy: 100,
     armor: 0, magnetRange: 1.08, luck: 1.05, passive: 'Fleet Footed'
-  }, { nuggetPrice: 400_000 }),
+  }),
   'adl-dyno': character('ADL Dyno', 'Heavy miner with powerful pickaxe strikes.', {
     baseHealth: 135, movementSpeed: .86, dashCooldown: 1.18, dashStrength: .96,
     pickaxeDamage: 1.24, miningSpeed: 1.22, blasterDamage: .82, blasterEnergy: 90,
@@ -20,27 +20,22 @@ export const CHARACTER_DEFAULTS = Object.freeze({
     baseHealth: 78, movementSpeed: .92, dashCooldown: 1.05, dashStrength: 1,
     pickaxeDamage: .88, miningSpeed: .9, blasterDamage: 1.28, blasterEnergy: 125,
     armor: 0, magnetRange: 1.12, luck: 1.08, passive: 'Crystal Charge'
-  }, { nuggetPrice: 550_000 }),
+  }),
   orc: character('Orc', 'Durable survivor with lower damage.', {
     baseHealth: 165, movementSpeed: .82, dashCooldown: 1.25, dashStrength: .9,
     pickaxeDamage: .78, miningSpeed: .9, blasterDamage: .72, blasterEnergy: 85,
     armor: .14, magnetRange: .9, luck: .92, passive: 'Iron Hide'
-  }, { nuggetPrice: 700_000 })
+  })
 });
 
 export const EXPANSION_SCHEMA = Object.freeze([
   field('chestOpeningEnabled', 'Chest Rewards', 'Chest opening enabled', 'boolean', true, 0, 1, 'Immediately gates server chest openings.'),
-  field('chestBaseNuggets', 'Chest Rewards', 'Base chest nuggets', 'integer', 250_000, 0, 5_000_000, 'Server-calculated permanent nugget award.'),
-  field('chestBonusMin', 'Chest Rewards', 'Bonus minimum', 'integer', 0, 0, 1_000_000, 'Minimum deterministic bonus.'),
-  field('chestBonusMax', 'Chest Rewards', 'Bonus maximum', 'integer', 0, 0, 1_000_000, 'Maximum deterministic bonus.'),
   field('chestMaxOpenings', 'Chest Rewards', 'Lifetime opening limit', 'integer', 1, 1, 100, 'Maximum openings of this chest per wallet.'),
-  field('chestDuplicateCosmetic', 'Chest Rewards', 'Duplicate cosmetic behavior', 'enum', 'reroll', 0, 0, 'reroll, nuggets, or keep.', ['reroll', 'nuggets', 'keep']),
   field('chestCosmeticDropsEnabled', 'Chest Rewards', 'Cosmetic drops enabled', 'boolean', true, 0, 1, 'Controls whether Pass chests include a permanent cosmetic.'),
   field('chestCosmeticId', 'Chest Rewards', 'Primary cosmetic', 'enum', 'molten_pickaxe', 0, 0, 'Primary chest cosmetic before duplicate handling.', [
     'starter_badge', 'gold_trail', 'molten_pickaxe', 'crystal_skin',
     'founder_frame', 'guardian_aura', 'ore_reactor_title', 'season_trophy'
   ]),
-  field('chestDuplicateNuggets', 'Chest Rewards', 'Duplicate cosmetic nuggets', 'integer', 25_000, 0, 5_000_000, 'Extra server-ledger nuggets when duplicate behavior is set to nuggets.'),
   field('deathRetentionPractice', 'Death and Revives', 'Practice score retention percent', 'number', 50, 0, 100, 'Applied with floor rounding to the rewardless Practice score summary.'),
   field('deathRetentionFree', 'Death and Revives', 'Free retention percent', 'number', 50, 0, 100, 'Applied with floor rounding.'),
   field('deathRetentionPaid', 'Death and Revives', 'Pass score retention percent', 'number', 50, 0, 100, 'Applied with floor rounding to legacy run score. The Miner NFT trait exclusively controls MATT Crystal death retention.'),
@@ -52,14 +47,6 @@ export const EXPANSION_SCHEMA = Object.freeze([
   field('controllerDeadZone', 'Controller Defaults', 'Stick dead zone', 'number', .18, 0, .5, 'Default for newly created player profiles. Input below this radius is ignored; players may override it.'),
   field('controllerAimSensitivity', 'Controller Defaults', 'Aim sensitivity', 'number', 1, .25, 3, 'Default right-stick aiming multiplier for newly created player profiles; players may override it.'),
   field('controllerVibration', 'Controller Defaults', 'Vibration enabled', 'boolean', true, 0, 1, 'Default for newly created player profiles; players may override it.'),
-  field('advertisementRewardsEnabled', 'Advertisement Rewards', 'Advertisement rewards enabled', 'boolean', false, 0, 1, 'Blocked without a signed provider verifier.'),
-  field('advertisementBonusMinPercent', 'Advertisement Rewards', 'Bonus minimum percent', 'number', 1, 0, 20, 'Server chooses within the configured range.'),
-  field('advertisementBonusMaxPercent', 'Advertisement Rewards', 'Bonus maximum percent', 'number', 5, 0, 20, 'Server chooses within the configured range.'),
-  field('advertisementDailyWalletLimit', 'Advertisement Rewards', 'Daily wallet limit', 'integer', 3, 0, 20, 'Maximum verified ad bonuses per UTC day.'),
-  field('advertisementCompletionTtlSeconds', 'Advertisement Rewards', 'Completion token lifetime', 'integer', 300, 30, 3600, 'Signed provider completion expiry.'),
-  field('advertisementPracticeEligible', 'Advertisement Rewards', 'Practice eligible', 'boolean', true, 0, 1, 'Allows verified post-run bonuses for Practice rewards.'),
-  field('advertisementFreeEligible', 'Advertisement Rewards', 'Free ranked eligible', 'boolean', true, 0, 1, 'Allows a verified nugget bonus after Free runs; never changes score.'),
-  field('advertisementPaidEligible', 'Advertisement Rewards', 'Pass ranked eligible', 'boolean', true, 0, 1, 'Allows a verified nugget bonus after Pass runs; never changes score.'),
   field('weeklyCompetitionEnabled', 'Weekly Competition', 'Weekly competition enabled', 'boolean', false, 0, 1, 'Keeps the new mode unavailable until released.'),
   field('weeklyActiveDayCount', 'Weekly Competition', 'Active weekly day count', 'integer', 1, 1, 7, 'Launch with one day and expand safely to seven.'),
   field('weeklyLockedCharacter', 'Weekly Competition', 'Locked character', 'enum', 'matt', 0, 0, 'Same character rule for all entrants.', CHARACTER_IDS),
@@ -102,16 +89,11 @@ export function normalizeExpansionConfig(input = {}) {
     definition.id,
     normalizeField(definition, settingsSource[definition.id] ?? definition.default)
   ]));
-  if (settings.chestBonusMin > settings.chestBonusMax) throw new Error('Chest bonus minimum cannot exceed maximum.');
-  if (settings.advertisementBonusMinPercent > settings.advertisementBonusMaxPercent) {
-    throw new Error('Advertisement bonus minimum cannot exceed maximum.');
-  }
   const characterSource = record(source.characters);
   const characters = Object.fromEntries(CHARACTER_IDS.map((id) => [
     id,
     normalizeCharacter(id, characterSource[id] || defaults.characters[id])
   ]));
-  characters.matt.nuggetPrice = 0;
   return {
     settings,
     characters,
@@ -153,7 +135,7 @@ export function normalizeExpansionPatch(input = {}, current = defaultExpansionCo
 export function defaultPlayerExpansion() {
   return {
     betaTester: false,
-    ownedCharacters: ['matt'],
+    ownedCharacters: [...CHARACTER_IDS],
     selectedCharacter: 'matt',
     controller: defaultControllerProfile(),
     characterHistory: [],
@@ -164,9 +146,7 @@ export function defaultPlayerExpansion() {
 
 export function normalizePlayerExpansion(input = {}) {
   const source = record(input);
-  const owned = [...new Set((Array.isArray(source.ownedCharacters) ? source.ownedCharacters : ['matt'])
-    .filter((id) => CHARACTER_IDS.includes(id)))];
-  if (!owned.includes('matt')) owned.unshift('matt');
+  const owned = [...CHARACTER_IDS];
   return {
     betaTester: source.betaTester === true,
     ownedCharacters: owned,
@@ -255,7 +235,6 @@ function character(name, description, stats, unlock = {}) {
   return {
     name, description, portrait: '', sprite: '', ...stats,
     unlockRequirement: unlock.unlockRequirement || '',
-    nuggetPrice: unlock.nuggetPrice || 0,
     passRequirement: unlock.passRequirement || 0,
     progressionRequirement: unlock.progressionRequirement || 0,
     enabled: true
@@ -283,7 +262,6 @@ function normalizeCharacter(id, input) {
     luck: finite(source.luck, .25, 5, defaults.luck),
     passive: text(source.passive, defaults.passive, 80),
     unlockRequirement: text(source.unlockRequirement, defaults.unlockRequirement, 120),
-    nuggetPrice: integer(source.nuggetPrice, 0, 100_000_000, defaults.nuggetPrice),
     passRequirement: integer(source.passRequirement, 0, 100, defaults.passRequirement),
     progressionRequirement: integer(source.progressionRequirement, 0, 1_000_000, defaults.progressionRequirement),
     enabled: source.enabled !== false

@@ -29,7 +29,7 @@ export const pickupMethods = {
           this.addFloater(this.player.x, this.player.y - 52, 'UPGRADE', '#68e6ff');
           this.audio.play('crystal');
         } else {
-          this.run.rawNuggets += pickup.value;
+          this.run.rawScore += pickup.value;
         }
         if (pickup.type === 'crystal') {
           const carryLimit = nftCarryCapacity(this.runContext);
