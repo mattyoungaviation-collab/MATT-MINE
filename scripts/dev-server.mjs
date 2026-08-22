@@ -190,7 +190,7 @@ const nftMetadataService = nftMetadataEnabled
       timeoutMs: Number(process.env.MATT_MINE_RPC_TIMEOUT_MS || 10_000),
       minerDeploymentBlock: process.env.MATT_MINE_NFT_MINER_DEPLOYMENT_BLOCK || 59_628_599,
       equipmentDeploymentBlock: process.env.MATT_MINE_NFT_EQUIPMENT_DEPLOYMENT_BLOCK || 59_628_601,
-      equipmentIndexChunkSize: Number(process.env.MATT_MINE_NFT_EQUIPMENT_INDEX_CHUNK_SIZE || 20_000),
+      equipmentIndexChunkSize: Number(process.env.MATT_MINE_NFT_EQUIPMENT_INDEX_CHUNK_SIZE || 1_000),
       equipmentIndexRefreshMs: Number(process.env.MATT_MINE_NFT_EQUIPMENT_INDEX_REFRESH_MS || 5_000),
       equipmentIndexConfirmations: Number(process.env.MATT_MINE_NFT_EQUIPMENT_INDEX_CONFIRMATIONS || 12),
       equipmentIndexMaxChunks: Number(process.env.MATT_MINE_NFT_EQUIPMENT_INDEX_MAX_CHUNKS || 25),
