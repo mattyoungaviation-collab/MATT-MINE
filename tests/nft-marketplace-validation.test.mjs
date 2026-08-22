@@ -354,8 +354,9 @@ test('Bulk validation never follows metadata-controlled image origins or redirec
     origin: 'http://localhost:4173', from: 1, to: 1, retries: 0, fetchImpl
   });
   assert.equal(report.ok, false);
-  assert.equal(calls.some((url) => url.startsWith('https://attacker.invalid')), false);
-  assert.equal(calls.some((url) => url.startsWith('http://169.254.169.254')), false);
+  const calledHosts = calls.map((url) => new URL(url).hostname);
+  assert.equal(calledHosts.includes('attacker.invalid'), false);
+  assert.equal(calledHosts.includes('169.254.169.254'), false);
   assert.ok(report.errors.some((entry) => /origin must be/.test(entry.message)));
   assert.ok(report.errors.some((entry) => /Redirect HTTP 302/.test(entry.message)));
 });
