@@ -6,6 +6,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { MemoryDatabase } from '../server/database.js';
 import { CompleteProductionMattMineService } from '../server/complete-production-service.js';
 import { RONIN_CHAINS, SERVER_RUN_MODES } from '../server/constants.js';
+import { resolveCompetitionSnapshot } from '../src/game/competitionStudio.js';
 
 const ORIGIN = 'http://localhost:4173';
 const START = Date.UTC(2026, 7, 11, 20, 0, 0);
@@ -37,6 +38,22 @@ function createHarness({ ownsMiner = true, initialLocked = false } = {}) {
   const database = new MemoryDatabase();
   const nftGameplayService = {
     publicStatus: () => ({ enabled: true, chainId: 202601 }),
+    async activeMap(mode) {
+      const normalizedMode = String(mode).toLowerCase() === 'arena' ? 'arena' : 'paid';
+      const slot = normalizedMode === 'arena' ? 'arena' : 'pass';
+      const state = await database.read();
+      const snapshot = resolveCompetitionSnapshot(state.competitionStudio, slot, START);
+      const seed = String(snapshot.id || `${slot}-${START}`);
+      const fingerprint = String(snapshot.fingerprint || '').replace(/^0x/, '');
+      return {
+        approved: true,
+        retired: false,
+        mapId: `0x${createHash('sha256').update(`matt-mine-map:${normalizedMode}:${seed}`).digest('hex')}`,
+        contentHash: /^[a-f0-9]{64}$/i.test(fingerprint)
+          ? `0x${fingerprint.toLowerCase()}`
+          : `0x${createHash('sha256').update(JSON.stringify(snapshot)).digest('hex')}`
+      };
+    },
     async playerMiner(_address, requestedMinerId = 0) {
       if (!ownsMiner) return null;
       return minerProfile(locked, requestedMinerId || 1);
@@ -219,4 +236,156 @@ test('a Pass Mine credit is restored when the NFT transaction definitely never s
     state.audit.at(-1).action,
     'NFT_V2_START_ROLLED_BACK'
   );
+});
+
+test('orphan recovery reconciles a pending Pass reservation even after the Miner is already unlocked', async () => {
+  const harness = createHarness({ initialLocked: false });
+  const session = await signIn(harness.service);
+  const runId = `run_${'b'.repeat(24)}`;
+  const address = account.address.toLowerCase();
+  await harness.database.transact((state) => {
+    state.runs[runId] = {
+      id: runId,
+      address,
+      mode: SERVER_RUN_MODES.PAID,
+      status: 'active',
+      startedAt: START,
+      expiresAt: START + 60_000,
+      result: null,
+      pendingNftRun: { minerId: 1, mode: 'paid', mapVersion: 'map', reservedAt: START }
+    };
+    state.paidEntitlements.pending = {
+      key: 'pending',
+      transactionHash: `0x${'8'.repeat(64)}`,
+      logIndex: 0,
+      blockNumber: '1',
+      address,
+      entitlementId: '2',
+      ronPaid: '1',
+      mattBought: '0',
+      currentPoolMatt: '0',
+      futureRewardsMatt: '0',
+      reserveMatt: '0',
+      confirmedAt: START - 1,
+      consumedAt: START,
+      usedRunId: runId
+    };
+  });
+
+  const recovered = await harness.service.recoverLockedMinerRun(session.token, { minerId: 1 });
+  const state = await harness.database.read();
+  assert.equal(recovered.recovered, true);
+  assert.deepEqual(recovered.reconciledRunIds, [runId]);
+  assert.equal(recovered.restoredPassCredits, 1);
+  assert.equal(state.runs[runId].status, 'expired');
+  assert.equal(state.runs[runId].pendingNftRun, undefined);
+  assert.equal(state.paidEntitlements.pending.consumedAt, 0);
+  assert.equal(state.paidEntitlements.pending.usedRunId, '');
+  assert.deepEqual(harness.cancellations, []);
+});
+
+test('orphan recovery uses the lifecycle mutation barrier and cannot overtake Admin termination', async () => {
+  const harness = createHarness({ initialLocked: true });
+  const session = await signIn(harness.service);
+  const runId = `run_${'d'.repeat(24)}`;
+  const address = account.address.toLowerCase();
+  let mutationEntries = 0;
+  const originalMutation = harness.database.withNftLifecycleMutation.bind(harness.database);
+  harness.database.withNftLifecycleMutation = async (operation) => {
+    mutationEntries += 1;
+    return originalMutation(operation);
+  };
+  await harness.database.transact((state) => {
+    state.runs[runId] = {
+      id: runId,
+      address,
+      mode: SERVER_RUN_MODES.PAID,
+      status: 'awaiting-revive',
+      startedAt: START,
+      expiresAt: START + 60_000,
+      result: null,
+      nftRun: { minerId: 1, runId: `0x${'3'.repeat(64)}` },
+      pendingRevive: { id: 'revive-admin-race', status: 'pending' },
+      adminTerminationPending: {
+        id: 'adminterm-recovery',
+        requestedAt: START,
+        context: 'Support termination'
+      }
+    };
+  });
+
+  await assert.rejects(
+    () => harness.service.recoverLockedMinerRun(session.token, { minerId: 1 }),
+    (error) => error.code === 'run_admin_termination_pending'
+  );
+
+  const run = (await harness.database.read()).runs[runId];
+  assert.equal(mutationEntries, 1);
+  assert.equal(run.status, 'awaiting-revive');
+  assert.equal(run.pendingRevive.status, 'pending');
+  assert.deepEqual(harness.cancellations, []);
+});
+
+test('orphan recovery refuses to clear a reservation that changed during cancellation', async () => {
+  const harness = createHarness({ initialLocked: true });
+  const session = await signIn(harness.service);
+  const runId = `run_${'e'.repeat(24)}`;
+  const address = account.address.toLowerCase();
+  await harness.database.transact((state) => {
+    state.runs[runId] = {
+      id: runId,
+      address,
+      mode: SERVER_RUN_MODES.PAID,
+      status: 'active',
+      startedAt: START,
+      expiresAt: START + 60_000,
+      result: null,
+      nftRun: { minerId: 1, runId: `0x${'4'.repeat(64)}` }
+    };
+  });
+  harness.service.nftGameplayService.cancelRun = async () => {
+    await harness.database.transact((state) => {
+      state.runs[runId].nftRun.runId = `0x${'5'.repeat(64)}`;
+    });
+    return { cancelled: true, minerId: 1 };
+  };
+
+  await assert.rejects(
+    () => harness.service.recoverLockedMinerRun(session.token, { minerId: 1 }),
+    (error) => error.code === 'nft_run_recovery_reservation_changed'
+  );
+
+  const run = (await harness.database.read()).runs[runId];
+  assert.equal(run.status, 'active');
+  assert.equal(run.nftRun.runId, `0x${'5'.repeat(64)}`);
+});
+
+test('post-begin attachment only succeeds for the exact active pending reservation', async () => {
+  const harness = createHarness();
+  const runId = `run_${'c'.repeat(24)}`;
+  const address = account.address.toLowerCase();
+  await harness.database.transact((state) => {
+    state.runs[runId] = {
+      id: runId,
+      address,
+      mode: SERVER_RUN_MODES.PAID,
+      status: 'expired',
+      startedAt: START,
+      expiresAt: START,
+      finishedAt: START,
+      result: null,
+      pendingNftRun: { minerId: 1, mode: 'paid', mapVersion: 'map', reservedAt: START }
+    };
+  });
+
+  await assert.rejects(
+    () => harness.service.attachStartedPaidNftRun(address, runId, 1, {
+      minerId: 1,
+      runId: `0x${'1'.repeat(64)}`
+    }, {}),
+    (error) => error.code === 'nft_server_run_not_active'
+  );
+  const state = await harness.database.read();
+  assert.equal(state.runs[runId].nftRun, undefined);
+  assert.equal(state.runs[runId].pendingNftRun.minerId, 1);
 });

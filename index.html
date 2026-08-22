@@ -418,6 +418,33 @@
               <small>Select, equip, repair, check balances, and enter a mine without leaving this page.</small>
             </aside>
           </div>
+          <section id="wallet-crystal-bank" class="miner-command-center wallet-crystal-bank" aria-labelledby="wallet-crystal-bank-title">
+            <header class="miner-command-center-heading">
+              <div>
+                <p class="eyebrow">WALLET CRYSTAL BANK</p>
+                <h3 id="wallet-crystal-bank-title">BANKED &amp; WITHDRAWABLE</h3>
+                <p>This balance belongs to your connected wallet. You can withdraw it even when this wallet does not currently own a Miner.</p>
+              </div>
+              <div><button id="garage-crystal-refresh-button" type="button">REFRESH BANK</button></div>
+            </header>
+            <div class="garage-balance-strip">
+              <article><span>IN YOUR WALLET</span><strong id="garage-crystal-wallet-balance">--</strong></article>
+              <article class="crystal-balance-card"><span>BANKED MATT CRYSTALS</span><strong id="garage-crystal-balance">--</strong></article>
+              <article><span>WITHDRAWABLE TODAY</span><strong id="garage-crystal-withdrawable">--</strong></article>
+              <article><span>YOUR DAILY CAP LEFT</span><strong id="garage-crystal-wallet-remaining">--</strong></article>
+              <article><span>UTC LIMIT RESET</span><strong id="garage-crystal-reset">--</strong></article>
+            </div>
+            <section class="garage-panel garage-service-card crystal-bank-service">
+              <div class="garage-panel-heading"><span>WITHDRAW TO WALLET</span><small id="garage-crystal-state">ON-CHAIN</small></div>
+              <p id="garage-withdraw-copy">Connect Ronin Wallet to load the live Crystal Bank balance and withdrawal limits.</p>
+              <label for="garage-withdraw-input">WITHDRAW AMOUNT</label>
+              <input id="garage-withdraw-input" type="text" pattern="[0-9]+(?:\.[0-9]+)?" placeholder="0" inputmode="decimal" autocomplete="off" />
+              <button id="garage-withdraw-all-button" class="garage-withdraw-all-button" type="button" disabled>USE MAX AVAILABLE</button>
+              <button id="garage-withdraw-button" class="primary-button" type="button" disabled>WITHDRAW CRYSTALS</button>
+              <a id="garage-crystal-receipt" class="garage-wallet-note" href="#" target="_blank" rel="noopener noreferrer" hidden>VIEW TRANSACTION ON RONIN</a>
+            </section>
+            <div id="garage-crystal-status" class="garage-status" role="status">Wallet Crystal Bank has not been loaded yet.</div>
+          </section>
           <section id="miner-command-center" class="miner-command-center" hidden aria-labelledby="miner-command-center-title">
             <header class="miner-command-center-heading">
               <div>
@@ -432,7 +459,6 @@
             </header>
             <div class="garage-balance-strip">
               <article><span>MATT BALANCE</span><strong id="garage-matt-balance">--</strong></article>
-              <article class="crystal-balance-card"><span>BANKED MATT CRYSTALS</span><strong id="garage-crystal-balance">--</strong></article>
               <article><span>MINER STATE</span><strong id="garage-miner-state">--</strong></article>
               <article><span>EQUIPMENT</span><strong id="garage-equipment-count">--</strong></article>
             </div>
@@ -445,20 +471,13 @@
               <section class="garage-panel garage-inventory-panel">
                 <div class="garage-panel-heading"><span>EQUIPMENT INVENTORY</span><small id="garage-inventory-state">LOADING</small></div>
                 <div id="garage-equipment-list" class="garage-equipment-list"></div>
+                <button id="garage-equipment-load-more" class="garage-equipment-load-more" type="button" hidden>LOAD MORE EQUIPMENT</button>
               </section>
               <aside class="garage-service-column">
                 <section class="garage-panel garage-service-card">
                   <div class="garage-panel-heading"><span>ARMOR SERVICE</span><small>PAID IN MATT</small></div>
                   <p id="garage-armor-copy">Select a Miner to inspect its armor.</p>
                   <button id="garage-repair-button" class="primary-button" type="button" disabled>REPAIR ARMOR</button>
-                </section>
-                <section class="garage-panel garage-service-card crystal-bank-service">
-                  <div class="garage-panel-heading"><span>CRYSTAL BANK</span><small>ON-CHAIN</small></div>
-                  <p id="garage-withdraw-copy">Crystals earned from verified runs are held here until withdrawn.</p>
-                  <label for="garage-withdraw-input">WITHDRAW AMOUNT</label>
-                  <input id="garage-withdraw-input" type="number" min="0" step="any" placeholder="0" inputmode="decimal" />
-                  <button id="garage-withdraw-all-button" class="garage-withdraw-all-button" type="button">USE FULL BALANCE</button>
-                  <button id="garage-withdraw-button" class="primary-button" type="button" disabled>WITHDRAW CRYSTALS</button>
                 </section>
               </aside>
             </div>
@@ -546,8 +565,8 @@
                 </button>
               </div>
               <div id="interrupted-nft-practice" class="interrupted-nft-practice" hidden>
-                <span><strong>MINER RUN INTERRUPTED</strong><small id="interrupted-nft-practice-copy">Your Miner is safely locked to an unfinished Practice run.</small></span>
-                <button id="resume-nft-practice-button" type="button">RESUME MINER RUN</button>
+                <span><strong>LEGACY MINER RUN LOCKED</strong><small id="interrupted-nft-practice-copy">This old run cannot be resumed. Ending it applies the on-chain death rules before public Practice starts.</small></span>
+                <button id="resume-nft-practice-button" type="button">FORFEIT OLD RUN &amp; START PRACTICE</button>
               </div>
             </div>
           </div>
@@ -567,6 +586,7 @@
               <button id="leaderboards-button" class="secondary-button">LEADERBOARDS</button>
               <button id="pass-button" class="secondary-button">MINE PASS</button>
               <button id="profile-button" class="secondary-button">PROFILE</button>
+              <button id="crystal-bank-button" class="secondary-button">CRYSTAL BANK</button>
               <button id="controls-button" class="secondary-button controls-nav-button">CONTROLS</button>
               <button id="sound-button" class="secondary-button">SOUND</button>
               <button id="shake-toggle-button" class="secondary-button preference-toggle" type="button" aria-pressed="true">SHAKE ON</button>

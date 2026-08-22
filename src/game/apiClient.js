@@ -66,6 +66,16 @@ export class MattMineApiClient {
     return response.miner;
   }
 
+  async equipmentInventory(cursor = '', limit = 50, priorityTokenIds = []) {
+    const query = new URLSearchParams({ limit: String(limit) });
+    if (cursor) query.set('cursor', String(cursor));
+    if (priorityTokenIds.length > 0) query.set('priority', priorityTokenIds.join(','));
+    const response = await this.request(`/api/me/equipment?${query}`, {
+      authenticated: true
+    });
+    return response.inventory;
+  }
+
   async setIdentity(name, avatarDataUrl = '') {
     return this.request('/api/profile/identity', {
       method: 'POST',

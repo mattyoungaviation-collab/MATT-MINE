@@ -5,6 +5,7 @@ import {
   NftGarageClient,
   NFT_GARAGE_CONTRACTS,
   NFT_GARAGE_SELECTORS,
+  crystalWithdrawalAvailability,
   formatTokenUnits,
   parseTokenUnits
 } from '../src/game/nftGarageClient.js';
@@ -16,7 +17,7 @@ function garageHarness() {
     wallet: { async sendPreparedTransaction() {} },
     fetch: async () => ({ ok: true, json: async () => ({ result: '0x' }) })
   });
-  garage.send = async (to, data, kind) => calls.push({ to, data, kind });
+  garage.send = async (to, data, kind, options) => calls.push({ to, data, kind, options });
   return { garage, calls };
 }
 
@@ -30,12 +31,93 @@ test('the unified Garage reads the activated Crystal Bank through the same-origi
     }, 'latest']
   });
   assert.equal(request.params[0].to, NFT_GARAGE_CONTRACTS.crystalBank.toLowerCase());
+
+  const walletBalanceRequest = validatedNftLabRpcRequest({
+    id: 2,
+    method: 'eth_call',
+    params: [{
+      to: NFT_GARAGE_CONTRACTS.crystal,
+      data: `${NFT_GARAGE_SELECTORS.balanceOf}${'1'.padStart(64, '0')}`
+    }, 'latest']
+  });
+  assert.equal(walletBalanceRequest.params[0].to, NFT_GARAGE_CONTRACTS.crystal.toLowerCase());
 });
 
 test('Crystal withdrawal amounts round-trip without floating point loss', () => {
   const raw = parseTokenUnits('123.456789');
   assert.equal(raw, 123_456789_000000000000n);
   assert.equal(formatTokenUnits(raw, 18, 6), '123.456789');
+});
+
+test('Crystal withdrawal availability caps Max by bank, wallet, and global UTC limits', () => {
+  const available = crystalWithdrawalAvailability({
+    crystalBalanceRaw: 500n,
+    minimumWithdrawalRaw: 100n,
+    walletDailyLimitRaw: 1_000n,
+    walletWithdrawnRaw: 700n,
+    globalDailyLimitRaw: 10_000n,
+    globalWithdrawnRaw: 9_800n,
+    crystalBankPaused: false
+  });
+
+  assert.equal(available.walletRemainingRaw, 300n);
+  assert.equal(available.globalRemainingRaw, 200n);
+  assert.equal(available.withdrawableRaw, 200n);
+  assert.equal(available.withdrawalAvailable, true);
+  assert.equal(crystalWithdrawalAvailability({ ...available, crystalBankPaused: true }).withdrawableRaw, 0n);
+});
+
+test('the wallet Crystal Bank snapshot reads UTC usage without requiring a selected Miner', async () => {
+  const address = '0x1111111111111111111111111111111111111111';
+  const now = Date.UTC(2026, 7, 22, 12);
+  const day = Math.floor(now / 86_400_000);
+  const calls = [];
+  const garage = new NftGarageClient({
+    wallet: { async sendPreparedTransaction() {} },
+    now: () => now,
+    fetch: async () => ({ ok: true, json: async () => ({ result: '0x' }) })
+  });
+  garage.call = async (to, data) => {
+    calls.push({ to, data });
+    const value = to === NFT_GARAGE_CONTRACTS.crystal ? 1_250n
+      : data.startsWith(NFT_GARAGE_SELECTORS.bankBalance) ? 900n
+      : data === NFT_GARAGE_SELECTORS.minimumWithdrawal ? 100n
+        : data === NFT_GARAGE_SELECTORS.walletDailyLimit ? 1_000n
+          : data === NFT_GARAGE_SELECTORS.globalDailyLimit ? 10_000n
+            : data.startsWith(NFT_GARAGE_SELECTORS.walletWithdrawn) ? 250n
+              : data.startsWith(NFT_GARAGE_SELECTORS.globalWithdrawn) ? 9_500n
+                : 0n;
+    return `0x${value.toString(16).padStart(64, '0')}`;
+  };
+
+  const snapshot = await garage.walletSnapshot({ address });
+
+  assert.equal(snapshot.utcDay, day);
+  assert.equal(snapshot.walletCrystalBalanceRaw, 1_250n);
+  assert.equal(snapshot.nextUtcResetAt, Date.UTC(2026, 7, 23));
+  assert.equal(snapshot.walletRemainingRaw, 750n);
+  assert.equal(snapshot.globalRemainingRaw, 500n);
+  assert.equal(snapshot.withdrawableRaw, 500n);
+  assert.ok(calls.some((call) => call.data === `${NFT_GARAGE_SELECTORS.walletWithdrawn}${day.toString(16).padStart(64, '0')}${address.slice(2).padStart(64, '0')}`));
+});
+
+test('Crystal withdrawals reject amounts beyond the currently withdrawable limit', async () => {
+  const { garage, calls } = garageHarness();
+  const unit = 10n ** 18n;
+  const snapshot = crystalWithdrawalAvailability({
+    crystalBalanceRaw: 900n * unit,
+    minimumWithdrawalRaw: 100n * unit,
+    walletDailyLimitRaw: 500n * unit,
+    walletWithdrawnRaw: 100n * unit,
+    globalDailyLimitRaw: 10_000n * unit,
+    globalWithdrawnRaw: 9_700n * unit,
+    crystalBankPaused: false
+  });
+
+  await assert.rejects(() => garage.withdrawCrystals(snapshot, 301n * unit), /Only 300 MATT/);
+  await garage.withdrawCrystals(snapshot, 300n * unit, { onBroadcast() {} });
+  assert.equal(calls[0].kind, 'crystal-withdrawal');
+  assert.equal(typeof calls[0].options.onBroadcast, 'function');
 });
 
 test('first-time replacement explains the immutable three-transaction contract sequence', async () => {

@@ -1587,6 +1587,9 @@ button,
 .garage-equipment-card button.unequip { border-color: #ffcf37; color: #ffcf37; }
 .garage-equipment-card button:disabled { opacity: .45; cursor: not-allowed; }
 .garage-inventory-empty { grid-column: 1 / -1; margin: 0; padding: 30px 14px; color: #8d9ba3; text-align: center; font: 700 11px/1.5 Inter, sans-serif; }
+.garage-equipment-load-more { width: calc(100% - 24px); min-height: 40px; margin: 0 12px 12px; border: 1px solid #47eee3; background: #0b171b; color: #47eee3; font: 1000 9px Inter, sans-serif; letter-spacing: .1em; }
+.garage-equipment-load-more:hover { background: #11272b; }
+.garage-equipment-load-more:disabled { opacity: .55; cursor: wait; }
 .garage-service-column { display: grid; gap: 12px; }
 .garage-service-card { padding-bottom: 12px; }
 .garage-service-card p { margin: 12px; color: #98a6ae; font: 700 10px/1.5 Inter, sans-serif; }

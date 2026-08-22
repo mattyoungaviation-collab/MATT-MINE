@@ -24,6 +24,10 @@ import {
   reconcileLinkedAdminControls
 } from './admin-control-links.js';
 import { buildAdminReadiness } from './admin-readiness.js';
+import {
+  OperationsMonitor,
+  collectInProcessOperationsSignals
+} from './operations-monitor.js';
 import { SERVER_RUN_MODES } from './constants.js';
 import { resolveCompetitionSnapshot } from '../src/game/competitionStudio.js';
 import {
@@ -40,6 +44,13 @@ const BETA_CAPABILITIES = Object.freeze([
   'enemyAI', 'bossAI', 'damageNumbers', 'hitboxes', 'cooldownDebug',
   'seedDisplay', 'exportConfiguration', 'importConfiguration'
 ]);
+
+// A Symbol cannot be supplied by an HTTP JSON body. It lets the public start
+// methods re-enter once while holding the in-process phase-XP barrier without
+// exposing a bypass flag to players.
+const NFT_PHASE_XP_BARRIER_HELD = Symbol('nftPhaseXpBarrierHeld');
+const NFT_LIFECYCLE_ACTIVITY_HELD = Symbol('nftLifecycleActivityHeld');
+const NFT_LIFECYCLE_MUTATION_HELD = Symbol('nftLifecycleMutationHeld');
 
 const RETIRED_EXPANSION_SETTING_IDS = new Set([
   'deathRetentionFree',
@@ -81,6 +92,39 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     this.competitiveReplayValidator = options.competitiveReplayValidator || null;
     this.nftV2AdminService = options.nftV2AdminService || null;
     this.adminControlLinkPromise = null;
+    const requestedHealthCacheMs = Number(options.nftHealthCacheMs);
+    this.nftHealthCacheMs = requestedHealthCacheMs === 0
+      ? 0
+      : Math.max(15_000, Math.min(30_000, Number.isFinite(requestedHealthCacheMs) ? requestedHealthCacheMs : 20_000));
+    this.nftHealthCache = null;
+    this.nftHealthPromise = null;
+    this.nftPhaseXpQueue = Promise.resolve();
+    const metadataEvidence = typeof options.operationsMetadataEvidence === 'function'
+      ? options.operationsMetadataEvidence
+      : options.operationsMetadataEvidence
+        ? async () => structuredClone(options.operationsMetadataEvidence)
+        : null;
+    this.operationsMonitor = options.operationsMonitor || new OperationsMonitor({
+      stage: options.operationsStage || 'public',
+      cacheMs: options.operationsMonitorCacheMs,
+      now: () => this.now(),
+      thresholds: options.operationsThresholds,
+      collect: ({ checkedAt }) => collectInProcessOperationsSignals({
+        checkedAt,
+        database: this.database,
+        getNftHealth: () => this.nftOperationalHealth(),
+        getProtocolSnapshot: this.nftV2AdminService?.snapshot
+          ? () => this.nftV2AdminService.snapshot()
+          : null,
+        getMetadataEvidence: metadataEvidence,
+        getVrfSignal: typeof options.operationsVrfSignal === 'function'
+          ? options.operationsVrfSignal
+          : null,
+        expectedContractPauses: options.operationsExpectedContractPauses,
+        authoritySignals: options.operationsAuthoritySignals,
+        walletSignals: options.operationsWalletSignals
+      })
+    });
   }
 
   async ensureAdminControlLinks() {
@@ -105,13 +149,117 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     return this.adminControlLinkPromise;
   }
 
+  invalidateNftOperationalHealth() {
+    this.nftHealthCache = null;
+  }
+
+  async nftOperationalHealth(options = {}) {
+    const force = options.force === true;
+    const timestamp = Date.now();
+    if (!force && this.nftHealthCache && this.nftHealthCache.expiresAt > timestamp) {
+      return structuredClone(this.nftHealthCache.value);
+    }
+    if (!force && this.nftHealthPromise) return structuredClone(await this.nftHealthPromise);
+    const pending = this.#computeNftOperationalHealth();
+    this.nftHealthPromise = pending;
+    try {
+      const value = await pending;
+      this.nftHealthCache = {
+        expiresAt: timestamp + this.nftHealthCacheMs,
+        value: structuredClone(value)
+      };
+      return value;
+    } finally {
+      if (this.nftHealthPromise === pending) this.nftHealthPromise = null;
+    }
+  }
+
+  async #computeNftOperationalHealth() {
+    const [metadata, gameplayHealth] = await Promise.all([
+      safeNftHealth(
+        this.nftMetadataService,
+        'NFT metadata chain health could not be verified.'
+      ),
+      safeNftHealth(
+        this.nftGameplayService,
+        'NFT gameplay chain health could not be verified.'
+      )
+    ]);
+    const studioParity = await this.#nftStudioParity(gameplayHealth);
+    const gameplay = {
+      ...gameplayHealth,
+      studioParity,
+      ok: gameplayHealth.ok === true && studioParity.ok === true,
+      ...(gameplayHealth.ok === true && studioParity.ok !== true
+        ? { error: 'The active NFT routes do not match the published Studio maps.' }
+        : {})
+    };
+    return {
+      enabled: Boolean(this.nftMetadataService || this.nftGameplayService),
+      ok: metadata.ok === true && gameplay.ok === true,
+      metadata,
+      gameplay
+    };
+  }
+
+  async #nftStudioParity(gameplayHealth) {
+    if (!this.nftGameplayService) return { enabled: false, ok: true, routes: {} };
+    try {
+      const state = await this.database.read();
+      const defaults = nftV2MapDefaults(state.competitionStudio, this.now());
+      const routes = {};
+      for (const mode of ['arena', 'paid']) {
+        const studioMap = defaults[mode];
+        const activeMap = gameplayHealth.activeMaps?.[mode];
+        const ok = Boolean(
+          studioMap &&
+          activeMap?.approved === true &&
+          activeMap?.retired !== true &&
+          String(activeMap.mapId || '').toLowerCase() === String(studioMap.mapId || '').toLowerCase() &&
+          String(activeMap.contentHash || '').toLowerCase() === String(studioMap.contentHash || '').toLowerCase()
+        );
+        routes[mode] = {
+          ok,
+          studioFingerprint: String(studioMap?.fingerprint || ''),
+          versionId: String(activeMap?.versionId || '')
+        };
+      }
+      return {
+        enabled: true,
+        ok: Object.values(routes).every((route) => route.ok),
+        routes
+      };
+    } catch {
+      return {
+        enabled: true,
+        ok: false,
+        routes: {},
+        error: 'Studio and on-chain NFT map parity could not be verified.'
+      };
+    }
+  }
+
+  async health() {
+    const [base, nft] = await Promise.all([
+      super.health(),
+      this.nftOperationalHealth()
+    ]);
+    return {
+      ...base,
+      degraded: base.degraded === true || (nft.enabled && nft.ok !== true),
+      nft
+    };
+  }
+
   async adminOverview(adminKey) {
     this.assertAdminKey(adminKey);
     await this.ensureAdminControlLinks();
     const overview = await super.adminOverview(adminKey);
-    const [state, database] = await Promise.all([
+    const [state, database, nft, operationsHealth] = await Promise.all([
       this.database.read(),
-      this.database.healthCheck().catch(() => ({ ok: false, kind: this.database.kind || 'unknown' }))
+      this.database.healthCheck().catch(() => ({ ok: false, kind: this.database.kind || 'unknown' })),
+      this.nftOperationalHealth(),
+      this.operationsMonitor.current()
     ]);
     const controlLinks = linkedAdminControlSnapshot(state);
     const replay = this.competitiveReplayValidator?.publicStatus?.() || { configured: false, enabled: false };
@@ -127,6 +275,7 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     return {
       ...overview,
       controlLinks,
+      operationsHealth,
       readiness: buildAdminReadiness({
         checkedAt: this.now(),
         database,
@@ -139,7 +288,8 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
           eligibilityReady: Boolean(this.reviveEligibilityValidator)
         },
         treasurySafe,
-        controlLinks
+        controlLinks,
+        nft
       })
     };
   }
@@ -159,6 +309,35 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     return this.nftGameplayService.prepareRunAuthorization({ address: session.address, minerId, mode });
   }
 
+  async assertNftMapMatchesStudio(mode, expectedFingerprint = '') {
+    assertApi(this.nftGameplayService?.activeMap, 503, 'nft_map_verification_unavailable', 'Live NFT map verification is unavailable.');
+    const chainMode = String(mode || '').toLowerCase() === 'pass' ? 'paid' : String(mode || '').toLowerCase();
+    const slotId = chainMode === 'arena' ? 'arena' : chainMode === 'paid' ? 'pass' : '';
+    assertApi(slotId, 422, 'nft_map_mode_invalid', 'Choose MATT Arena or Pass Mine.');
+    const state = await this.database.read();
+    const defaults = nftV2MapDefaults(state.competitionStudio, this.now());
+    const studioMap = defaults[chainMode];
+    assertApi(studioMap, 503, 'nft_map_snapshot_missing', 'Publish an active mine version before opening NFT gameplay.');
+    if (expectedFingerprint) {
+      assertApi(
+        String(studioMap.fingerprint || '').toLowerCase() === String(expectedFingerprint).toLowerCase(),
+        409,
+        'competition_snapshot_changed',
+        'This mine changed while the run was opening. Review the new version and approve the run again.'
+      );
+    }
+    const activeMap = await this.nftGameplayService.activeMap(chainMode);
+    assertApi(activeMap.approved && !activeMap.retired, 503, 'nft_map_unavailable', 'The routed NFT map is not active on-chain.');
+    assertApi(
+      String(activeMap.mapId).toLowerCase() === studioMap.mapId.toLowerCase() &&
+        String(activeMap.contentHash).toLowerCase() === studioMap.contentHash.toLowerCase(),
+      503,
+      'nft_map_content_drift',
+      'The published game map does not match the active on-chain NFT map. Approve the current map in Admin before accepting runs.'
+    );
+    return { chainMode, slotId, studioMap, activeMap };
+  }
+
   async adminNftV2Protocol(adminKey) {
     this.assertAdminKey(adminKey);
     assertApi(this.nftV2AdminService, 503, 'nft_v2_admin_disabled', 'NFT V2 on-chain Admin controls are disabled.');
@@ -174,13 +353,27 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     this.assertAdminKey(adminKey);
     assertApi(this.nftV2AdminService, 503, 'nft_v2_admin_disabled', 'NFT V2 on-chain Admin controls are disabled.');
     const reason = adminReason(input?.reason);
-    const result = await this.nftV2AdminService.setEconomy(input);
+    let result;
+    try {
+      result = await this.nftV2AdminService.setEconomy(input);
+    } catch (error) {
+      if (Array.isArray(error?.confirmedTransactions) && error.confirmedTransactions.length) {
+        await this.database.transact((state) => appendAudit(
+          state,
+          'NFT_V2_ECONOMY_PARTIALLY_UPDATED',
+          `${error.confirmedTransactions.join(', ')}; failed ${error.failedControl || 'unknown control'}; ${reason}`,
+          this.now()
+        ));
+      }
+      throw error;
+    }
     await this.database.transact((state) => appendAudit(
       state,
       'NFT_V2_ECONOMY_UPDATED',
       `${result.transactions.join(', ')}; ${reason}`,
       this.now()
     ));
+    this.invalidateNftOperationalHealth();
     return result;
   }
 
@@ -200,21 +393,75 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
       state.nftV2Protocol.updatedAt = this.now();
       appendAudit(state, 'NFT_V2_MAP_APPROVED', `${result.mode}; ${result.versionId}; ${result.transactionHash}; ${reason}`, this.now());
     });
+    this.invalidateNftOperationalHealth();
     return result;
   }
 
   async updateAdminNftV2PhaseXp(adminKey, input) {
     this.assertAdminKey(adminKey);
     assertApi(this.nftV2AdminService, 503, 'nft_v2_admin_disabled', 'NFT V2 on-chain Admin controls are disabled.');
-    const reason = adminReason(input?.reason);
-    const result = await this.nftV2AdminService.setPhaseXp(input);
-    await this.database.transact((state) => appendAudit(
-      state,
-      'NFT_V2_PHASE_XP_UPDATED',
-      `${result.mode}; ${result.versionId}; ${result.phaseXp.join('/')}; ${result.transactionHash}; ${reason}`,
-      this.now()
-    ));
-    return result;
+    return this.withNftLifecycleMutation(async () => {
+      const mode = String(input?.mode || '').toLowerCase();
+      await this.assertNoActiveNftRunsForPhaseXp(mode);
+      const reason = adminReason(input?.reason);
+      const result = await this.nftV2AdminService.setPhaseXp(input);
+      await this.database.transact((state) => appendAudit(
+        state,
+        'NFT_V2_PHASE_XP_UPDATED',
+        `${result.mode}; ${result.versionId}; ${result.phaseXp.join('/')}; ${result.transactionHash}; ${reason}`,
+        this.now()
+      ));
+      this.invalidateNftOperationalHealth();
+      return result;
+    });
+  }
+
+  async assertNoActiveNftRunsForPhaseXp(mode) {
+    if (!['arena', 'paid'].includes(mode)) return;
+    const [state, arenaRuns] = await Promise.all([
+      this.database.read(),
+      mode === 'arena' && this.arenaService?.adminActiveRuns
+        ? Promise.resolve(this.arenaService.adminActiveRuns()).catch(() => {
+            throw new ApiError(
+              503,
+              'nft_phase_xp_active_run_check_failed',
+              'MATT Arena activity could not be verified, so phase XP was not changed.'
+            );
+          })
+        : Promise.resolve([])
+    ]);
+    const paidRuns = mode === 'paid'
+      ? Object.values(state.runs || {}).filter((run) =>
+          ['active', 'awaiting-revive'].includes(run?.status) && run?.mode === SERVER_RUN_MODES.PAID
+        )
+      : [];
+    const activeCount = paidRuns.length + (arenaRuns || []).length;
+    assertApi(
+      activeCount === 0,
+      409,
+      'nft_phase_xp_active_runs',
+      `End or settle the ${activeCount} active ${mode === 'arena' ? 'MATT Arena' : 'Pass Mine'} run${activeCount === 1 ? '' : 's'} before changing phase XP.`
+    );
+  }
+
+  withNftPhaseXpBarrier(operation) {
+    const next = this.nftPhaseXpQueue.then(operation, operation);
+    this.nftPhaseXpQueue = next.catch(() => undefined);
+    return next;
+  }
+
+  withNftLifecycleStart(operation) {
+    if (typeof this.database.withNftLifecycleStart === 'function') {
+      return this.database.withNftLifecycleStart(operation);
+    }
+    return this.withNftPhaseXpBarrier(operation);
+  }
+
+  withNftLifecycleMutation(operation) {
+    if (typeof this.database.withNftLifecycleMutation === 'function') {
+      return this.database.withNftLifecycleMutation(operation);
+    }
+    return this.withNftPhaseXpBarrier(operation);
   }
 
   async retireAdminNftV2Map(adminKey, input) {
@@ -228,11 +475,18 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
       state.nftV2Protocol.updatedAt = this.now();
       appendAudit(state, 'NFT_V2_MAP_RETIRED', `${result.versionId}; ${result.transactionHash}; ${reason}`, this.now());
     });
+    this.invalidateNftOperationalHealth();
     return result;
   }
 
   async startRun(token, mode, input = {}) {
     const normalizedMode = String(mode || '').toLowerCase();
+    if (requiresMinerNft(normalizedMode) && input?.[NFT_PHASE_XP_BARRIER_HELD] !== true) {
+      return this.withNftLifecycleStart(() => this.startRun(token, mode, {
+        ...input,
+        [NFT_PHASE_XP_BARRIER_HELD]: true
+      }));
+    }
     if (isRetiredRunMode(normalizedMode)) {
       throw new ApiError(
         410,
@@ -242,6 +496,7 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     }
     const nftGateActive = requiresMinerNft(normalizedMode);
     let gatedMinerId = 0;
+    let mapParity = null;
     if (nftGateActive) {
       assertApi(
         this.nftGameplayService,
@@ -256,6 +511,7 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
         'nft_replay_required',
         'This NFT mine remains closed until deterministic server replay verification is active.'
       );
+      mapParity = await this.assertNftMapMatchesStudio(normalizedMode);
       const session = await this.authenticate(token);
       gatedMinerId = selectedMinerId(input.minerId);
       assertApi(
@@ -281,15 +537,28 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
         'Approve this Miner run in Ronin Wallet.'
       );
     }
-    const started = await super.startRun(token, mode);
+    const started = await super.startRun(token, mode, {
+      expectedCompetitionFingerprint: mapParity?.studioMap?.fingerprint || '',
+      ...(nftGateActive ? {
+        pendingNftRun: {
+          minerId: gatedMinerId,
+          mode: 'paid',
+          mapVersion: String(mapParity?.activeMap?.versionId || input.authorization?.mapVersion || ''),
+          reservedAt: this.now()
+        }
+      } : {})
+    });
     const replayVerifiedMode = this.competitiveReplayValidator?.publicStatus?.().modes?.includes(started.mode);
     const nftSession = nftGateActive && replayVerifiedMode
       ? await this.authenticate(token)
       : null;
     if (nftGateActive && replayVerifiedMode) {
       let nftRun = null;
+      let beginAttempted = false;
       try {
+        await this.assertNftMapMatchesStudio(normalizedMode, mapParity.studioMap.fingerprint);
         await this.releaseExpiredNftRuns(nftSession.address, started.runId);
+        beginAttempted = true;
         nftRun = await this.nftGameplayService.beginRun({
           address: nftSession.address,
           minerId: gatedMinerId,
@@ -302,38 +571,64 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
             ...started.tuning,
             playerMaxHealth: nftRun.profile.gameplay.maximumHealth,
             nftCrystalCarryLimit: nftRun.crystalCarryLimit,
+            nftMineableCrystalUnits: nftRun.mineableCrystalUnits,
+            nftRunTimeoutSeconds: nftRun.runTimeoutSeconds,
+            nftPhaseXp: structuredClone(nftRun.phaseXp || []),
             nftMinerProfile: nftRun.profile
           };
-          await this.database.transact((state) => {
-            const run = state.runs?.[started.runId];
-            if (run) {
-              run.nftRun = {
-                minerId: nftRun.minerId,
-                runId: nftRun.runId,
-                beginTransactionHash: nftRun.beginTransactionHash,
-                crystalCarryLimit: nftRun.crystalCarryLimit,
-                profile: structuredClone(nftRun.profile)
-              };
-              run.tuning = structuredClone(started.tuning);
-            }
-          });
-          started.nftRun = {
+          const attachedNftRun = {
             minerId: nftRun.minerId,
             runId: nftRun.runId,
             beginTransactionHash: nftRun.beginTransactionHash,
             crystalCarryLimit: nftRun.crystalCarryLimit,
+            mineableCrystalUnits: nftRun.mineableCrystalUnits,
+            runTimeoutSeconds: nftRun.runTimeoutSeconds,
+            forceAbandonAt: nftRun.forceAbandonAt,
+            phaseXp: structuredClone(nftRun.phaseXp || []),
             profile: nftRun.profile
           };
+          await this.attachStartedPaidNftRun(
+            nftSession.address,
+            started.runId,
+            gatedMinerId,
+            attachedNftRun,
+            started.tuning
+          );
+          started.nftRun = attachedNftRun;
         }
       } catch (error) {
         if (nftRun) {
+          let released = false;
+          try {
+            await this.nftGameplayService.cancelRun({
+              address: nftSession.address,
+              minerId: gatedMinerId,
+              runId: nftRun.runId
+            });
+            released = true;
+          } catch {
+            // Preserve the pending intent so explicit recovery can reconcile it.
+          }
+          if (released) {
+            await this.reconcilePendingPaidNftRun(
+              nftSession.address,
+              started.runId,
+              gatedMinerId,
+              'post-begin attachment failed'
+            ).catch(() => undefined);
+            throw new ApiError(
+              503,
+              'nft_run_start_reverted',
+              'The Miner run could not be attached to the browser session. Its on-chain lock was released and the Pass Mine credit was restored; start again.'
+            );
+          }
           throw new ApiError(
             503,
             'nft_run_persistence_recovery',
-            'The Miner run started on-chain. Refresh to resume the same run.'
+            'The Miner run started on-chain but the browser session was not created. Refresh, select the same Miner, and use the explicit locked-run recovery action.'
           );
         }
-        if (error?.nftRunDefinitelyNotStarted === true) {
+        if (!beginAttempted || error?.nftRunDefinitelyNotStarted === true) {
           await this.rollbackUnstartedPaidNftRun(nftSession.address, started.runId);
         }
         throw error;
@@ -414,12 +709,19 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
   }
 
   async startArenaRun(token, input = {}) {
+    if (input?.[NFT_PHASE_XP_BARRIER_HELD] !== true) {
+      return this.withNftLifecycleStart(() => this.startArenaRun(token, {
+        ...input,
+        [NFT_PHASE_XP_BARRIER_HELD]: true
+      }));
+    }
     assertApi(
       this.nftGameplayService,
       503,
       'nft_gameplay_required',
       'MATT Arena remains closed until Miner NFT verification is available.'
     );
+    const mapParity = await this.assertNftMapMatchesStudio('arena');
     const session = await this.authenticate(token);
     const minerId = selectedMinerId(input.minerId);
     assertApi(
@@ -463,10 +765,14 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
         reviveInfrastructureReady
       ),
       reviveLimitPerRun: settings.reviveLimitPerRun,
-      reviveInvulnerabilitySeconds: settings.reviveInvulnerabilitySeconds
+      reviveInvulnerabilitySeconds: settings.reviveInvulnerabilitySeconds,
+      expectedCompetitionFingerprint: mapParity.studioMap.fingerprint
     });
     let nftRun = null;
+    let beginAttempted = false;
     try {
+      await this.assertNftMapMatchesStudio('arena', mapParity.studioMap.fingerprint);
+      beginAttempted = true;
       nftRun = await this.nftGameplayService.beginRun({
         address: session.address,
         minerId,
@@ -484,11 +790,18 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
       return started;
     } catch (error) {
       if (nftRun) {
-        throw new ApiError(
-          503,
-          'nft_run_persistence_recovery',
-          'The Arena Miner run started on-chain. Refresh to resume the same run.'
-        );
+          throw new ApiError(
+            503,
+            'nft_run_persistence_recovery',
+            'The Arena Miner run started on-chain but the browser session was not created. Refresh, select the same Miner, and use the explicit locked-run recovery action if needed.'
+          );
+      }
+      if (!beginAttempted) {
+        await this.arenaService.store.rollbackUnstartedNftRun(
+          started.run.runId,
+          session.address,
+          this.now()
+        ).catch(() => undefined);
       }
       if (error?.nftRunDefinitelyNotStarted === true) {
         await this.arenaService.store.rollbackUnstartedNftRun(
@@ -516,6 +829,7 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
       run.status = 'expired';
       run.finishedAt = timestamp;
       run.result = null;
+      delete run.pendingNftRun;
       await transaction?.upsertRun(run);
       appendAudit(
         state,
@@ -528,14 +842,88 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     });
   }
 
+  async attachStartedPaidNftRun(address, runId, minerId, nftRun, tuning) {
+    return this.database.transact(async (state, transaction) => {
+      const run = state.runs?.[runId];
+      assertApi(run, 404, 'run_not_found', 'The server run was not found.');
+      assertApi(run.address === address, 403, 'run_owner_mismatch', 'This run belongs to another wallet.');
+      assertApi(run.status === 'active', 409, 'nft_server_run_not_active', 'The reserved server run is no longer active.');
+      assertApi(
+        !run.adminTerminationPending,
+        409,
+        'run_admin_termination_pending',
+        'An administrator is ending this run, so its Miner attachment was not changed.'
+      );
+      assertApi(
+        Number(run.pendingNftRun?.minerId) === Number(minerId) && !run.nftRun,
+        409,
+        'nft_run_reservation_mismatch',
+        'The active server reservation does not match this Miner run.'
+      );
+      run.nftRun = structuredClone(nftRun);
+      run.tuning = structuredClone(tuning);
+      delete run.pendingNftRun;
+      await transaction?.upsertRun(run);
+      return structuredClone(run.nftRun);
+    });
+  }
+
+  async reconcilePendingPaidNftRun(address, runId, minerId, reason = 'pending Miner run reconciled') {
+    const timestamp = this.now();
+    return this.database.transact(async (state, transaction) => {
+      const run = state.runs?.[runId];
+      assertApi(run, 404, 'run_not_found', 'The reserved server run was not found.');
+      assertApi(run.address === address, 403, 'run_owner_mismatch', 'This run belongs to another wallet.');
+      assertApi(
+        !run.nftRun && Number(run.pendingNftRun?.minerId) === Number(minerId),
+        409,
+        'nft_run_reservation_mismatch',
+        'The server reservation does not match this Miner run.'
+      );
+      const entitlement = Object.values(state.paidEntitlements || {})
+        .find((entry) => entry.address === address && entry.usedRunId === runId);
+      if (entitlement) {
+        entitlement.consumedAt = 0;
+        entitlement.usedRunId = '';
+      }
+      run.status = 'expired';
+      run.finishedAt = timestamp;
+      run.result = null;
+      run.orphanRecoveryAt = timestamp;
+      delete run.pendingNftRun;
+      await transaction?.upsertRun(run);
+      appendAudit(
+        state,
+        'NFT_V2_PENDING_RUN_RECONCILED',
+        `${address}; ${runId}; Miner #${minerId}; ${reason}; Pass Mine credit ${entitlement ? 'restored' : 'not found'}`,
+        timestamp,
+        'SERVER_SECURITY'
+      );
+      return { runId, restoredCredit: Boolean(entitlement) };
+    });
+  }
+
   async appendCompetitiveEvents(token, payload) {
     if (!this.competitiveReplayValidator) {
       throw new ApiError(503, 'competitive_replay_validator_missing', 'Deterministic server replay is not configured.');
     }
-    const session = await this.authenticate(token);
-    return {
-      checkpoint: await this.competitiveReplayValidator.append(session.address, payload)
-    };
+    return this.withNftLifecycleStart(async () => {
+      const session = await this.authenticate(token);
+      const runId = String(payload?.runId || '');
+      const snapshot = await this.database.read();
+      const run = snapshot.runs?.[runId];
+      if (run) {
+        assertApi(
+          !run.adminTerminationPending,
+          409,
+          'run_admin_termination_pending',
+          'An administrator is ending this run, so no more replay events were accepted.'
+        );
+      }
+      return {
+        checkpoint: await this.competitiveReplayValidator.append(session.address, payload)
+      };
+    });
   }
 
   async me(token) {
@@ -642,6 +1030,12 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
   }
 
   async recoverLockedMinerRun(token, payload) {
+    if (payload?.[NFT_LIFECYCLE_MUTATION_HELD] !== true) {
+      return this.withNftLifecycleMutation(() => this.recoverLockedMinerRun(token, {
+        ...(payload || {}),
+        [NFT_LIFECYCLE_MUTATION_HELD]: true
+      }));
+    }
     assertApi(this.nftGameplayService, 503, 'nft_gameplay_disabled', 'NFT gameplay is not enabled.');
     const session = await this.authenticate(token);
     const minerId = Number(payload?.minerId);
@@ -649,23 +1043,90 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
 
     const before = await this.nftGameplayService.playerMiner(session.address, minerId);
     assertApi(before, 403, 'miner_nft_required', 'A Miner NFT owned by this wallet is required.');
-    if (before.gameplay?.runLocked !== true) {
+    const reservationSnapshot = await this.database.read();
+    const reservations = Object.values(reservationSnapshot.runs || {})
+      .filter((run) =>
+        run.address === session.address &&
+        ['active', 'awaiting-revive', 'expired'].includes(run.status) &&
+        (
+          Number(run.pendingNftRun?.minerId) === minerId ||
+          (
+            before.gameplay?.runLocked === true &&
+            Number((run.nftRun || run.nftSettlement)?.minerId) === minerId
+          )
+        )
+      )
+      .map((run) => {
+        assertRunNotAdminTerminating(
+          run,
+          'An administrator is ending this run. Wait for that operation to finish before recovering its Miner.'
+        );
+        const attached = run.nftRun || run.nftSettlement || null;
+        return {
+          runId: run.id,
+          kind: Number(run.pendingNftRun?.minerId) === minerId && !attached ? 'pending' : 'attached',
+          minerId,
+          chainRunId: String(attached?.runId || ''),
+          reservedAt: Number(run.pendingNftRun?.reservedAt || 0)
+        };
+      });
+    const pendingRunIds = reservations
+      .filter((reservation) => reservation.kind === 'pending')
+      .map((reservation) => reservation.runId);
+    if (before.gameplay?.runLocked !== true && pendingRunIds.length === 0) {
       return { recovered: false, minerId, profile: before };
     }
 
-    const cancellation = await this.nftGameplayService.cancelRun({
-      address: session.address,
-      minerId
-    });
+    const cancellation = before.gameplay?.runLocked === true
+      ? await this.nftGameplayService.cancelRun({
+          address: session.address,
+          minerId
+        })
+      : { cancelled: false, minerId, transactionHash: null };
     const timestamp = this.now();
-    const expiredRunIds = await this.database.transact(async (state, transaction) => {
+    const reconciled = await this.database.transact(async (state, transaction) => {
       const runIds = [];
-      for (const run of Object.values(state.runs || {})) {
-        if (
-          run.address !== session.address ||
-          run.status !== 'active' ||
-          Number(run.nftRun?.minerId) !== minerId
-        ) continue;
+      let restoredPassCredits = 0;
+      for (const reservation of reservations) {
+        const run = state.runs?.[reservation.runId];
+        assertApi(run, 409, 'nft_run_recovery_reservation_changed', 'The reserved Miner run changed before recovery completed. Refresh and try again.');
+        assertApi(
+          run.address === session.address && ['active', 'awaiting-revive', 'expired'].includes(run.status),
+          409,
+          'nft_run_recovery_reservation_changed',
+          'The reserved Miner run changed before recovery completed. Refresh and try again.'
+        );
+        assertRunNotAdminTerminating(
+          run,
+          'An administrator is ending this run. Wait for that operation to finish before recovering its Miner.'
+        );
+        const attached = run.nftRun || run.nftSettlement || null;
+        const reservationMatches = reservation.kind === 'pending'
+          ? !attached &&
+            Number(run.pendingNftRun?.minerId) === reservation.minerId &&
+            Number(run.pendingNftRun?.reservedAt || 0) === reservation.reservedAt
+          : Number(attached?.minerId) === reservation.minerId &&
+            (!reservation.chainRunId || String(attached?.runId || '') === reservation.chainRunId);
+        assertApi(
+          reservationMatches,
+          409,
+          'nft_run_recovery_reservation_changed',
+          'The reserved Miner run changed before recovery completed. Refresh and try again.'
+        );
+        if (reservation.kind === 'pending') {
+          const entitlement = Object.values(state.paidEntitlements || {})
+            .find((entry) => entry.address === session.address && entry.usedRunId === run.id);
+          if (entitlement) {
+            entitlement.consumedAt = 0;
+            entitlement.usedRunId = '';
+            restoredPassCredits += 1;
+          }
+          delete run.pendingNftRun;
+        }
+        if (run.pendingRevive?.status === 'pending') {
+          run.pendingRevive.status = 'cancelled';
+          run.pendingRevive.cancelledAt = timestamp;
+        }
         run.status = 'expired';
         run.finishedAt = timestamp;
         run.result = null;
@@ -680,19 +1141,26 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
         timestamp,
         session.address
       );
-      return runIds;
+      return { runIds, restoredPassCredits };
     });
-    await Promise.all(expiredRunIds.map((runId) =>
+    await Promise.all(reconciled.runIds.map((runId) =>
       this.competitiveReplayValidator?.finalize?.(runId, 'expired').catch(() => undefined)
     ));
     const profile = cancellation.settlement?.profile ||
       await this.nftGameplayService.playerMiner(session.address, minerId);
     return {
-      recovered: cancellation.cancelled === true,
+      recovered: cancellation.cancelled === true || reconciled.runIds.length > 0,
       minerId,
       transactionHash: cancellation.transactionHash || null,
-      profile
+      profile,
+      reconciledRunIds: reconciled.runIds,
+      restoredPassCredits: reconciled.restoredPassCredits
     };
+  }
+
+  async adminOperationsHealth(adminKey, options = {}) {
+    this.assertAdminKey(adminKey);
+    return this.operationsMonitor.current({ force: options.force === true });
   }
 
   async adminWallet(adminKey, address) {
@@ -1002,6 +1470,12 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
   }
 
   async requestPaidRevive(token, input = {}) {
+    if (input?.[NFT_LIFECYCLE_ACTIVITY_HELD] !== true) {
+      return this.withNftLifecycleStart(() => this.requestPaidRevive(token, {
+        ...input,
+        [NFT_LIFECYCLE_ACTIVITY_HELD]: true
+      }));
+    }
     const { session, state: currentState } = await this.authenticateWithState(token);
     const runId = String(input.runId || '');
     const arenaRun = isArenaRunId(runId);
@@ -1016,6 +1490,12 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     const currentRun = currentState.runs?.[runId];
     if (!arenaRun && (!currentRun || currentRun.address !== session.address)) {
       throw new ApiError(404, 'run_not_found', 'The active run was not found.');
+    }
+    if (currentRun) {
+      assertRunNotAdminTerminating(
+        currentRun,
+        'An administrator is ending this run. Wait for that operation to finish before requesting a revive.'
+      );
     }
     const verifiedDeath = arenaRun
       ? await this.arenaService.validatePaidReviveDeath(
@@ -1037,6 +1517,10 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
         ? (state.arenaReviveRuns[runId] ||= structuredClone(verifiedDeath.reviveRun))
         : state.runs[runId];
       if (!run || run.address !== session.address) throw new ApiError(404, 'run_not_found', 'The active run was not found.');
+      assertRunNotAdminTerminating(
+        run,
+        'An administrator is ending this run. Wait for that operation to finish before requesting a revive.'
+      );
       const config = state.expansionConfig.settings;
       if (!config.paidRevivesEnabled) throw new ApiError(503, 'paid_revives_disabled', 'Paid revives are paused.');
       if (run.paidReviveEligible !== true) {
@@ -1071,6 +1555,12 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
   }
 
   async confirmPaidRevive(token, input = {}) {
+    if (input?.[NFT_LIFECYCLE_ACTIVITY_HELD] !== true) {
+      return this.withNftLifecycleStart(() => this.confirmPaidRevive(token, {
+        ...input,
+        [NFT_LIFECYCLE_ACTIVITY_HELD]: true
+      }));
+    }
     const { session, state } = await this.authenticateWithState(token);
     if (!this.revivePaymentVerifier?.publicStatus?.().configured) {
       throw new ApiError(503, 'revive_payment_verifier_missing', 'Paid revives are disabled until exact on-chain payment verification is configured.');
@@ -1088,6 +1578,12 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
       }
       return structuredClone(existing.completedResponse);
     }
+    if (!arenaRun) {
+      assertRunNotAdminTerminating(
+        run,
+        'An administrator is ending this run. Wait for that operation to finish before confirming a revive.'
+      );
+    }
     if (arenaRun) {
       await this.arenaService.assertPaidReviveRunOpen(session.address, runId);
     }
@@ -1099,6 +1595,12 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     });
     return this.database.transact((next) => {
       const activeRun = next.runs[runId] || next.arenaReviveRuns?.[runId];
+      if (next.runs[runId]) {
+        assertRunNotAdminTerminating(
+          activeRun,
+          'An administrator is ending this run. Wait for that operation to finish before confirming a revive.'
+        );
+      }
       const reconciled = next.revivePayments[transactionHash];
       if (reconciled) {
         if (reconciled.address !== session.address || reconciled.runId !== runId) {
@@ -1132,7 +1634,14 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     });
   }
 
-  async resumePaidRevive(token, runIdInput) {
+  async resumePaidRevive(token, runIdInput, lifecycleHeld = null) {
+    if (lifecycleHeld !== NFT_LIFECYCLE_ACTIVITY_HELD) {
+      return this.withNftLifecycleStart(() => this.resumePaidRevive(
+        token,
+        runIdInput,
+        NFT_LIFECYCLE_ACTIVITY_HELD
+      ));
+    }
     const session = await this.authenticate(token);
     const runId = String(runIdInput || '');
     const timestamp = this.now();
@@ -1143,6 +1652,12 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     return this.database.transact((state) => {
       const run = state.runs?.[runId] || state.arenaReviveRuns?.[runId];
       if (!run || run.address !== session.address) throw new ApiError(404, 'run_not_found', 'The paid revive run was not found.');
+      if (state.runs?.[runId]) {
+        assertRunNotAdminTerminating(
+          run,
+          'An administrator is ending this run. Wait for that operation to finish before resuming its revive.'
+        );
+      }
       const payment = Object.values(state.revivePayments || {}).find((entry) =>
         entry.address === session.address && entry.runId === runId
       );
@@ -1182,13 +1697,30 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     };
   }
 
-  async cancelPaidRevive(token, runIdInput) {
+  async cancelPaidRevive(token, runIdInput, lifecycleHeld = null) {
+    if (lifecycleHeld !== NFT_LIFECYCLE_ACTIVITY_HELD) {
+      return this.withNftLifecycleStart(() => this.cancelPaidRevive(
+        token,
+        runIdInput,
+        NFT_LIFECYCLE_ACTIVITY_HELD
+      ));
+    }
     const session = await this.authenticate(token);
     const runId = String(runIdInput || '');
+    const snapshot = await this.database.read();
+    if (snapshot.arenaReviveRuns?.[runId]) {
+      await this.arenaService.assertPaidReviveRunOpen(session.address, runId);
+    }
     return this.database.transact((state) => {
       const run = state.runs[runId] || state.arenaReviveRuns?.[runId];
       if (!run || run.address !== session.address) {
         throw new ApiError(404, 'run_not_found', 'The pending revive was not found.');
+      }
+      if (state.runs[runId]) {
+        assertRunNotAdminTerminating(
+          run,
+          'An administrator is ending this run. Wait for that operation to finish before cancelling its revive.'
+        );
       }
       if (run.status !== 'awaiting-revive' || run.pendingRevive?.status !== 'pending') {
         throw new ApiError(409, 'revive_not_pending', 'This revive is no longer pending.');
@@ -1201,14 +1733,17 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
   }
 
   async finishArenaRun(token, payload) {
+    const session = await this.authenticate(token);
+    const pending = await this.arenaService?.store?.getRun?.(String(payload?.runId || ''));
     const result = await super.finishArenaRun(token, payload);
-    if (result.accepted !== false && result.progression?.nftRun?.minerId && this.nftGameplayService) {
-      const session = await this.authenticate(token);
+    const nftRun = pending?.tuning?._nftRun;
+    if (result.accepted !== false && nftRun?.minerId && this.nftGameplayService) {
       result.nftSettlement = await this.nftGameplayService.settleRun({
         address: session.address,
-        minerId: Number(result.progression.nftRun.minerId),
-        runId: result.progression.nftRun.runId,
+        minerId: Number(nftRun.minerId),
+        runId: nftRun.runId,
         result: result.result,
+        phaseXp: nftRun.phaseXp,
         completedPhases: completedPhaseCount(result.result)
       });
     }
@@ -1219,9 +1754,19 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
   }
 
   async abandonArenaRun(token, payload) {
-    const session = await this.authenticate(token);
+    this.arenaService?.assertLive?.();
+    const { session } = await this.arenaPlayer(token);
+    assertApi(payload && typeof payload === 'object' && !Array.isArray(payload), 400, 'arena_abandon_invalid', 'A Daily Arena abandonment request is required.');
+    const runId = String(payload.runId || '');
+    const runToken = String(payload.runToken || '');
+    assertApi(/^arena_run_[a-f0-9]{24}$/.test(runId), 400, 'arena_run_id_invalid', 'The Daily Arena run identifier is invalid.');
+    assertApi(/^[a-f0-9]{64}$/.test(runToken), 400, 'arena_run_token_invalid', 'The Daily Arena run token is invalid.');
     const active = await this.arenaService?.store?.getRun?.(String(payload?.runId || ''));
-    const result = await super.abandonArenaRun(token, payload);
+    assertApi(active, 404, 'arena_run_missing', 'The Daily Arena run was not found.');
+    assertApi(active.address === session.address, 403, 'arena_run_owner_mismatch', 'This Daily Arena run belongs to another wallet.');
+    const suppliedTokenHash = createHash('sha256').update(runToken).digest('hex');
+    assertApi(active.tokenHash === suppliedTokenHash, 401, 'arena_run_token_rejected', 'The Daily Arena run token is invalid.');
+    assertApi(active.status === 'active', 409, 'arena_run_not_active', 'The Daily Arena run is no longer active.');
     if (active?.tuning?._nftRun?.minerId && this.nftGameplayService) {
       await this.nftGameplayService.cancelRun({
         address: session.address,
@@ -1229,14 +1774,18 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
         runId: active.tuning._nftRun.runId
       });
     }
+    const result = await super.abandonArenaRun(token, payload);
     await this.#closeArenaReviveRun(result.runId, 'expired');
     return result;
   }
 
   async abandonActiveArenaRun(token) {
-    const session = await this.authenticate(token);
+    const { session } = await this.arenaPlayer(token, {
+      allowSuspended: true,
+      allowMaintenance: true,
+      allowIdentityMissing: true
+    });
     const active = await this.arenaService?.store?.activeRun?.(session.address);
-    const result = await super.abandonActiveArenaRun(token);
     if (active?.tuning?._nftRun?.minerId && this.nftGameplayService) {
       await this.nftGameplayService.cancelRun({
         address: session.address,
@@ -1244,6 +1793,7 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
         runId: active.tuning._nftRun.runId
       });
     }
+    const result = await super.abandonActiveArenaRun(token);
     await this.#closeArenaReviveRun(result.runId, 'expired');
     return result;
   }
@@ -1266,7 +1816,12 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
 
   async finishRun(token, payload) {
     let verifiedPayload = payload;
-    const pendingRun = (await this.database.read()).runs?.[String(payload?.runId || '')];
+    const runId = String(payload?.runId || '');
+    const storedRun = (await this.database.read()).runs?.[runId];
+    const settlementContext = storedRun?.nftRun || storedRun?.nftSettlement;
+    const pendingRun = settlementContext
+      ? { ...storedRun, nftRun: structuredClone(settlementContext) }
+      : storedRun;
     if (
       pendingRun &&
       this.competitiveReplayValidator?.publicStatus?.().modes?.includes(pendingRun.mode)
@@ -1294,27 +1849,34 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
         minerId: pendingRun.nftRun.minerId,
         runId: pendingRun.nftRun.runId,
         result: verifiedResult,
+        phaseXp: pendingRun.nftRun.phaseXp,
         currentLevel: Number(pendingRun.tuning?.nftMinerProfile?.progression?.level || 1),
         completedPhases: completedPhaseCount(verifiedResult)
       });
-      await this.database.transact((state) => {
-        const wallet = state.wallets?.[pendingRun.address];
-        if (!wallet) return;
-        recordNftCrystalBank(wallet, {
-          address: pendingRun.address,
-          runId: pendingRun.id,
-          amount: nftSettlement.crystalsBanked,
-          transactionHash: nftSettlement.transactionHash,
-          timestamp: this.now()
+      if (Number.isFinite(nftSettlement.crystalsBanked) && nftSettlement.crystalsBanked >= 0) {
+        await this.database.transact((state) => {
+          const wallet = state.wallets?.[pendingRun.address];
+          if (!wallet) return;
+          recordNftCrystalBank(wallet, {
+            address: pendingRun.address,
+            runId: pendingRun.id,
+            amount: nftSettlement.crystalsBanked,
+            transactionHash: nftSettlement.transactionHash,
+            timestamp: this.now()
+          });
+          const settledRun = state.runs?.[pendingRun.id];
+          if (settledRun?.address === pendingRun.address) {
+            delete settledRun.nftSettlement;
+            delete settledRun.nftRun;
+          }
         });
-      });
+      }
     }
     if (nftSettlement) {
       result.nftSettlement = nftSettlement;
       result.practiceClaim = null;
       result.nftCrystals = (await this.me(token)).nftCrystals;
     }
-    const runId = String(payload?.runId || '');
     if (
       pendingRun &&
       this.competitiveReplayValidator?.publicStatus?.().modes?.includes(pendingRun.mode)
@@ -1474,6 +2036,27 @@ function adminReason(value) {
   return reason;
 }
 
+function assertRunNotAdminTerminating(run, message) {
+  assertApi(
+    !run?.adminTerminationPending,
+    409,
+    'run_admin_termination_pending',
+    message
+  );
+}
+
+async function safeNftHealth(service, errorMessage) {
+  if (!service) return { enabled: false, ok: true };
+  if (typeof service.health !== 'function') {
+    return { enabled: true, ok: false, error: errorMessage };
+  }
+  try {
+    return await service.health();
+  } catch {
+    return { enabled: true, ok: false, error: errorMessage };
+  }
+}
+
 function nftV2MapDefaults(studio, timestamp) {
   return Object.fromEntries([['arena', 'arena'], ['paid', 'pass']].flatMap(([mode, slot]) => {
     const snapshot = resolveCompetitionSnapshot(studio, slot, timestamp);
@@ -1484,7 +2067,13 @@ function nftV2MapDefaults(studio, timestamp) {
     const contentHash = /^[a-f0-9]{64}$/i.test(fingerprint)
       ? `0x${fingerprint.toLowerCase()}`
       : sha256Bytes32(JSON.stringify(snapshot));
-    return [[mode, { seed, mapId, contentHash, snapshotName: snapshot.name || snapshot.title || seed }]];
+    return [[mode, {
+      seed,
+      mapId,
+      contentHash,
+      fingerprint: String(snapshot.fingerprint || ''),
+      snapshotName: snapshot.name || snapshot.title || seed
+    }]];
   }));
 }
 

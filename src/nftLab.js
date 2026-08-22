@@ -1,3 +1,5 @@
+import { apiClient } from './game/apiClient.js';
+
 export const NFT_LAB_CHAIN = Object.freeze({
   id: 2020,
   hexId: '0x7e4',
@@ -48,6 +50,11 @@ export const CHEST_PRODUCTS = Object.freeze([
 
 const ITEM_TYPES = ['Armor', 'Pickaxe', 'Blaster', 'Dynamite', 'Helmet', 'Backpack'];
 const RARITIES = ['Common', 'Uncommon', 'Rare', 'Mythic', 'Legendary'];
+const EQUIPMENT_PAGE_SIZE = 50;
+const EQUIPMENT_INVENTORY_DRIFT_CODES = new Set([
+  'nft_equipment_inventory_changed',
+  'nft_equipment_index_changed'
+]);
 const SLOT_KEYS = [
   { key: 'armor', label: 'ARMOR' },
   { key: 'pickaxe', label: 'PICKAXE' },
@@ -62,6 +69,9 @@ const state = {
   account: '',
   miners: [],
   equipment: [],
+  equipmentNextCursor: '',
+  equipmentTotal: 0,
+  equipmentIndexedToBlock: null,
   selectedMinerId: null,
   mattBalance: 0n,
   busy: false
@@ -273,9 +283,12 @@ async function refreshAll() {
       callContract(NFT_LAB_CONTRACTS.matt, encodeCall(ABI_SELECTORS.balanceOf, addressWord(state.account)))
         .then(decodeAbiUint)
     ]);
-    const equipment = await loadRelevantEquipment(miners);
+    const equipmentPage = await loadRelevantEquipment('', equippedTokenIds(miners));
     state.miners = miners;
-    state.equipment = equipment;
+    state.equipment = equipmentPage.items;
+    state.equipmentNextCursor = equipmentPage.nextCursor;
+    state.equipmentTotal = equipmentPage.total;
+    state.equipmentIndexedToBlock = equipmentPage.indexedToBlock;
     state.mattBalance = mattBalance;
     if (!miners.some((miner) => miner.id === state.selectedMinerId)) {
       const requestedMinerId = preferredMinerId();
@@ -284,7 +297,7 @@ async function refreshAll() {
     renderAll();
     setStatus(
       miners.length
-        ? `Loaded ${miners.length} Miner NFT${miners.length === 1 ? '' : 's'} and ${equipment.length} equipment item${equipment.length === 1 ? '' : 's'} directly from chain.`
+        ? `Loaded ${miners.length} Miner NFT${miners.length === 1 ? '' : 's'} and ${equipmentPage.items.length} of ${equipmentPage.total} server-indexed Equipment NFTs from Ronin Mainnet.`
         : `No Miner NFTs found for ${shortAddress(state.account)} on Ronin Mainnet.`,
       miners.length ? 'success' : 'error'
     );
@@ -343,47 +356,77 @@ async function loadOwnedMiners() {
   return owned;
 }
 
-async function loadRelevantEquipment(ownedMiners) {
-  const nextId = Number(decodeAbiUint(await callContract(NFT_LAB_CONTRACTS.equipment, ABI_SELECTORS.nextTokenId)));
-  const ownedMinerIds = new Set(ownedMiners.map((miner) => miner.id));
-  const candidates = Array.from({ length: Math.max(0, nextId - 1) }, (_, index) => index + 1);
-  const scanErrors = [];
-  const equipment = await Promise.all(candidates.map(async (id) => {
+async function loadRelevantEquipment(cursor = '', priorityTokenIds = []) {
+  if (!apiClient.hasSession()) {
+    throw new Error('Sign in to MATT Mine first so the Garage can load your authenticated Equipment inventory.');
+  }
+  const pageCursor = String(cursor || '');
+  const attempts = pageCursor ? 1 : 2;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
-      const [ownerValue, dataValue, uriValue, bonusValue] = await Promise.all([
-        callContract(NFT_LAB_CONTRACTS.equipment, encodeCall(ABI_SELECTORS.ownerOf, uintWord(id))),
-        callContract(NFT_LAB_CONTRACTS.equipment, encodeCall(ABI_SELECTORS.equipmentData, uintWord(id))),
-        callContract(NFT_LAB_CONTRACTS.equipment, encodeCall(ABI_SELECTORS.tokenURI, uintWord(id))),
-        callContract(NFT_LAB_CONTRACTS.equipment, encodeCall(ABI_SELECTORS.bonusFor, uintWord(id)))
-      ]);
-      const owner = decodeAbiAddress(ownerValue);
-      const words = splitAbiWords(dataValue);
-      const data = {
-        definitionId: Number(BigInt(`0x${words[0]}`)),
-        equippedToMiner: Number(BigInt(`0x${words[1]}`)),
-        slot: Number(BigInt(`0x${words[2]}`)),
-        rarity: Number(BigInt(`0x${words[3]}`)),
-        damaged: BigInt(`0x${words[4]}`) !== 0n,
-        bonus: Number(decodeAbiUint(bonusValue))
-      };
-      if (!sameAddress(owner, state.account) && !ownedMinerIds.has(data.equippedToMiner)) return null;
+      const page = await apiClient.equipmentInventory(pageCursor, EQUIPMENT_PAGE_SIZE, priorityTokenIds);
+      if (!sameAddress(page?.owner, state.account)) {
+        throw new Error('The signed-in MATT Mine session does not match the connected Ronin wallet. Sign in again.');
+      }
+      const items = dedupeEquipment((page?.items || []).map((item) => ({ ...item, id: Number(item.tokenId) })));
+      const total = Number(page?.total ?? items.length);
+      if (!Number.isSafeInteger(total) || total < 0) throw new Error('The Equipment inventory server returned an invalid total.');
       return {
-        id,
-        owner,
-        tokenUri: decodeAbiString(uriValue),
-        metadata: await fetchMetadata(decodeAbiString(uriValue)),
-        ...data
+        items,
+        nextCursor: String(page?.nextCursor || ''),
+        total: Math.max(total, items.length),
+        indexedToBlock: page?.indexedToBlock ?? null
       };
     } catch (error) {
-      scanErrors.push(`Equipment #${id}: ${error?.message || error}`);
-      return null;
+      if (attempt === 0 && EQUIPMENT_INVENTORY_DRIFT_CODES.has(error?.code)) continue;
+      throw error;
     }
-  }));
-  const relevant = equipment.filter(Boolean).sort((left, right) => left.id - right.id);
-  if (!relevant.length && candidates.length && scanErrors.length === candidates.length) {
-    throw new Error(`Equipment scan failed — ${scanErrors[0]}`);
   }
-  return relevant;
+  throw new Error('The Equipment inventory could not be loaded.');
+}
+
+async function loadMoreRelevantEquipment() {
+  if (state.busy || !state.account || !state.equipmentNextCursor) return;
+  setBusy(true);
+  renderEquipment();
+  setStatus('Loading the next Equipment inventory page...', 'busy');
+  let reset = false;
+  try {
+    let page;
+    try {
+      page = await loadRelevantEquipment(state.equipmentNextCursor);
+    } catch (error) {
+      if (!EQUIPMENT_INVENTORY_DRIFT_CODES.has(error?.code)) throw error;
+      reset = true;
+      page = await loadRelevantEquipment('', equippedTokenIds(state.miners));
+    }
+    state.equipment = reset ? page.items : dedupeEquipment([...state.equipment, ...page.items]);
+    state.equipmentNextCursor = page.nextCursor;
+    state.equipmentTotal = Math.max(page.total, state.equipment.length);
+    state.equipmentIndexedToBlock = page.indexedToBlock;
+    renderAll();
+    setStatus(reset
+      ? `Equipment ownership changed while loading. Inventory safely restarted at ${state.equipment.length} of ${state.equipmentTotal}.`
+      : `Loaded ${state.equipment.length} of ${state.equipmentTotal} Equipment NFTs.`, 'success');
+  } catch (error) {
+    setStatus(error?.message || 'More Equipment NFTs could not be loaded.', 'error');
+  } finally {
+    setBusy(false);
+    renderEquipment();
+  }
+}
+
+function equippedTokenIds(miners) {
+  return [...new Set((miners || []).flatMap((miner) =>
+    Object.values(miner?.loadout || {}).map(Number).filter((tokenId) => Number.isSafeInteger(tokenId) && tokenId > 0)
+  ))];
+}
+
+function dedupeEquipment(items) {
+  return [...new Map(items
+    .filter((item) => Number.isSafeInteger(item.id) && item.id > 0)
+    .map((item) => [item.id, item])).values()]
+    .sort((left, right) => left.id - right.id);
 }
 
 async function fetchMetadata(uri) {
@@ -428,6 +471,9 @@ function renderConnection() {
 function renderDisconnected() {
   state.miners = [];
   state.equipment = [];
+  state.equipmentNextCursor = '';
+  state.equipmentTotal = 0;
+  state.equipmentIndexedToBlock = null;
   state.mattBalance = 0n;
   renderAll();
   renderConnection();
@@ -564,8 +610,13 @@ function renderLoadout(miner) {
 
 function renderEquipment() {
   const list = dom('equipment-list');
+  const loadMore = dom('equipment-load-more');
   list.replaceChildren();
-  dom('equipment-count').textContent = `${state.equipment.length} ITEM${state.equipment.length === 1 ? '' : 'S'}`;
+  const total = Math.max(state.equipmentTotal, state.equipment.length);
+  dom('equipment-count').textContent = `${state.equipment.length}${total > state.equipment.length ? ` / ${total}` : ''} ITEMS`;
+  loadMore.hidden = !state.equipmentNextCursor;
+  loadMore.disabled = state.busy || !state.equipmentNextCursor;
+  loadMore.textContent = state.busy && state.equipmentNextCursor ? 'LOADING EQUIPMENT...' : 'LOAD MORE EQUIPMENT';
   if (!state.equipment.length) {
     const empty = document.createElement('p');
     empty.className = 'inventory-empty';
@@ -821,6 +872,7 @@ function renderSettlementState() {
 function initialize() {
   dom('connect-button').addEventListener('click', connectWallet);
   dom('refresh-button').addEventListener('click', () => void refreshAll());
+  dom('equipment-load-more').addEventListener('click', () => void loadMoreRelevantEquipment());
   dom('repair-armor-button').addEventListener('click', () => void repairSelectedArmor());
   dom('confirm-loadout-button').addEventListener('click', () => void confirmSelectedLoadout());
   document.querySelectorAll('[data-chest-slot]').forEach((button) => {

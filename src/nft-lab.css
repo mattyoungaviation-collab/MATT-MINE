@@ -115,6 +115,8 @@ h1 span { color: var(--gold); }
 .inventory-panel { margin-top: 18px; }
 .equipment-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; padding: 18px; }
 .inventory-empty { grid-column: 1 / -1; margin: 20px 0; color: var(--muted); text-align: center; }
+.equipment-load-more { width: calc(100% - 36px); min-height: 42px; margin: 0 18px 18px; border-color: var(--cyan); background: #091b25; color: var(--cyan); }
+.equipment-load-more:disabled { opacity: .55; cursor: wait; }
 .equipment-card { display: grid; grid-template-columns: 86px 1fr; gap: 12px; min-height: 132px; padding: 10px; border: 1px solid var(--line); background: #091524; }
 .equipment-card.equipped { border-color: var(--cyan); }
 .equipment-card img { width: 86px; height: 86px; object-fit: cover; image-rendering: pixelated; background: #10243f; }

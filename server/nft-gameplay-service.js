@@ -26,6 +26,7 @@ const SETTLEMENT_ABI = parseAbi([
   'function processedRuns(bytes32 runId) view returns (bool)',
   'function paused() view returns (bool)',
   'function mapVersions(bytes32 versionId) view returns (bytes32 mapId,bytes32 contentHash,uint128 conversionRate,uint128 maximumPayout,uint32 mineableCrystalUnits,uint32 runTimeout,bool approved,bool retired)',
+  'function phaseXpForMap(bytes32 versionId) view returns (uint16[5])',
   'function activeRun(uint256 minerId) view returns ((bytes32 runId,bytes32 mapVersion,bytes32 loadoutHash,address player,uint128 conversionRate,uint128 maximumPayout,uint40 startedAt,uint32 mineableCrystalUnits,uint32 runTimeout,uint16 carryCapacity,uint16 deathRetentionBps,uint256 nonce))',
   'function beginRun((address player,uint256 minerId,bytes32 mapVersion,bytes32 loadoutHash,uint256 nonce,uint256 deadline) authorization,bytes playerSignature) returns (bytes32 runId)',
   'function settleRun((address player,uint256 minerId,bytes32 runId,bytes32 mapVersion,bytes32 loadoutHash,uint8 outcome,uint8 completedPhases,uint32 minedCrystalUnits,uint256 nonce,uint256 deadline) result,bytes rewardSignature)'
@@ -64,6 +65,9 @@ const RUN_RESULT_TYPES = Object.freeze({
     { name: 'deadline', type: 'uint256' }
   ]
 });
+const DEFAULT_PHASE_XP = Object.freeze([10, 15, 20, 25, 30]);
+const REQUIRED_GAMEPLAY_MODES = Object.freeze(['arena', 'paid']);
+const DEFAULT_OPERATOR_MINIMUM_BALANCE_WEI = 20_000_000_000_000_000n;
 
 export class NftGameplayService {
   constructor(options = {}) {
@@ -78,6 +82,10 @@ export class NftGameplayService {
     this.signerPrivateKey = requiredPrivateKey(options.signerPrivateKey, 'NFT Reward Signer private key');
     this.metadataService = options.metadataService;
     this.mapVersions = normalizeMapVersions(options.mapVersions);
+    this.operatorMinimumBalanceWei = nonnegativeBigInt(
+      options.operatorMinimumBalanceWei ?? DEFAULT_OPERATOR_MINIMUM_BALANCE_WEI,
+      'NFT Game Operator minimum RON balance'
+    );
     assertApi(this.metadataService, 500, 'nft_gameplay_metadata_missing', 'NFT gameplay requires the V2 metadata chain reader.');
     const chain = defineChain({
       id: this.chainId,
@@ -103,6 +111,7 @@ export class NftGameplayService {
       transport: http(this.rpcUrl)
     });
     this.runQueue = Promise.resolve();
+    this.activeRunEconomy = new Map();
   }
 
   async init() {
@@ -142,6 +151,111 @@ export class NftGameplayService {
       settlement: this.settlementAddress,
       loadout: this.loadoutAddress,
       mapVersions: { ...this.mapVersions }
+    };
+  }
+
+  async health() {
+    const startedAt = Date.now();
+    const base = {
+      enabled: this.enabled,
+      expectedChainId: this.chainId,
+      settlement: { address: this.settlementAddress },
+      operator: { address: this.operatorAddress },
+      rewardSigner: { configuredAddress: this.signerAddress }
+    };
+    if (!this.enabled) {
+      return { ...base, ok: false, latencyMs: Date.now() - startedAt, error: 'NFT gameplay is disabled.' };
+    }
+    try {
+      const operatorRole = await this.publicClient.readContract({
+        address: this.settlementAddress,
+        abi: SETTLEMENT_ABI,
+        functionName: 'OPERATOR_ROLE'
+      });
+      const balanceReadsSupported = typeof this.publicClient.getBalance === 'function';
+      const [chainId, paused, onchainSigner, operatorAuthorized, activeMaps, balances] = await Promise.all([
+        typeof this.publicClient.getChainId === 'function' ? this.publicClient.getChainId() : Promise.resolve(this.chainId),
+        this.publicClient.readContract({ address: this.settlementAddress, abi: SETTLEMENT_ABI, functionName: 'paused' }),
+        this.publicClient.readContract({ address: this.settlementAddress, abi: SETTLEMENT_ABI, functionName: 'rewardSigner' }),
+        this.publicClient.readContract({
+          address: this.settlementAddress,
+          abi: SETTLEMENT_ABI,
+          functionName: 'hasRole',
+          args: [operatorRole, this.operatorAddress]
+        }),
+        Promise.all(Object.keys(this.mapVersions).map(async (mode) => [mode, await this.activeMap(mode)]))
+          .then((entries) => Object.fromEntries(entries)),
+        balanceReadsSupported
+          ? Promise.all([
+              this.publicClient.getBalance({ address: this.operatorAddress }),
+              this.publicClient.getBalance({ address: this.signerAddress })
+            ])
+          : Promise.resolve(null)
+      ]);
+      const signerMatches = isAddressEqual(onchainSigner, this.signerAddress);
+      const routesConfigured = REQUIRED_GAMEPLAY_MODES.every((mode) =>
+        Boolean(this.mapVersions[mode]) && Boolean(activeMaps[mode])
+      );
+      const mapsActive = routesConfigured && REQUIRED_GAMEPLAY_MODES.every((mode) =>
+        activeMaps[mode].approved && !activeMaps[mode].retired
+      );
+      const operatorBalance = balances ? BigInt(balances[0]) : null;
+      const operatorFunded = operatorBalance !== null && operatorBalance >= this.operatorMinimumBalanceWei;
+      const ok = Number(chainId) === this.chainId && paused !== true && operatorAuthorized === true &&
+        signerMatches && mapsActive && operatorFunded;
+      return {
+        ...base,
+        ok,
+        latencyMs: Date.now() - startedAt,
+        chainId: Number(chainId),
+        settlement: { ...base.settlement, paused: paused === true },
+        operator: {
+          ...base.operator,
+          role: String(operatorRole),
+          authorized: operatorAuthorized === true,
+          funded: operatorFunded,
+          minimumBalanceRaw: this.operatorMinimumBalanceWei.toString()
+        },
+        rewardSigner: {
+          ...base.rewardSigner,
+          onchainAddress: String(onchainSigner),
+          matches: signerMatches
+        },
+        activeMaps,
+        requiredRoutes: [...REQUIRED_GAMEPLAY_MODES],
+        routesConfigured,
+        ...(balances ? {
+          nativeBalancesRaw: {
+            operator: BigInt(balances[0]).toString(),
+            rewardSigner: BigInt(balances[1]).toString()
+          }
+        } : {})
+      };
+    } catch {
+      return {
+        ...base,
+        ok: false,
+        latencyMs: Date.now() - startedAt,
+        error: 'NFT gameplay chain health could not be verified.'
+      };
+    }
+  }
+
+  async activeMap(mode) {
+    const normalized = normalizedMode(mode);
+    const versionId = this.#mapVersion(normalized);
+    const state = await this.#mapState(versionId);
+    return {
+      mode: normalized,
+      versionId,
+      mapId: String(state.mapId || ''),
+      contentHash: String(state.contentHash || ''),
+      conversionRateRaw: BigInt(state.conversionRate || 0).toString(),
+      maximumPayoutRaw: BigInt(state.maximumPayout || 0).toString(),
+      mineableCrystalUnits: Number(state.mineableCrystalUnits || 0),
+      runTimeoutSeconds: Number(state.runTimeout || 0),
+      approved: state.approved === true,
+      retired: state.retired === true
     };
   }
 
@@ -275,12 +389,39 @@ export class NftGameplayService {
   }
 
   async #startedRunResult(profile, active, hash, recovered) {
+    const [freshProfile, phaseXp] = await Promise.all([
+      this.metadataService.minerProfile(profile.minerId),
+      this.#phaseXpForMap(active.mapVersion)
+    ]);
+    const mineableCrystalUnits = Number(active.mineableCrystalUnits);
+    const carryCapacity = Number(active.carryCapacity);
+    const crystalCarryLimit = Math.min(carryCapacity, mineableCrystalUnits);
+    const startedAt = Number(active.startedAt);
+    const runTimeoutSeconds = Number(active.runTimeout);
+    const economy = {
+      mapVersion: active.mapVersion,
+      conversionRateRaw: BigInt(active.conversionRate).toString(),
+      maximumPayoutRaw: BigInt(active.maximumPayout).toString(),
+      mineableCrystalUnits,
+      carryCapacity,
+      crystalCarryLimit,
+      runTimeoutSeconds,
+      startedAt,
+      forceAbandonAt: startedAt + runTimeoutSeconds,
+      phaseXp
+    };
+    this.activeRunEconomy.set(active.runId, economy);
     return {
       version: 2,
       contractVersion: 2,
       minerId: profile.minerId,
-      profile: await this.metadataService.minerProfile(profile.minerId),
-      crystalCarryLimit: Number(active.carryCapacity),
+      profile: freshProfile,
+      crystalCarryLimit,
+      mineableCrystalUnits,
+      runTimeoutSeconds,
+      forceAbandonAt: economy.forceAbandonAt,
+      phaseXp: [...phaseXp],
+      mapEconomy: { ...economy, phaseXp: [...phaseXp] },
       runId: active.runId,
       mapVersion: active.mapVersion,
       loadoutHash: active.loadoutHash,
@@ -289,7 +430,7 @@ export class NftGameplayService {
     };
   }
 
-  async settleRun({ address, minerId, runId = '', result, completedPhases }) {
+  async settleRun({ address, minerId, runId = '', result, completedPhases, phaseXp: pinnedPhaseXp }) {
     return this.#serialize(async () => {
       const player = getAddress(address);
       const active = await this.#activeRun(minerId);
@@ -317,6 +458,19 @@ export class NftGameplayService {
       const extraction = result.extracted === true;
       const phaseCount = normalizedPhaseCount(completedPhases);
       const minedCrystalUnits = Math.min(4_294_967_295, Math.max(0, Math.floor(Number(result.crystalsCarried || 0))));
+      const mineableCrystalUnits = Number(active.mineableCrystalUnits);
+      assertApi(
+        minedCrystalUnits <= mineableCrystalUnits,
+        422,
+        'nft_mineable_crystal_limit',
+        `This run can settle at most ${mineableCrystalUnits.toLocaleString()} mined Crystal units.`
+      );
+      const pinnedEconomy = this.activeRunEconomy.get(active.runId);
+      const phaseXp = normalizedPhaseXp(pinnedPhaseXp)
+        || normalizedPhaseXp(pinnedEconomy?.phaseXp)
+        || await this.#phaseXpForMap(active.mapVersion);
+      const configuredXpBanked = extraction ? xpForCompletedPhases(phaseXp, phaseCount) : 0;
+      const profileBefore = extraction ? await this.metadataService.minerProfile(minerId) : null;
       const receipt = {
         player,
         minerId: BigInt(minerId),
@@ -342,10 +496,14 @@ export class NftGameplayService {
         args: [receipt, signature]
       });
       await this.#confirmed(hash, 'NFT V2 run settlement');
-      const carried = Math.min(BigInt(minedCrystalUnits), active.carryCapacity);
-      const converted = minBigInt(carried * active.conversionRate, active.maximumPayout, 100_000n * 10n ** 18n);
-      const crystalsBanked = extraction ? converted : converted * active.deathRetentionBps / 10_000n;
+      const carried = minBigInt(BigInt(minedCrystalUnits), BigInt(active.carryCapacity));
+      const converted = minBigInt(carried * BigInt(active.conversionRate), BigInt(active.maximumPayout), 100_000n * 10n ** 18n);
+      const crystalsBanked = extraction ? converted : converted * BigInt(active.deathRetentionBps) / 10_000n;
       const profile = await this.metadataService.minerProfile(minerId);
+      const xpBanked = extraction
+        ? Math.max(0, profileBankedXp(profile) - profileBankedXp(profileBefore))
+        : 0;
+      this.activeRunEconomy.delete(active.runId);
       return {
         version: 2,
         minerId,
@@ -355,7 +513,10 @@ export class NftGameplayService {
         crystalsBankedRaw: crystalsBanked.toString(),
         // The server mirror is display-only. The contract's Crystal Bank is authoritative.
         crystalsBanked: Number(crystalsBanked / 10n ** 18n),
-        xpBanked: extraction ? [0, 10, 25, 45, 70, 100][phaseCount] : 0,
+        xpBanked,
+        configuredXpBanked,
+        xpParityVerified: xpBanked === configuredXpBanked,
+        phaseXp: [...phaseXp],
         newLevel: profile.progression.level,
         transactionHash: hash,
         profile
@@ -417,6 +578,25 @@ export class NftGameplayService {
     ]);
   }
 
+  async #phaseXpForMap(versionId) {
+    try {
+      const value = await this.publicClient.readContract({
+        address: this.settlementAddress,
+        abi: SETTLEMENT_ABI,
+        functionName: 'phaseXpForMap',
+        args: [versionId]
+      });
+      if (!Array.isArray(value) || value.length !== 5) return [...DEFAULT_PHASE_XP];
+      const phaseXp = value.map(Number);
+      return phaseXp.every((entry) => Number.isSafeInteger(entry) && entry > 0)
+        ? phaseXp
+        : [...DEFAULT_PHASE_XP];
+    } catch {
+      // The transition implementation predates configurable phase XP.
+      return [...DEFAULT_PHASE_XP];
+    }
+  }
+
   #mapVersion(mode) {
     const version = this.mapVersions[normalizedMode(mode)];
     if (!version) throw new ApiError(422, 'nft_map_mode_invalid', 'This mine has no approved NFT V2 map version.');
@@ -462,6 +642,8 @@ export function createNftGameplayServiceFromEnvironment(metadataService, environ
     operatorPrivateKey: environment.MATT_MINE_NFT_GAME_OPERATOR_PRIVATE_KEY,
     signerPrivateKey: environment.MATT_MINE_NFT_REWARD_SIGNER_PRIVATE_KEY
       || environment.MATT_MINE_NFT_GAME_SIGNER_PRIVATE_KEY,
+    operatorMinimumBalanceWei: environment.MATT_MINE_NFT_OPERATOR_MINIMUM_BALANCE_WEI
+      || DEFAULT_OPERATOR_MINIMUM_BALANCE_WEI,
     mapVersions: parseMapVersions(environment.MATT_MINE_NFT_MAP_VERSIONS_JSON),
     metadataService,
     ...options
@@ -530,6 +712,24 @@ function minBigInt(...values) {
   return values.reduce((minimum, value) => value < minimum ? value : minimum);
 }
 
+function xpForCompletedPhases(phaseXp, completedPhases) {
+  return phaseXp.slice(0, completedPhases).reduce((total, value) => total + Number(value), 0);
+}
+
+function normalizedPhaseXp(value) {
+  if (!Array.isArray(value) || value.length !== 5) return null;
+  const phaseXp = value.map(Number);
+  return phaseXp.every((entry) => Number.isSafeInteger(entry) && entry > 0 && entry <= 250)
+    && phaseXp.reduce((total, entry) => total + entry, 0) <= 500
+    ? phaseXp
+    : null;
+}
+
+function profileBankedXp(profile) {
+  const value = Number(profile?.progression?.bankedXp || 0);
+  return Number.isSafeInteger(value) && value >= 0 ? value : 0;
+}
+
 function jsonSafe(value) {
   return JSON.parse(JSON.stringify(value, (_key, item) => typeof item === 'bigint' ? item.toString() : item));
 }
@@ -568,4 +768,15 @@ function positiveInteger(value, label) {
   const number = Number(value);
   if (!Number.isSafeInteger(number) || number <= 0) throw new Error(`${label} must be a positive integer.`);
   return number;
+}
+
+function nonnegativeBigInt(value, label) {
+  let result;
+  try {
+    result = BigInt(value);
+  } catch {
+    throw new Error(`${label} must be a non-negative integer.`);
+  }
+  if (result < 0n) throw new Error(`${label} must be a non-negative integer.`);
+  return result;
 }

@@ -70,12 +70,13 @@ test('the lobby exposes NFT Practice refresh recovery without reusing a lost run
   assert.match(httpSource, /service\.restartInterruptedNftPractice\(bearerToken\(request\)\)/);
 });
 
-test('the Miner selector exposes an explicit on-chain orphan recovery action', async () => {
+test('the Miner selector exposes an explicit on-chain orphan forfeit action', async () => {
   const source = await readFile(`${root}src/main.js`, 'utf8');
   const apiSource = await readFile(`${root}src/game/apiClient.js`, 'utf8');
   const httpSource = await readFile(`${root}server/http.js`, 'utf8');
 
-  assert.match(source, /END LOCKED RUN/);
+  assert.match(source, /FORFEIT LOCKED RUN/);
+  assert.match(source, /This does not resume the run/);
   assert.match(source, /recoverLockedMinerRun\(selectedNftMinerId\)/);
   assert.match(apiSource, /\/api\/nft\/v2\/runs\/recover/);
   assert.match(httpSource, /service\.recoverLockedMinerRun\(bearerToken\(request\), body\)/);
@@ -88,12 +89,13 @@ test('Miner selection, loadout, balances, repair, chests, and mine entry share o
   assert.match(html, /id="miner-command-center"/);
   assert.match(html, /id="garage-crystal-balance"/);
   assert.match(html, /id="garage-equipment-list"/);
+  assert.match(html, /id="garage-equipment-load-more"/);
   assert.match(html, /id="garage-repair-button"/);
   assert.match(html, /id="garage-withdraw-button"/);
   assert.match(html, /id="garage-withdraw-all-button" class="garage-withdraw-all-button"/);
   assert.match(html, /id="garage-chest-list"/);
   assert.doesNotMatch(html, /id="select-loadout-button"[^>]*href=/);
-  assert.match(source, /new NftGarageClient\(\{ wallet \}\)/);
+  assert.match(source, /new NftGarageClient\(\{ wallet, api: apiClient \}\)/);
   assert.match(source, /No separate confirmation is needed/);
   assert.match(source, /returnToMinerAfterRun = resultScreenMode !== RUN_MODES\.PRACTICE/);
   assert.match(source, /void openMinerSelect\(\)/);

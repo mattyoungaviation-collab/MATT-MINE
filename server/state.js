@@ -450,7 +450,17 @@ function normalizeRuns(input) {
     .slice(-25_000)
     .map(([key, value]) => {
       const runId = String(key).slice(0, 200);
-      if (value.status === 'active') return [runId, { ...value }];
+      // A knocked-out run waiting on a paid revive is still a live gameplay
+      // record. Preserve its authoritative checkpoint, NFT lock, pending quote,
+      // and any administrative termination reservation exactly as we do for an
+      // active run. Treating it as archival data here silently discarded those
+      // fields at every database transaction boundary.
+      if (value.status === 'active' || value.status === 'awaiting-revive') {
+        return [runId, { ...value }];
+      }
+      const nftSettlement = normalizeNftSettlementContext(value.nftSettlement)
+        || normalizeNftSettlementContext(value.nftRun);
+      const pendingRevive = normalizeArchivedPendingRevive(value.pendingRevive);
       return [runId, {
         id: String(value.id || runId).slice(0, 200),
         tokenHash: typeof value.tokenHash === 'string' ? value.tokenHash : '',
@@ -473,11 +483,53 @@ function normalizeRuns(input) {
         competitionSnapshot: typeof value.competitionSnapshot?.id === 'string'
           ? { id: value.competitionSnapshot.id.slice(0, 200) }
           : null,
+        ...(nftSettlement ? { nftSettlement } : {}),
+        ...(isRecord(value.pendingNftRun) ? { pendingNftRun: { ...value.pendingNftRun } } : {}),
+        ...(pendingRevive ? { pendingRevive } : {}),
+        adminTerminatedAt: safeTimestamp(value.adminTerminatedAt),
         adminTerminationReason: typeof value.adminTerminationReason === 'string'
           ? value.adminTerminationReason.slice(0, 500)
           : ''
       }];
     }));
+}
+
+function normalizeArchivedPendingRevive(input) {
+  if (!isRecord(input)) return null;
+  const status = String(input.status || '');
+  if (!['pending', 'confirmed', 'cancelled'].includes(status)) return null;
+  const transactionHash = String(input.transactionHash || '').toLowerCase();
+  return {
+    id: String(input.id || '').slice(0, 240),
+    status,
+    priceRonWei: /^\d+$/.test(String(input.priceRonWei || ''))
+      ? String(input.priceRonWei)
+      : '0',
+    createdAt: safeTimestamp(input.createdAt),
+    expiresAt: safeTimestamp(input.expiresAt),
+    cancelledAt: safeTimestamp(input.cancelledAt),
+    transactionBlockAt: safeTimestamp(input.transactionBlockAt),
+    ...(/^0x[a-f0-9]{64}$/.test(transactionHash) ? { transactionHash } : {})
+  };
+}
+
+function normalizeNftSettlementContext(input) {
+  if (!isRecord(input)) return null;
+  const minerId = Number(input.minerId);
+  const runId = String(input.runId || '').toLowerCase();
+  if (!Number.isSafeInteger(minerId) || minerId < 1 || minerId > 1_000) return null;
+  if (!/^0x[a-f0-9]{64}$/.test(runId)) return null;
+  const phaseXp = Array.isArray(input.phaseXp) && input.phaseXp.length === 5
+    ? input.phaseXp.map(Number)
+    : null;
+  const validPhaseXp = phaseXp &&
+    phaseXp.every((entry) => Number.isSafeInteger(entry) && entry > 0 && entry <= 250) &&
+    phaseXp.reduce((total, entry) => total + entry, 0) <= 500;
+  return {
+    minerId,
+    runId,
+    ...(validPhaseXp ? { phaseXp } : {})
+  };
 }
 
 function normalizeArenaPassXpAwards(input) {

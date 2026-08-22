@@ -1,8 +1,8 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { isAbsolute, relative, resolve } from 'node:path';
 import sharp from 'sharp';
-import { createPublicClient, getAddress, http, parseAbi } from 'viem';
+import { createPublicClient, getAddress, http, parseAbi, parseAbiItem } from 'viem';
 import { ronin, saigon } from 'viem/chains';
 import { ApiError } from './errors.js';
 import { compileMinerNftProfile } from './nft-profile-compiler.js';
@@ -19,10 +19,27 @@ const LOADOUT_ABI = parseAbi([
   'function effectiveTraits(uint256 minerId) view returns ((uint16 maximumHealth,uint16 armorShield,uint16 pickaxeAttack,uint16 blasterAttack,uint16 dynamiteAttack,uint16 healAmount,uint16 carryCapacity,uint16 deathRetentionBps,uint8 level,uint8 crystalsPerHour))'
 ]);
 const EQUIPMENT_ABI = parseAbi([
+  'function balanceOf(address owner) view returns (uint256)',
   'function ownerOf(uint256 tokenId) view returns (address)',
+  'function nextTokenId() view returns (uint256)',
+  'function tokenURI(uint256 tokenId) view returns (string)',
   'function equipmentData(uint256 tokenId) view returns ((uint32 definitionId,uint32 equippedToMiner,uint8 slot,uint8 rarity,bool damaged))',
   'function bonusFor(uint256 tokenId) view returns (uint16)'
 ]);
+const EQUIPMENT_TRANSFER_EVENT = parseAbiItem('event Transfer(address indexed from,address indexed to,uint256 indexed tokenId)');
+const EQUIPMENT_ASSIGNMENT_EVENT = parseAbiItem('event EquipmentAssignmentChanged(uint256 indexed tokenId,uint256 indexed minerId)');
+const MINER_TRANSFER_EVENT = parseAbiItem('event Transfer(address indexed from,address indexed to,uint256 indexed tokenId)');
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+export const DEFAULT_MINER_DEPLOYMENT_BLOCK = 59_628_599n;
+export const DEFAULT_EQUIPMENT_DEPLOYMENT_BLOCK = 59_628_601n;
+const DEFAULT_EQUIPMENT_PAGE_SIZE = 50;
+const MAX_EQUIPMENT_PAGE_SIZE = 100;
+const DEFAULT_EQUIPMENT_SNAPSHOT_TTL_MS = 120_000;
+const DEFAULT_EQUIPMENT_SNAPSHOT_LIMIT = 1_000;
+const DEFAULT_EQUIPMENT_INDEX_CONFIRMATIONS = 12;
+const DEFAULT_EQUIPMENT_INDEX_MAX_CHUNKS = 25;
+const EQUIPMENT_INDEX_BOOTSTRAP_BATCH_SIZE = 100;
+const MINER_MAX_SUPPLY = 1_000;
 const ITEM_TYPES = Object.freeze(['Armor', 'Pickaxe', 'Blaster', 'Dynamite', 'Helmet', 'Backpack']);
 const RARITIES = Object.freeze(['Common', 'Uncommon', 'Rare', 'Mythic', 'Legendary']);
 const MARKET_IMAGE_SIZE = 960;
@@ -62,16 +79,48 @@ export class NftMetadataService {
       chainId: this.chainId,
       rpcUrl: options.rpcUrl,
       timeoutMs: options.timeoutMs,
-      addresses: this.addresses
+      addresses: this.addresses,
+      minerDeploymentBlock: options.minerDeploymentBlock,
+      equipmentDeploymentBlock: options.equipmentDeploymentBlock,
+      equipmentIndexChunkSize: options.equipmentIndexChunkSize,
+      equipmentIndexRefreshMs: options.equipmentIndexRefreshMs,
+      equipmentIndexConfirmations: options.equipmentIndexConfirmations,
+      equipmentIndexMaxChunks: options.equipmentIndexMaxChunks
     });
     this.manifest = null;
     this.imageCache = new Map();
     this.spriteCache = new Map();
+    this.equipmentInventorySnapshots = new Map();
+    this.equipmentSnapshotTtlMs = boundedPositiveInteger(
+      options.equipmentSnapshotTtlMs ?? DEFAULT_EQUIPMENT_SNAPSHOT_TTL_MS,
+      'Equipment inventory snapshot TTL',
+      10 * 60_000
+    );
+    this.equipmentSnapshotLimit = boundedPositiveInteger(
+      options.equipmentSnapshotLimit ?? DEFAULT_EQUIPMENT_SNAPSHOT_LIMIT,
+      'Equipment inventory snapshot limit',
+      5_000
+    );
+    this.equipmentIndexStartupWaitMs = boundedNonnegativeInteger(
+      options.equipmentIndexStartupWaitMs ?? 1_500,
+      'Equipment index startup wait',
+      10_000
+    );
+    this.equipmentIndexWarmupPromise = null;
+    this.equipmentIndexWarmupError = '';
   }
 
   async init() {
     if (!this.enabled) return this;
     this.manifest = JSON.parse(await readFile(this.manifestPath, 'utf8'));
+    if (typeof this.chainReader.prewarmEquipmentIndex === 'function') {
+      const warmup = Promise.resolve(this.chainReader.prewarmEquipmentIndex());
+      this.equipmentIndexWarmupPromise = warmup.catch((error) => {
+        this.equipmentIndexWarmupError = String(error?.message || error);
+        return null;
+      });
+      await settleWithin(this.equipmentIndexWarmupPromise, this.equipmentIndexStartupWaitMs);
+    }
     return this;
   }
 
@@ -81,6 +130,38 @@ export class NftMetadataService {
       chainId: this.chainId,
       contracts: this.enabled ? this.addresses : null
     };
+  }
+
+  async health() {
+    if (!this.enabled) return { enabled: false, ok: true };
+    if (!this.manifest) return { enabled: true, ok: false, error: 'manifest_not_loaded' };
+    const startedAt = Date.now();
+    try {
+      const chain = typeof this.chainReader.health === 'function'
+        ? await this.chainReader.health()
+        : { ok: true, chainId: this.chainId };
+      const equipmentIndex = typeof this.chainReader.inventoryIndexStatus === 'function'
+        ? this.chainReader.inventoryIndexStatus()
+        : { ready: typeof this.chainReader.equipmentInventorySnapshotForOwner === 'function' };
+      return {
+        enabled: true,
+        ok: chain.ok === true && Number(chain.chainId) === this.chainId && equipmentIndex.ready === true,
+        chainId: Number(chain.chainId || this.chainId),
+        nextMinerTokenId: Number(chain.nextMinerTokenId || 0),
+        latencyMs: Date.now() - startedAt,
+        manifestLoaded: true,
+        equipmentIndex,
+        ...(this.equipmentIndexWarmupError ? { equipmentIndexError: this.equipmentIndexWarmupError } : {})
+      };
+    } catch {
+      return {
+        enabled: true,
+        ok: false,
+        chainId: this.chainId,
+        latencyMs: Date.now() - startedAt,
+        error: 'nft_metadata_health_failed'
+      };
+    }
   }
 
   async minerMetadata(minerIdInput) {
@@ -165,6 +246,10 @@ export class NftMetadataService {
     this.assertEnabled();
     const tokenId = tokenIdValue(tokenIdInput, 'equipment token ID');
     const item = await this.chainReader.equipment(tokenId);
+    return this.equipmentMetadataFromItem(tokenId, item);
+  }
+
+  equipmentMetadataFromItem(tokenId, item) {
     const definition = this.manifest.equipmentDefinitions[String(item.definitionId)];
     if (!definition) throw new ApiError(502, 'nft_definition_missing', `Equipment definition ${item.definitionId} is not configured.`);
     const itemType = ITEM_TYPES[item.slot];
@@ -186,12 +271,113 @@ export class NftMetadataService {
     };
   }
 
+  async playerEquipmentInventory(addressInput, options = {}) {
+    this.assertEnabled();
+    if (typeof this.chainReader.equipmentInventorySnapshotForOwner !== 'function') {
+      throw new ApiError(503, 'nft_equipment_index_unavailable', 'The server Equipment ownership index is unavailable.');
+    }
+    const owner = getAddress(addressInput);
+    const limit = equipmentPageLimit(options.limit);
+    this.pruneEquipmentSnapshots();
+    let snapshot;
+    let offset = 0;
+    if (options.cursor) {
+      const cursor = equipmentSnapshotCursor(options.cursor);
+      snapshot = this.equipmentInventorySnapshots.get(cursor.snapshotId);
+      if (!snapshot || snapshot.owner !== owner || snapshot.expiresAt <= Date.now()) {
+        throw equipmentInventoryChanged();
+      }
+      offset = cursor.offset;
+      if (offset < 0 || offset >= snapshot.tokenIds.length) throw equipmentInventoryChanged();
+    } else {
+      const indexed = await this.chainReader.equipmentInventorySnapshotForOwner(owner);
+      const priority = equipmentPriorityTokenIds(options.priorityTokenIds)
+        .filter((tokenId) => indexed.tokenIds.includes(tokenId));
+      const prioritySet = new Set(priority);
+      const tokenIds = Object.freeze([
+        ...priority,
+        ...indexed.tokenIds.filter((tokenId) => !prioritySet.has(tokenId))
+      ]);
+      const snapshotId = randomBytes(18).toString('base64url');
+      snapshot = Object.freeze({
+        snapshotId,
+        owner,
+        indexedToBlock: BigInt(indexed.indexedToBlock),
+        checkpointHash: String(indexed.checkpointHash || ''),
+        tokenIds,
+        directTokenIds: Object.freeze([...indexed.directTokenIds]),
+        custodyTokenIds: Object.freeze([...indexed.custodyTokenIds]),
+        ownedMinerIds: Object.freeze([...indexed.ownedMinerIds]),
+        createdAt: Date.now(),
+        expiresAt: Date.now() + this.equipmentSnapshotTtlMs
+      });
+      this.equipmentInventorySnapshots.set(snapshotId, snapshot);
+      this.pruneEquipmentSnapshots();
+    }
+    const pageTokenIds = snapshot.tokenIds.slice(offset, offset + limit);
+    const equipment = typeof this.chainReader.equipmentBatch === 'function'
+      ? await this.chainReader.equipmentBatch(pageTokenIds, { blockNumber: snapshot.indexedToBlock })
+      : await Promise.all(pageTokenIds.map((tokenId) => this.chainReader.equipment(tokenId, { blockNumber: snapshot.indexedToBlock })));
+    const directTokenIds = new Set(snapshot.directTokenIds);
+    const custodyTokenIds = new Set(snapshot.custodyTokenIds);
+    const ownedMinerIdSet = new Set(snapshot.ownedMinerIds);
+    const items = equipment.map((item, index) => {
+      const tokenId = pageTokenIds[index];
+      const itemOwner = getAddress(item.owner);
+      const directCustody = directTokenIds.has(tokenId) && itemOwner === owner && item.equippedToMiner === 0;
+      const equippedCustody = custodyTokenIds.has(tokenId) &&
+        itemOwner === this.addresses.loadout &&
+        ownedMinerIdSet.has(item.equippedToMiner);
+      if (!directCustody && !equippedCustody) {
+        throw equipmentInventoryChanged();
+      }
+      return {
+        tokenId,
+        ...item,
+        metadata: this.equipmentMetadataFromItem(tokenId, item)
+      };
+    });
+    if (typeof this.chainReader.assertEquipmentInventorySnapshot === 'function') {
+      await this.chainReader.assertEquipmentInventorySnapshot({
+        indexedToBlock: snapshot.indexedToBlock,
+        checkpointHash: snapshot.checkpointHash
+      });
+    }
+    const nextOffset = offset + pageTokenIds.length;
+    const nextCursor = nextOffset < snapshot.tokenIds.length
+      ? encodeEquipmentSnapshotCursor(snapshot.snapshotId, nextOffset)
+      : '';
+    return {
+      owner,
+      items,
+      nextCursor,
+      hasMore: Boolean(nextCursor),
+      total: snapshot.tokenIds.length,
+      indexedToBlock: snapshot.indexedToBlock.toString(),
+      pageSize: limit
+    };
+  }
+
+  pruneEquipmentSnapshots() {
+    const timestamp = Date.now();
+    for (const [snapshotId, snapshot] of this.equipmentInventorySnapshots) {
+      if (snapshot.expiresAt <= timestamp) this.equipmentInventorySnapshots.delete(snapshotId);
+    }
+    while (this.equipmentInventorySnapshots.size > this.equipmentSnapshotLimit) {
+      this.equipmentInventorySnapshots.delete(this.equipmentInventorySnapshots.keys().next().value);
+    }
+  }
+
   minerContractMetadata() {
     this.assertEnabled();
     return {
       name: 'MATT Mine Miners',
       description: 'A fixed collection of 1,000 evolving Miner NFTs for MATT Mine.',
-      image: assetUrl(this.publicOrigin, this.manifest, this.manifest.baseEvolutions['rookie-miner'].image),
+      image: assetUrl(
+        this.publicOrigin,
+        this.manifest,
+        this.manifest.collectionImages?.miners || this.manifest.baseEvolutions['rookie-miner'].image
+      ),
       external_link: this.publicOrigin
     };
   }
@@ -282,10 +468,86 @@ export class ViemNftChainReader {
       chain,
       transport: http(rpcUrl, { timeout: positiveInteger(options.timeoutMs || 10_000, 'NFT RPC timeout') })
     });
+    this.minerDeploymentBlock = nonnegativeBigInt(
+      options.minerDeploymentBlock ?? DEFAULT_MINER_DEPLOYMENT_BLOCK,
+      'Miner deployment block'
+    );
+    this.equipmentDeploymentBlock = nonnegativeBigInt(
+      options.equipmentDeploymentBlock ?? DEFAULT_EQUIPMENT_DEPLOYMENT_BLOCK,
+      'Equipment deployment block'
+    );
+    this.equipmentIndexChunkSize = positiveInteger(
+      options.equipmentIndexChunkSize || 20_000,
+      'Equipment index chunk size'
+    );
+    this.equipmentIndexRefreshMs = boundedNonnegativeInteger(
+      options.equipmentIndexRefreshMs ?? 5_000,
+      'Equipment index refresh milliseconds',
+      60_000
+    );
+    this.equipmentIndexConfirmations = boundedNonnegativeInteger(
+      options.equipmentIndexConfirmations ?? DEFAULT_EQUIPMENT_INDEX_CONFIRMATIONS,
+      'Equipment index confirmations',
+      100
+    );
+    this.equipmentIndexMaxChunks = boundedPositiveInteger(
+      options.equipmentIndexMaxChunks ?? DEFAULT_EQUIPMENT_INDEX_MAX_CHUNKS,
+      'Equipment index maximum chunks',
+      1_000
+    );
+    this.equipmentIndexStartBlock = minBigInt(this.minerDeploymentBlock, this.equipmentDeploymentBlock);
+    this.equipmentIndexedToBlock = this.equipmentIndexStartBlock - 1n;
+    this.equipmentConfirmedTargetBlock = this.equipmentIndexStartBlock - 1n;
+    this.equipmentIndexCheckpointHash = '';
+    this.equipmentIndexRevision = 0;
+    this.equipmentIndexInitialized = false;
+    this.equipmentIndexError = '';
+    this.minerOwners = new Map();
+    this.minerTokensByOwner = new Map();
+    this.equipmentOwners = new Map();
+    this.equipmentTokensByOwner = new Map();
+    this.equipmentAssignments = new Map();
+    this.equipmentTokensByMiner = new Map();
+    this.equipmentIndexLastSyncAt = 0;
+    this.equipmentIndexSyncPromise = null;
+    this.equipmentIndexPrewarmPromise = null;
+  }
+
+  async health() {
+    const [chainId, nextMinerTokenId] = await Promise.all([
+      this.client.getChainId(),
+      this.client.readContract({
+        address: this.addresses.miner,
+        abi: MINER_ABI,
+        functionName: 'nextTokenId'
+      }),
+      this.syncEquipmentOwnershipIndex()
+    ]);
+    return {
+      ok: chainId === this.chainId,
+      chainId,
+      nextMinerTokenId: Number(nextMinerTokenId),
+      equipmentIndex: this.inventoryIndexStatus()
+    };
   }
 
   async minerIdsForOwner(ownerInput) {
     const owner = getAddress(ownerInput);
+    const index = this.inventoryIndexStatus();
+    if (index.ready) {
+      const owned = [...(this.minerTokensByOwner.get(owner.toLowerCase()) || [])].sort((left, right) => left - right);
+      const balance = await this.client.readContract({
+        address: this.addresses.miner,
+        abi: MINER_ABI,
+        functionName: 'balanceOf',
+        args: [owner],
+        blockNumber: this.equipmentIndexedToBlock
+      });
+      if (BigInt(owned.length) !== BigInt(balance)) {
+        throw new ApiError(502, 'nft_owner_index_incomplete', 'The confirmed Ronin Miner ownership index was incomplete.');
+      }
+      return owned;
+    }
     const [balance, nextTokenId] = await Promise.all([
       this.client.readContract({ address: this.addresses.miner, abi: MINER_ABI, functionName: 'balanceOf', args: [owner] }),
       this.client.readContract({ address: this.addresses.miner, abi: MINER_ABI, functionName: 'nextTokenId' })
@@ -349,12 +611,486 @@ export class ViemNftChainReader {
     }
   }
 
-  async equipment(tokenId) {
+  async equipmentTokenPageForOwner(ownerInput, options = {}) {
+    const owner = getAddress(ownerInput);
+    const cursor = equipmentCursor(options.cursor);
+    const limit = equipmentPageLimit(options.limit);
+    const snapshot = await this.equipmentInventorySnapshotForOwner(owner);
+    if (cursor.indexedToBlock !== null && cursor.indexedToBlock !== BigInt(snapshot.indexedToBlock)) {
+      throw equipmentInventoryChanged();
+    }
+    const sorted = snapshot.tokenIds;
+    const afterCursor = sorted.filter((tokenId) => tokenId > cursor.tokenId);
+    const page = afterCursor.slice(0, limit);
+    return {
+      tokenIds: page,
+      nextCursor: afterCursor.length > page.length
+        ? encodeEquipmentCursor(snapshot.indexedToBlock, page.at(-1))
+        : '',
+      total: sorted.length,
+      limit,
+      indexedToBlock: String(snapshot.indexedToBlock)
+    };
+  }
+
+  async equipmentInventorySnapshotForOwner(ownerInput) {
+    const owner = getAddress(ownerInput);
+    await this.syncEquipmentOwnershipIndex();
+    const status = this.inventoryIndexStatus();
+    if (!status.ready) {
+      void this.prewarmEquipmentIndex().catch(() => undefined);
+      const error = new ApiError(
+        503,
+        'nft_equipment_index_warming',
+        'The confirmed Ronin Equipment index is warming. Try again shortly.',
+        status
+      );
+      error.retryAfter = 2;
+      throw error;
+    }
+    const indexedToBlock = this.equipmentIndexedToBlock;
+    const checkpointHash = this.equipmentIndexCheckpointHash;
+    const indexRevision = this.equipmentIndexRevision;
+    const ownerKey = owner.toLowerCase();
+    const loadoutKey = this.addresses.loadout.toLowerCase();
+    const directTokenIds = [...(this.equipmentTokensByOwner.get(ownerKey) || [])].sort((left, right) => left - right);
+    const ownedMinerIds = [...(this.minerTokensByOwner.get(ownerKey) || [])].sort((left, right) => left - right);
+    const loadoutTokenIds = [...(this.equipmentTokensByOwner.get(loadoutKey) || [])];
+    const custodyTokenIds = [...new Set(ownedMinerIds.flatMap((minerId) => [
+      ...(this.equipmentTokensByMiner.get(minerId) || [])
+    ]))]
+      .filter((tokenId) => this.equipmentOwners.get(tokenId) === loadoutKey)
+      .sort((left, right) => left - right);
+    const [indexedDirectBalance, indexedLoadoutBalance, indexedMinerBalance] = await Promise.all([
+      this.client.readContract({
+        address: this.addresses.equipment,
+        abi: EQUIPMENT_ABI,
+        functionName: 'balanceOf',
+        args: [owner],
+        blockNumber: indexedToBlock
+      }),
+      this.client.readContract({
+        address: this.addresses.equipment,
+        abi: EQUIPMENT_ABI,
+        functionName: 'balanceOf',
+        args: [this.addresses.loadout],
+        blockNumber: indexedToBlock
+      }),
+      this.client.readContract({
+        address: this.addresses.miner,
+        abi: MINER_ABI,
+        functionName: 'balanceOf',
+        args: [owner],
+        blockNumber: indexedToBlock
+      })
+    ]);
+    if (
+      indexRevision !== this.equipmentIndexRevision ||
+      indexedToBlock !== this.equipmentIndexedToBlock ||
+      checkpointHash !== this.equipmentIndexCheckpointHash
+    ) {
+      throw equipmentInventoryChanged();
+    }
+    if (
+      BigInt(directTokenIds.length) !== BigInt(indexedDirectBalance) ||
+      BigInt(loadoutTokenIds.length) !== BigInt(indexedLoadoutBalance) ||
+      BigInt(ownedMinerIds.length) !== BigInt(indexedMinerBalance)
+    ) {
+      throw new ApiError(
+        502,
+        'nft_equipment_index_incomplete',
+        'The confirmed NFT ownership index is not synchronized with Ronin. Try again shortly.'
+      );
+    }
+    const tokenIds = [...new Set([...directTokenIds, ...custodyTokenIds])].sort((left, right) => left - right);
+    return {
+      indexedToBlock: indexedToBlock.toString(),
+      checkpointHash,
+      tokenIds: Object.freeze(tokenIds),
+      directTokenIds: Object.freeze(directTokenIds),
+      custodyTokenIds: Object.freeze(custodyTokenIds),
+      ownedMinerIds: Object.freeze(ownedMinerIds)
+    };
+  }
+
+  async assertEquipmentInventorySnapshot(snapshot = {}) {
+    const indexedToBlock = nonnegativeBigInt(snapshot.indexedToBlock, 'Equipment snapshot block');
+    const checkpointHash = String(snapshot.checkpointHash || '');
+    if (!checkpointHash || typeof this.client.getBlock !== 'function') return true;
+    const block = await this.client.getBlock({ blockNumber: indexedToBlock });
+    if (String(block?.hash || '').toLowerCase() !== checkpointHash.toLowerCase()) {
+      throw equipmentInventoryChanged();
+    }
+    return true;
+  }
+
+  inventoryIndexStatus() {
+    const ready = this.equipmentIndexInitialized &&
+      this.equipmentIndexedToBlock >= this.equipmentConfirmedTargetBlock;
+    return {
+      ready,
+      warming: Boolean(this.equipmentIndexSyncPromise || this.equipmentIndexPrewarmPromise) && !ready,
+      confirmations: this.equipmentIndexConfirmations,
+      indexedToBlock: this.equipmentIndexedToBlock.toString(),
+      confirmedBlock: this.equipmentConfirmedTargetBlock.toString(),
+      remainingBlocks: this.equipmentConfirmedTargetBlock > this.equipmentIndexedToBlock
+        ? (this.equipmentConfirmedTargetBlock - this.equipmentIndexedToBlock).toString()
+        : '0',
+      ...(this.equipmentIndexError ? { error: this.equipmentIndexError } : {})
+    };
+  }
+
+  prewarmEquipmentIndex() {
+    if (this.equipmentIndexPrewarmPromise) return this.equipmentIndexPrewarmPromise;
+    const pending = (async () => {
+      while (true) {
+        await this.syncEquipmentOwnershipIndex({ force: true });
+        const status = this.inventoryIndexStatus();
+        if (status.ready) return status;
+        await eventLoopTurn();
+      }
+    })();
+    this.equipmentIndexPrewarmPromise = pending;
+    pending.catch((error) => {
+      this.equipmentIndexError = String(error?.message || error);
+    }).finally(() => {
+      if (this.equipmentIndexPrewarmPromise === pending) this.equipmentIndexPrewarmPromise = null;
+    });
+    return pending;
+  }
+
+  async syncEquipmentOwnershipIndex(options = {}) {
+    const timestamp = Date.now();
+    if (
+      options.force !== true &&
+      !this.equipmentIndexSyncPromise &&
+      this.inventoryIndexStatus().ready &&
+      this.equipmentIndexLastSyncAt > 0 &&
+      timestamp - this.equipmentIndexLastSyncAt < this.equipmentIndexRefreshMs
+    ) {
+      return this.equipmentIndexedToBlock;
+    }
+    if (this.equipmentIndexSyncPromise) return this.equipmentIndexSyncPromise;
+    const pending = this.#syncEquipmentOwnershipIndex(options.maxChunks || this.equipmentIndexMaxChunks);
+    this.equipmentIndexSyncPromise = pending;
     try {
-      const [owner, data, bonus] = await Promise.all([
-        this.client.readContract({ address: this.addresses.equipment, abi: EQUIPMENT_ABI, functionName: 'ownerOf', args: [BigInt(tokenId)] }),
-        this.client.readContract({ address: this.addresses.equipment, abi: EQUIPMENT_ABI, functionName: 'equipmentData', args: [BigInt(tokenId)] }),
-        this.client.readContract({ address: this.addresses.equipment, abi: EQUIPMENT_ABI, functionName: 'bonusFor', args: [BigInt(tokenId)] })
+      return await pending;
+    } finally {
+      if (this.equipmentIndexSyncPromise === pending) this.equipmentIndexSyncPromise = null;
+    }
+  }
+
+  async #syncEquipmentOwnershipIndex(maxChunks) {
+    await this.#verifyEquipmentIndexCheckpoint();
+    const latestBlock = BigInt(await this.client.getBlockNumber());
+    const confirmedBlock = latestBlock > BigInt(this.equipmentIndexConfirmations)
+      ? latestBlock - BigInt(this.equipmentIndexConfirmations)
+      : 0n;
+    const targetBlock = confirmedBlock >= this.equipmentIndexStartBlock
+      ? confirmedBlock
+      : this.equipmentIndexStartBlock - 1n;
+    if (targetBlock < this.equipmentIndexedToBlock) {
+      throw new ApiError(
+        503,
+        'nft_equipment_index_checkpoint_ahead',
+        'The Ronin RPC confirmed head is behind the NFT index checkpoint.'
+      );
+    }
+    this.equipmentConfirmedTargetBlock = targetBlock;
+    const firstUnindexedBlock = this.equipmentIndexedToBlock >= this.equipmentIndexStartBlock
+      ? this.equipmentIndexedToBlock + 1n
+      : this.equipmentIndexStartBlock;
+    const replayBlocks = targetBlock >= firstUnindexedBlock
+      ? targetBlock - firstUnindexedBlock + 1n
+      : 0n;
+    const replayCapacity = BigInt(this.equipmentIndexChunkSize) * BigInt(maxChunks);
+    if (!this.equipmentIndexInitialized && replayBlocks > replayCapacity) {
+      await this.#bootstrapEquipmentOwnershipIndex(targetBlock);
+      this.equipmentIndexError = '';
+      this.equipmentIndexLastSyncAt = Date.now();
+      return this.equipmentIndexedToBlock;
+    }
+    let fromBlock = this.equipmentIndexedToBlock + 1n;
+    if (fromBlock < this.equipmentIndexStartBlock) fromBlock = this.equipmentIndexStartBlock;
+    let chunks = 0;
+    while (fromBlock <= targetBlock && chunks < maxChunks) {
+      const toBlock = minBigInt(
+        targetBlock,
+        fromBlock + BigInt(this.equipmentIndexChunkSize) - 1n
+      );
+      const [minerTransfers, transfers, assignments] = await Promise.all([
+        this.client.getLogs({
+          address: this.addresses.miner,
+          event: MINER_TRANSFER_EVENT,
+          fromBlock,
+          toBlock
+        }),
+        this.client.getLogs({
+          address: this.addresses.equipment,
+          event: EQUIPMENT_TRANSFER_EVENT,
+          fromBlock,
+          toBlock
+        }),
+        this.client.getLogs({
+          address: this.addresses.equipment,
+          event: EQUIPMENT_ASSIGNMENT_EVENT,
+          fromBlock,
+          toBlock
+        })
+      ]);
+      this.equipmentIndexRevision += 1;
+      for (const log of sortedLogs(minerTransfers)) this.#applyMinerTransfer(log);
+      for (const log of sortedLogs([
+        ...transfers.map((entry) => ({ ...entry, equipmentIndexEvent: 'transfer' })),
+        ...assignments.map((entry) => ({ ...entry, equipmentIndexEvent: 'assignment' }))
+      ])) {
+        if (log.equipmentIndexEvent === 'transfer') this.#applyEquipmentTransfer(log);
+        else this.#applyEquipmentAssignment(log);
+      }
+      this.equipmentIndexedToBlock = toBlock;
+      this.equipmentIndexRevision += 1;
+      fromBlock = toBlock + 1n;
+      chunks += 1;
+    }
+    if (targetBlock < this.equipmentIndexStartBlock) {
+      this.equipmentIndexedToBlock = this.equipmentIndexStartBlock - 1n;
+    }
+    this.equipmentIndexInitialized = true;
+    this.equipmentIndexCheckpointHash = await this.#blockHash(this.equipmentIndexedToBlock);
+    this.equipmentIndexError = '';
+    this.equipmentIndexLastSyncAt = Date.now();
+    return this.equipmentIndexedToBlock;
+  }
+
+  async #bootstrapEquipmentOwnershipIndex(blockNumber) {
+    const checkpointHash = await this.#blockHash(blockNumber);
+    if (!checkpointHash) {
+      throw new ApiError(
+        503,
+        'nft_equipment_index_bootstrap_unavailable',
+        'Ronin did not return the confirmed block required to build the NFT ownership index.'
+      );
+    }
+    const [nextMinerTokenIdRaw, nextEquipmentTokenIdRaw] = await Promise.all([
+      this.client.readContract({
+        address: this.addresses.miner,
+        abi: MINER_ABI,
+        functionName: 'nextTokenId',
+        blockNumber
+      }),
+      this.client.readContract({
+        address: this.addresses.equipment,
+        abi: EQUIPMENT_ABI,
+        functionName: 'nextTokenId',
+        blockNumber
+      })
+    ]);
+    const nextMinerTokenId = safeInteger(nextMinerTokenIdRaw, 'next Miner token ID');
+    const nextEquipmentTokenId = safeInteger(nextEquipmentTokenIdRaw, 'next Equipment token ID');
+    if (nextMinerTokenId < 1 || nextMinerTokenId > MINER_MAX_SUPPLY + 1) {
+      throw new ApiError(
+        502,
+        'nft_miner_supply_invalid',
+        `Ronin returned a Miner supply outside the fixed ${MINER_MAX_SUPPLY}-token collection.`
+      );
+    }
+    if (nextEquipmentTokenId < 1) {
+      throw new ApiError(502, 'nft_equipment_supply_invalid', 'Ronin returned an invalid Equipment supply.');
+    }
+
+    const state = emptyEquipmentOwnershipIndex();
+    for (let start = 1; start <= MINER_MAX_SUPPLY; start += EQUIPMENT_INDEX_BOOTSTRAP_BATCH_SIZE) {
+      const tokenIds = integerRange(
+        start,
+        Math.min(MINER_MAX_SUPPLY, start + EQUIPMENT_INDEX_BOOTSTRAP_BATCH_SIZE - 1)
+      );
+      const results = await this.client.multicall({
+        allowFailure: true,
+        blockNumber,
+        contracts: tokenIds.map((tokenId) => ({
+          address: this.addresses.miner,
+          abi: MINER_ABI,
+          functionName: 'ownerOf',
+          args: [BigInt(tokenId)]
+        }))
+      });
+      for (let index = 0; index < tokenIds.length; index += 1) {
+        const result = results[index];
+        if (result?.status !== 'success') continue;
+        addIndexedOwnership(state.minerOwners, state.minerTokensByOwner, tokenIds[index], result.result);
+      }
+      await eventLoopTurn();
+    }
+    if (state.minerOwners.size !== nextMinerTokenId - 1) {
+      throw new ApiError(
+        502,
+        'nft_owner_index_incomplete',
+        'Ronin did not return every minted Miner at the confirmed bootstrap block.'
+      );
+    }
+
+    const mintedEquipment = nextEquipmentTokenId - 1;
+    for (let start = 1; start <= mintedEquipment; start += EQUIPMENT_INDEX_BOOTSTRAP_BATCH_SIZE) {
+      const tokenIds = integerRange(
+        start,
+        Math.min(mintedEquipment, start + EQUIPMENT_INDEX_BOOTSTRAP_BATCH_SIZE - 1)
+      );
+      const results = await this.client.multicall({
+        allowFailure: true,
+        blockNumber,
+        contracts: tokenIds.flatMap((tokenId) => ([
+          {
+            address: this.addresses.equipment,
+            abi: EQUIPMENT_ABI,
+            functionName: 'ownerOf',
+            args: [BigInt(tokenId)]
+          },
+          {
+            address: this.addresses.equipment,
+            abi: EQUIPMENT_ABI,
+            functionName: 'equipmentData',
+            args: [BigInt(tokenId)]
+          }
+        ]))
+      });
+      for (let index = 0; index < tokenIds.length; index += 1) {
+        const ownerResult = results[index * 2];
+        const dataResult = results[index * 2 + 1];
+        if (ownerResult?.status !== 'success' && dataResult?.status !== 'success') continue;
+        if (ownerResult?.status !== 'success' || dataResult?.status !== 'success') {
+          throw new ApiError(
+            502,
+            'nft_equipment_index_incomplete',
+            `Ronin returned inconsistent confirmed state for Equipment #${tokenIds[index]}.`
+          );
+        }
+        const tokenId = tokenIds[index];
+        addIndexedOwnership(state.equipmentOwners, state.equipmentTokensByOwner, tokenId, ownerResult.result);
+        const minerId = safeInteger(
+          dataResult.result?.equippedToMiner ?? dataResult.result?.[1],
+          `Equipment #${tokenId} assigned Miner ID`
+        );
+        if (minerId > 0) {
+          state.equipmentAssignments.set(tokenId, minerId);
+          addIndexedToken(state.equipmentTokensByMiner, minerId, tokenId);
+        }
+      }
+      await eventLoopTurn();
+    }
+
+    const verifiedHash = await this.#blockHash(blockNumber);
+    if (!verifiedHash || verifiedHash.toLowerCase() !== checkpointHash.toLowerCase()) {
+      throw new ApiError(
+        503,
+        'nft_equipment_index_bootstrap_reorg',
+        'The confirmed Ronin block changed while the NFT ownership index was being built. Retrying is safe.'
+      );
+    }
+    this.equipmentIndexRevision += 1;
+    this.minerOwners = state.minerOwners;
+    this.minerTokensByOwner = state.minerTokensByOwner;
+    this.equipmentOwners = state.equipmentOwners;
+    this.equipmentTokensByOwner = state.equipmentTokensByOwner;
+    this.equipmentAssignments = state.equipmentAssignments;
+    this.equipmentTokensByMiner = state.equipmentTokensByMiner;
+    this.equipmentIndexedToBlock = blockNumber;
+    this.equipmentIndexCheckpointHash = verifiedHash;
+    this.equipmentIndexInitialized = true;
+    this.equipmentIndexRevision += 1;
+  }
+
+  async #verifyEquipmentIndexCheckpoint() {
+    if (!this.equipmentIndexCheckpointHash || typeof this.client.getBlock !== 'function') return;
+    const currentHash = await this.#blockHash(this.equipmentIndexedToBlock);
+    if (currentHash && currentHash.toLowerCase() !== this.equipmentIndexCheckpointHash.toLowerCase()) {
+      this.#resetEquipmentIndex();
+    }
+  }
+
+  async #blockHash(blockNumber) {
+    if (blockNumber < 0n || typeof this.client.getBlock !== 'function') return '';
+    const block = await this.client.getBlock({ blockNumber });
+    return String(block?.hash || '');
+  }
+
+  #resetEquipmentIndex() {
+    this.equipmentIndexRevision += 1;
+    this.equipmentIndexedToBlock = this.equipmentIndexStartBlock - 1n;
+    this.equipmentConfirmedTargetBlock = this.equipmentIndexStartBlock - 1n;
+    this.equipmentIndexCheckpointHash = '';
+    this.equipmentIndexInitialized = false;
+    this.minerOwners.clear();
+    this.minerTokensByOwner.clear();
+    this.equipmentOwners.clear();
+    this.equipmentTokensByOwner.clear();
+    this.equipmentAssignments.clear();
+    this.equipmentTokensByMiner.clear();
+    this.equipmentIndexRevision += 1;
+  }
+
+  #applyMinerTransfer(log) {
+    applyOwnershipTransfer({
+      log,
+      owners: this.minerOwners,
+      tokensByOwner: this.minerTokensByOwner,
+      label: 'Miner Transfer token ID'
+    });
+  }
+
+  #applyEquipmentTransfer(log) {
+    const tokenId = tokenIdValue(log?.args?.tokenId, 'Equipment Transfer token ID');
+    const previousOwner = this.equipmentOwners.get(tokenId);
+    if (previousOwner) this.equipmentTokensByOwner.get(previousOwner)?.delete(tokenId);
+    const nextOwner = getAddress(log?.args?.to).toLowerCase();
+    if (nextOwner === ZERO_ADDRESS) {
+      this.equipmentOwners.delete(tokenId);
+      this.#setEquipmentAssignment(tokenId, 0);
+      return;
+    }
+    this.equipmentOwners.set(tokenId, nextOwner);
+    let bucket = this.equipmentTokensByOwner.get(nextOwner);
+    if (!bucket) {
+      bucket = new Set();
+      this.equipmentTokensByOwner.set(nextOwner, bucket);
+    }
+    bucket.add(tokenId);
+  }
+
+  #applyEquipmentAssignment(log) {
+    const tokenId = tokenIdValue(log?.args?.tokenId, 'Equipment assignment token ID');
+    const minerId = Number(log?.args?.minerId || 0n);
+    if (!Number.isSafeInteger(minerId) || minerId < 0) {
+      throw new ApiError(502, 'nft_equipment_index_invalid', 'Ronin returned an invalid Equipment assignment.');
+    }
+    this.#setEquipmentAssignment(tokenId, minerId);
+  }
+
+  #setEquipmentAssignment(tokenId, minerId) {
+    const previousMinerId = this.equipmentAssignments.get(tokenId);
+    if (previousMinerId) this.equipmentTokensByMiner.get(previousMinerId)?.delete(tokenId);
+    if (minerId === 0) {
+      this.equipmentAssignments.delete(tokenId);
+      return;
+    }
+    this.equipmentAssignments.set(tokenId, minerId);
+    let bucket = this.equipmentTokensByMiner.get(minerId);
+    if (!bucket) {
+      bucket = new Set();
+      this.equipmentTokensByMiner.set(minerId, bucket);
+    }
+    bucket.add(tokenId);
+  }
+
+  async equipment(tokenId, options = {}) {
+    try {
+      const blockNumber = options.blockNumber === undefined
+        ? undefined
+        : nonnegativeBigInt(options.blockNumber, 'Equipment read block');
+      const [owner, data, bonus, tokenUri] = await Promise.all([
+        this.client.readContract({ address: this.addresses.equipment, abi: EQUIPMENT_ABI, functionName: 'ownerOf', args: [BigInt(tokenId)], blockNumber }),
+        this.client.readContract({ address: this.addresses.equipment, abi: EQUIPMENT_ABI, functionName: 'equipmentData', args: [BigInt(tokenId)], blockNumber }),
+        this.client.readContract({ address: this.addresses.equipment, abi: EQUIPMENT_ABI, functionName: 'bonusFor', args: [BigInt(tokenId)], blockNumber }),
+        this.client.readContract({ address: this.addresses.equipment, abi: EQUIPMENT_ABI, functionName: 'tokenURI', args: [BigInt(tokenId)], blockNumber })
       ]);
       return {
         owner,
@@ -363,10 +1099,43 @@ export class ViemNftChainReader {
         slot: safeInteger(data.slot ?? data[2], 'equipment slot'),
         rarity: safeInteger(data.rarity ?? data[3], 'rarity'),
         damaged: Boolean(data.damaged ?? data[4]),
-        bonus: safeInteger(bonus, 'equipment bonus')
+        bonus: safeInteger(bonus, 'equipment bonus'),
+        tokenUri: String(tokenUri || '')
       };
     } catch (error) {
       throw chainReadError(error, `Equipment #${tokenId}`);
+    }
+  }
+
+  async equipmentBatch(tokenIdsInput, options = {}) {
+    const tokenIds = Array.from(tokenIdsInput || []).map((value) => tokenIdValue(value, 'equipment token ID'));
+    if (tokenIds.length === 0) return [];
+    try {
+      const calls = tokenIds.flatMap((tokenId) => [
+        { address: this.addresses.equipment, abi: EQUIPMENT_ABI, functionName: 'ownerOf', args: [BigInt(tokenId)] },
+        { address: this.addresses.equipment, abi: EQUIPMENT_ABI, functionName: 'equipmentData', args: [BigInt(tokenId)] },
+        { address: this.addresses.equipment, abi: EQUIPMENT_ABI, functionName: 'bonusFor', args: [BigInt(tokenId)] },
+        { address: this.addresses.equipment, abi: EQUIPMENT_ABI, functionName: 'tokenURI', args: [BigInt(tokenId)] }
+      ]);
+      const blockNumber = options.blockNumber === undefined
+        ? undefined
+        : nonnegativeBigInt(options.blockNumber, 'Equipment batch block');
+      const values = await this.client.multicall({ contracts: calls, allowFailure: false, blockNumber });
+      return tokenIds.map((tokenId, index) => {
+        const [owner, data, bonus, tokenUri] = values.slice(index * 4, index * 4 + 4);
+        return {
+          owner,
+          definitionId: safeInteger(data.definitionId ?? data[0], 'equipment definition'),
+          equippedToMiner: safeInteger(data.equippedToMiner ?? data[1], 'equipped Miner'),
+          slot: safeInteger(data.slot ?? data[2], 'equipment slot'),
+          rarity: safeInteger(data.rarity ?? data[3], 'rarity'),
+          damaged: Boolean(data.damaged ?? data[4]),
+          bonus: safeInteger(bonus, 'equipment bonus'),
+          tokenUri: String(tokenUri || '')
+        };
+      });
+    } catch (error) {
+      throw chainReadError(error, 'Equipment inventory');
     }
   }
 }
@@ -551,6 +1320,183 @@ function numericTrait(traitType, value) {
 
 function tokenIdValue(value, label) {
   return positiveInteger(value, label);
+}
+
+function equipmentCursor(value) {
+  if (value === undefined || value === null || value === '') {
+    return { indexedToBlock: null, tokenId: 0 };
+  }
+  try {
+    const decoded = Buffer.from(String(value), 'base64url').toString('utf8');
+    const match = decoded.match(/^(\d+):(\d+)$/);
+    if (!match) throw new Error('invalid cursor');
+    return {
+      indexedToBlock: nonnegativeBigInt(match[1], 'Equipment inventory cursor block'),
+      tokenId: positiveInteger(match[2], 'Equipment inventory cursor token')
+    };
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(400, 'invalid_nft_equipment_cursor', 'The Equipment inventory cursor is invalid.');
+  }
+}
+
+function equipmentSnapshotCursor(value) {
+  try {
+    const decoded = Buffer.from(String(value || ''), 'base64url').toString('utf8');
+    const match = decoded.match(/^([A-Za-z0-9_-]{16,64}):(\d+)$/);
+    if (!match) throw new Error('invalid cursor');
+    return {
+      snapshotId: match[1],
+      offset: safeInteger(match[2], 'Equipment inventory cursor offset')
+    };
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(400, 'invalid_nft_equipment_cursor', 'The Equipment inventory cursor is invalid.');
+  }
+}
+
+function encodeEquipmentSnapshotCursor(snapshotId, offset) {
+  return Buffer.from(`${snapshotId}:${offset}`, 'utf8').toString('base64url');
+}
+
+function equipmentPriorityTokenIds(value) {
+  const values = Array.isArray(value)
+    ? value
+    : String(value || '').split(',').filter(Boolean);
+  if (values.length > 6) {
+    throw new ApiError(400, 'nft_equipment_priority_too_large', 'At most six active Loadout tokens can be prioritized.');
+  }
+  return [...new Set(values.map((entry) => tokenIdValue(entry, 'priority Equipment token ID')))];
+}
+
+function equipmentInventoryChanged() {
+  return new ApiError(
+    409,
+    'nft_equipment_inventory_changed',
+    'Equipment or Miner ownership changed while the inventory page was loading. Refresh and try again.'
+  );
+}
+
+function encodeEquipmentCursor(indexedToBlock, tokenId) {
+  return Buffer.from(`${indexedToBlock}:${tokenId}`, 'utf8').toString('base64url');
+}
+
+function equipmentPageLimit(value) {
+  if (value === undefined || value === null || value === '') return DEFAULT_EQUIPMENT_PAGE_SIZE;
+  const limit = positiveInteger(value, 'Equipment inventory page size');
+  if (limit > MAX_EQUIPMENT_PAGE_SIZE) {
+    throw new ApiError(
+      400,
+      'nft_equipment_page_too_large',
+      `Equipment inventory pages are limited to ${MAX_EQUIPMENT_PAGE_SIZE} items.`
+    );
+  }
+  return limit;
+}
+
+function nonnegativeBigInt(value, label) {
+  try {
+    const number = BigInt(value);
+    if (number < 0n) throw new Error('negative');
+    return number;
+  } catch {
+    throw new ApiError(400, 'invalid_nft_value', `${label} must be a non-negative integer.`);
+  }
+}
+
+function boundedNonnegativeInteger(value, label, maximum) {
+  const number = safeInteger(value, label);
+  if (number > maximum) {
+    throw new ApiError(400, 'invalid_nft_value', `${label} must not exceed ${maximum}.`);
+  }
+  return number;
+}
+
+function boundedPositiveInteger(value, label, maximum) {
+  const number = positiveInteger(value, label);
+  if (number > maximum) {
+    throw new ApiError(400, 'invalid_nft_value', `${label} must not exceed ${maximum}.`);
+  }
+  return number;
+}
+
+function minBigInt(left, right) {
+  return left < right ? left : right;
+}
+
+function sortedLogs(logs) {
+  return [...(logs || [])].sort((left, right) => {
+    for (const key of ['blockNumber', 'transactionIndex', 'logIndex']) {
+      const difference = BigInt(left?.[key] ?? 0) - BigInt(right?.[key] ?? 0);
+      if (difference < 0n) return -1;
+      if (difference > 0n) return 1;
+    }
+    return 0;
+  });
+}
+
+function emptyEquipmentOwnershipIndex() {
+  return {
+    minerOwners: new Map(),
+    minerTokensByOwner: new Map(),
+    equipmentOwners: new Map(),
+    equipmentTokensByOwner: new Map(),
+    equipmentAssignments: new Map(),
+    equipmentTokensByMiner: new Map()
+  };
+}
+
+function integerRange(start, end) {
+  return Array.from({ length: Math.max(0, end - start + 1) }, (_value, index) => start + index);
+}
+
+function addIndexedToken(tokensByKey, key, tokenId) {
+  let bucket = tokensByKey.get(key);
+  if (!bucket) {
+    bucket = new Set();
+    tokensByKey.set(key, bucket);
+  }
+  bucket.add(tokenId);
+}
+
+function addIndexedOwnership(owners, tokensByOwner, tokenId, ownerInput) {
+  const owner = getAddress(ownerInput).toLowerCase();
+  if (owner === ZERO_ADDRESS) {
+    throw new ApiError(502, 'nft_equipment_index_invalid', 'Ronin returned the zero address as an NFT owner.');
+  }
+  owners.set(tokenId, owner);
+  addIndexedToken(tokensByOwner, owner, tokenId);
+}
+
+function applyOwnershipTransfer({ log, owners, tokensByOwner, label }) {
+  const tokenId = tokenIdValue(log?.args?.tokenId, label);
+  const previousOwner = owners.get(tokenId);
+  if (previousOwner) tokensByOwner.get(previousOwner)?.delete(tokenId);
+  const nextOwner = getAddress(log?.args?.to).toLowerCase();
+  if (nextOwner === ZERO_ADDRESS) {
+    owners.delete(tokenId);
+    return tokenId;
+  }
+  owners.set(tokenId, nextOwner);
+  let bucket = tokensByOwner.get(nextOwner);
+  if (!bucket) {
+    bucket = new Set();
+    tokensByOwner.set(nextOwner, bucket);
+  }
+  bucket.add(tokenId);
+  return tokenId;
+}
+
+function eventLoopTurn() {
+  return new Promise((resolveTurn) => setImmediate(resolveTurn));
+}
+
+async function settleWithin(promise, timeoutMs) {
+  if (timeoutMs === 0) return;
+  await Promise.race([
+    promise,
+    new Promise((resolveTimeout) => setTimeout(resolveTimeout, timeoutMs))
+  ]);
 }
 
 function positiveInteger(value, label) {

@@ -73,7 +73,7 @@ Optional:
 | Variable | Default |
 |---|---|
 | `RONIN_RPC_URL` | `https://api.roninchain.com/rpc` |
-| `MATT_MINE_DATABASE_POOL_SIZE` | `5` in the Render Blueprint |
+| `MATT_MINE_DATABASE_POOL_SIZE` | `3` in the Render Blueprint, plus one dedicated NFT lifecycle advisory-lock connection |
 | `MATT_MINE_DATABASE_STARTUP_RETRY_ATTEMPTS` | `90` |
 | `MATT_MINE_DATABASE_QUERY_RETRY_ATTEMPTS` | `5` for safe read operations |
 | `MATT_MINE_DATABASE_SSL` | `false` for Render internal connections |

@@ -59,11 +59,15 @@ export function nftGameplayTraits(input = {}) {
 
 export function nftCarryCapacity(runContext = {}) {
   const traits = nftGameplayTraits(runContext);
-  if (traits) return traits.carryCapacity;
-  const configured = Number(runContext?.tuning?.nftCrystalCarryLimit);
-  return Number.isSafeInteger(configured) && configured >= 0
-    ? configured
+  const configuredCandidates = [
+    runContext?.nftRun?.crystalCarryLimit,
+    runContext?.tuning?.nftCrystalCarryLimit,
+    runContext?.tuning?._nftRun?.crystalCarryLimit
+  ].map(Number).filter((value) => Number.isSafeInteger(value) && value >= 0);
+  const configured = configuredCandidates.length
+    ? Math.min(...configuredCandidates)
     : Number.MAX_SAFE_INTEGER;
+  return traits ? Math.min(traits.carryCapacity, configured) : configured;
 }
 
 export function nftHealAmount(runContext = {}, fallback = 0) {

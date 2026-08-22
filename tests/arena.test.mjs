@@ -401,6 +401,65 @@ test('Arena Admin controls can list and expire active runs immediately', async (
   assert.equal((await store.activeRuns(PLAYER)).length, 0);
 });
 
+test('Arena administrative termination reservation blocks player mutation and expires only the exact run', async () => {
+  const store = await new MemoryArenaStore().init();
+  const runId = `arena_run_${'a'.repeat(24)}`;
+  await store.ensureDay(dayRecord());
+  await store.confirmEntry(entryRecord(1, HASH_A));
+  await store.consumeEntry(PLAYER, DAY, 'arena_entry_1', runRecord(runId, 1_000));
+  const reserved = await store.reserveAdminTermination(
+    [runId],
+    1_500,
+    'Support termination'
+  );
+  assert.equal(reserved.length, 1);
+  assert.equal(reserved[0].tuning._adminTerminationPending.requestedAt, 1_500);
+
+  const arena = new DailyArenaService({
+    store,
+    chain: fakeArenaAdapter(() => scheduledChainDay()),
+    receiptSecret: 'r'.repeat(64),
+    seedSecret: 's'.repeat(64),
+    safeAddress: SAFE,
+    liveEnabled: true,
+    now: () => 1_500
+  });
+  await assert.rejects(
+    () => arena.validatePaidReviveDeath(PLAYER, runId, {}),
+    (error) => error.code === 'arena_admin_termination_pending'
+  );
+  await assert.rejects(
+    () => arena.assertPaidReviveRunOpen(PLAYER, runId),
+    (error) => error.code === 'arena_admin_termination_pending'
+  );
+
+  await assert.rejects(
+    () => store.appendEvents(runId, 0, [], {
+      throughSeq: 0,
+      throughTick: 0,
+      transcriptHash: 'a'.repeat(64),
+      checkpointSignature: 'checkpoint'
+    }),
+    (error) => error.code === 'arena_admin_termination_pending'
+  );
+  await assert.rejects(
+    () => store.attachNftRun(runId, PLAYER, { minerId: 1 }),
+    (error) => error.code === 'arena_admin_termination_pending'
+  );
+  await assert.rejects(
+    () => store.finishRun(runId, {}, 1_750),
+    (error) => error.code === 'arena_admin_termination_pending'
+  );
+  await assert.rejects(
+    () => store.expireRun(runId, 1_750),
+    (error) => error.code === 'arena_admin_termination_pending'
+  );
+
+  const expired = await store.expireAdminTermination([runId], 2_000);
+  assert.deepEqual(expired.map((run) => run.runId), [runId]);
+  assert.equal((await store.getRun(runId)).status, 'expired');
+});
+
 test('a confirmed payment cannot be replayed by another wallet', async () => {
   const store = await new MemoryArenaStore().init();
   await store.ensureDay(dayRecord());

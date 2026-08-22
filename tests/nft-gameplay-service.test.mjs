@@ -28,6 +28,34 @@ const LOADOUT_HASH = `0x${'bb'.repeat(32)}`;
 const RUN_ID = `0x${'cc'.repeat(32)}`;
 const PLAYER_SIGNATURE = `0x${'11'.repeat(65)}`;
 
+function healthPublicClient(operatorAddress, signerAddress, operatorBalance) {
+  return {
+    async getChainId() { return 2020; },
+    async getBalance({ address }) {
+      return address.toLowerCase() === operatorAddress.toLowerCase()
+        ? operatorBalance
+        : 10n ** 18n;
+    },
+    async readContract({ functionName }) {
+      if (functionName === 'OPERATOR_ROLE') return `0x${'55'.repeat(32)}`;
+      if (functionName === 'paused') return false;
+      if (functionName === 'rewardSigner') return signerAddress;
+      if (functionName === 'hasRole') return true;
+      if (functionName === 'mapVersions') return [
+        `0x${'01'.repeat(32)}`,
+        `0x${'02'.repeat(32)}`,
+        10n ** 18n,
+        500n * 10n ** 18n,
+        2_500,
+        7_200,
+        true,
+        false
+      ];
+      throw new Error(`Unexpected ${functionName}`);
+    }
+  };
+}
+
 test('production gameplay accepts the existing legacy game-signer secret name', () => {
   const operator = privateKeyToAccount(OPERATOR_KEY);
   const signer = privateKeyToAccount(SIGNER_KEY);
@@ -45,6 +73,125 @@ test('production gameplay accepts the existing legacy game-signer secret name', 
     MATT_MINE_NFT_MAP_VERSIONS_JSON: JSON.stringify({ arena: MAP_VERSION, paid: MAP_VERSION })
   });
   assert.ok(service instanceof NftGameplayService);
+});
+
+test('NFT gameplay exposes normalized active-map state and a secret-free chain health snapshot', async () => {
+  const operator = privateKeyToAccount(OPERATOR_KEY);
+  const signer = privateKeyToAccount(SIGNER_KEY);
+  const publicClient = {
+    async getChainId() { return 2020; },
+    async getBalance({ address }) { return address === operator.address ? 5n * 10n ** 18n : 7n * 10n ** 18n; },
+    async readContract({ functionName }) {
+      if (functionName === 'OPERATOR_ROLE') return `0x${'55'.repeat(32)}`;
+      if (functionName === 'paused') return false;
+      if (functionName === 'rewardSigner') return signer.address;
+      if (functionName === 'hasRole') return true;
+      if (functionName === 'mapVersions') return [
+        `0x${'01'.repeat(32)}`,
+        `0x${'02'.repeat(32)}`,
+        10n ** 18n,
+        500n * 10n ** 18n,
+        2_500,
+        7_200,
+        true,
+        false
+      ];
+      throw new Error(`Unexpected ${functionName}`);
+    }
+  };
+  const service = new NftGameplayService({
+    enabled: true,
+    chainId: 2020,
+    rpcUrl: 'https://example.invalid',
+    settlementAddress: SETTLEMENT,
+    loadoutAddress: LOADOUT,
+    operatorAddress: operator.address,
+    signerAddress: signer.address,
+    operatorPrivateKey: OPERATOR_KEY,
+    signerPrivateKey: SIGNER_KEY,
+    mapVersions: { arena: MAP_VERSION, paid: MAP_VERSION },
+    metadataService: { async minerProfile() { return profile(); } },
+    publicClient,
+    operatorClient: {}
+  });
+
+  const active = await service.activeMap('pass');
+  assert.deepEqual(active, {
+    mode: 'paid',
+    versionId: MAP_VERSION,
+    mapId: `0x${'01'.repeat(32)}`,
+    contentHash: `0x${'02'.repeat(32)}`,
+    conversionRateRaw: (10n ** 18n).toString(),
+    maximumPayoutRaw: (500n * 10n ** 18n).toString(),
+    mineableCrystalUnits: 2_500,
+    runTimeoutSeconds: 7_200,
+    approved: true,
+    retired: false
+  });
+  const health = await service.health();
+  assert.equal(health.ok, true);
+  assert.equal(health.settlement.paused, false);
+  assert.equal(health.operator.authorized, true);
+  assert.equal(health.operator.funded, true);
+  assert.equal(health.routesConfigured, true);
+  assert.equal(health.rewardSigner.matches, true);
+  assert.equal(health.activeMaps.paid.contentHash, active.contentHash);
+  assert.deepEqual(health.nativeBalancesRaw, {
+    operator: (5n * 10n ** 18n).toString(),
+    rewardSigner: (7n * 10n ** 18n).toString()
+  });
+  assert.equal('rpcUrl' in health, false);
+});
+
+test('NFT gameplay readiness fails closed when the transaction operator is below its gas floor', async () => {
+  const operator = privateKeyToAccount(OPERATOR_KEY);
+  const signer = privateKeyToAccount(SIGNER_KEY);
+  const service = new NftGameplayService({
+    enabled: true,
+    chainId: 2020,
+    rpcUrl: 'https://example.invalid',
+    settlementAddress: SETTLEMENT,
+    loadoutAddress: LOADOUT,
+    operatorAddress: operator.address,
+    signerAddress: signer.address,
+    operatorPrivateKey: OPERATOR_KEY,
+    signerPrivateKey: SIGNER_KEY,
+    mapVersions: { arena: MAP_VERSION, paid: MAP_VERSION },
+    metadataService: { async minerProfile() { return profile(); } },
+    publicClient: healthPublicClient(operator.address, signer.address, 1n),
+    operatorClient: {}
+  });
+
+  const health = await service.health();
+  assert.equal(health.ok, false);
+  assert.equal(health.operator.funded, false);
+  assert.equal(health.operator.minimumBalanceRaw, (20_000_000_000_000_000n).toString());
+});
+
+test('NFT gameplay readiness requires both Arena and Pass Mine routes', async () => {
+  const operator = privateKeyToAccount(OPERATOR_KEY);
+  const signer = privateKeyToAccount(SIGNER_KEY);
+  const service = new NftGameplayService({
+    enabled: true,
+    chainId: 2020,
+    rpcUrl: 'https://example.invalid',
+    settlementAddress: SETTLEMENT,
+    loadoutAddress: LOADOUT,
+    operatorAddress: operator.address,
+    signerAddress: signer.address,
+    operatorPrivateKey: OPERATOR_KEY,
+    signerPrivateKey: SIGNER_KEY,
+    mapVersions: { arena: MAP_VERSION, paid: MAP_VERSION },
+    metadataService: { async minerProfile() { return profile(); } },
+    publicClient: healthPublicClient(operator.address, signer.address, 10n ** 18n),
+    operatorClient: {}
+  });
+  service.clearMapVersion('paid');
+
+  const health = await service.health();
+  assert.equal(health.ok, false);
+  assert.equal(health.routesConfigured, false);
+  assert.deepEqual(health.requiredRoutes, ['arena', 'paid']);
 });
 
 test('Miner run approvals include the explicit EIP-712 domain type required by Ronin Wallet', async () => {
@@ -136,15 +283,17 @@ function profile(overrides = {}) {
   };
 }
 
-function fakePublicClient(minerId = 1) {
+function fakePublicClient(minerId = 1, options = {}) {
   return {
     async readContract(call) {
       if (call.functionName === 'playerNonces') return 0n;
       if (call.functionName === 'loadoutHash') return LOADOUT_HASH;
       if (call.functionName === 'activeRun') return [
         RUN_ID, MAP_VERSION, LOADOUT_HASH, PLAYER, 10n ** 16n, 100_000n * 10n ** 18n,
-        1n, 1_000_000, 7_200, 1_500, 1_000, 0n
+        1n, options.mineableCrystalUnits ?? 1_000_000, options.runTimeoutSeconds ?? 7_200,
+        options.carryCapacity ?? 1_500, 1_000, 0n
       ];
+      if (call.functionName === 'phaseXpForMap' && options.phaseXp) return options.phaseXp.map(BigInt);
       throw new Error(`Unexpected ${call.functionName} for Miner ${minerId}`);
     },
     async waitForTransactionReceipt() { return { status: 'success' }; }
@@ -200,9 +349,44 @@ test('NFT gameplay locks the owned Miner and pins armor health plus doubled crys
   assert.equal(started.minerId, 1);
   assert.equal(started.profile.gameplay.maximumHealth, 50);
   assert.equal(started.crystalCarryLimit, 1_500);
+  assert.equal(started.mineableCrystalUnits, 1_000_000);
+  assert.equal(started.runTimeoutSeconds, 7_200);
+  assert.deepEqual(started.phaseXp, [10, 15, 20, 25, 30]);
   assert.equal(calls[0].functionName, 'beginRun');
   assert.equal(calls[0].args[0].minerId, 1n);
   assert.equal(calls[0].args[1], PLAYER_SIGNATURE);
+});
+
+test('NFT gameplay applies the lower onchain map cap when it is below backpack capacity', async () => {
+  const operator = privateKeyToAccount(OPERATOR_KEY);
+  const signer = privateKeyToAccount(SIGNER_KEY);
+  const service = new NftGameplayService({
+    enabled: true,
+    chainId: 2020,
+    rpcUrl: 'https://example.invalid',
+    settlementAddress: SETTLEMENT,
+    loadoutAddress: LOADOUT,
+    operatorAddress: operator.address,
+    signerAddress: signer.address,
+    operatorPrivateKey: OPERATOR_KEY,
+    signerPrivateKey: SIGNER_KEY,
+    mapVersions: { arena: MAP_VERSION, paid: MAP_VERSION },
+    metadataService: { async minerProfile() { return profile(); } },
+    publicClient: fakePublicClient(1, { mineableCrystalUnits: 25, phaseXp: [20, 30, 40, 50, 60] }),
+    operatorClient: { async writeContract() { return `0x${'12'.repeat(32)}`; } }
+  });
+  const started = await service.beginRun({
+    address: PLAYER,
+    minerId: 1,
+    mode: 'paid',
+    authorization: authorization(1),
+    playerSignature: PLAYER_SIGNATURE
+  });
+  assert.equal(started.crystalCarryLimit, 25);
+  assert.equal(started.mapEconomy.carryCapacity, 1_500);
+  assert.equal(started.mapEconomy.mineableCrystalUnits, 25);
+  assert.deepEqual(started.phaseXp, [20, 30, 40, 50, 60]);
+  assert.equal(started.forceAbandonAt, 7_201);
 });
 
 test('NFT gameplay locks the Miner explicitly selected on the character screen', async () => {
@@ -307,6 +491,97 @@ test('NFT level pacing targets six months at twenty perfect runs per day', async
     readFile(new URL('../contracts/src/nftv2/libraries/MattV2Math.sol', import.meta.url), 'utf8'));
   assert.match(source, /LEVEL_100_XP = 360_000/);
   assert.equal(Math.ceil(360_000 / (100 * 20)), 180);
+});
+
+test('NFT settlement rejects mined Crystal units above the active onchain map cap before broadcast', async () => {
+  const operator = privateKeyToAccount(OPERATOR_KEY);
+  const signer = privateKeyToAccount(SIGNER_KEY);
+  let broadcasts = 0;
+  const service = new NftGameplayService({
+    enabled: true,
+    chainId: 2020,
+    rpcUrl: 'https://example.invalid',
+    settlementAddress: SETTLEMENT,
+    loadoutAddress: LOADOUT,
+    operatorAddress: operator.address,
+    signerAddress: signer.address,
+    operatorPrivateKey: OPERATOR_KEY,
+    signerPrivateKey: SIGNER_KEY,
+    mapVersions: { arena: MAP_VERSION, paid: MAP_VERSION },
+    metadataService: { async minerProfile() { return profile(); } },
+    publicClient: {
+      async readContract({ functionName }) {
+        if (functionName === 'activeRun') return [
+          RUN_ID, MAP_VERSION, LOADOUT_HASH, PLAYER, 10n ** 16n, 100_000n * 10n ** 18n,
+          1n, 5, 7_200, 1_500, 1_000, 0n
+        ];
+        if (functionName === 'processedRuns') return false;
+        throw new Error(`Unexpected ${functionName}`);
+      }
+    },
+    operatorClient: { async writeContract() { broadcasts += 1; return `0x${'12'.repeat(32)}`; } }
+  });
+
+  await assert.rejects(() => service.settleRun({
+    address: PLAYER,
+    minerId: 1,
+    runId: RUN_ID,
+    result: { extracted: true, crystalsCarried: 6 },
+    completedPhases: 1
+  }), { code: 'nft_mineable_crystal_limit' });
+  assert.equal(broadcasts, 0);
+});
+
+test('NFT settlement reports configured phase XP and verifies the observed banked-XP delta', async () => {
+  const operator = privateKeyToAccount(OPERATOR_KEY);
+  const signer = privateKeyToAccount(SIGNER_KEY);
+  let profileReads = 0;
+  const metadataService = {
+    async minerProfile() {
+      profileReads += 1;
+      const current = profile();
+      current.progression.bankedXp = profileReads === 1 ? 100 : 190;
+      return current;
+    }
+  };
+  const service = new NftGameplayService({
+    enabled: true,
+    chainId: 2020,
+    rpcUrl: 'https://example.invalid',
+    settlementAddress: SETTLEMENT,
+    loadoutAddress: LOADOUT,
+    operatorAddress: operator.address,
+    signerAddress: signer.address,
+    operatorPrivateKey: OPERATOR_KEY,
+    signerPrivateKey: SIGNER_KEY,
+    mapVersions: { arena: MAP_VERSION, paid: MAP_VERSION },
+    metadataService,
+    publicClient: {
+      async readContract({ functionName }) {
+        if (functionName === 'activeRun') return [
+          RUN_ID, MAP_VERSION, LOADOUT_HASH, PLAYER, 10n ** 16n, 100_000n * 10n ** 18n,
+          1n, 1_000, 7_200, 1_500, 1_000, 0n
+        ];
+        if (functionName === 'processedRuns') return false;
+        if (functionName === 'phaseXpForMap') return [20n, 30n, 40n, 50n, 60n];
+        throw new Error(`Unexpected ${functionName}`);
+      },
+      async waitForTransactionReceipt() { return { status: 'success' }; }
+    },
+    operatorClient: { async writeContract() { return `0x${'12'.repeat(32)}`; } }
+  });
+
+  const settled = await service.settleRun({
+    address: PLAYER,
+    minerId: 1,
+    runId: RUN_ID,
+    result: { extracted: true, crystalsCarried: 10 },
+    completedPhases: 3
+  });
+  assert.equal(settled.xpBanked, 90);
+  assert.equal(settled.configuredXpBanked, 90);
+  assert.equal(settled.xpParityVerified, true);
+  assert.deepEqual(settled.phaseXp, [20, 30, 40, 50, 60]);
 });
 
 test('a lost settlement HTTP response retries idempotently against processedRuns', async () => {

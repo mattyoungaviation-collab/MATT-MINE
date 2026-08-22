@@ -79,8 +79,12 @@ async function activateTab(name) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-async function refreshOverview() {
+async function refreshOverview(forceOperations = false) {
+  const forced = forceOperations
+    ? await api('/api/admin/operations-health?refresh=true')
+    : null;
   const data = await api('/api/admin/overview');
+  if (forced?.report) data.operationsHealth = forced.report;
   state.overview = data;
   state.actions = data.contractActions;
   renderOverview(data);
@@ -90,6 +94,7 @@ async function refreshOverview() {
 
 function renderOverview(data) {
   renderReadiness(data.readiness);
+  renderOperationsHealth(data.operationsHealth);
   $('#metrics').innerHTML = Object.entries(data.counts).map(([key, value]) =>
     `<div class="metric"><span class="muted">${words(key)}</span><strong>${Number(value).toLocaleString()}</strong></div>`
   ).join('');
@@ -158,11 +163,14 @@ $('#wallet-search').addEventListener('submit', async (event) => {
 
 async function loadWallets() {
   const data = await api(`/api/admin/wallets?query=${encodeURIComponent($('#wallet-query').value)}`);
+  const emptyMessage = data.chainLookupUnavailable
+    ? 'No wallets found. Live Miner/Arena lookup is unavailable; retry or search by wallet address.'
+    : 'No wallets found.';
   $('#wallet-rows').innerHTML = data.wallets.map((wallet) => `<tr>
     <td><button class="wallet-link" data-wallet="${wallet.address}">${escapeHtml(wallet.identity?.name || 'Unnamed')}<br><small>${short(wallet.address)}</small></button></td>
     <td><span class="badge ${wallet.suspended ? 'suspended' : ''}">${wallet.suspended ? 'Suspended' : 'Active'}</span></td>
     <td>${wallet.finishedRuns}</td><td>${wallet.unusedPaidCredits}</td>
-    <td><button class="ghost" data-wallet="${wallet.address}">Inspect</button></td></tr>`).join('') || '<tr><td colspan="6">No wallets found.</td></tr>';
+    <td><button class="ghost" data-wallet="${wallet.address}">Inspect</button></td></tr>`).join('') || `<tr><td colspan="6">${emptyMessage}</td></tr>`;
   document.querySelectorAll('[data-wallet]').forEach((button) => button.addEventListener('click', () => loadWallet(button.dataset.wallet)));
 }
 
@@ -269,6 +277,9 @@ function renderTuning() {
 }
 
 const NFT_V2_SLOTS = ['armor', 'pickaxe', 'blaster', 'dynamite', 'helmet', 'backpack'];
+const NFT_V2_TOKEN_UNIT = 10n ** 18n;
+const NFT_V2_MAX_WALLET_DAILY = 1_000_000n * NFT_V2_TOKEN_UNIT;
+const NFT_V2_MAX_GLOBAL_DAILY = 100_000_000n * NFT_V2_TOKEN_UNIT;
 
 async function loadNftV2Protocol() {
   try {
@@ -322,17 +333,40 @@ function renderNftV2Protocol() {
     priceFragment.append(label);
   }
   $('#nft-v2-chest-prices').replaceChildren(priceFragment);
+  updateNftV2EconomyValidation();
   syncNftV2MapDefaults();
   renderNftV2PhaseXp();
   const routeFragment = document.createDocumentFragment();
   for (const mode of ['arena', 'paid']) {
     const item = document.createElement('div');
-    item.className = 'kv';
-    const label = document.createElement('span');
-    label.textContent = mineLabel(mode);
-    const value = document.createElement('span');
-    value.textContent = protocol.activeMapVersions?.[mode] || 'No active on-chain version';
-    item.append(label, value);
+    item.className = 'protocol-route';
+    const active = protocol.activeMaps?.[mode];
+    const heading = document.createElement('div');
+    heading.className = 'protocol-route-heading';
+    const title = document.createElement('strong');
+    title.textContent = mineLabel(mode);
+    const badge = document.createElement('span');
+    const available = Boolean(active?.approved && !active?.retired);
+    badge.className = `badge${available ? '' : ' warning'}`;
+    badge.textContent = active ? (available ? 'ACTIVE' : 'UNAVAILABLE') : 'NO ROUTE';
+    heading.append(title, badge);
+    item.append(heading);
+    if (active) {
+      item.append(
+        kvNode('Version', active.versionId),
+        kvNode('Map ID', active.mapId),
+        kvNode('Content hash', active.contentHash),
+        kvNode('Mineable units', Number(active.mineableCrystalUnits || 0).toLocaleString()),
+        kvNode('Conversion', `${formatTokenAmount(active.conversionRateRaw)} MATT Crystals / mined Crystal`),
+        kvNode('Maximum payout', `${formatTokenAmount(active.maximumPayoutRaw)} MATT Crystals`),
+        kvNode('Force-abandon delay', `${Number(active.runTimeoutSeconds || 0) / 60} minutes`)
+      );
+    } else {
+      const message = document.createElement('p');
+      message.className = 'muted';
+      message.textContent = 'Approve a published mine version before opening new NFT runs.';
+      item.append(message);
+    }
     routeFragment.append(item);
   }
   $('#nft-v2-map-routes').replaceChildren(routeFragment);
@@ -342,24 +376,46 @@ $('#refresh-nft-v2').addEventListener('click', loadNftV2Protocol);
 
 $('#nft-v2-economy-form').addEventListener('submit', async (event) => {
   event.preventDefault();
+  if (!updateNftV2EconomyValidation()) {
+    event.currentTarget.reportValidity();
+    return;
+  }
+  const protocol = state.nftV2?.protocol;
+  if (!protocol) {
+    showAlert('Refresh the live NFT V2 protocol before changing its economy.');
+    return;
+  }
+  const repairPriceRaw = parseTokenAmount($('#nft-v2-repair').value);
+  const withdrawal = {
+    minimumRaw: parseTokenAmount($('#nft-v2-withdraw-min').value),
+    walletDailyRaw: parseTokenAmount($('#nft-v2-withdraw-wallet').value),
+    globalDailyRaw: parseTokenAmount($('#nft-v2-withdraw-global').value)
+  };
+  const chestPrices = Object.fromEntries([...document.querySelectorAll('[data-nft-v2-chest]')]
+    .map((input) => [input.dataset.nftV2Chest, parseTokenAmount(input.value)])
+    .filter(([slot, value]) => BigInt(value) !== BigInt(protocol.chestPrices?.[slot] || 0)));
+  const body = { reason: $('#nft-v2-economy-reason').value };
+  if (BigInt(repairPriceRaw) !== BigInt(protocol.repairPriceRaw || 0)) body.repairPriceRaw = repairPriceRaw;
+  if (
+    BigInt(withdrawal.minimumRaw) !== BigInt(protocol.withdrawal?.minimumRaw || 0)
+    || BigInt(withdrawal.walletDailyRaw) !== BigInt(protocol.withdrawal?.walletDailyRaw || 0)
+    || BigInt(withdrawal.globalDailyRaw) !== BigInt(protocol.withdrawal?.globalDailyRaw || 0)
+  ) body.withdrawal = withdrawal;
+  if (Object.keys(chestPrices).length) body.chestPrices = chestPrices;
+  if (!body.repairPriceRaw && !body.withdrawal && !body.chestPrices) {
+    showAlert('No NFT V2 economy values changed.');
+    return;
+  }
   if (!await confirmAction('Send NFT V2 economy transactions?', 'These values change on Ronin Mainnet after the dedicated Config Operator transactions confirm.')) return;
   await api('/api/admin/nft-v2/economy', {
     method: 'PUT',
-    body: {
-      repairPriceRaw: parseTokenAmount($('#nft-v2-repair').value),
-      withdrawal: {
-        minimumRaw: parseTokenAmount($('#nft-v2-withdraw-min').value),
-        walletDailyRaw: parseTokenAmount($('#nft-v2-withdraw-wallet').value),
-        globalDailyRaw: parseTokenAmount($('#nft-v2-withdraw-global').value)
-      },
-      chestPrices: Object.fromEntries([...document.querySelectorAll('[data-nft-v2-chest]')].map((input) => [input.dataset.nftV2Chest, parseTokenAmount(input.value)])),
-      reason: $('#nft-v2-economy-reason').value
-    }
+    body
   });
   $('#nft-v2-economy-reason').value = '';
   await loadNftV2Protocol();
   showAlert('NFT V2 economy transactions confirmed on Ronin.');
 });
+$('#nft-v2-economy-form').addEventListener('input', updateNftV2EconomyValidation);
 
 $('#nft-v2-map-form').addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -378,16 +434,20 @@ $('#nft-v2-map-form').addEventListener('submit', async (event) => {
     }
   });
   $('#nft-v2-map-reason').value = '';
-  $('#nft-v2-retire-version').value = result.versionId;
   await loadNftV2Protocol();
   showAlert(`Map ${result.versionId} is approved and active for new runs.`);
 });
 
 $('#nft-v2-map-mode').addEventListener('change', syncNftV2MapDefaults);
+$('#nft-v2-reset-map-economy').addEventListener('click', syncNftV2MapDefaults);
 $('#nft-v2-xp-mode').addEventListener('change', renderNftV2PhaseXp);
 $('#nft-v2-xp-form').addEventListener('input', updateNftV2XpTotal);
 $('#nft-v2-xp-form').addEventListener('submit', async (event) => {
   event.preventDefault();
+  if (!updateNftV2XpTotal()) {
+    event.currentTarget.reportValidity();
+    return;
+  }
   if (!await confirmAction('Change NFT XP for this mine?', 'The new XP applies to runs started after the Ronin transaction confirms.')) return;
   await api('/api/admin/nft-v2/phase-xp', {
     method: 'PUT',
@@ -403,10 +463,41 @@ $('#nft-v2-xp-form').addEventListener('submit', async (event) => {
 });
 
 function syncNftV2MapDefaults() {
-  const defaults = state.nftV2?.mapDefaults?.[$('#nft-v2-map-mode').value];
+  const mode = $('#nft-v2-map-mode').value;
+  const defaults = state.nftV2?.mapDefaults?.[mode];
+  const active = state.nftV2?.protocol?.activeMaps?.[mode];
   $('#nft-v2-map-seed').value = defaults?.seed || 'No active published mine';
   $('#nft-v2-map-id').value = defaults?.mapId || '';
   $('#nft-v2-content-hash').value = defaults?.contentHash || '';
+  $('#nft-v2-mineable').value = active?.mineableCrystalUnits || '';
+  $('#nft-v2-timeout').value = active?.runTimeoutSeconds ? active.runTimeoutSeconds / 60 : '';
+  $('#nft-v2-conversion').value = active?.conversionRateRaw ? formatTokenAmount(active.conversionRateRaw) : '';
+  $('#nft-v2-max-payout').value = active?.maximumPayoutRaw ? formatTokenAmount(active.maximumPayoutRaw) : '';
+  const current = $('#nft-v2-map-current');
+  const studioMatches = Boolean(active && defaults &&
+    String(active.mapId).toLowerCase() === String(defaults.mapId).toLowerCase() &&
+    String(active.contentHash).toLowerCase() === String(defaults.contentHash).toLowerCase());
+  current.classList.toggle('warning', !active || !studioMatches || active?.retired || !active?.approved);
+  const title = document.createElement('strong');
+  title.textContent = active ? 'Current on-chain route' : 'No active on-chain route';
+  current.replaceChildren(title);
+  if (active) {
+    const note = document.createElement('small');
+    note.textContent = 'The editable values below begin from this active immutable version.';
+    current.append(
+      kvNode('Version', active.versionId),
+      kvNode('Published Studio map', studioMatches ? 'MATCHED' : 'UPDATE REQUIRED'),
+      kvNode('Mineable units', Number(active.mineableCrystalUnits || 0).toLocaleString()),
+      kvNode('Conversion', `${formatTokenAmount(active.conversionRateRaw)} MATT Crystals / mined Crystal`),
+      kvNode('Maximum payout', `${formatTokenAmount(active.maximumPayoutRaw)} MATT Crystals`),
+      kvNode('Force-abandon delay', `${Number(active.runTimeoutSeconds || 0) / 60} minutes`),
+      note
+    );
+  } else {
+    const message = document.createElement('p');
+    message.textContent = 'Enter reviewed launch values before approving this published mine.';
+    current.append(message);
+  }
 }
 
 function renderNftV2PhaseXp() {
@@ -430,13 +521,42 @@ function renderNftV2PhaseXp() {
 }
 
 function updateNftV2XpTotal() {
-  const values = [...document.querySelectorAll('[data-nft-v2-phase-xp]')].map((input) => Number(input.value) || 0);
+  const inputs = [...document.querySelectorAll('[data-nft-v2-phase-xp]')];
+  const values = inputs.map((input) => Number(input.value));
   const total = values.reduce((sum, value) => sum + value, 0);
-  const cap = state.nftV2?.protocol?.phaseXpCaps?.perRun || 500;
-  const available = state.nftV2?.protocol?.phaseXpConfigurable;
-  $('#nft-v2-xp-total').textContent = available
-    ? `${total} XP for all five phases · maximum ${cap}`
-    : 'Settlement upgrade required before these XP controls can be saved.';
+  const protocol = state.nftV2?.protocol;
+  const perPhaseCap = protocol?.phaseXpCaps?.perPhase || 250;
+  const perRunCap = protocol?.phaseXpCaps?.perRun || 500;
+  const available = protocol?.phaseXpConfigurable === true;
+  const mode = $('#nft-v2-xp-mode').value;
+  const active = Boolean(protocol?.activeMapVersions?.[mode]);
+  const valuesValid = values.length === 5 && values.every((value) =>
+    Number.isSafeInteger(value) && value >= 1 && value <= perPhaseCap
+  );
+  const totalValid = valuesValid && total <= perRunCap;
+  inputs.forEach((input) => input.setCustomValidity(''));
+  if (!valuesValid) {
+    inputs.find((input) => {
+      const value = Number(input.value);
+      return !Number.isSafeInteger(value) || value < 1 || value > perPhaseCap;
+    })?.setCustomValidity(`Phase XP must be a whole number from 1 to ${perPhaseCap}.`);
+  } else if (!totalValid) {
+    inputs.at(-1)?.setCustomValidity(`Total XP cannot exceed ${perRunCap}.`);
+  }
+  const valid = available && active && totalValid;
+  const statusNode = $('#nft-v2-xp-total');
+  statusNode.classList.toggle('warning', !valid);
+  statusNode.textContent = !available
+    ? 'Settlement upgrade required before these XP controls can be saved.'
+    : !active
+      ? `Approve an active ${mineLabel(mode)} map before setting phase XP.`
+      : !valuesValid
+        ? `Every phase must award 1-${perPhaseCap} whole XP.`
+        : !totalValid
+          ? `${total} XP exceeds the ${perRunCap} XP maximum.`
+          : `${total} XP for all five phases · maximum ${perRunCap}`;
+  $('#nft-v2-xp-submit').disabled = !valid;
+  return valid;
 }
 
 function formatTokenAmount(raw) {
@@ -450,6 +570,38 @@ function parseTokenAmount(value) {
   const match = String(value || '').trim().match(/^(\d+)(?:\.(\d{1,18}))?$/);
   if (!match) throw new Error('Enter a positive number with no more than 18 decimal places.');
   return (BigInt(match[1]) * 10n ** 18n + BigInt((match[2] || '').padEnd(18, '0') || '0')).toString();
+}
+
+function updateNftV2EconomyValidation() {
+  const statusNode = $('#nft-v2-economy-validation');
+  const submit = $('#nft-v2-economy-submit');
+  const withdrawalInputs = [$('#nft-v2-withdraw-min'), $('#nft-v2-withdraw-wallet'), $('#nft-v2-withdraw-global')];
+  withdrawalInputs.forEach((input) => input.setCustomValidity(''));
+  let message = '';
+  try {
+    const positiveValues = [
+      $('#nft-v2-repair').value,
+      ...[...document.querySelectorAll('[data-nft-v2-chest]')].map((input) => input.value)
+    ].map((value) => BigInt(parseTokenAmount(value)));
+    if (positiveValues.some((value) => value <= 0n)) {
+      message = 'Repair and chest prices must be greater than zero.';
+    }
+    const minimum = BigInt(parseTokenAmount(withdrawalInputs[0].value));
+    const wallet = BigInt(parseTokenAmount(withdrawalInputs[1].value));
+    const global = BigInt(parseTokenAmount(withdrawalInputs[2].value));
+    if (!message && minimum < NFT_V2_TOKEN_UNIT) message = 'Minimum withdrawal must be at least 1 MATT Crystal.';
+    if (!message && minimum > wallet) message = 'Minimum withdrawal cannot exceed the wallet daily limit.';
+    if (!message && wallet > global) message = 'Wallet daily limit cannot exceed the global daily limit.';
+    if (!message && wallet > NFT_V2_MAX_WALLET_DAILY) message = 'Wallet daily limit cannot exceed 1,000,000 MATT Crystals.';
+    if (!message && global > NFT_V2_MAX_GLOBAL_DAILY) message = 'Global daily limit cannot exceed 100,000,000 MATT Crystals.';
+  } catch (error) {
+    message = error.message;
+  }
+  withdrawalInputs.forEach((input) => input.setCustomValidity(message));
+  statusNode.classList.toggle('error', Boolean(message));
+  statusNode.textContent = message || 'Withdrawal order verified: minimum ≤ wallet daily limit ≤ global daily limit.';
+  submit.disabled = Boolean(message);
+  return !message;
 }
 
 $('#nft-v2-retire-form').addEventListener('submit', async (event) => {
@@ -952,10 +1104,65 @@ function renderReadiness(readiness = {}) {
   `).join('') || '<article class="readiness-monitor" data-status="blocked"><strong>No readiness data</strong><p>Run the checks again.</p></article>';
 }
 
+function renderOperationsHealth(report = {}) {
+  const card = $('#operations-health');
+  if (!card) return;
+  const status = ['healthy', 'degraded', 'critical'].includes(report.status)
+    ? report.status
+    : 'unknown';
+  const counts = report.counts || {};
+  const checkedAt = Number(report.checkedAt || 0);
+  card.dataset.status = status;
+  $('#operations-health-label').textContent = {
+    healthy: 'All measured release signals are healthy',
+    degraded: 'Release operations need attention',
+    critical: 'Public release is blocked',
+    unknown: 'Current report unavailable'
+  }[status];
+  const missing = Object.values(report.signals || {}).filter((value) => value === 'missing').length;
+  $('#operations-health-summary').textContent = checkedAt
+    ? `${String(report.stage || 'unknown')} stage · checked ${new Date(checkedAt).toLocaleTimeString()} · ${missing} signal group${missing === 1 ? '' : 's'} missing`
+    : 'Waiting for authenticated server probes.';
+  $('#operations-health-counts').textContent = status === 'unknown'
+    ? 'NOT CHECKED'
+    : `${Number(counts.critical || 0)} CRITICAL · ${Number(counts.warning || 0)} WARNING`;
+  const alerts = Array.isArray(report.alerts) ? report.alerts : [];
+  const alertContainer = $('#operations-health-alerts');
+  const fragment = document.createDocumentFragment();
+  for (const alert of alerts.slice(0, 12)) {
+    const item = document.createElement('article');
+    item.className = 'operations-health-alert';
+    item.dataset.severity = String(alert.severity || 'warning');
+    const label = document.createElement('span');
+    label.textContent = `${String(alert.severity || '').toUpperCase()} · ${String(alert.group || '')} · ${String(alert.code || '')}`;
+    const message = document.createElement('strong');
+    message.textContent = String(alert.message || 'Operations signal requires review.');
+    const runbook = document.createElement('p');
+    runbook.textContent = String(alert.runbook || 'Resolve this signal before release.');
+    item.append(label, message, runbook);
+    fragment.append(item);
+  }
+  if (alerts.length > 12) {
+    const more = document.createElement('p');
+    more.className = 'muted';
+    more.textContent = `${alerts.length - 12} more alert${alerts.length - 12 === 1 ? '' : 's'} in the authenticated report.`;
+    fragment.append(more);
+  } else if (!alerts.length) {
+    const empty = document.createElement('p');
+    empty.className = 'muted';
+    empty.textContent = 'No operations alerts were reported.';
+    fragment.append(empty);
+  }
+  alertContainer.replaceChildren(fragment);
+  const external = report.externalAutomation || {};
+  $('#operations-health-external').textContent = external.note
+    || 'Scheduling, alert delivery, and on-call routing require external setup.';
+}
+
 $('#refresh-overview').addEventListener('click', async () => {
   $('#refresh-overview').disabled = true;
   try {
-    await refreshOverview();
+    await refreshOverview(true);
     showAlert('Live readiness checks completed.');
   } catch (error) {
     showAlert(error.message, true);
@@ -1375,6 +1582,15 @@ async function openControlSearchResult(result) {
     $('#expansion-search').value = characterId;
     await activateTab(result.tab);
     $('#expansion-fields').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else if (result.id.startsWith('nft-v2:')) {
+    const targets = {
+      'nft-v2:economy': '#nft-v2-economy-form',
+      'nft-v2:maps': '#nft-v2-map-form',
+      'nft-v2:phase-xp': '#nft-v2-xp-form',
+      'nft-v2:routes': '#nft-v2-map-routes'
+    };
+    await activateTab('nft-v2');
+    $(targets[result.id])?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } else {
     await activateTab(result.tab);
   }
@@ -1512,6 +1728,16 @@ function showAlert(message, error = false) {
   alert.hidden = false;
   alert.className = `alert${error ? ' error' : ''}`;
   alert.textContent = message;
+}
+function kvNode(label, value) {
+  const element = document.createElement('div');
+  element.className = 'kv';
+  const name = document.createElement('span');
+  name.textContent = label;
+  const content = document.createElement('span');
+  content.textContent = value;
+  element.append(name, content);
+  return element;
 }
 function row(label, value) { return `<div class="kv"><span>${escapeHtml(label)}</span><span>${escapeHtml(value)}</span></div>`; }
 function metric(label, value) { return `<div class="metric"><span class="muted">${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`; }

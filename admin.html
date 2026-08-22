@@ -73,6 +73,18 @@
           </div>
         </article>
         <div id="readiness-monitors" class="readiness-grid"></div>
+        <article id="operations-health" class="panel operations-health" data-status="unknown">
+          <div class="operations-health-heading">
+            <div>
+              <p class="eyebrow">RELEASE OPERATIONS</p>
+              <h2 id="operations-health-label">Current report unavailable</h2>
+              <p id="operations-health-summary" class="muted">Waiting for authenticated server probes.</p>
+            </div>
+            <span id="operations-health-counts" class="operations-health-counts">NOT CHECKED</span>
+          </div>
+          <div id="operations-health-alerts" class="operations-health-alerts"></div>
+          <small id="operations-health-external" class="muted">Scheduling, alert delivery, and on-call routing require external setup.</small>
+        </article>
         <div class="section-heading compact">
           <div><p class="eyebrow">LIVE COUNTS</p><h2>Production activity</h2></div>
         </div>
@@ -149,7 +161,7 @@
       <section id="tab-players" class="tab">
         <div class="section-heading">
           <div><p class="eyebrow">MODERATION</p><h2>Players and wallets</h2></div>
-          <form id="wallet-search"><input id="wallet-query" placeholder="Search miner name or wallet"><button>Search</button></form>
+          <form id="wallet-search"><input id="wallet-query" placeholder="Search name, wallet, Miner #1000, or run ID"><button>Search</button></form>
         </div>
         <div class="panel table-wrap"><table><thead><tr><th>Wallet</th><th>Status</th><th>Runs</th><th>Credits</th><th>Action</th></tr></thead><tbody id="wallet-rows"></tbody></table></div>
         <div id="wallet-detail" class="panel" hidden></div>
@@ -273,10 +285,11 @@
             <summary><strong>Repair and withdrawal limits</strong><span>Enter normal token amounts</span></summary>
             <div class="tuning-grid">
               <label class="tuning-field">Armor repair price (MATT)<input id="nft-v2-repair" type="number" min="0.000001" step="0.000001" required></label>
-              <label class="tuning-field">Minimum withdrawal (MATT Crystals)<input id="nft-v2-withdraw-min" type="number" min="0.000001" step="0.000001" required></label>
-              <label class="tuning-field">Wallet daily limit (MATT Crystals)<input id="nft-v2-withdraw-wallet" type="number" min="0.000001" step="0.000001" required></label>
-              <label class="tuning-field">Global daily limit (MATT Crystals)<input id="nft-v2-withdraw-global" type="number" min="0.000001" step="0.000001" required></label>
+              <label class="tuning-field">Minimum withdrawal (MATT Crystals)<input id="nft-v2-withdraw-min" type="number" min="1" max="1000000" step="0.000001" required></label>
+              <label class="tuning-field">Wallet daily limit (MATT Crystals)<input id="nft-v2-withdraw-wallet" type="number" min="1" max="1000000" step="0.000001" required></label>
+              <label class="tuning-field">Global daily limit (MATT Crystals)<input id="nft-v2-withdraw-global" type="number" min="1" max="100000000" step="0.000001" required></label>
             </div>
+            <p id="nft-v2-economy-validation" class="validation-message" role="status"></p>
           </details>
           <details class="panel structured-card" open>
             <summary><strong>Equipment chest prices</strong><span>MATT per chest</span></summary>
@@ -284,7 +297,7 @@
           </details>
           <article class="panel save-bar">
             <label>Required reason<input id="nft-v2-economy-reason" maxlength="240" required placeholder="Why are these on-chain values changing?"></label>
-            <button type="submit">Send economy transactions</button>
+            <button id="nft-v2-economy-submit" type="submit">Send economy transactions</button>
           </article>
         </form>
 
@@ -295,14 +308,15 @@
             <label>Current mine seed<input id="nft-v2-map-seed" readonly></label>
             <label>Map ID (automatic)<input id="nft-v2-map-id" readonly></label>
             <label>Content hash (automatic)<input id="nft-v2-content-hash" readonly></label>
+            <div id="nft-v2-map-current" class="current-config" role="status"></div>
             <div class="compact-grid">
               <label>Mineable units<input id="nft-v2-mineable" type="number" min="1" max="1000000" step="1" required></label>
-              <label>Run timeout (minutes)<input id="nft-v2-timeout" type="number" min="5" max="1440" step="1" required></label>
+              <label>Force-abandon delay (minutes)<input id="nft-v2-timeout" type="number" min="5" max="1440" step="1" required><small>This is the earliest time the owner can force-unlock a stranded Miner; it is not the gameplay clock.</small></label>
               <label>MATT Crystals per mined Crystal<input id="nft-v2-conversion" type="number" min="0.000001" max="100000" step="0.000001" required></label>
               <label>Maximum payout (MATT Crystals)<input id="nft-v2-max-payout" type="number" min="0.000001" max="100000" step="0.000001" required></label>
             </div>
             <label>Required reason<input id="nft-v2-map-reason" maxlength="240" required></label>
-            <button type="submit">Approve + route new runs</button>
+            <div class="action-row"><button type="submit">Approve + route new runs</button><button id="nft-v2-reset-map-economy" class="ghost" type="button">Restore active values</button></div>
           </form>
           <form id="nft-v2-retire-form" class="panel">
             <h2>Retire a map version</h2>

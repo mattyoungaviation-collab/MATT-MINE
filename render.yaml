@@ -19,6 +19,8 @@ services:
         value: 22.16.0
       - key: NODE_ENV
         value: production
+      - key: MATT_MINE_TRUST_PROXY
+        value: "render"
       - key: DATABASE_URL
         fromDatabase:
           name: matt-mine-db
@@ -45,8 +47,14 @@ services:
         sync: false
       - key: MATT_MINE_NFT_MINER_ADDRESS
         value: "0xBbaBE35B943E3Ba911B53C2b39447cF181fE565A"
+      - key: MATT_MINE_NFT_MINER_DEPLOYMENT_BLOCK
+        value: "59628599"
       - key: MATT_MINE_NFT_EQUIPMENT_ADDRESS
         value: "0x415cF1DeA47f3d4BAb830F78B82e12D6EeceD612"
+      - key: MATT_MINE_NFT_EQUIPMENT_DEPLOYMENT_BLOCK
+        value: "59628601"
+      - key: MATT_MINE_NFT_EQUIPMENT_INDEX_CONFIRMATIONS
+        value: "12"
       - key: MATT_MINE_NFT_LOADOUT_ADDRESS
         value: "0xb88C219C792cFa07749E0E5D939DbbbF1E62C7b5"
       - key: MATT_MINE_NFT_CHEST_ADDRESS

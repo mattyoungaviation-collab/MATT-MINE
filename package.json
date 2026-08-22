@@ -16,6 +16,8 @@
     "test:contracts": "npm --workspace contracts test",
     "test:postgres": "node --test tests/postgres-integration.test.mjs",
     "test:browser": "playwright test",
+    "test:release-ops": "node --test tests/nft-marketplace-validation.test.mjs tests/operations-monitor.test.mjs tests/legal-draft-static-deny.test.mjs tests/static-public-boundary.test.mjs",
+    "validate:nft-marketplace": "node scripts/validate-nft-marketplace.mjs",
     "contracts:compile": "npm --workspace contracts run compile",
     "contracts:validate:ronin": "npm --workspace contracts run validate:ronin",
     "contracts:check-deployment:ronin": "npm --workspace contracts run check-deployment:ronin",
