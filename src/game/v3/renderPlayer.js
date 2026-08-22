@@ -1,5 +1,11 @@
 import { TAU, roundRect } from './drawHelpers.js';
 import { imageIsReady } from './visualAssets.js';
+import {
+  NFT_MINER_ATLAS_COLUMNS,
+  NFT_MINER_ATLAS_ROWS,
+  nftMinerActionDuration,
+  nftMinerAnimationFrame
+} from './nftMinerAnimation.js';
 
 const MATT_DYNO_WALK_FRAMES = 4;
 const MATT_DYNO_FRAME_WIDTH = 120;
@@ -20,20 +26,30 @@ const ROSTER_WEAPON_ROWS = Object.freeze({
 });
 
 function drawNftMiner(game, ctx, player, movement, visualAngle) {
-  const image = game.visualAssets?.nftMiner;
-  if (!game.runContext?.nftRun || !imageIsReady(image)) return false;
+  if (!game.runContext?.nftRun) return false;
+
+  const atlas = game.visualAssets?.nftMinerAtlas;
+  if (!imageIsReady(atlas)) {
+    const fallback = game.visualAssets?.nftMiner;
+    if (!imageIsReady(fallback)) return false;
+    ctx.save();
+    ctx.scale(Math.cos(visualAngle) >= 0 ? 1 : -1, 1);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(fallback, -55, -114, 110, 132);
+    ctx.restore();
+    return true;
+  }
 
   const moving = movement > 22;
-  const attacking = player.swingTimer > 0;
   const facesRight = Math.cos(visualAngle) >= 0;
   const stepBob = moving
-    ? Math.abs(Math.sin(game.run.elapsed * (player.dashTimer > 0 ? 12 : 7) * Math.PI)) * 2.4
-    : Math.sin(game.run.elapsed * 3.2) * 0.9;
-  const actionDuration = player.weapon === 'dynamite' ? 0.24 : player.weapon === 'blaster' ? 0.14 : 0.16;
-  const actionProgress = attacking
-    ? Math.max(0, Math.min(1, 1 - player.swingTimer / actionDuration))
-    : 0;
-  const lunge = attacking ? Math.sin(actionProgress * Math.PI) * 5 : 0;
+    ? Math.abs(Math.sin(game.run.elapsed * (player.dashTimer > 0 ? 12 : 7) * Math.PI)) * 1.6
+    : Math.sin(game.run.elapsed * 3.2) * 0.65;
+  const animation = nftMinerAnimationFrame(player, movement, game.run.elapsed);
+  const frameWidth = atlas.naturalWidth / NFT_MINER_ATLAS_COLUMNS;
+  const frameHeight = atlas.naturalHeight / NFT_MINER_ATLAS_ROWS;
+  const lunge = player.swingTimer > 0 ? Math.sin(animation.progress * Math.PI) * 3 : 0;
+  const drawSize = 176;
 
   ctx.save();
   ctx.translate(Math.cos(visualAngle) * lunge, -stepBob + Math.sin(visualAngle) * lunge);
@@ -44,7 +60,17 @@ function drawNftMiner(game, ctx, player, movement, visualAngle) {
     : player.dashTimer > 0
       ? 'brightness(1.12)'
       : 'none';
-  ctx.drawImage(image, -55, -114, 110, 132);
+  ctx.drawImage(
+    atlas,
+    animation.column * frameWidth,
+    animation.row * frameHeight,
+    frameWidth,
+    frameHeight,
+    -drawSize / 2,
+    -132,
+    drawSize,
+    drawSize
+  );
   ctx.restore();
   return true;
 }
@@ -77,10 +103,7 @@ function drawRosterCharacter(game, ctx, player, movement, visualAngle) {
 
   const attacking = player.swingTimer > 0;
   const moving = movement > 22;
-  const actionDuration =
-    player.weapon === 'dynamite' ? 0.24 :
-      player.weapon === 'blaster' ? 0.14 :
-        0.16;
+  const actionDuration = nftMinerActionDuration(player.weapon);
   const actionProgress = attacking
     ? Math.max(0, Math.min(0.999, 1 - player.swingTimer / actionDuration))
     : 0;
@@ -174,7 +197,11 @@ export const renderPlayerMethods = {
       : Math.atan2(player.vy, player.vx);
     if (drawNftMiner(this, ctx, player, movement, visualAngle)) {
       ctx.restore();
-      if (player.weapon === 'pickaxe' && player.swingTimer > 0) {
+      if (
+        player.weapon === 'pickaxe' &&
+        player.swingTimer > 0 &&
+        nftMinerAnimationFrame(player, movement, this.run.elapsed).column >= 3
+      ) {
         ctx.save();
         ctx.strokeStyle = 'rgba(245,209,66,0.5)';
         ctx.lineWidth = 10;
@@ -240,7 +267,7 @@ export const renderPlayerMethods = {
         ? Math.abs(Math.sin(this.run.elapsed * (player.dashTimer > 0 ? 14 : 8) * Math.PI)) * 2.2
         : Math.sin(this.run.elapsed * 3.4) * 1.1;
       const facesRight = Math.cos(visualAngle) >= 0;
-      const actionDuration = player.weapon === 'dynamite' ? 0.24 : player.weapon === 'blaster' ? 0.14 : 0.16;
+      const actionDuration = nftMinerActionDuration(player.weapon);
       const actionProgress = attacking
         ? Math.max(0, Math.min(1, 1 - player.swingTimer / actionDuration))
         : 0;

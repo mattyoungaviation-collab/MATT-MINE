@@ -2,6 +2,7 @@ import { CONFIG, WEAPONS } from '../config.js';
 import { pointInLayout } from '../layout.js';
 import { angleTo, clamp, distance, random, randomRange } from '../utils.js';
 import { frontArmorMultiplier, bossPhaseForHealth, normalizeAngle } from '../combat.js';
+import { nftMinerActionDuration } from './nftMinerAnimation.js';
 
 export const weaponsMethods = {
   switchWeapon(id) {
@@ -41,7 +42,7 @@ export const weaponsMethods = {
   },
   swingPickaxe() {
     this.player.attackTimer = this.player.attackCooldown;
-    this.player.swingTimer = 0.16;
+    this.player.swingTimer = nftMinerActionDuration('pickaxe');
     this.audio.play('swing');
     const candidates = [...this.enemies, ...this.ores]
       .map((target) => ({
@@ -75,7 +76,7 @@ export const weaponsMethods = {
       return;
     }
     this.player.attackTimer = 0.62;
-    this.player.swingTimer = 0.24;
+    this.player.swingTimer = nftMinerActionDuration('dynamite');
     this.player.dynamiteAmmo -= 1;
     const speed = 430;
     const tuning = this.runContext?.tuning || {};
@@ -108,7 +109,7 @@ export const weaponsMethods = {
       return;
     }
     this.player.attackTimer = Math.max(0.13, this.player.attackCooldown * 0.48);
-    this.player.swingTimer = Math.max(this.player.swingTimer, 0.14);
+    this.player.swingTimer = nftMinerActionDuration('blaster');
     this.player.blasterEnergy -= energyCost;
     const speed = 760;
     const count = clamp(this.player.blasterVolley || 1, 1, this.runContext?.tuning?.blasterBeams || 2);
