@@ -477,7 +477,7 @@ export class ViemNftChainReader {
       'Equipment deployment block'
     );
     this.equipmentIndexChunkSize = positiveInteger(
-      options.equipmentIndexChunkSize || 20_000,
+      options.equipmentIndexChunkSize || 1_000,
       'Equipment index chunk size'
     );
     this.equipmentIndexRefreshMs = boundedNonnegativeInteger(

@@ -55,6 +55,10 @@ services:
         value: "59628601"
       - key: MATT_MINE_NFT_EQUIPMENT_INDEX_CONFIRMATIONS
         value: "12"
+      # Ronin RPC providers reject the 20,000-block eth_getLogs ranges that
+      # were previously used by the ownership index.
+      - key: MATT_MINE_NFT_EQUIPMENT_INDEX_CHUNK_SIZE
+        value: "1000"
       - key: MATT_MINE_NFT_LOADOUT_ADDRESS
         value: "0xb88C219C792cFa07749E0E5D939DbbbF1E62C7b5"
       - key: MATT_MINE_NFT_CHEST_ADDRESS
