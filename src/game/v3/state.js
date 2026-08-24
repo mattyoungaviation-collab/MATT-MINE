@@ -1,7 +1,7 @@
 import { CONFIG, ORE_TYPES } from '../config.js';
 import { createMineLayout, randomPointInRoom, roomAt } from '../layout.js';
 import { clamp, random, randomRange, weightedChoice } from '../utils.js';
-import { bossPhaseForHealth, roomRequiresLock } from '../combat.js';
+import { bossPhaseForHealth, normalizeAngle, roomRequiresLock } from '../combat.js';
 import { nftGameplayTraits, nftHealAmount } from '../nftTraits.js';
 import {
   MAP_OBJECT_KINDS,
@@ -78,6 +78,11 @@ export const stateMethods = {
       xp: 0,
       nextXp: 45,
       angle: 0,
+      visualAngle: 0,
+      visualFacingSign: 1,
+      actionAngle: 0,
+      dashAngle: 0,
+      walkCycle: 0,
       hitFlash: 0,
       invulnerable: 0,
       swingTimer: 0,
@@ -370,6 +375,7 @@ export const stateMethods = {
 
     this.updatePlayerMovement(dt);
     this.updateAim();
+    this.updatePlayerPresentation(dt);
     if (this.input.attacking() && this.player.attackTimer <= 0) this.attack();
     this.updateDrone(dt);
     this.updateProjectiles(dt);
@@ -413,6 +419,7 @@ export const stateMethods = {
       const length = Math.hypot(dashX, dashY) || 1;
       dashX /= length;
       dashY /= length;
+      this.player.dashAngle = Math.atan2(dashY, dashX);
       this.player.vx = dashX * this.player.dashSpeed;
       this.player.vy = dashY * this.player.dashSpeed;
       const dashDuration = this.runContext?.tuning?.dashDuration ?? CONFIG.dashDuration;
@@ -474,6 +481,27 @@ export const stateMethods = {
         maxLife: 0.42
       });
     }
+  },
+  updatePlayerPresentation(dt) {
+    const movement = Math.hypot(this.player.vx, this.player.vy);
+    if (movement > 8 && this.player.dashTimer <= 0) {
+      this.player.walkCycle = (this.player.walkCycle + movement * dt / 92) % 1;
+    }
+
+    const targetAngle = this.player.swingTimer > 0
+      ? this.player.actionAngle
+      : this.player.dashTimer > 0
+        ? this.player.dashAngle
+        : movement > 12
+          ? Math.atan2(this.player.vy, this.player.vx)
+          : this.player.angle;
+    const difference = normalizeAngle(targetAngle - this.player.visualAngle);
+    const turnRate = this.player.dashTimer > 0 ? 18 : this.player.swingTimer > 0 ? 24 : 11;
+    this.player.visualAngle = normalizeAngle(
+      this.player.visualAngle + difference * Math.min(1, turnRate * dt)
+    );
+    const horizontal = Math.cos(this.player.visualAngle);
+    if (Math.abs(horizontal) > 0.3) this.player.visualFacingSign = horizontal < 0 ? -1 : 1;
   },
   beginBossTelemetry(enemy, phase) {
     const telemetry = this.run?.bossTelemetry;

@@ -41,6 +41,7 @@ export const weaponsMethods = {
     this.swingPickaxe();
   },
   swingPickaxe() {
+    this.player.actionAngle = this.player.angle;
     this.player.attackTimer = this.player.attackCooldown;
     this.player.swingTimer = nftMinerActionDuration('pickaxe');
     this.audio.play('swing');
@@ -75,6 +76,7 @@ export const weaponsMethods = {
       this.player.weapon = 'pickaxe';
       return;
     }
+    this.player.actionAngle = this.player.angle;
     this.player.attackTimer = 0.62;
     this.player.swingTimer = nftMinerActionDuration('dynamite');
     this.player.dynamiteAmmo -= 1;
@@ -108,6 +110,7 @@ export const weaponsMethods = {
       }
       return;
     }
+    this.player.actionAngle = this.player.angle;
     this.player.attackTimer = Math.max(0.13, this.player.attackCooldown * 0.48);
     this.player.swingTimer = nftMinerActionDuration('blaster');
     this.player.blasterEnergy -= energyCost;
