@@ -4,7 +4,9 @@ import {
   NFT_MINER_ATLAS_COLUMNS,
   NFT_MINER_ATLAS_ROWS,
   nftMinerActionDuration,
-  nftMinerAnimationFrame
+  nftMinerAnimationFrame,
+  nftMinerMotionTransform,
+  nftMinerVisualDirection
 } from './nftMinerAnimation.js';
 
 const MATT_DYNO_WALK_FRAMES = 4;
@@ -25,7 +27,7 @@ const ROSTER_WEAPON_ROWS = Object.freeze({
   dynamite: 3
 });
 
-function drawNftMiner(game, ctx, player, movement, visualAngle) {
+function drawNftMiner(game, ctx, player, movement) {
   if (!game.runContext?.nftRun) return false;
 
   const atlas = game.visualAssets?.nftMinerAtlas;
@@ -40,20 +42,16 @@ function drawNftMiner(game, ctx, player, movement, visualAngle) {
     return true;
   }
 
-  const moving = movement > 22;
-  const facesRight = Math.cos(visualAngle) >= 0;
-  const stepBob = moving
-    ? Math.abs(Math.sin(game.run.elapsed * (player.dashTimer > 0 ? 12 : 7) * Math.PI)) * 1.6
-    : Math.sin(game.run.elapsed * 3.2) * 0.65;
   const animation = nftMinerAnimationFrame(player, movement, game.run.elapsed);
+  const motion = nftMinerMotionTransform(player, movement, game.run.elapsed, animation.progress);
   const frameWidth = atlas.naturalWidth / NFT_MINER_ATLAS_COLUMNS;
   const frameHeight = atlas.naturalHeight / NFT_MINER_ATLAS_ROWS;
-  const lunge = player.swingTimer > 0 ? Math.sin(animation.progress * Math.PI) * 3 : 0;
   const drawSize = 176;
 
   ctx.save();
-  ctx.translate(Math.cos(visualAngle) * lunge, -stepBob + Math.sin(visualAngle) * lunge);
-  ctx.scale(facesRight ? 1 : -1, 1);
+  ctx.translate(motion.offsetX, motion.offsetY);
+  ctx.rotate(motion.rotation);
+  ctx.scale(motion.facingSign * motion.scaleX, motion.scaleY);
   ctx.imageSmoothingEnabled = false;
   ctx.filter = player.hitFlash > 0
     ? 'sepia(1) saturate(6) hue-rotate(310deg) brightness(1.15)'
@@ -96,7 +94,7 @@ export const PLAYABLE_CHARACTER_SPRITES = Object.freeze({
   })
 });
 
-function drawRosterCharacter(game, ctx, player, movement, visualAngle) {
+function drawRosterCharacter(game, ctx, player, movement) {
   const sprite = PLAYABLE_CHARACTER_SPRITES[game.runContext?.characterId];
   const image = sprite ? game.visualAssets?.[sprite.asset] : null;
   if (!sprite || !imageIsReady(image)) return false;
@@ -131,15 +129,12 @@ function drawRosterCharacter(game, ctx, player, movement, visualAngle) {
     image.naturalHeight - ROSTER_SOURCE_HEIGHT,
     ROSTER_SOURCE_ROW_Y[row]
   );
-  const facesRight = Math.cos(visualAngle) >= 0;
-  const stepBob = moving
-    ? Math.abs(Math.sin(game.run.elapsed * (player.dashTimer > 0 ? 12 : 7) * Math.PI)) * 2
-    : Math.sin(game.run.elapsed * 3.2) * 0.8;
-  const lunge = attacking ? Math.sin(actionProgress * Math.PI) * 4 : 0;
+  const motion = nftMinerMotionTransform(player, movement, game.run.elapsed, actionProgress);
 
   ctx.save();
-  ctx.translate(Math.cos(visualAngle) * lunge, -stepBob + Math.sin(visualAngle) * lunge);
-  ctx.scale(facesRight ? 1 : -1, 1);
+  ctx.translate(motion.offsetX, motion.offsetY);
+  ctx.rotate(motion.rotation);
+  ctx.scale(motion.facingSign * motion.scaleX, motion.scaleY);
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
   ctx.filter = player.hitFlash > 0
@@ -168,7 +163,8 @@ export const renderPlayerMethods = {
     const cosmetics = this.cosmetics || {};
     const movement = Math.hypot(player.vx, player.vy);
     const stride = player.dashTimer > 0 ? 0 : Math.sin(this.run.elapsed * 13) * Math.min(5, movement / 60);
-    const facing = Math.cos(player.angle) >= 0 ? 1 : -1;
+    const facing = nftMinerVisualDirection(player, movement).facingSign;
+    const baseMotion = nftMinerMotionTransform(player, movement, this.run.elapsed);
     ctx.save();
     ctx.translate(player.x, player.y);
     ctx.globalAlpha = player.invulnerable > 0 && Math.floor(player.invulnerable * 18) % 2 ? 0.45 : 1;
@@ -186,16 +182,18 @@ export const renderPlayerMethods = {
       ctx.restore();
     }
 
+    ctx.save();
+    ctx.translate(3, 23);
+    ctx.rotate(baseMotion.shadowRotation);
     ctx.fillStyle = 'rgba(0,0,0,0.26)';
-    ctx.beginPath(); ctx.ellipse(3, 23, 29, 11, 0, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0, 0, 29 * baseMotion.shadowStretch, 11, 0, 0, TAU); ctx.fill();
     ctx.fillStyle = 'rgba(0,0,0,0.46)';
-    ctx.beginPath(); ctx.ellipse(3, 23, 21, 7, 0, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0, 0, 21 * baseMotion.shadowStretch, 7, 0, 0, TAU); ctx.fill();
+    ctx.restore();
 
     const moving = movement > 22;
-    const visualAngle = player.swingTimer > 0 || !moving
-      ? player.angle
-      : Math.atan2(player.vy, player.vx);
-    if (drawNftMiner(this, ctx, player, movement, visualAngle)) {
+    const visualAngle = nftMinerVisualDirection(player, movement).angle;
+    if (drawNftMiner(this, ctx, player, movement)) {
       ctx.restore();
       if (
         player.weapon === 'pickaxe' &&
@@ -206,20 +204,22 @@ export const renderPlayerMethods = {
         ctx.strokeStyle = 'rgba(245,209,66,0.5)';
         ctx.lineWidth = 10;
         ctx.beginPath();
-        ctx.arc(player.x, player.y, player.attackRange * 0.84, player.angle - 0.72, player.angle + 0.72);
+        const strikeAngle = Number.isFinite(player.actionAngle) ? player.actionAngle : player.angle;
+        ctx.arc(player.x, player.y, player.attackRange * 0.84, strikeAngle - 0.72, strikeAngle + 0.72);
         ctx.stroke();
         ctx.restore();
       }
       return;
     }
-    if (drawRosterCharacter(this, ctx, player, movement, visualAngle)) {
+    if (drawRosterCharacter(this, ctx, player, movement)) {
       ctx.restore();
       if (player.weapon === 'pickaxe' && player.swingTimer > 0) {
         ctx.save();
         ctx.strokeStyle = 'rgba(245,209,66,0.5)';
         ctx.lineWidth = 10;
         ctx.beginPath();
-        ctx.arc(player.x, player.y, player.attackRange * 0.84, player.angle - 0.72, player.angle + 0.72);
+        const strikeAngle = Number.isFinite(player.actionAngle) ? player.actionAngle : player.angle;
+        ctx.arc(player.x, player.y, player.attackRange * 0.84, strikeAngle - 0.72, strikeAngle + 0.72);
         ctx.stroke();
         ctx.restore();
       }
@@ -262,27 +262,20 @@ export const renderPlayerMethods = {
       const drawY = usesVerticalSheet
         ? MATT_DYNO_VERTICAL_DRAW_Y[frameRow]
         : -127;
-      const breathing = moving ? 1 : 1 + Math.sin(this.run.elapsed * 3.4) * 0.018;
-      const stepBob = moving
-        ? Math.abs(Math.sin(this.run.elapsed * (player.dashTimer > 0 ? 14 : 8) * Math.PI)) * 2.2
-        : Math.sin(this.run.elapsed * 3.4) * 1.1;
-      const facesRight = Math.cos(visualAngle) >= 0;
       const actionDuration = nftMinerActionDuration(player.weapon);
       const actionProgress = attacking
         ? Math.max(0, Math.min(1, 1 - player.swingTimer / actionDuration))
         : 0;
-      const actionLunge = attacking ? Math.sin(actionProgress * Math.PI) * 5 : 0;
+      const motion = nftMinerMotionTransform(player, movement, this.run.elapsed, actionProgress);
       const actionTilt = attacking && !usesVerticalSheet
-        ? Math.sin(actionProgress * Math.PI) * (facesRight ? -0.08 : 0.08)
+        ? Math.sin(actionProgress * Math.PI) * (motion.facingSign > 0 ? -0.08 : 0.08)
         : 0;
 
       ctx.save();
-      ctx.translate(
-        Math.cos(visualAngle) * actionLunge,
-        -stepBob + Math.sin(visualAngle) * actionLunge
-      );
-      ctx.rotate(actionTilt);
-      ctx.scale(!usesVerticalSheet && facesRight ? -breathing : breathing, breathing);
+      ctx.translate(motion.offsetX, motion.offsetY);
+      ctx.rotate(motion.rotation + actionTilt);
+      const sheetFacing = !usesVerticalSheet ? -motion.facingSign : 1;
+      ctx.scale(sheetFacing * motion.scaleX, motion.scaleY);
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'medium';
       // Canvas filters are especially expensive on mobile GPUs. The new
@@ -316,7 +309,8 @@ export const renderPlayerMethods = {
         ctx.strokeStyle = 'rgba(245,209,66,0.5)';
         ctx.lineWidth = 10;
         ctx.beginPath();
-        ctx.arc(player.x, player.y, player.attackRange * 0.84, player.angle - 0.72, player.angle + 0.72);
+        const strikeAngle = Number.isFinite(player.actionAngle) ? player.actionAngle : player.angle;
+        ctx.arc(player.x, player.y, player.attackRange * 0.84, strikeAngle - 0.72, strikeAngle + 0.72);
         ctx.stroke();
         ctx.restore();
       }
@@ -430,7 +424,8 @@ export const renderPlayerMethods = {
       ctx.strokeStyle = 'rgba(245,209,66,0.45)';
       ctx.lineWidth = 10;
       ctx.beginPath();
-      ctx.arc(player.x, player.y, player.attackRange * 0.84, player.angle - 0.72, player.angle + 0.72);
+      const strikeAngle = Number.isFinite(player.actionAngle) ? player.actionAngle : player.angle;
+      ctx.arc(player.x, player.y, player.attackRange * 0.84, strikeAngle - 0.72, strikeAngle + 0.72);
       ctx.stroke();
       ctx.restore();
     }

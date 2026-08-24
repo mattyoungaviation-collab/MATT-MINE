@@ -240,6 +240,7 @@ test('MATT Dyno swaps weapon sheets and uses front and back walking rows', async
 
   game.player.weapon = 'blaster';
   game.player.angle = Math.PI / 2;
+  game.player.actionAngle = game.player.angle;
   game.player.swingTimer = 0.1;
   game.drawPlayer(context);
   assert.equal(draws.at(-1)[0].id, 'blaster-vertical');
@@ -255,6 +256,7 @@ test('MATT Dyno swaps weapon sheets and uses front and back walking rows', async
   game.player.angle = 0;
   game.player.vx = 0;
   game.player.vy = -80;
+  game.player.visualAngle = -Math.PI / 2;
   game.drawPlayer(context);
   assert.equal(draws.at(-1)[0].id, 'dynamite-vertical');
   assert.equal(draws.at(-1)[2], 241);
@@ -266,6 +268,7 @@ test('MATT Dyno swaps weapon sheets and uses front and back walking rows', async
   game.player.vx = 80;
   game.player.vy = 0;
   game.player.angle = 0;
+  game.player.visualAngle = 0;
   game.drawPlayer(context);
   assert.equal(draws.at(-1)[0].id, 'pickaxe-side');
   assert.equal(draws.at(-1)[6], -127);
