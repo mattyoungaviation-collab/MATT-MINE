@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
-import { access } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import test from 'node:test';
 import {
   NFT_MINER_ACTION_DURATION,
   nftMinerAnimationFrame,
   nftMinerAtlasAssetForLevel,
   nftMinerAtlasSourceForLevel,
+  nftMinerAtlasSourcesForLevel,
   nftMinerMotionTransform,
   nftMinerVisualDirection
 } from '../src/game/v3/nftMinerAnimation.js';
@@ -27,13 +28,44 @@ test('Miner levels select the correct immutable evolution milestone', () => {
   assert.equal(nftMinerAtlasAssetForLevel(9), 'nftRookieAtlas');
   assert.equal(nftMinerAtlasAssetForLevel(74), 'nftVaultRaiderAtlas');
   assert.equal(nftMinerAtlasAssetForLevel(999), 'nftMineLegendAtlas');
-  assert.equal(nftMinerAtlasSourceForLevel(25), '/assets/game/nft-evolution/crystal-hunter-atlas-v1.png');
+  assert.equal(
+    nftMinerAtlasSourceForLevel(25),
+    '/assets/game/nft-directional-v2/atlases/crystal-hunter/east.webp'
+  );
+  assert.deepEqual(
+    nftMinerAtlasSourcesForLevel(100),
+    {
+      east: '/assets/game/nft-directional-v2/atlases/mine-legend/east.webp',
+      west: '/assets/game/nft-directional-v2/atlases/mine-legend/east.webp',
+      north: '/assets/game/nft-directional-v2/atlases/mine-legend/north.webp',
+      south: '/assets/game/nft-directional-v2/atlases/mine-legend/south.webp'
+    }
+  );
 });
 
 test('every evolution atlas is present in the production asset tree', async () => {
   await Promise.all(EVOLUTION_ASSETS.map(([, , file]) => (
     access(new URL(`../assets/game/nft-evolution/${file}`, import.meta.url))
   )));
+});
+
+test('directional sprite library contains 504 validated frame images and 21 runtime atlases', async () => {
+  const manifestUrl = new URL('../assets/game/nft-directional-v2/sprite-library.json', import.meta.url);
+  const manifest = JSON.parse(await readFile(manifestUrl, 'utf8'));
+  assert.equal(manifest.frameCount, 504);
+  assert.deepEqual(manifest.runtimeDirections, ['east', 'west', 'north', 'south']);
+  assert.equal(manifest.westMirrors, 'east');
+
+  const assets = [];
+  for (const tier of Object.values(manifest.tiers)) {
+    for (const direction of Object.values(tier.directions)) {
+      assets.push(direction.atlas, ...direction.frames.map((frame) => frame.path));
+      assert.equal(direction.frames.length, 24);
+      assert.equal(direction.frames.every((frame) => frame.alphaCoverage >= 0.01), true);
+    }
+  }
+  assert.equal(assets.length, 525);
+  await Promise.all(assets.map((asset) => access(new URL(`..${asset}`, import.meta.url))));
 });
 
 test('NFT animation maps movement, damage, knockout, and weapons to atlas frames', () => {

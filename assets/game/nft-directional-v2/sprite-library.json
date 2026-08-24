@@ -1,0 +1,4716 @@
+{
+  "version": 2,
+  "atlas": {
+    "columns": 6,
+    "rows": 4,
+    "width": 1536,
+    "height": 1024
+  },
+  "runtimeDirections": [
+    "east",
+    "west",
+    "north",
+    "south"
+  ],
+  "storedDirections": [
+    "east",
+    "north",
+    "south"
+  ],
+  "westMirrors": "east",
+  "tierCount": 7,
+  "framesPerStoredDirection": 24,
+  "frameCount": 504,
+  "tiers": {
+    "rookie": {
+      "directions": {
+        "east": {
+          "atlas": "/assets/game/nft-directional-v2/atlases/rookie/east.webp",
+          "atlasSha256": "69546b71e7c304c9861db836706c711b32b9dac4addc7f6698b719fceeee79e2",
+          "frames": [
+            {
+              "index": 0,
+              "row": 0,
+              "column": 0,
+              "action": "idle",
+              "name": "idle-0",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/east/idle/idle-0.webp",
+              "alphaCoverage": 0.220093
+            },
+            {
+              "index": 1,
+              "row": 0,
+              "column": 1,
+              "action": "walk",
+              "name": "walk-1",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/east/walk/walk-1.webp",
+              "alphaCoverage": 0.213211
+            },
+            {
+              "index": 2,
+              "row": 0,
+              "column": 2,
+              "action": "walk",
+              "name": "walk-2",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/east/walk/walk-2.webp",
+              "alphaCoverage": 0.213867
+            },
+            {
+              "index": 3,
+              "row": 0,
+              "column": 3,
+              "action": "walk",
+              "name": "walk-3",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/east/walk/walk-3.webp",
+              "alphaCoverage": 0.206726
+            },
+            {
+              "index": 4,
+              "row": 0,
+              "column": 4,
+              "action": "walk",
+              "name": "walk-4",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/east/walk/walk-4.webp",
+              "alphaCoverage": 0.213211
+            },
+            {
+              "index": 5,
+              "row": 0,
+              "column": 5,
+              "action": "knockout",
+              "name": "knockout-0",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/east/knockout/knockout-0.webp",
+              "alphaCoverage": 0.144119
+            },
+            {
+              "index": 6,
+              "row": 1,
+              "column": 0,
+              "action": "pickaxe",
+              "name": "pickaxe-0",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/east/pickaxe/pickaxe-0.webp",
+              "alphaCoverage": 0.23407
+            },
+            {
+              "index": 7,
+              "row": 1,
+              "column": 1,
+              "action": "pickaxe",
+              "name": "pickaxe-1",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/east/pickaxe/pickaxe-1.webp",
+              "alphaCoverage": 0.225769
+            },
+            {
+              "index": 8,
+              "row": 1,
+              "column": 2,
+              "action": "pickaxe",
+              "name": "pickaxe-2",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/east/pickaxe/pickaxe-2.webp",
+              "alphaCoverage": 0.222824
+            },
+            {
+              "index": 9,
+              "row": 1,
+              "column": 3,
+              "action": "pickaxe",
+              "name": "pickaxe-3",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/east/pickaxe/pickaxe-3.webp",
+              "alphaCoverage": 0.244644
+            },
+            {
+              "index": 10,
+              "row": 1,
+              "column": 4,
+              "action": "pickaxe",
+              "name": "pickaxe-4",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/east/pickaxe/pickaxe-4.webp",
+              "alphaCoverage": 0.265076
+            },
+            {
+              "index": 11,
+              "row": 1,
+              "column": 5,
+              "action": "pickaxe",
+              "name": "pickaxe-5",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/east/pickaxe/pickaxe-5.webp",
+              "alphaCoverage": 0.224274
+            },
+            {
+              "index": 12,
+              "row": 2,
+              "column": 0,
+              "action": "blaster",
+              "name": "blaster-0",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/east/blaster/blaster-0.webp",
+              "alphaCoverage": 0.224823
+            },
+            {
+              "index": 13,
+              "row": 2,
+              "column": 1,
+              "action": "blaster",
+              "name": "blaster-1",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/east/blaster/blaster-1.webp",
+              "alphaCoverage": 0.226868
+            },
+            {
+              "index": 14,
+              "row": 2,
+              "column": 2,
+              "action": "blaster",
+              "name": "blaster-2",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/east/blaster/blaster-2.webp",
+              "alphaCoverage": 0.226837
+            },
+            {
+              "index": 15,
+              "row": 2,
+              "column": 3,
+              "action": "blaster",
+              "name": "blaster-3",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/east/blaster/blaster-3.webp",
+              "alphaCoverage": 0.245224
+            },
+            {
+              "index": 16,
+              "row": 2,
+              "column": 4,
+              "action": "blaster",
+              "name": "blaster-4",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/east/blaster/blaster-4.webp",
+              "alphaCoverage": 0.225479
+            },
+            {
+              "index": 17,
+              "row": 2,
+              "column": 5,
+              "action": "blaster",
+              "name": "blaster-5",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/east/blaster/blaster-5.webp",
+              "alphaCoverage": 0.212891
+            },
+            {
+              "index": 18,
+              "row": 3,
+              "column": 0,
+              "action": "dynamite",
+              "name": "dynamite-0",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/east/dynamite/dynamite-0.webp",
+              "alphaCoverage": 0.218079
+            },
+            {
+              "index": 19,
+              "row": 3,
+              "column": 1,
+              "action": "dynamite",
+              "name": "dynamite-1",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/east/dynamite/dynamite-1.webp",
+              "alphaCoverage": 0.227325
+            },
+            {
+              "index": 20,
+              "row": 3,
+              "column": 2,
+              "action": "dynamite",
+              "name": "dynamite-2",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/east/dynamite/dynamite-2.webp",
+              "alphaCoverage": 0.235474
+            },
+            {
+              "index": 21,
+              "row": 3,
+              "column": 3,
+              "action": "dynamite",
+              "name": "dynamite-3",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/east/dynamite/dynamite-3.webp",
+              "alphaCoverage": 0.214661
+            },
+            {
+              "index": 22,
+              "row": 3,
+              "column": 4,
+              "action": "dynamite",
+              "name": "dynamite-4",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/east/dynamite/dynamite-4.webp",
+              "alphaCoverage": 0.219559
+            },
+            {
+              "index": 23,
+              "row": 3,
+              "column": 5,
+              "action": "dynamite",
+              "name": "dynamite-5",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/east/dynamite/dynamite-5.webp",
+              "alphaCoverage": 0.199905
+            }
+          ]
+        },
+        "north": {
+          "atlas": "/assets/game/nft-directional-v2/atlases/rookie/north.webp",
+          "atlasSha256": "3288ac87f80a8339b14ae42027883a74f351e01753cc2d3087d3d29fe31c3048",
+          "frames": [
+            {
+              "index": 0,
+              "row": 0,
+              "column": 0,
+              "action": "idle",
+              "name": "idle-0",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/north/idle/idle-0.webp",
+              "alphaCoverage": 0.194778
+            },
+            {
+              "index": 1,
+              "row": 0,
+              "column": 1,
+              "action": "walk",
+              "name": "walk-1",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/north/walk/walk-1.webp",
+              "alphaCoverage": 0.17514
+            },
+            {
+              "index": 2,
+              "row": 0,
+              "column": 2,
+              "action": "walk",
+              "name": "walk-2",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/north/walk/walk-2.webp",
+              "alphaCoverage": 0.179688
+            },
+            {
+              "index": 3,
+              "row": 0,
+              "column": 3,
+              "action": "walk",
+              "name": "walk-3",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/north/walk/walk-3.webp",
+              "alphaCoverage": 0.178665
+            },
+            {
+              "index": 4,
+              "row": 0,
+              "column": 4,
+              "action": "walk",
+              "name": "walk-4",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/north/walk/walk-4.webp",
+              "alphaCoverage": 0.175125
+            },
+            {
+              "index": 5,
+              "row": 0,
+              "column": 5,
+              "action": "knockout",
+              "name": "knockout-0",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/north/knockout/knockout-0.webp",
+              "alphaCoverage": 0.112793
+            },
+            {
+              "index": 6,
+              "row": 1,
+              "column": 0,
+              "action": "pickaxe",
+              "name": "pickaxe-0",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/north/pickaxe/pickaxe-0.webp",
+              "alphaCoverage": 0.203491
+            },
+            {
+              "index": 7,
+              "row": 1,
+              "column": 1,
+              "action": "pickaxe",
+              "name": "pickaxe-1",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/north/pickaxe/pickaxe-1.webp",
+              "alphaCoverage": 0.182266
+            },
+            {
+              "index": 8,
+              "row": 1,
+              "column": 2,
+              "action": "pickaxe",
+              "name": "pickaxe-2",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/north/pickaxe/pickaxe-2.webp",
+              "alphaCoverage": 0.194061
+            },
+            {
+              "index": 9,
+              "row": 1,
+              "column": 3,
+              "action": "pickaxe",
+              "name": "pickaxe-3",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/north/pickaxe/pickaxe-3.webp",
+              "alphaCoverage": 0.218521
+            },
+            {
+              "index": 10,
+              "row": 1,
+              "column": 4,
+              "action": "pickaxe",
+              "name": "pickaxe-4",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/north/pickaxe/pickaxe-4.webp",
+              "alphaCoverage": 0.231583
+            },
+            {
+              "index": 11,
+              "row": 1,
+              "column": 5,
+              "action": "pickaxe",
+              "name": "pickaxe-5",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/north/pickaxe/pickaxe-5.webp",
+              "alphaCoverage": 0.206833
+            },
+            {
+              "index": 12,
+              "row": 2,
+              "column": 0,
+              "action": "blaster",
+              "name": "blaster-0",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/north/blaster/blaster-0.webp",
+              "alphaCoverage": 0.182632
+            },
+            {
+              "index": 13,
+              "row": 2,
+              "column": 1,
+              "action": "blaster",
+              "name": "blaster-1",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/north/blaster/blaster-1.webp",
+              "alphaCoverage": 0.196732
+            },
+            {
+              "index": 14,
+              "row": 2,
+              "column": 2,
+              "action": "blaster",
+              "name": "blaster-2",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/north/blaster/blaster-2.webp",
+              "alphaCoverage": 0.195419
+            },
+            {
+              "index": 15,
+              "row": 2,
+              "column": 3,
+              "action": "blaster",
+              "name": "blaster-3",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/north/blaster/blaster-3.webp",
+              "alphaCoverage": 0.213043
+            },
+            {
+              "index": 16,
+              "row": 2,
+              "column": 4,
+              "action": "blaster",
+              "name": "blaster-4",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/north/blaster/blaster-4.webp",
+              "alphaCoverage": 0.187607
+            },
+            {
+              "index": 17,
+              "row": 2,
+              "column": 5,
+              "action": "blaster",
+              "name": "blaster-5",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/north/blaster/blaster-5.webp",
+              "alphaCoverage": 0.184036
+            },
+            {
+              "index": 18,
+              "row": 3,
+              "column": 0,
+              "action": "dynamite",
+              "name": "dynamite-0",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/north/dynamite/dynamite-0.webp",
+              "alphaCoverage": 0.193741
+            },
+            {
+              "index": 19,
+              "row": 3,
+              "column": 1,
+              "action": "dynamite",
+              "name": "dynamite-1",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/north/dynamite/dynamite-1.webp",
+              "alphaCoverage": 0.192123
+            },
+            {
+              "index": 20,
+              "row": 3,
+              "column": 2,
+              "action": "dynamite",
+              "name": "dynamite-2",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/north/dynamite/dynamite-2.webp",
+              "alphaCoverage": 0.196396
+            },
+            {
+              "index": 21,
+              "row": 3,
+              "column": 3,
+              "action": "dynamite",
+              "name": "dynamite-3",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/north/dynamite/dynamite-3.webp",
+              "alphaCoverage": 0.186707
+            },
+            {
+              "index": 22,
+              "row": 3,
+              "column": 4,
+              "action": "dynamite",
+              "name": "dynamite-4",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/north/dynamite/dynamite-4.webp",
+              "alphaCoverage": 0.184494
+            },
+            {
+              "index": 23,
+              "row": 3,
+              "column": 5,
+              "action": "dynamite",
+              "name": "dynamite-5",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/north/dynamite/dynamite-5.webp",
+              "alphaCoverage": 0.183685
+            }
+          ]
+        },
+        "south": {
+          "atlas": "/assets/game/nft-directional-v2/atlases/rookie/south.webp",
+          "atlasSha256": "3550555168fc7dfd3cc5a2dead4a7802c68ab5e9e0f092e005f5b40db0f9b94b",
+          "frames": [
+            {
+              "index": 0,
+              "row": 0,
+              "column": 0,
+              "action": "idle",
+              "name": "idle-0",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/south/idle/idle-0.webp",
+              "alphaCoverage": 0.251572
+            },
+            {
+              "index": 1,
+              "row": 0,
+              "column": 1,
+              "action": "walk",
+              "name": "walk-1",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/south/walk/walk-1.webp",
+              "alphaCoverage": 0.232071
+            },
+            {
+              "index": 2,
+              "row": 0,
+              "column": 2,
+              "action": "walk",
+              "name": "walk-2",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/south/walk/walk-2.webp",
+              "alphaCoverage": 0.239502
+            },
+            {
+              "index": 3,
+              "row": 0,
+              "column": 3,
+              "action": "walk",
+              "name": "walk-3",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/south/walk/walk-3.webp",
+              "alphaCoverage": 0.236145
+            },
+            {
+              "index": 4,
+              "row": 0,
+              "column": 4,
+              "action": "walk",
+              "name": "walk-4",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/south/walk/walk-4.webp",
+              "alphaCoverage": 0.239853
+            },
+            {
+              "index": 5,
+              "row": 0,
+              "column": 5,
+              "action": "knockout",
+              "name": "knockout-0",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/south/knockout/knockout-0.webp",
+              "alphaCoverage": 0.179642
+            },
+            {
+              "index": 6,
+              "row": 1,
+              "column": 0,
+              "action": "pickaxe",
+              "name": "pickaxe-0",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/south/pickaxe/pickaxe-0.webp",
+              "alphaCoverage": 0.27652
+            },
+            {
+              "index": 7,
+              "row": 1,
+              "column": 1,
+              "action": "pickaxe",
+              "name": "pickaxe-1",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/south/pickaxe/pickaxe-1.webp",
+              "alphaCoverage": 0.255753
+            },
+            {
+              "index": 8,
+              "row": 1,
+              "column": 2,
+              "action": "pickaxe",
+              "name": "pickaxe-2",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/south/pickaxe/pickaxe-2.webp",
+              "alphaCoverage": 0.246063
+            },
+            {
+              "index": 9,
+              "row": 1,
+              "column": 3,
+              "action": "pickaxe",
+              "name": "pickaxe-3",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/south/pickaxe/pickaxe-3.webp",
+              "alphaCoverage": 0.247482
+            },
+            {
+              "index": 10,
+              "row": 1,
+              "column": 4,
+              "action": "pickaxe",
+              "name": "pickaxe-4",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/south/pickaxe/pickaxe-4.webp",
+              "alphaCoverage": 0.255859
+            },
+            {
+              "index": 11,
+              "row": 1,
+              "column": 5,
+              "action": "pickaxe",
+              "name": "pickaxe-5",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/south/pickaxe/pickaxe-5.webp",
+              "alphaCoverage": 0.272949
+            },
+            {
+              "index": 12,
+              "row": 2,
+              "column": 0,
+              "action": "blaster",
+              "name": "blaster-0",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/south/blaster/blaster-0.webp",
+              "alphaCoverage": 0.228256
+            },
+            {
+              "index": 13,
+              "row": 2,
+              "column": 1,
+              "action": "blaster",
+              "name": "blaster-1",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/south/blaster/blaster-1.webp",
+              "alphaCoverage": 0.217606
+            },
+            {
+              "index": 14,
+              "row": 2,
+              "column": 2,
+              "action": "blaster",
+              "name": "blaster-2",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/south/blaster/blaster-2.webp",
+              "alphaCoverage": 0.217758
+            },
+            {
+              "index": 15,
+              "row": 2,
+              "column": 3,
+              "action": "blaster",
+              "name": "blaster-3",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/south/blaster/blaster-3.webp",
+              "alphaCoverage": 0.215973
+            },
+            {
+              "index": 16,
+              "row": 2,
+              "column": 4,
+              "action": "blaster",
+              "name": "blaster-4",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/south/blaster/blaster-4.webp",
+              "alphaCoverage": 0.225403
+            },
+            {
+              "index": 17,
+              "row": 2,
+              "column": 5,
+              "action": "blaster",
+              "name": "blaster-5",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/south/blaster/blaster-5.webp",
+              "alphaCoverage": 0.22551
+            },
+            {
+              "index": 18,
+              "row": 3,
+              "column": 0,
+              "action": "dynamite",
+              "name": "dynamite-0",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/south/dynamite/dynamite-0.webp",
+              "alphaCoverage": 0.253723
+            },
+            {
+              "index": 19,
+              "row": 3,
+              "column": 1,
+              "action": "dynamite",
+              "name": "dynamite-1",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/south/dynamite/dynamite-1.webp",
+              "alphaCoverage": 0.25473
+            },
+            {
+              "index": 20,
+              "row": 3,
+              "column": 2,
+              "action": "dynamite",
+              "name": "dynamite-2",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/south/dynamite/dynamite-2.webp",
+              "alphaCoverage": 0.258652
+            },
+            {
+              "index": 21,
+              "row": 3,
+              "column": 3,
+              "action": "dynamite",
+              "name": "dynamite-3",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/south/dynamite/dynamite-3.webp",
+              "alphaCoverage": 0.23645
+            },
+            {
+              "index": 22,
+              "row": 3,
+              "column": 4,
+              "action": "dynamite",
+              "name": "dynamite-4",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/south/dynamite/dynamite-4.webp",
+              "alphaCoverage": 0.225098
+            },
+            {
+              "index": 23,
+              "row": 3,
+              "column": 5,
+              "action": "dynamite",
+              "name": "dynamite-5",
+              "path": "/assets/game/nft-directional-v2/frames/rookie/south/dynamite/dynamite-5.webp",
+              "alphaCoverage": 0.247101
+            }
+          ]
+        }
+      }
+    },
+    "apprentice": {
+      "directions": {
+        "east": {
+          "atlas": "/assets/game/nft-directional-v2/atlases/apprentice/east.webp",
+          "atlasSha256": "b0067d065f817f861f66cd4b9da77495f9286f21e5f549bb0cd4160db62b727d",
+          "frames": [
+            {
+              "index": 0,
+              "row": 0,
+              "column": 0,
+              "action": "idle",
+              "name": "idle-0",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/east/idle/idle-0.webp",
+              "alphaCoverage": 0.220413
+            },
+            {
+              "index": 1,
+              "row": 0,
+              "column": 1,
+              "action": "walk",
+              "name": "walk-1",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/east/walk/walk-1.webp",
+              "alphaCoverage": 0.219345
+            },
+            {
+              "index": 2,
+              "row": 0,
+              "column": 2,
+              "action": "walk",
+              "name": "walk-2",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/east/walk/walk-2.webp",
+              "alphaCoverage": 0.219406
+            },
+            {
+              "index": 3,
+              "row": 0,
+              "column": 3,
+              "action": "walk",
+              "name": "walk-3",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/east/walk/walk-3.webp",
+              "alphaCoverage": 0.208267
+            },
+            {
+              "index": 4,
+              "row": 0,
+              "column": 4,
+              "action": "walk",
+              "name": "walk-4",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/east/walk/walk-4.webp",
+              "alphaCoverage": 0.211838
+            },
+            {
+              "index": 5,
+              "row": 0,
+              "column": 5,
+              "action": "knockout",
+              "name": "knockout-0",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/east/knockout/knockout-0.webp",
+              "alphaCoverage": 0.138077
+            },
+            {
+              "index": 6,
+              "row": 1,
+              "column": 0,
+              "action": "pickaxe",
+              "name": "pickaxe-0",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/east/pickaxe/pickaxe-0.webp",
+              "alphaCoverage": 0.236893
+            },
+            {
+              "index": 7,
+              "row": 1,
+              "column": 1,
+              "action": "pickaxe",
+              "name": "pickaxe-1",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/east/pickaxe/pickaxe-1.webp",
+              "alphaCoverage": 0.227127
+            },
+            {
+              "index": 8,
+              "row": 1,
+              "column": 2,
+              "action": "pickaxe",
+              "name": "pickaxe-2",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/east/pickaxe/pickaxe-2.webp",
+              "alphaCoverage": 0.219131
+            },
+            {
+              "index": 9,
+              "row": 1,
+              "column": 3,
+              "action": "pickaxe",
+              "name": "pickaxe-3",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/east/pickaxe/pickaxe-3.webp",
+              "alphaCoverage": 0.23848
+            },
+            {
+              "index": 10,
+              "row": 1,
+              "column": 4,
+              "action": "pickaxe",
+              "name": "pickaxe-4",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/east/pickaxe/pickaxe-4.webp",
+              "alphaCoverage": 0.256378
+            },
+            {
+              "index": 11,
+              "row": 1,
+              "column": 5,
+              "action": "pickaxe",
+              "name": "pickaxe-5",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/east/pickaxe/pickaxe-5.webp",
+              "alphaCoverage": 0.224167
+            },
+            {
+              "index": 12,
+              "row": 2,
+              "column": 0,
+              "action": "blaster",
+              "name": "blaster-0",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/east/blaster/blaster-0.webp",
+              "alphaCoverage": 0.226044
+            },
+            {
+              "index": 13,
+              "row": 2,
+              "column": 1,
+              "action": "blaster",
+              "name": "blaster-1",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/east/blaster/blaster-1.webp",
+              "alphaCoverage": 0.228012
+            },
+            {
+              "index": 14,
+              "row": 2,
+              "column": 2,
+              "action": "blaster",
+              "name": "blaster-2",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/east/blaster/blaster-2.webp",
+              "alphaCoverage": 0.226349
+            },
+            {
+              "index": 15,
+              "row": 2,
+              "column": 3,
+              "action": "blaster",
+              "name": "blaster-3",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/east/blaster/blaster-3.webp",
+              "alphaCoverage": 0.243423
+            },
+            {
+              "index": 16,
+              "row": 2,
+              "column": 4,
+              "action": "blaster",
+              "name": "blaster-4",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/east/blaster/blaster-4.webp",
+              "alphaCoverage": 0.223953
+            },
+            {
+              "index": 17,
+              "row": 2,
+              "column": 5,
+              "action": "blaster",
+              "name": "blaster-5",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/east/blaster/blaster-5.webp",
+              "alphaCoverage": 0.212936
+            },
+            {
+              "index": 18,
+              "row": 3,
+              "column": 0,
+              "action": "dynamite",
+              "name": "dynamite-0",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/east/dynamite/dynamite-0.webp",
+              "alphaCoverage": 0.216766
+            },
+            {
+              "index": 19,
+              "row": 3,
+              "column": 1,
+              "action": "dynamite",
+              "name": "dynamite-1",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/east/dynamite/dynamite-1.webp",
+              "alphaCoverage": 0.224304
+            },
+            {
+              "index": 20,
+              "row": 3,
+              "column": 2,
+              "action": "dynamite",
+              "name": "dynamite-2",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/east/dynamite/dynamite-2.webp",
+              "alphaCoverage": 0.235046
+            },
+            {
+              "index": 21,
+              "row": 3,
+              "column": 3,
+              "action": "dynamite",
+              "name": "dynamite-3",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/east/dynamite/dynamite-3.webp",
+              "alphaCoverage": 0.212479
+            },
+            {
+              "index": 22,
+              "row": 3,
+              "column": 4,
+              "action": "dynamite",
+              "name": "dynamite-4",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/east/dynamite/dynamite-4.webp",
+              "alphaCoverage": 0.219162
+            },
+            {
+              "index": 23,
+              "row": 3,
+              "column": 5,
+              "action": "dynamite",
+              "name": "dynamite-5",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/east/dynamite/dynamite-5.webp",
+              "alphaCoverage": 0.198608
+            }
+          ]
+        },
+        "north": {
+          "atlas": "/assets/game/nft-directional-v2/atlases/apprentice/north.webp",
+          "atlasSha256": "b8566d7b52527b2517a3cc08741038b6f6131ba45bfed8f83a809ae857f98c28",
+          "frames": [
+            {
+              "index": 0,
+              "row": 0,
+              "column": 0,
+              "action": "idle",
+              "name": "idle-0",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/north/idle/idle-0.webp",
+              "alphaCoverage": 0.198746
+            },
+            {
+              "index": 1,
+              "row": 0,
+              "column": 1,
+              "action": "walk",
+              "name": "walk-1",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/north/walk/walk-1.webp",
+              "alphaCoverage": 0.17836
+            },
+            {
+              "index": 2,
+              "row": 0,
+              "column": 2,
+              "action": "walk",
+              "name": "walk-2",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/north/walk/walk-2.webp",
+              "alphaCoverage": 0.180695
+            },
+            {
+              "index": 3,
+              "row": 0,
+              "column": 3,
+              "action": "walk",
+              "name": "walk-3",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/north/walk/walk-3.webp",
+              "alphaCoverage": 0.178009
+            },
+            {
+              "index": 4,
+              "row": 0,
+              "column": 4,
+              "action": "walk",
+              "name": "walk-4",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/north/walk/walk-4.webp",
+              "alphaCoverage": 0.197693
+            },
+            {
+              "index": 5,
+              "row": 0,
+              "column": 5,
+              "action": "knockout",
+              "name": "knockout-0",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/north/knockout/knockout-0.webp",
+              "alphaCoverage": 0.114761
+            },
+            {
+              "index": 6,
+              "row": 1,
+              "column": 0,
+              "action": "pickaxe",
+              "name": "pickaxe-0",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/north/pickaxe/pickaxe-0.webp",
+              "alphaCoverage": 0.225906
+            },
+            {
+              "index": 7,
+              "row": 1,
+              "column": 1,
+              "action": "pickaxe",
+              "name": "pickaxe-1",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/north/pickaxe/pickaxe-1.webp",
+              "alphaCoverage": 0.206131
+            },
+            {
+              "index": 8,
+              "row": 1,
+              "column": 2,
+              "action": "pickaxe",
+              "name": "pickaxe-2",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/north/pickaxe/pickaxe-2.webp",
+              "alphaCoverage": 0.217911
+            },
+            {
+              "index": 9,
+              "row": 1,
+              "column": 3,
+              "action": "pickaxe",
+              "name": "pickaxe-3",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/north/pickaxe/pickaxe-3.webp",
+              "alphaCoverage": 0.234375
+            },
+            {
+              "index": 10,
+              "row": 1,
+              "column": 4,
+              "action": "pickaxe",
+              "name": "pickaxe-4",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/north/pickaxe/pickaxe-4.webp",
+              "alphaCoverage": 0.233383
+            },
+            {
+              "index": 11,
+              "row": 1,
+              "column": 5,
+              "action": "pickaxe",
+              "name": "pickaxe-5",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/north/pickaxe/pickaxe-5.webp",
+              "alphaCoverage": 0.221344
+            },
+            {
+              "index": 12,
+              "row": 2,
+              "column": 0,
+              "action": "blaster",
+              "name": "blaster-0",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/north/blaster/blaster-0.webp",
+              "alphaCoverage": 0.20813
+            },
+            {
+              "index": 13,
+              "row": 2,
+              "column": 1,
+              "action": "blaster",
+              "name": "blaster-1",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/north/blaster/blaster-1.webp",
+              "alphaCoverage": 0.218002
+            },
+            {
+              "index": 14,
+              "row": 2,
+              "column": 2,
+              "action": "blaster",
+              "name": "blaster-2",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/north/blaster/blaster-2.webp",
+              "alphaCoverage": 0.175995
+            },
+            {
+              "index": 15,
+              "row": 2,
+              "column": 3,
+              "action": "blaster",
+              "name": "blaster-3",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/north/blaster/blaster-3.webp",
+              "alphaCoverage": 0.235611
+            },
+            {
+              "index": 16,
+              "row": 2,
+              "column": 4,
+              "action": "blaster",
+              "name": "blaster-4",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/north/blaster/blaster-4.webp",
+              "alphaCoverage": 0.208572
+            },
+            {
+              "index": 17,
+              "row": 2,
+              "column": 5,
+              "action": "blaster",
+              "name": "blaster-5",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/north/blaster/blaster-5.webp",
+              "alphaCoverage": 0.200409
+            },
+            {
+              "index": 18,
+              "row": 3,
+              "column": 0,
+              "action": "dynamite",
+              "name": "dynamite-0",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/north/dynamite/dynamite-0.webp",
+              "alphaCoverage": 0.208023
+            },
+            {
+              "index": 19,
+              "row": 3,
+              "column": 1,
+              "action": "dynamite",
+              "name": "dynamite-1",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/north/dynamite/dynamite-1.webp",
+              "alphaCoverage": 0.212738
+            },
+            {
+              "index": 20,
+              "row": 3,
+              "column": 2,
+              "action": "dynamite",
+              "name": "dynamite-2",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/north/dynamite/dynamite-2.webp",
+              "alphaCoverage": 0.213684
+            },
+            {
+              "index": 21,
+              "row": 3,
+              "column": 3,
+              "action": "dynamite",
+              "name": "dynamite-3",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/north/dynamite/dynamite-3.webp",
+              "alphaCoverage": 0.208984
+            },
+            {
+              "index": 22,
+              "row": 3,
+              "column": 4,
+              "action": "dynamite",
+              "name": "dynamite-4",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/north/dynamite/dynamite-4.webp",
+              "alphaCoverage": 0.199203
+            },
+            {
+              "index": 23,
+              "row": 3,
+              "column": 5,
+              "action": "dynamite",
+              "name": "dynamite-5",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/north/dynamite/dynamite-5.webp",
+              "alphaCoverage": 0.195267
+            }
+          ]
+        },
+        "south": {
+          "atlas": "/assets/game/nft-directional-v2/atlases/apprentice/south.webp",
+          "atlasSha256": "695ec61f313d7dd7ac3f98b018aafbbbebb1507e1948361ebf07934fe24f75ba",
+          "frames": [
+            {
+              "index": 0,
+              "row": 0,
+              "column": 0,
+              "action": "idle",
+              "name": "idle-0",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/south/idle/idle-0.webp",
+              "alphaCoverage": 0.220734
+            },
+            {
+              "index": 1,
+              "row": 0,
+              "column": 1,
+              "action": "walk",
+              "name": "walk-1",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/south/walk/walk-1.webp",
+              "alphaCoverage": 0.19455
+            },
+            {
+              "index": 2,
+              "row": 0,
+              "column": 2,
+              "action": "walk",
+              "name": "walk-2",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/south/walk/walk-2.webp",
+              "alphaCoverage": 0.192368
+            },
+            {
+              "index": 3,
+              "row": 0,
+              "column": 3,
+              "action": "walk",
+              "name": "walk-3",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/south/walk/walk-3.webp",
+              "alphaCoverage": 0.193588
+            },
+            {
+              "index": 4,
+              "row": 0,
+              "column": 4,
+              "action": "walk",
+              "name": "walk-4",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/south/walk/walk-4.webp",
+              "alphaCoverage": 0.20192
+            },
+            {
+              "index": 5,
+              "row": 0,
+              "column": 5,
+              "action": "knockout",
+              "name": "knockout-0",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/south/knockout/knockout-0.webp",
+              "alphaCoverage": 0.128708
+            },
+            {
+              "index": 6,
+              "row": 1,
+              "column": 0,
+              "action": "pickaxe",
+              "name": "pickaxe-0",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/south/pickaxe/pickaxe-0.webp",
+              "alphaCoverage": 0.23143
+            },
+            {
+              "index": 7,
+              "row": 1,
+              "column": 1,
+              "action": "pickaxe",
+              "name": "pickaxe-1",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/south/pickaxe/pickaxe-1.webp",
+              "alphaCoverage": 0.214218
+            },
+            {
+              "index": 8,
+              "row": 1,
+              "column": 2,
+              "action": "pickaxe",
+              "name": "pickaxe-2",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/south/pickaxe/pickaxe-2.webp",
+              "alphaCoverage": 0.210617
+            },
+            {
+              "index": 9,
+              "row": 1,
+              "column": 3,
+              "action": "pickaxe",
+              "name": "pickaxe-3",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/south/pickaxe/pickaxe-3.webp",
+              "alphaCoverage": 0.220901
+            },
+            {
+              "index": 10,
+              "row": 1,
+              "column": 4,
+              "action": "pickaxe",
+              "name": "pickaxe-4",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/south/pickaxe/pickaxe-4.webp",
+              "alphaCoverage": 0.221497
+            },
+            {
+              "index": 11,
+              "row": 1,
+              "column": 5,
+              "action": "pickaxe",
+              "name": "pickaxe-5",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/south/pickaxe/pickaxe-5.webp",
+              "alphaCoverage": 0.24675
+            },
+            {
+              "index": 12,
+              "row": 2,
+              "column": 0,
+              "action": "blaster",
+              "name": "blaster-0",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/south/blaster/blaster-0.webp",
+              "alphaCoverage": 0.19342
+            },
+            {
+              "index": 13,
+              "row": 2,
+              "column": 1,
+              "action": "blaster",
+              "name": "blaster-1",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/south/blaster/blaster-1.webp",
+              "alphaCoverage": 0.188416
+            },
+            {
+              "index": 14,
+              "row": 2,
+              "column": 2,
+              "action": "blaster",
+              "name": "blaster-2",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/south/blaster/blaster-2.webp",
+              "alphaCoverage": 0.18924
+            },
+            {
+              "index": 15,
+              "row": 2,
+              "column": 3,
+              "action": "blaster",
+              "name": "blaster-3",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/south/blaster/blaster-3.webp",
+              "alphaCoverage": 0.210068
+            },
+            {
+              "index": 16,
+              "row": 2,
+              "column": 4,
+              "action": "blaster",
+              "name": "blaster-4",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/south/blaster/blaster-4.webp",
+              "alphaCoverage": 0.194443
+            },
+            {
+              "index": 17,
+              "row": 2,
+              "column": 5,
+              "action": "blaster",
+              "name": "blaster-5",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/south/blaster/blaster-5.webp",
+              "alphaCoverage": 0.19458
+            },
+            {
+              "index": 18,
+              "row": 3,
+              "column": 0,
+              "action": "dynamite",
+              "name": "dynamite-0",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/south/dynamite/dynamite-0.webp",
+              "alphaCoverage": 0.217697
+            },
+            {
+              "index": 19,
+              "row": 3,
+              "column": 1,
+              "action": "dynamite",
+              "name": "dynamite-1",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/south/dynamite/dynamite-1.webp",
+              "alphaCoverage": 0.211777
+            },
+            {
+              "index": 20,
+              "row": 3,
+              "column": 2,
+              "action": "dynamite",
+              "name": "dynamite-2",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/south/dynamite/dynamite-2.webp",
+              "alphaCoverage": 0.223312
+            },
+            {
+              "index": 21,
+              "row": 3,
+              "column": 3,
+              "action": "dynamite",
+              "name": "dynamite-3",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/south/dynamite/dynamite-3.webp",
+              "alphaCoverage": 0.198364
+            },
+            {
+              "index": 22,
+              "row": 3,
+              "column": 4,
+              "action": "dynamite",
+              "name": "dynamite-4",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/south/dynamite/dynamite-4.webp",
+              "alphaCoverage": 0.194077
+            },
+            {
+              "index": 23,
+              "row": 3,
+              "column": 5,
+              "action": "dynamite",
+              "name": "dynamite-5",
+              "path": "/assets/game/nft-directional-v2/frames/apprentice/south/dynamite/dynamite-5.webp",
+              "alphaCoverage": 0.215698
+            }
+          ]
+        }
+      }
+    },
+    "crystal-hunter": {
+      "directions": {
+        "east": {
+          "atlas": "/assets/game/nft-directional-v2/atlases/crystal-hunter/east.webp",
+          "atlasSha256": "034d5f5609986cb63072b5a1c3a9ed86b058f9c05ed86a69eb4771757ee2e156",
+          "frames": [
+            {
+              "index": 0,
+              "row": 0,
+              "column": 0,
+              "action": "idle",
+              "name": "idle-0",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/east/idle/idle-0.webp",
+              "alphaCoverage": 0.21965
+            },
+            {
+              "index": 1,
+              "row": 0,
+              "column": 1,
+              "action": "walk",
+              "name": "walk-1",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/east/walk/walk-1.webp",
+              "alphaCoverage": 0.212799
+            },
+            {
+              "index": 2,
+              "row": 0,
+              "column": 2,
+              "action": "walk",
+              "name": "walk-2",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/east/walk/walk-2.webp",
+              "alphaCoverage": 0.21434
+            },
+            {
+              "index": 3,
+              "row": 0,
+              "column": 3,
+              "action": "walk",
+              "name": "walk-3",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/east/walk/walk-3.webp",
+              "alphaCoverage": 0.208603
+            },
+            {
+              "index": 4,
+              "row": 0,
+              "column": 4,
+              "action": "walk",
+              "name": "walk-4",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/east/walk/walk-4.webp",
+              "alphaCoverage": 0.210495
+            },
+            {
+              "index": 5,
+              "row": 0,
+              "column": 5,
+              "action": "knockout",
+              "name": "knockout-0",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/east/knockout/knockout-0.webp",
+              "alphaCoverage": 0.140823
+            },
+            {
+              "index": 6,
+              "row": 1,
+              "column": 0,
+              "action": "pickaxe",
+              "name": "pickaxe-0",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/east/pickaxe/pickaxe-0.webp",
+              "alphaCoverage": 0.234146
+            },
+            {
+              "index": 7,
+              "row": 1,
+              "column": 1,
+              "action": "pickaxe",
+              "name": "pickaxe-1",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/east/pickaxe/pickaxe-1.webp",
+              "alphaCoverage": 0.226654
+            },
+            {
+              "index": 8,
+              "row": 1,
+              "column": 2,
+              "action": "pickaxe",
+              "name": "pickaxe-2",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/east/pickaxe/pickaxe-2.webp",
+              "alphaCoverage": 0.222977
+            },
+            {
+              "index": 9,
+              "row": 1,
+              "column": 3,
+              "action": "pickaxe",
+              "name": "pickaxe-3",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/east/pickaxe/pickaxe-3.webp",
+              "alphaCoverage": 0.242493
+            },
+            {
+              "index": 10,
+              "row": 1,
+              "column": 4,
+              "action": "pickaxe",
+              "name": "pickaxe-4",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/east/pickaxe/pickaxe-4.webp",
+              "alphaCoverage": 0.262466
+            },
+            {
+              "index": 11,
+              "row": 1,
+              "column": 5,
+              "action": "pickaxe",
+              "name": "pickaxe-5",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/east/pickaxe/pickaxe-5.webp",
+              "alphaCoverage": 0.223267
+            },
+            {
+              "index": 12,
+              "row": 2,
+              "column": 0,
+              "action": "blaster",
+              "name": "blaster-0",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/east/blaster/blaster-0.webp",
+              "alphaCoverage": 0.224731
+            },
+            {
+              "index": 13,
+              "row": 2,
+              "column": 1,
+              "action": "blaster",
+              "name": "blaster-1",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/east/blaster/blaster-1.webp",
+              "alphaCoverage": 0.225647
+            },
+            {
+              "index": 14,
+              "row": 2,
+              "column": 2,
+              "action": "blaster",
+              "name": "blaster-2",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/east/blaster/blaster-2.webp",
+              "alphaCoverage": 0.226608
+            },
+            {
+              "index": 15,
+              "row": 2,
+              "column": 3,
+              "action": "blaster",
+              "name": "blaster-3",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/east/blaster/blaster-3.webp",
+              "alphaCoverage": 0.244034
+            },
+            {
+              "index": 16,
+              "row": 2,
+              "column": 4,
+              "action": "blaster",
+              "name": "blaster-4",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/east/blaster/blaster-4.webp",
+              "alphaCoverage": 0.223999
+            },
+            {
+              "index": 17,
+              "row": 2,
+              "column": 5,
+              "action": "blaster",
+              "name": "blaster-5",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/east/blaster/blaster-5.webp",
+              "alphaCoverage": 0.21344
+            },
+            {
+              "index": 18,
+              "row": 3,
+              "column": 0,
+              "action": "dynamite",
+              "name": "dynamite-0",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/east/dynamite/dynamite-0.webp",
+              "alphaCoverage": 0.217514
+            },
+            {
+              "index": 19,
+              "row": 3,
+              "column": 1,
+              "action": "dynamite",
+              "name": "dynamite-1",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/east/dynamite/dynamite-1.webp",
+              "alphaCoverage": 0.226776
+            },
+            {
+              "index": 20,
+              "row": 3,
+              "column": 2,
+              "action": "dynamite",
+              "name": "dynamite-2",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/east/dynamite/dynamite-2.webp",
+              "alphaCoverage": 0.234497
+            },
+            {
+              "index": 21,
+              "row": 3,
+              "column": 3,
+              "action": "dynamite",
+              "name": "dynamite-3",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/east/dynamite/dynamite-3.webp",
+              "alphaCoverage": 0.213196
+            },
+            {
+              "index": 22,
+              "row": 3,
+              "column": 4,
+              "action": "dynamite",
+              "name": "dynamite-4",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/east/dynamite/dynamite-4.webp",
+              "alphaCoverage": 0.218536
+            },
+            {
+              "index": 23,
+              "row": 3,
+              "column": 5,
+              "action": "dynamite",
+              "name": "dynamite-5",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/east/dynamite/dynamite-5.webp",
+              "alphaCoverage": 0.199509
+            }
+          ]
+        },
+        "north": {
+          "atlas": "/assets/game/nft-directional-v2/atlases/crystal-hunter/north.webp",
+          "atlasSha256": "39e49496f9e09565132c881da5e393a4363b9f1141544d5735cac4860b451a14",
+          "frames": [
+            {
+              "index": 0,
+              "row": 0,
+              "column": 0,
+              "action": "idle",
+              "name": "idle-0",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/north/idle/idle-0.webp",
+              "alphaCoverage": 0.213043
+            },
+            {
+              "index": 1,
+              "row": 0,
+              "column": 1,
+              "action": "walk",
+              "name": "walk-1",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/north/walk/walk-1.webp",
+              "alphaCoverage": 0.188232
+            },
+            {
+              "index": 2,
+              "row": 0,
+              "column": 2,
+              "action": "walk",
+              "name": "walk-2",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/north/walk/walk-2.webp",
+              "alphaCoverage": 0.184052
+            },
+            {
+              "index": 3,
+              "row": 0,
+              "column": 3,
+              "action": "walk",
+              "name": "walk-3",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/north/walk/walk-3.webp",
+              "alphaCoverage": 0.188675
+            },
+            {
+              "index": 4,
+              "row": 0,
+              "column": 4,
+              "action": "walk",
+              "name": "walk-4",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/north/walk/walk-4.webp",
+              "alphaCoverage": 0.192719
+            },
+            {
+              "index": 5,
+              "row": 0,
+              "column": 5,
+              "action": "knockout",
+              "name": "knockout-0",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/north/knockout/knockout-0.webp",
+              "alphaCoverage": 0.108856
+            },
+            {
+              "index": 6,
+              "row": 1,
+              "column": 0,
+              "action": "pickaxe",
+              "name": "pickaxe-0",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/north/pickaxe/pickaxe-0.webp",
+              "alphaCoverage": 0.217804
+            },
+            {
+              "index": 7,
+              "row": 1,
+              "column": 1,
+              "action": "pickaxe",
+              "name": "pickaxe-1",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/north/pickaxe/pickaxe-1.webp",
+              "alphaCoverage": 0.211334
+            },
+            {
+              "index": 8,
+              "row": 1,
+              "column": 2,
+              "action": "pickaxe",
+              "name": "pickaxe-2",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/north/pickaxe/pickaxe-2.webp",
+              "alphaCoverage": 0.217438
+            },
+            {
+              "index": 9,
+              "row": 1,
+              "column": 3,
+              "action": "pickaxe",
+              "name": "pickaxe-3",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/north/pickaxe/pickaxe-3.webp",
+              "alphaCoverage": 0.222839
+            },
+            {
+              "index": 10,
+              "row": 1,
+              "column": 4,
+              "action": "pickaxe",
+              "name": "pickaxe-4",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/north/pickaxe/pickaxe-4.webp",
+              "alphaCoverage": 0.219849
+            },
+            {
+              "index": 11,
+              "row": 1,
+              "column": 5,
+              "action": "pickaxe",
+              "name": "pickaxe-5",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/north/pickaxe/pickaxe-5.webp",
+              "alphaCoverage": 0.216858
+            },
+            {
+              "index": 12,
+              "row": 2,
+              "column": 0,
+              "action": "blaster",
+              "name": "blaster-0",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/north/blaster/blaster-0.webp",
+              "alphaCoverage": 0.192902
+            },
+            {
+              "index": 13,
+              "row": 2,
+              "column": 1,
+              "action": "blaster",
+              "name": "blaster-1",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/north/blaster/blaster-1.webp",
+              "alphaCoverage": 0.201599
+            },
+            {
+              "index": 14,
+              "row": 2,
+              "column": 2,
+              "action": "blaster",
+              "name": "blaster-2",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/north/blaster/blaster-2.webp",
+              "alphaCoverage": 0.197937
+            },
+            {
+              "index": 15,
+              "row": 2,
+              "column": 3,
+              "action": "blaster",
+              "name": "blaster-3",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/north/blaster/blaster-3.webp",
+              "alphaCoverage": 0.218338
+            },
+            {
+              "index": 16,
+              "row": 2,
+              "column": 4,
+              "action": "blaster",
+              "name": "blaster-4",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/north/blaster/blaster-4.webp",
+              "alphaCoverage": 0.192245
+            },
+            {
+              "index": 17,
+              "row": 2,
+              "column": 5,
+              "action": "blaster",
+              "name": "blaster-5",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/north/blaster/blaster-5.webp",
+              "alphaCoverage": 0.185547
+            },
+            {
+              "index": 18,
+              "row": 3,
+              "column": 0,
+              "action": "dynamite",
+              "name": "dynamite-0",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/north/dynamite/dynamite-0.webp",
+              "alphaCoverage": 0.212143
+            },
+            {
+              "index": 19,
+              "row": 3,
+              "column": 1,
+              "action": "dynamite",
+              "name": "dynamite-1",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/north/dynamite/dynamite-1.webp",
+              "alphaCoverage": 0.209198
+            },
+            {
+              "index": 20,
+              "row": 3,
+              "column": 2,
+              "action": "dynamite",
+              "name": "dynamite-2",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/north/dynamite/dynamite-2.webp",
+              "alphaCoverage": 0.222626
+            },
+            {
+              "index": 21,
+              "row": 3,
+              "column": 3,
+              "action": "dynamite",
+              "name": "dynamite-3",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/north/dynamite/dynamite-3.webp",
+              "alphaCoverage": 0.201492
+            },
+            {
+              "index": 22,
+              "row": 3,
+              "column": 4,
+              "action": "dynamite",
+              "name": "dynamite-4",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/north/dynamite/dynamite-4.webp",
+              "alphaCoverage": 0.198456
+            },
+            {
+              "index": 23,
+              "row": 3,
+              "column": 5,
+              "action": "dynamite",
+              "name": "dynamite-5",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/north/dynamite/dynamite-5.webp",
+              "alphaCoverage": 0.20282
+            }
+          ]
+        },
+        "south": {
+          "atlas": "/assets/game/nft-directional-v2/atlases/crystal-hunter/south.webp",
+          "atlasSha256": "d410ab499eeef381185e64ff993ccf4245838c6e33ef47bf3c5eb8521ae94694",
+          "frames": [
+            {
+              "index": 0,
+              "row": 0,
+              "column": 0,
+              "action": "idle",
+              "name": "idle-0",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/south/idle/idle-0.webp",
+              "alphaCoverage": 0.214249
+            },
+            {
+              "index": 1,
+              "row": 0,
+              "column": 1,
+              "action": "walk",
+              "name": "walk-1",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/south/walk/walk-1.webp",
+              "alphaCoverage": 0.196854
+            },
+            {
+              "index": 2,
+              "row": 0,
+              "column": 2,
+              "action": "walk",
+              "name": "walk-2",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/south/walk/walk-2.webp",
+              "alphaCoverage": 0.193878
+            },
+            {
+              "index": 3,
+              "row": 0,
+              "column": 3,
+              "action": "walk",
+              "name": "walk-3",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/south/walk/walk-3.webp",
+              "alphaCoverage": 0.189789
+            },
+            {
+              "index": 4,
+              "row": 0,
+              "column": 4,
+              "action": "walk",
+              "name": "walk-4",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/south/walk/walk-4.webp",
+              "alphaCoverage": 0.194382
+            },
+            {
+              "index": 5,
+              "row": 0,
+              "column": 5,
+              "action": "knockout",
+              "name": "knockout-0",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/south/knockout/knockout-0.webp",
+              "alphaCoverage": 0.141281
+            },
+            {
+              "index": 6,
+              "row": 1,
+              "column": 0,
+              "action": "pickaxe",
+              "name": "pickaxe-0",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/south/pickaxe/pickaxe-0.webp",
+              "alphaCoverage": 0.240707
+            },
+            {
+              "index": 7,
+              "row": 1,
+              "column": 1,
+              "action": "pickaxe",
+              "name": "pickaxe-1",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/south/pickaxe/pickaxe-1.webp",
+              "alphaCoverage": 0.207932
+            },
+            {
+              "index": 8,
+              "row": 1,
+              "column": 2,
+              "action": "pickaxe",
+              "name": "pickaxe-2",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/south/pickaxe/pickaxe-2.webp",
+              "alphaCoverage": 0.228439
+            },
+            {
+              "index": 9,
+              "row": 1,
+              "column": 3,
+              "action": "pickaxe",
+              "name": "pickaxe-3",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/south/pickaxe/pickaxe-3.webp",
+              "alphaCoverage": 0.195297
+            },
+            {
+              "index": 10,
+              "row": 1,
+              "column": 4,
+              "action": "pickaxe",
+              "name": "pickaxe-4",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/south/pickaxe/pickaxe-4.webp",
+              "alphaCoverage": 0.220505
+            },
+            {
+              "index": 11,
+              "row": 1,
+              "column": 5,
+              "action": "pickaxe",
+              "name": "pickaxe-5",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/south/pickaxe/pickaxe-5.webp",
+              "alphaCoverage": 0.22583
+            },
+            {
+              "index": 12,
+              "row": 2,
+              "column": 0,
+              "action": "blaster",
+              "name": "blaster-0",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/south/blaster/blaster-0.webp",
+              "alphaCoverage": 0.196213
+            },
+            {
+              "index": 13,
+              "row": 2,
+              "column": 1,
+              "action": "blaster",
+              "name": "blaster-1",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/south/blaster/blaster-1.webp",
+              "alphaCoverage": 0.201935
+            },
+            {
+              "index": 14,
+              "row": 2,
+              "column": 2,
+              "action": "blaster",
+              "name": "blaster-2",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/south/blaster/blaster-2.webp",
+              "alphaCoverage": 0.17688
+            },
+            {
+              "index": 15,
+              "row": 2,
+              "column": 3,
+              "action": "blaster",
+              "name": "blaster-3",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/south/blaster/blaster-3.webp",
+              "alphaCoverage": 0.185211
+            },
+            {
+              "index": 16,
+              "row": 2,
+              "column": 4,
+              "action": "blaster",
+              "name": "blaster-4",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/south/blaster/blaster-4.webp",
+              "alphaCoverage": 0.193069
+            },
+            {
+              "index": 17,
+              "row": 2,
+              "column": 5,
+              "action": "blaster",
+              "name": "blaster-5",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/south/blaster/blaster-5.webp",
+              "alphaCoverage": 0.195084
+            },
+            {
+              "index": 18,
+              "row": 3,
+              "column": 0,
+              "action": "dynamite",
+              "name": "dynamite-0",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/south/dynamite/dynamite-0.webp",
+              "alphaCoverage": 0.213882
+            },
+            {
+              "index": 19,
+              "row": 3,
+              "column": 1,
+              "action": "dynamite",
+              "name": "dynamite-1",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/south/dynamite/dynamite-1.webp",
+              "alphaCoverage": 0.211334
+            },
+            {
+              "index": 20,
+              "row": 3,
+              "column": 2,
+              "action": "dynamite",
+              "name": "dynamite-2",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/south/dynamite/dynamite-2.webp",
+              "alphaCoverage": 0.222412
+            },
+            {
+              "index": 21,
+              "row": 3,
+              "column": 3,
+              "action": "dynamite",
+              "name": "dynamite-3",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/south/dynamite/dynamite-3.webp",
+              "alphaCoverage": 0.207932
+            },
+            {
+              "index": 22,
+              "row": 3,
+              "column": 4,
+              "action": "dynamite",
+              "name": "dynamite-4",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/south/dynamite/dynamite-4.webp",
+              "alphaCoverage": 0.199188
+            },
+            {
+              "index": 23,
+              "row": 3,
+              "column": 5,
+              "action": "dynamite",
+              "name": "dynamite-5",
+              "path": "/assets/game/nft-directional-v2/frames/crystal-hunter/south/dynamite/dynamite-5.webp",
+              "alphaCoverage": 0.208313
+            }
+          ]
+        }
+      }
+    },
+    "veteran": {
+      "directions": {
+        "east": {
+          "atlas": "/assets/game/nft-directional-v2/atlases/veteran/east.webp",
+          "atlasSha256": "932dadb4f24219f6786bc178929b48bd18d5beeb15689ea149abbaa4938298b3",
+          "frames": [
+            {
+              "index": 0,
+              "row": 0,
+              "column": 0,
+              "action": "idle",
+              "name": "idle-0",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/east/idle/idle-0.webp",
+              "alphaCoverage": 0.21666
+            },
+            {
+              "index": 1,
+              "row": 0,
+              "column": 1,
+              "action": "walk",
+              "name": "walk-1",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/east/walk/walk-1.webp",
+              "alphaCoverage": 0.21196
+            },
+            {
+              "index": 2,
+              "row": 0,
+              "column": 2,
+              "action": "walk",
+              "name": "walk-2",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/east/walk/walk-2.webp",
+              "alphaCoverage": 0.214233
+            },
+            {
+              "index": 3,
+              "row": 0,
+              "column": 3,
+              "action": "walk",
+              "name": "walk-3",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/east/walk/walk-3.webp",
+              "alphaCoverage": 0.20636
+            },
+            {
+              "index": 4,
+              "row": 0,
+              "column": 4,
+              "action": "walk",
+              "name": "walk-4",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/east/walk/walk-4.webp",
+              "alphaCoverage": 0.209213
+            },
+            {
+              "index": 5,
+              "row": 0,
+              "column": 5,
+              "action": "knockout",
+              "name": "knockout-0",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/east/knockout/knockout-0.webp",
+              "alphaCoverage": 0.141571
+            },
+            {
+              "index": 6,
+              "row": 1,
+              "column": 0,
+              "action": "pickaxe",
+              "name": "pickaxe-0",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/east/pickaxe/pickaxe-0.webp",
+              "alphaCoverage": 0.231644
+            },
+            {
+              "index": 7,
+              "row": 1,
+              "column": 1,
+              "action": "pickaxe",
+              "name": "pickaxe-1",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/east/pickaxe/pickaxe-1.webp",
+              "alphaCoverage": 0.224548
+            },
+            {
+              "index": 8,
+              "row": 1,
+              "column": 2,
+              "action": "pickaxe",
+              "name": "pickaxe-2",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/east/pickaxe/pickaxe-2.webp",
+              "alphaCoverage": 0.221786
+            },
+            {
+              "index": 9,
+              "row": 1,
+              "column": 3,
+              "action": "pickaxe",
+              "name": "pickaxe-3",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/east/pickaxe/pickaxe-3.webp",
+              "alphaCoverage": 0.240555
+            },
+            {
+              "index": 10,
+              "row": 1,
+              "column": 4,
+              "action": "pickaxe",
+              "name": "pickaxe-4",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/east/pickaxe/pickaxe-4.webp",
+              "alphaCoverage": 0.260727
+            },
+            {
+              "index": 11,
+              "row": 1,
+              "column": 5,
+              "action": "pickaxe",
+              "name": "pickaxe-5",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/east/pickaxe/pickaxe-5.webp",
+              "alphaCoverage": 0.222595
+            },
+            {
+              "index": 12,
+              "row": 2,
+              "column": 0,
+              "action": "blaster",
+              "name": "blaster-0",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/east/blaster/blaster-0.webp",
+              "alphaCoverage": 0.222549
+            },
+            {
+              "index": 13,
+              "row": 2,
+              "column": 1,
+              "action": "blaster",
+              "name": "blaster-1",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/east/blaster/blaster-1.webp",
+              "alphaCoverage": 0.224457
+            },
+            {
+              "index": 14,
+              "row": 2,
+              "column": 2,
+              "action": "blaster",
+              "name": "blaster-2",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/east/blaster/blaster-2.webp",
+              "alphaCoverage": 0.22438
+            },
+            {
+              "index": 15,
+              "row": 2,
+              "column": 3,
+              "action": "blaster",
+              "name": "blaster-3",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/east/blaster/blaster-3.webp",
+              "alphaCoverage": 0.243118
+            },
+            {
+              "index": 16,
+              "row": 2,
+              "column": 4,
+              "action": "blaster",
+              "name": "blaster-4",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/east/blaster/blaster-4.webp",
+              "alphaCoverage": 0.221344
+            },
+            {
+              "index": 17,
+              "row": 2,
+              "column": 5,
+              "action": "blaster",
+              "name": "blaster-5",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/east/blaster/blaster-5.webp",
+              "alphaCoverage": 0.212418
+            },
+            {
+              "index": 18,
+              "row": 3,
+              "column": 0,
+              "action": "dynamite",
+              "name": "dynamite-0",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/east/dynamite/dynamite-0.webp",
+              "alphaCoverage": 0.215286
+            },
+            {
+              "index": 19,
+              "row": 3,
+              "column": 1,
+              "action": "dynamite",
+              "name": "dynamite-1",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/east/dynamite/dynamite-1.webp",
+              "alphaCoverage": 0.224289
+            },
+            {
+              "index": 20,
+              "row": 3,
+              "column": 2,
+              "action": "dynamite",
+              "name": "dynamite-2",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/east/dynamite/dynamite-2.webp",
+              "alphaCoverage": 0.231674
+            },
+            {
+              "index": 21,
+              "row": 3,
+              "column": 3,
+              "action": "dynamite",
+              "name": "dynamite-3",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/east/dynamite/dynamite-3.webp",
+              "alphaCoverage": 0.21138
+            },
+            {
+              "index": 22,
+              "row": 3,
+              "column": 4,
+              "action": "dynamite",
+              "name": "dynamite-4",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/east/dynamite/dynamite-4.webp",
+              "alphaCoverage": 0.2173
+            },
+            {
+              "index": 23,
+              "row": 3,
+              "column": 5,
+              "action": "dynamite",
+              "name": "dynamite-5",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/east/dynamite/dynamite-5.webp",
+              "alphaCoverage": 0.198471
+            }
+          ]
+        },
+        "north": {
+          "atlas": "/assets/game/nft-directional-v2/atlases/veteran/north.webp",
+          "atlasSha256": "21b44a127300357907538715e2626847965347ce40d9d0af93b1ea73aaac5318",
+          "frames": [
+            {
+              "index": 0,
+              "row": 0,
+              "column": 0,
+              "action": "idle",
+              "name": "idle-0",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/north/idle/idle-0.webp",
+              "alphaCoverage": 0.209305
+            },
+            {
+              "index": 1,
+              "row": 0,
+              "column": 1,
+              "action": "walk",
+              "name": "walk-1",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/north/walk/walk-1.webp",
+              "alphaCoverage": 0.186874
+            },
+            {
+              "index": 2,
+              "row": 0,
+              "column": 2,
+              "action": "walk",
+              "name": "walk-2",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/north/walk/walk-2.webp",
+              "alphaCoverage": 0.18367
+            },
+            {
+              "index": 3,
+              "row": 0,
+              "column": 3,
+              "action": "walk",
+              "name": "walk-3",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/north/walk/walk-3.webp",
+              "alphaCoverage": 0.181503
+            },
+            {
+              "index": 4,
+              "row": 0,
+              "column": 4,
+              "action": "walk",
+              "name": "walk-4",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/north/walk/walk-4.webp",
+              "alphaCoverage": 0.187881
+            },
+            {
+              "index": 5,
+              "row": 0,
+              "column": 5,
+              "action": "knockout",
+              "name": "knockout-0",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/north/knockout/knockout-0.webp",
+              "alphaCoverage": 0.113678
+            },
+            {
+              "index": 6,
+              "row": 1,
+              "column": 0,
+              "action": "pickaxe",
+              "name": "pickaxe-0",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/north/pickaxe/pickaxe-0.webp",
+              "alphaCoverage": 0.214493
+            },
+            {
+              "index": 7,
+              "row": 1,
+              "column": 1,
+              "action": "pickaxe",
+              "name": "pickaxe-1",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/north/pickaxe/pickaxe-1.webp",
+              "alphaCoverage": 0.208282
+            },
+            {
+              "index": 8,
+              "row": 1,
+              "column": 2,
+              "action": "pickaxe",
+              "name": "pickaxe-2",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/north/pickaxe/pickaxe-2.webp",
+              "alphaCoverage": 0.206268
+            },
+            {
+              "index": 9,
+              "row": 1,
+              "column": 3,
+              "action": "pickaxe",
+              "name": "pickaxe-3",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/north/pickaxe/pickaxe-3.webp",
+              "alphaCoverage": 0.233719
+            },
+            {
+              "index": 10,
+              "row": 1,
+              "column": 4,
+              "action": "pickaxe",
+              "name": "pickaxe-4",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/north/pickaxe/pickaxe-4.webp",
+              "alphaCoverage": 0.235931
+            },
+            {
+              "index": 11,
+              "row": 1,
+              "column": 5,
+              "action": "pickaxe",
+              "name": "pickaxe-5",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/north/pickaxe/pickaxe-5.webp",
+              "alphaCoverage": 0.215057
+            },
+            {
+              "index": 12,
+              "row": 2,
+              "column": 0,
+              "action": "blaster",
+              "name": "blaster-0",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/north/blaster/blaster-0.webp",
+              "alphaCoverage": 0.18483
+            },
+            {
+              "index": 13,
+              "row": 2,
+              "column": 1,
+              "action": "blaster",
+              "name": "blaster-1",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/north/blaster/blaster-1.webp",
+              "alphaCoverage": 0.195129
+            },
+            {
+              "index": 14,
+              "row": 2,
+              "column": 2,
+              "action": "blaster",
+              "name": "blaster-2",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/north/blaster/blaster-2.webp",
+              "alphaCoverage": 0.194427
+            },
+            {
+              "index": 15,
+              "row": 2,
+              "column": 3,
+              "action": "blaster",
+              "name": "blaster-3",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/north/blaster/blaster-3.webp",
+              "alphaCoverage": 0.215546
+            },
+            {
+              "index": 16,
+              "row": 2,
+              "column": 4,
+              "action": "blaster",
+              "name": "blaster-4",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/north/blaster/blaster-4.webp",
+              "alphaCoverage": 0.194427
+            },
+            {
+              "index": 17,
+              "row": 2,
+              "column": 5,
+              "action": "blaster",
+              "name": "blaster-5",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/north/blaster/blaster-5.webp",
+              "alphaCoverage": 0.181137
+            },
+            {
+              "index": 18,
+              "row": 3,
+              "column": 0,
+              "action": "dynamite",
+              "name": "dynamite-0",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/north/dynamite/dynamite-0.webp",
+              "alphaCoverage": 0.204025
+            },
+            {
+              "index": 19,
+              "row": 3,
+              "column": 1,
+              "action": "dynamite",
+              "name": "dynamite-1",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/north/dynamite/dynamite-1.webp",
+              "alphaCoverage": 0.200623
+            },
+            {
+              "index": 20,
+              "row": 3,
+              "column": 2,
+              "action": "dynamite",
+              "name": "dynamite-2",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/north/dynamite/dynamite-2.webp",
+              "alphaCoverage": 0.208923
+            },
+            {
+              "index": 21,
+              "row": 3,
+              "column": 3,
+              "action": "dynamite",
+              "name": "dynamite-3",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/north/dynamite/dynamite-3.webp",
+              "alphaCoverage": 0.19873
+            },
+            {
+              "index": 22,
+              "row": 3,
+              "column": 4,
+              "action": "dynamite",
+              "name": "dynamite-4",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/north/dynamite/dynamite-4.webp",
+              "alphaCoverage": 0.185715
+            },
+            {
+              "index": 23,
+              "row": 3,
+              "column": 5,
+              "action": "dynamite",
+              "name": "dynamite-5",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/north/dynamite/dynamite-5.webp",
+              "alphaCoverage": 0.197845
+            }
+          ]
+        },
+        "south": {
+          "atlas": "/assets/game/nft-directional-v2/atlases/veteran/south.webp",
+          "atlasSha256": "69bc69c5edc62c79a4cc41051111f8e8ccaabb378292f6af1146786133a1e8e2",
+          "frames": [
+            {
+              "index": 0,
+              "row": 0,
+              "column": 0,
+              "action": "idle",
+              "name": "idle-0",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/south/idle/idle-0.webp",
+              "alphaCoverage": 0.224548
+            },
+            {
+              "index": 1,
+              "row": 0,
+              "column": 1,
+              "action": "walk",
+              "name": "walk-1",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/south/walk/walk-1.webp",
+              "alphaCoverage": 0.197525
+            },
+            {
+              "index": 2,
+              "row": 0,
+              "column": 2,
+              "action": "walk",
+              "name": "walk-2",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/south/walk/walk-2.webp",
+              "alphaCoverage": 0.196198
+            },
+            {
+              "index": 3,
+              "row": 0,
+              "column": 3,
+              "action": "walk",
+              "name": "walk-3",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/south/walk/walk-3.webp",
+              "alphaCoverage": 0.190048
+            },
+            {
+              "index": 4,
+              "row": 0,
+              "column": 4,
+              "action": "walk",
+              "name": "walk-4",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/south/walk/walk-4.webp",
+              "alphaCoverage": 0.192612
+            },
+            {
+              "index": 5,
+              "row": 0,
+              "column": 5,
+              "action": "knockout",
+              "name": "knockout-0",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/south/knockout/knockout-0.webp",
+              "alphaCoverage": 0.121063
+            },
+            {
+              "index": 6,
+              "row": 1,
+              "column": 0,
+              "action": "pickaxe",
+              "name": "pickaxe-0",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/south/pickaxe/pickaxe-0.webp",
+              "alphaCoverage": 0.239517
+            },
+            {
+              "index": 7,
+              "row": 1,
+              "column": 1,
+              "action": "pickaxe",
+              "name": "pickaxe-1",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/south/pickaxe/pickaxe-1.webp",
+              "alphaCoverage": 0.232224
+            },
+            {
+              "index": 8,
+              "row": 1,
+              "column": 2,
+              "action": "pickaxe",
+              "name": "pickaxe-2",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/south/pickaxe/pickaxe-2.webp",
+              "alphaCoverage": 0.227005
+            },
+            {
+              "index": 9,
+              "row": 1,
+              "column": 3,
+              "action": "pickaxe",
+              "name": "pickaxe-3",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/south/pickaxe/pickaxe-3.webp",
+              "alphaCoverage": 0.231842
+            },
+            {
+              "index": 10,
+              "row": 1,
+              "column": 4,
+              "action": "pickaxe",
+              "name": "pickaxe-4",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/south/pickaxe/pickaxe-4.webp",
+              "alphaCoverage": 0.243042
+            },
+            {
+              "index": 11,
+              "row": 1,
+              "column": 5,
+              "action": "pickaxe",
+              "name": "pickaxe-5",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/south/pickaxe/pickaxe-5.webp",
+              "alphaCoverage": 0.239578
+            },
+            {
+              "index": 12,
+              "row": 2,
+              "column": 0,
+              "action": "blaster",
+              "name": "blaster-0",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/south/blaster/blaster-0.webp",
+              "alphaCoverage": 0.204483
+            },
+            {
+              "index": 13,
+              "row": 2,
+              "column": 1,
+              "action": "blaster",
+              "name": "blaster-1",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/south/blaster/blaster-1.webp",
+              "alphaCoverage": 0.214722
+            },
+            {
+              "index": 14,
+              "row": 2,
+              "column": 2,
+              "action": "blaster",
+              "name": "blaster-2",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/south/blaster/blaster-2.webp",
+              "alphaCoverage": 0.193192
+            },
+            {
+              "index": 15,
+              "row": 2,
+              "column": 3,
+              "action": "blaster",
+              "name": "blaster-3",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/south/blaster/blaster-3.webp",
+              "alphaCoverage": 0.237991
+            },
+            {
+              "index": 16,
+              "row": 2,
+              "column": 4,
+              "action": "blaster",
+              "name": "blaster-4",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/south/blaster/blaster-4.webp",
+              "alphaCoverage": 0.202652
+            },
+            {
+              "index": 17,
+              "row": 2,
+              "column": 5,
+              "action": "blaster",
+              "name": "blaster-5",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/south/blaster/blaster-5.webp",
+              "alphaCoverage": 0.198929
+            },
+            {
+              "index": 18,
+              "row": 3,
+              "column": 0,
+              "action": "dynamite",
+              "name": "dynamite-0",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/south/dynamite/dynamite-0.webp",
+              "alphaCoverage": 0.224716
+            },
+            {
+              "index": 19,
+              "row": 3,
+              "column": 1,
+              "action": "dynamite",
+              "name": "dynamite-1",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/south/dynamite/dynamite-1.webp",
+              "alphaCoverage": 0.229187
+            },
+            {
+              "index": 20,
+              "row": 3,
+              "column": 2,
+              "action": "dynamite",
+              "name": "dynamite-2",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/south/dynamite/dynamite-2.webp",
+              "alphaCoverage": 0.234344
+            },
+            {
+              "index": 21,
+              "row": 3,
+              "column": 3,
+              "action": "dynamite",
+              "name": "dynamite-3",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/south/dynamite/dynamite-3.webp",
+              "alphaCoverage": 0.214569
+            },
+            {
+              "index": 22,
+              "row": 3,
+              "column": 4,
+              "action": "dynamite",
+              "name": "dynamite-4",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/south/dynamite/dynamite-4.webp",
+              "alphaCoverage": 0.207916
+            },
+            {
+              "index": 23,
+              "row": 3,
+              "column": 5,
+              "action": "dynamite",
+              "name": "dynamite-5",
+              "path": "/assets/game/nft-directional-v2/frames/veteran/south/dynamite/dynamite-5.webp",
+              "alphaCoverage": 0.217972
+            }
+          ]
+        }
+      }
+    },
+    "vault-raider": {
+      "directions": {
+        "east": {
+          "atlas": "/assets/game/nft-directional-v2/atlases/vault-raider/east.webp",
+          "atlasSha256": "230886c13b15816816d99cb8618542dd391e60d44a6f632c98af366f9439b043",
+          "frames": [
+            {
+              "index": 0,
+              "row": 0,
+              "column": 0,
+              "action": "idle",
+              "name": "idle-0",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/east/idle/idle-0.webp",
+              "alphaCoverage": 0.218765
+            },
+            {
+              "index": 1,
+              "row": 0,
+              "column": 1,
+              "action": "walk",
+              "name": "walk-1",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/east/walk/walk-1.webp",
+              "alphaCoverage": 0.210251
+            },
+            {
+              "index": 2,
+              "row": 0,
+              "column": 2,
+              "action": "walk",
+              "name": "walk-2",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/east/walk/walk-2.webp",
+              "alphaCoverage": 0.211487
+            },
+            {
+              "index": 3,
+              "row": 0,
+              "column": 3,
+              "action": "walk",
+              "name": "walk-3",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/east/walk/walk-3.webp",
+              "alphaCoverage": 0.206299
+            },
+            {
+              "index": 4,
+              "row": 0,
+              "column": 4,
+              "action": "walk",
+              "name": "walk-4",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/east/walk/walk-4.webp",
+              "alphaCoverage": 0.211365
+            },
+            {
+              "index": 5,
+              "row": 0,
+              "column": 5,
+              "action": "knockout",
+              "name": "knockout-0",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/east/knockout/knockout-0.webp",
+              "alphaCoverage": 0.140839
+            },
+            {
+              "index": 6,
+              "row": 1,
+              "column": 0,
+              "action": "pickaxe",
+              "name": "pickaxe-0",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/east/pickaxe/pickaxe-0.webp",
+              "alphaCoverage": 0.232224
+            },
+            {
+              "index": 7,
+              "row": 1,
+              "column": 1,
+              "action": "pickaxe",
+              "name": "pickaxe-1",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/east/pickaxe/pickaxe-1.webp",
+              "alphaCoverage": 0.223007
+            },
+            {
+              "index": 8,
+              "row": 1,
+              "column": 2,
+              "action": "pickaxe",
+              "name": "pickaxe-2",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/east/pickaxe/pickaxe-2.webp",
+              "alphaCoverage": 0.21994
+            },
+            {
+              "index": 9,
+              "row": 1,
+              "column": 3,
+              "action": "pickaxe",
+              "name": "pickaxe-3",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/east/pickaxe/pickaxe-3.webp",
+              "alphaCoverage": 0.240402
+            },
+            {
+              "index": 10,
+              "row": 1,
+              "column": 4,
+              "action": "pickaxe",
+              "name": "pickaxe-4",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/east/pickaxe/pickaxe-4.webp",
+              "alphaCoverage": 0.26062
+            },
+            {
+              "index": 11,
+              "row": 1,
+              "column": 5,
+              "action": "pickaxe",
+              "name": "pickaxe-5",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/east/pickaxe/pickaxe-5.webp",
+              "alphaCoverage": 0.221588
+            },
+            {
+              "index": 12,
+              "row": 2,
+              "column": 0,
+              "action": "blaster",
+              "name": "blaster-0",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/east/blaster/blaster-0.webp",
+              "alphaCoverage": 0.222641
+            },
+            {
+              "index": 13,
+              "row": 2,
+              "column": 1,
+              "action": "blaster",
+              "name": "blaster-1",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/east/blaster/blaster-1.webp",
+              "alphaCoverage": 0.223999
+            },
+            {
+              "index": 14,
+              "row": 2,
+              "column": 2,
+              "action": "blaster",
+              "name": "blaster-2",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/east/blaster/blaster-2.webp",
+              "alphaCoverage": 0.223831
+            },
+            {
+              "index": 15,
+              "row": 2,
+              "column": 3,
+              "action": "blaster",
+              "name": "blaster-3",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/east/blaster/blaster-3.webp",
+              "alphaCoverage": 0.242462
+            },
+            {
+              "index": 16,
+              "row": 2,
+              "column": 4,
+              "action": "blaster",
+              "name": "blaster-4",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/east/blaster/blaster-4.webp",
+              "alphaCoverage": 0.22258
+            },
+            {
+              "index": 17,
+              "row": 2,
+              "column": 5,
+              "action": "blaster",
+              "name": "blaster-5",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/east/blaster/blaster-5.webp",
+              "alphaCoverage": 0.212509
+            },
+            {
+              "index": 18,
+              "row": 3,
+              "column": 0,
+              "action": "dynamite",
+              "name": "dynamite-0",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/east/dynamite/dynamite-0.webp",
+              "alphaCoverage": 0.216064
+            },
+            {
+              "index": 19,
+              "row": 3,
+              "column": 1,
+              "action": "dynamite",
+              "name": "dynamite-1",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/east/dynamite/dynamite-1.webp",
+              "alphaCoverage": 0.224838
+            },
+            {
+              "index": 20,
+              "row": 3,
+              "column": 2,
+              "action": "dynamite",
+              "name": "dynamite-2",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/east/dynamite/dynamite-2.webp",
+              "alphaCoverage": 0.232071
+            },
+            {
+              "index": 21,
+              "row": 3,
+              "column": 3,
+              "action": "dynamite",
+              "name": "dynamite-3",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/east/dynamite/dynamite-3.webp",
+              "alphaCoverage": 0.211945
+            },
+            {
+              "index": 22,
+              "row": 3,
+              "column": 4,
+              "action": "dynamite",
+              "name": "dynamite-4",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/east/dynamite/dynamite-4.webp",
+              "alphaCoverage": 0.216339
+            },
+            {
+              "index": 23,
+              "row": 3,
+              "column": 5,
+              "action": "dynamite",
+              "name": "dynamite-5",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/east/dynamite/dynamite-5.webp",
+              "alphaCoverage": 0.199554
+            }
+          ]
+        },
+        "north": {
+          "atlas": "/assets/game/nft-directional-v2/atlases/vault-raider/north.webp",
+          "atlasSha256": "4702cbd9ec9b5cbb00265e29e16ec23bac1d057e89ef6412def6450ba4b07650",
+          "frames": [
+            {
+              "index": 0,
+              "row": 0,
+              "column": 0,
+              "action": "idle",
+              "name": "idle-0",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/north/idle/idle-0.webp",
+              "alphaCoverage": 0.210541
+            },
+            {
+              "index": 1,
+              "row": 0,
+              "column": 1,
+              "action": "walk",
+              "name": "walk-1",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/north/walk/walk-1.webp",
+              "alphaCoverage": 0.189545
+            },
+            {
+              "index": 2,
+              "row": 0,
+              "column": 2,
+              "action": "walk",
+              "name": "walk-2",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/north/walk/walk-2.webp",
+              "alphaCoverage": 0.191681
+            },
+            {
+              "index": 3,
+              "row": 0,
+              "column": 3,
+              "action": "walk",
+              "name": "walk-3",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/north/walk/walk-3.webp",
+              "alphaCoverage": 0.185043
+            },
+            {
+              "index": 4,
+              "row": 0,
+              "column": 4,
+              "action": "walk",
+              "name": "walk-4",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/north/walk/walk-4.webp",
+              "alphaCoverage": 0.190689
+            },
+            {
+              "index": 5,
+              "row": 0,
+              "column": 5,
+              "action": "knockout",
+              "name": "knockout-0",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/north/knockout/knockout-0.webp",
+              "alphaCoverage": 0.136108
+            },
+            {
+              "index": 6,
+              "row": 1,
+              "column": 0,
+              "action": "pickaxe",
+              "name": "pickaxe-0",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/north/pickaxe/pickaxe-0.webp",
+              "alphaCoverage": 0.219681
+            },
+            {
+              "index": 7,
+              "row": 1,
+              "column": 1,
+              "action": "pickaxe",
+              "name": "pickaxe-1",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/north/pickaxe/pickaxe-1.webp",
+              "alphaCoverage": 0.206589
+            },
+            {
+              "index": 8,
+              "row": 1,
+              "column": 2,
+              "action": "pickaxe",
+              "name": "pickaxe-2",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/north/pickaxe/pickaxe-2.webp",
+              "alphaCoverage": 0.203293
+            },
+            {
+              "index": 9,
+              "row": 1,
+              "column": 3,
+              "action": "pickaxe",
+              "name": "pickaxe-3",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/north/pickaxe/pickaxe-3.webp",
+              "alphaCoverage": 0.218201
+            },
+            {
+              "index": 10,
+              "row": 1,
+              "column": 4,
+              "action": "pickaxe",
+              "name": "pickaxe-4",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/north/pickaxe/pickaxe-4.webp",
+              "alphaCoverage": 0.229965
+            },
+            {
+              "index": 11,
+              "row": 1,
+              "column": 5,
+              "action": "pickaxe",
+              "name": "pickaxe-5",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/north/pickaxe/pickaxe-5.webp",
+              "alphaCoverage": 0.223602
+            },
+            {
+              "index": 12,
+              "row": 2,
+              "column": 0,
+              "action": "blaster",
+              "name": "blaster-0",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/north/blaster/blaster-0.webp",
+              "alphaCoverage": 0.178574
+            },
+            {
+              "index": 13,
+              "row": 2,
+              "column": 1,
+              "action": "blaster",
+              "name": "blaster-1",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/north/blaster/blaster-1.webp",
+              "alphaCoverage": 0.195572
+            },
+            {
+              "index": 14,
+              "row": 2,
+              "column": 2,
+              "action": "blaster",
+              "name": "blaster-2",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/north/blaster/blaster-2.webp",
+              "alphaCoverage": 0.188492
+            },
+            {
+              "index": 15,
+              "row": 2,
+              "column": 3,
+              "action": "blaster",
+              "name": "blaster-3",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/north/blaster/blaster-3.webp",
+              "alphaCoverage": 0.216049
+            },
+            {
+              "index": 16,
+              "row": 2,
+              "column": 4,
+              "action": "blaster",
+              "name": "blaster-4",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/north/blaster/blaster-4.webp",
+              "alphaCoverage": 0.190369
+            },
+            {
+              "index": 17,
+              "row": 2,
+              "column": 5,
+              "action": "blaster",
+              "name": "blaster-5",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/north/blaster/blaster-5.webp",
+              "alphaCoverage": 0.177765
+            },
+            {
+              "index": 18,
+              "row": 3,
+              "column": 0,
+              "action": "dynamite",
+              "name": "dynamite-0",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/north/dynamite/dynamite-0.webp",
+              "alphaCoverage": 0.211014
+            },
+            {
+              "index": 19,
+              "row": 3,
+              "column": 1,
+              "action": "dynamite",
+              "name": "dynamite-1",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/north/dynamite/dynamite-1.webp",
+              "alphaCoverage": 0.194
+            },
+            {
+              "index": 20,
+              "row": 3,
+              "column": 2,
+              "action": "dynamite",
+              "name": "dynamite-2",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/north/dynamite/dynamite-2.webp",
+              "alphaCoverage": 0.207993
+            },
+            {
+              "index": 21,
+              "row": 3,
+              "column": 3,
+              "action": "dynamite",
+              "name": "dynamite-3",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/north/dynamite/dynamite-3.webp",
+              "alphaCoverage": 0.193954
+            },
+            {
+              "index": 22,
+              "row": 3,
+              "column": 4,
+              "action": "dynamite",
+              "name": "dynamite-4",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/north/dynamite/dynamite-4.webp",
+              "alphaCoverage": 0.183777
+            },
+            {
+              "index": 23,
+              "row": 3,
+              "column": 5,
+              "action": "dynamite",
+              "name": "dynamite-5",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/north/dynamite/dynamite-5.webp",
+              "alphaCoverage": 0.20607
+            }
+          ]
+        },
+        "south": {
+          "atlas": "/assets/game/nft-directional-v2/atlases/vault-raider/south.webp",
+          "atlasSha256": "7dd2ad6795c248061e4347cef7cdb606558e8c274308915846f2633074ce19e0",
+          "frames": [
+            {
+              "index": 0,
+              "row": 0,
+              "column": 0,
+              "action": "idle",
+              "name": "idle-0",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/south/idle/idle-0.webp",
+              "alphaCoverage": 0.247559
+            },
+            {
+              "index": 1,
+              "row": 0,
+              "column": 1,
+              "action": "walk",
+              "name": "walk-1",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/south/walk/walk-1.webp",
+              "alphaCoverage": 0.233017
+            },
+            {
+              "index": 2,
+              "row": 0,
+              "column": 2,
+              "action": "walk",
+              "name": "walk-2",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/south/walk/walk-2.webp",
+              "alphaCoverage": 0.228149
+            },
+            {
+              "index": 3,
+              "row": 0,
+              "column": 3,
+              "action": "walk",
+              "name": "walk-3",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/south/walk/walk-3.webp",
+              "alphaCoverage": 0.226135
+            },
+            {
+              "index": 4,
+              "row": 0,
+              "column": 4,
+              "action": "walk",
+              "name": "walk-4",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/south/walk/walk-4.webp",
+              "alphaCoverage": 0.238541
+            },
+            {
+              "index": 5,
+              "row": 0,
+              "column": 5,
+              "action": "knockout",
+              "name": "knockout-0",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/south/knockout/knockout-0.webp",
+              "alphaCoverage": 0.159698
+            },
+            {
+              "index": 6,
+              "row": 1,
+              "column": 0,
+              "action": "pickaxe",
+              "name": "pickaxe-0",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/south/pickaxe/pickaxe-0.webp",
+              "alphaCoverage": 0.25322
+            },
+            {
+              "index": 7,
+              "row": 1,
+              "column": 1,
+              "action": "pickaxe",
+              "name": "pickaxe-1",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/south/pickaxe/pickaxe-1.webp",
+              "alphaCoverage": 0.246613
+            },
+            {
+              "index": 8,
+              "row": 1,
+              "column": 2,
+              "action": "pickaxe",
+              "name": "pickaxe-2",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/south/pickaxe/pickaxe-2.webp",
+              "alphaCoverage": 0.239563
+            },
+            {
+              "index": 9,
+              "row": 1,
+              "column": 3,
+              "action": "pickaxe",
+              "name": "pickaxe-3",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/south/pickaxe/pickaxe-3.webp",
+              "alphaCoverage": 0.240784
+            },
+            {
+              "index": 10,
+              "row": 1,
+              "column": 4,
+              "action": "pickaxe",
+              "name": "pickaxe-4",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/south/pickaxe/pickaxe-4.webp",
+              "alphaCoverage": 0.244598
+            },
+            {
+              "index": 11,
+              "row": 1,
+              "column": 5,
+              "action": "pickaxe",
+              "name": "pickaxe-5",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/south/pickaxe/pickaxe-5.webp",
+              "alphaCoverage": 0.253281
+            },
+            {
+              "index": 12,
+              "row": 2,
+              "column": 0,
+              "action": "blaster",
+              "name": "blaster-0",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/south/blaster/blaster-0.webp",
+              "alphaCoverage": 0.218796
+            },
+            {
+              "index": 13,
+              "row": 2,
+              "column": 1,
+              "action": "blaster",
+              "name": "blaster-1",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/south/blaster/blaster-1.webp",
+              "alphaCoverage": 0.214294
+            },
+            {
+              "index": 14,
+              "row": 2,
+              "column": 2,
+              "action": "blaster",
+              "name": "blaster-2",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/south/blaster/blaster-2.webp",
+              "alphaCoverage": 0.208389
+            },
+            {
+              "index": 15,
+              "row": 2,
+              "column": 3,
+              "action": "blaster",
+              "name": "blaster-3",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/south/blaster/blaster-3.webp",
+              "alphaCoverage": 0.228745
+            },
+            {
+              "index": 16,
+              "row": 2,
+              "column": 4,
+              "action": "blaster",
+              "name": "blaster-4",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/south/blaster/blaster-4.webp",
+              "alphaCoverage": 0.215729
+            },
+            {
+              "index": 17,
+              "row": 2,
+              "column": 5,
+              "action": "blaster",
+              "name": "blaster-5",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/south/blaster/blaster-5.webp",
+              "alphaCoverage": 0.217896
+            },
+            {
+              "index": 18,
+              "row": 3,
+              "column": 0,
+              "action": "dynamite",
+              "name": "dynamite-0",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/south/dynamite/dynamite-0.webp",
+              "alphaCoverage": 0.256195
+            },
+            {
+              "index": 19,
+              "row": 3,
+              "column": 1,
+              "action": "dynamite",
+              "name": "dynamite-1",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/south/dynamite/dynamite-1.webp",
+              "alphaCoverage": 0.253128
+            },
+            {
+              "index": 20,
+              "row": 3,
+              "column": 2,
+              "action": "dynamite",
+              "name": "dynamite-2",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/south/dynamite/dynamite-2.webp",
+              "alphaCoverage": 0.261993
+            },
+            {
+              "index": 21,
+              "row": 3,
+              "column": 3,
+              "action": "dynamite",
+              "name": "dynamite-3",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/south/dynamite/dynamite-3.webp",
+              "alphaCoverage": 0.229706
+            },
+            {
+              "index": 22,
+              "row": 3,
+              "column": 4,
+              "action": "dynamite",
+              "name": "dynamite-4",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/south/dynamite/dynamite-4.webp",
+              "alphaCoverage": 0.227356
+            },
+            {
+              "index": 23,
+              "row": 3,
+              "column": 5,
+              "action": "dynamite",
+              "name": "dynamite-5",
+              "path": "/assets/game/nft-directional-v2/frames/vault-raider/south/dynamite/dynamite-5.webp",
+              "alphaCoverage": 0.251129
+            }
+          ]
+        }
+      }
+    },
+    "elite": {
+      "directions": {
+        "east": {
+          "atlas": "/assets/game/nft-directional-v2/atlases/elite/east.webp",
+          "atlasSha256": "c2f86594113b206c4e96e4260eef3bd4cc03b721b8abd69258d42374e71cbe0a",
+          "frames": [
+            {
+              "index": 0,
+              "row": 0,
+              "column": 0,
+              "action": "idle",
+              "name": "idle-0",
+              "path": "/assets/game/nft-directional-v2/frames/elite/east/idle/idle-0.webp",
+              "alphaCoverage": 0.221069
+            },
+            {
+              "index": 1,
+              "row": 0,
+              "column": 1,
+              "action": "walk",
+              "name": "walk-1",
+              "path": "/assets/game/nft-directional-v2/frames/elite/east/walk/walk-1.webp",
+              "alphaCoverage": 0.216537
+            },
+            {
+              "index": 2,
+              "row": 0,
+              "column": 2,
+              "action": "walk",
+              "name": "walk-2",
+              "path": "/assets/game/nft-directional-v2/frames/elite/east/walk/walk-2.webp",
+              "alphaCoverage": 0.219223
+            },
+            {
+              "index": 3,
+              "row": 0,
+              "column": 3,
+              "action": "walk",
+              "name": "walk-3",
+              "path": "/assets/game/nft-directional-v2/frames/elite/east/walk/walk-3.webp",
+              "alphaCoverage": 0.217239
+            },
+            {
+              "index": 4,
+              "row": 0,
+              "column": 4,
+              "action": "walk",
+              "name": "walk-4",
+              "path": "/assets/game/nft-directional-v2/frames/elite/east/walk/walk-4.webp",
+              "alphaCoverage": 0.208954
+            },
+            {
+              "index": 5,
+              "row": 0,
+              "column": 5,
+              "action": "knockout",
+              "name": "knockout-0",
+              "path": "/assets/game/nft-directional-v2/frames/elite/east/knockout/knockout-0.webp",
+              "alphaCoverage": 0.141022
+            },
+            {
+              "index": 6,
+              "row": 1,
+              "column": 0,
+              "action": "pickaxe",
+              "name": "pickaxe-0",
+              "path": "/assets/game/nft-directional-v2/frames/elite/east/pickaxe/pickaxe-0.webp",
+              "alphaCoverage": 0.230545
+            },
+            {
+              "index": 7,
+              "row": 1,
+              "column": 1,
+              "action": "pickaxe",
+              "name": "pickaxe-1",
+              "path": "/assets/game/nft-directional-v2/frames/elite/east/pickaxe/pickaxe-1.webp",
+              "alphaCoverage": 0.221664
+            },
+            {
+              "index": 8,
+              "row": 1,
+              "column": 2,
+              "action": "pickaxe",
+              "name": "pickaxe-2",
+              "path": "/assets/game/nft-directional-v2/frames/elite/east/pickaxe/pickaxe-2.webp",
+              "alphaCoverage": 0.225418
+            },
+            {
+              "index": 9,
+              "row": 1,
+              "column": 3,
+              "action": "pickaxe",
+              "name": "pickaxe-3",
+              "path": "/assets/game/nft-directional-v2/frames/elite/east/pickaxe/pickaxe-3.webp",
+              "alphaCoverage": 0.241577
+            },
+            {
+              "index": 10,
+              "row": 1,
+              "column": 4,
+              "action": "pickaxe",
+              "name": "pickaxe-4",
+              "path": "/assets/game/nft-directional-v2/frames/elite/east/pickaxe/pickaxe-4.webp",
+              "alphaCoverage": 0.260406
+            },
+            {
+              "index": 11,
+              "row": 1,
+              "column": 5,
+              "action": "pickaxe",
+              "name": "pickaxe-5",
+              "path": "/assets/game/nft-directional-v2/frames/elite/east/pickaxe/pickaxe-5.webp",
+              "alphaCoverage": 0.221527
+            },
+            {
+              "index": 12,
+              "row": 2,
+              "column": 0,
+              "action": "blaster",
+              "name": "blaster-0",
+              "path": "/assets/game/nft-directional-v2/frames/elite/east/blaster/blaster-0.webp",
+              "alphaCoverage": 0.222641
+            },
+            {
+              "index": 13,
+              "row": 2,
+              "column": 1,
+              "action": "blaster",
+              "name": "blaster-1",
+              "path": "/assets/game/nft-directional-v2/frames/elite/east/blaster/blaster-1.webp",
+              "alphaCoverage": 0.227921
+            },
+            {
+              "index": 14,
+              "row": 2,
+              "column": 2,
+              "action": "blaster",
+              "name": "blaster-2",
+              "path": "/assets/game/nft-directional-v2/frames/elite/east/blaster/blaster-2.webp",
+              "alphaCoverage": 0.226929
+            },
+            {
+              "index": 15,
+              "row": 2,
+              "column": 3,
+              "action": "blaster",
+              "name": "blaster-3",
+              "path": "/assets/game/nft-directional-v2/frames/elite/east/blaster/blaster-3.webp",
+              "alphaCoverage": 0.24501
+            },
+            {
+              "index": 16,
+              "row": 2,
+              "column": 4,
+              "action": "blaster",
+              "name": "blaster-4",
+              "path": "/assets/game/nft-directional-v2/frames/elite/east/blaster/blaster-4.webp",
+              "alphaCoverage": 0.223129
+            },
+            {
+              "index": 17,
+              "row": 2,
+              "column": 5,
+              "action": "blaster",
+              "name": "blaster-5",
+              "path": "/assets/game/nft-directional-v2/frames/elite/east/blaster/blaster-5.webp",
+              "alphaCoverage": 0.21022
+            },
+            {
+              "index": 18,
+              "row": 3,
+              "column": 0,
+              "action": "dynamite",
+              "name": "dynamite-0",
+              "path": "/assets/game/nft-directional-v2/frames/elite/east/dynamite/dynamite-0.webp",
+              "alphaCoverage": 0.218796
+            },
+            {
+              "index": 19,
+              "row": 3,
+              "column": 1,
+              "action": "dynamite",
+              "name": "dynamite-1",
+              "path": "/assets/game/nft-directional-v2/frames/elite/east/dynamite/dynamite-1.webp",
+              "alphaCoverage": 0.224686
+            },
+            {
+              "index": 20,
+              "row": 3,
+              "column": 2,
+              "action": "dynamite",
+              "name": "dynamite-2",
+              "path": "/assets/game/nft-directional-v2/frames/elite/east/dynamite/dynamite-2.webp",
+              "alphaCoverage": 0.233521
+            },
+            {
+              "index": 21,
+              "row": 3,
+              "column": 3,
+              "action": "dynamite",
+              "name": "dynamite-3",
+              "path": "/assets/game/nft-directional-v2/frames/elite/east/dynamite/dynamite-3.webp",
+              "alphaCoverage": 0.210449
+            },
+            {
+              "index": 22,
+              "row": 3,
+              "column": 4,
+              "action": "dynamite",
+              "name": "dynamite-4",
+              "path": "/assets/game/nft-directional-v2/frames/elite/east/dynamite/dynamite-4.webp",
+              "alphaCoverage": 0.217316
+            },
+            {
+              "index": 23,
+              "row": 3,
+              "column": 5,
+              "action": "dynamite",
+              "name": "dynamite-5",
+              "path": "/assets/game/nft-directional-v2/frames/elite/east/dynamite/dynamite-5.webp",
+              "alphaCoverage": 0.195999
+            }
+          ]
+        },
+        "north": {
+          "atlas": "/assets/game/nft-directional-v2/atlases/elite/north.webp",
+          "atlasSha256": "60129d80ac51b8de903fd30fc7bcdd7aadfb5130e2bcde499cc852568c0ed34f",
+          "frames": [
+            {
+              "index": 0,
+              "row": 0,
+              "column": 0,
+              "action": "idle",
+              "name": "idle-0",
+              "path": "/assets/game/nft-directional-v2/frames/elite/north/idle/idle-0.webp",
+              "alphaCoverage": 0.212143
+            },
+            {
+              "index": 1,
+              "row": 0,
+              "column": 1,
+              "action": "walk",
+              "name": "walk-1",
+              "path": "/assets/game/nft-directional-v2/frames/elite/north/walk/walk-1.webp",
+              "alphaCoverage": 0.194016
+            },
+            {
+              "index": 2,
+              "row": 0,
+              "column": 2,
+              "action": "walk",
+              "name": "walk-2",
+              "path": "/assets/game/nft-directional-v2/frames/elite/north/walk/walk-2.webp",
+              "alphaCoverage": 0.195328
+            },
+            {
+              "index": 3,
+              "row": 0,
+              "column": 3,
+              "action": "walk",
+              "name": "walk-3",
+              "path": "/assets/game/nft-directional-v2/frames/elite/north/walk/walk-3.webp",
+              "alphaCoverage": 0.198044
+            },
+            {
+              "index": 4,
+              "row": 0,
+              "column": 4,
+              "action": "walk",
+              "name": "walk-4",
+              "path": "/assets/game/nft-directional-v2/frames/elite/north/walk/walk-4.webp",
+              "alphaCoverage": 0.195709
+            },
+            {
+              "index": 5,
+              "row": 0,
+              "column": 5,
+              "action": "knockout",
+              "name": "knockout-0",
+              "path": "/assets/game/nft-directional-v2/frames/elite/north/knockout/knockout-0.webp",
+              "alphaCoverage": 0.094727
+            },
+            {
+              "index": 6,
+              "row": 1,
+              "column": 0,
+              "action": "pickaxe",
+              "name": "pickaxe-0",
+              "path": "/assets/game/nft-directional-v2/frames/elite/north/pickaxe/pickaxe-0.webp",
+              "alphaCoverage": 0.220169
+            },
+            {
+              "index": 7,
+              "row": 1,
+              "column": 1,
+              "action": "pickaxe",
+              "name": "pickaxe-1",
+              "path": "/assets/game/nft-directional-v2/frames/elite/north/pickaxe/pickaxe-1.webp",
+              "alphaCoverage": 0.207001
+            },
+            {
+              "index": 8,
+              "row": 1,
+              "column": 2,
+              "action": "pickaxe",
+              "name": "pickaxe-2",
+              "path": "/assets/game/nft-directional-v2/frames/elite/north/pickaxe/pickaxe-2.webp",
+              "alphaCoverage": 0.203552
+            },
+            {
+              "index": 9,
+              "row": 1,
+              "column": 3,
+              "action": "pickaxe",
+              "name": "pickaxe-3",
+              "path": "/assets/game/nft-directional-v2/frames/elite/north/pickaxe/pickaxe-3.webp",
+              "alphaCoverage": 0.214478
+            },
+            {
+              "index": 10,
+              "row": 1,
+              "column": 4,
+              "action": "pickaxe",
+              "name": "pickaxe-4",
+              "path": "/assets/game/nft-directional-v2/frames/elite/north/pickaxe/pickaxe-4.webp",
+              "alphaCoverage": 0.22113
+            },
+            {
+              "index": 11,
+              "row": 1,
+              "column": 5,
+              "action": "pickaxe",
+              "name": "pickaxe-5",
+              "path": "/assets/game/nft-directional-v2/frames/elite/north/pickaxe/pickaxe-5.webp",
+              "alphaCoverage": 0.231445
+            },
+            {
+              "index": 12,
+              "row": 2,
+              "column": 0,
+              "action": "blaster",
+              "name": "blaster-0",
+              "path": "/assets/game/nft-directional-v2/frames/elite/north/blaster/blaster-0.webp",
+              "alphaCoverage": 0.198639
+            },
+            {
+              "index": 13,
+              "row": 2,
+              "column": 1,
+              "action": "blaster",
+              "name": "blaster-1",
+              "path": "/assets/game/nft-directional-v2/frames/elite/north/blaster/blaster-1.webp",
+              "alphaCoverage": 0.196259
+            },
+            {
+              "index": 14,
+              "row": 2,
+              "column": 2,
+              "action": "blaster",
+              "name": "blaster-2",
+              "path": "/assets/game/nft-directional-v2/frames/elite/north/blaster/blaster-2.webp",
+              "alphaCoverage": 0.175919
+            },
+            {
+              "index": 15,
+              "row": 2,
+              "column": 3,
+              "action": "blaster",
+              "name": "blaster-3",
+              "path": "/assets/game/nft-directional-v2/frames/elite/north/blaster/blaster-3.webp",
+              "alphaCoverage": 0.174545
+            },
+            {
+              "index": 16,
+              "row": 2,
+              "column": 4,
+              "action": "blaster",
+              "name": "blaster-4",
+              "path": "/assets/game/nft-directional-v2/frames/elite/north/blaster/blaster-4.webp",
+              "alphaCoverage": 0.193146
+            },
+            {
+              "index": 17,
+              "row": 2,
+              "column": 5,
+              "action": "blaster",
+              "name": "blaster-5",
+              "path": "/assets/game/nft-directional-v2/frames/elite/north/blaster/blaster-5.webp",
+              "alphaCoverage": 0.199036
+            },
+            {
+              "index": 18,
+              "row": 3,
+              "column": 0,
+              "action": "dynamite",
+              "name": "dynamite-0",
+              "path": "/assets/game/nft-directional-v2/frames/elite/north/dynamite/dynamite-0.webp",
+              "alphaCoverage": 0.213333
+            },
+            {
+              "index": 19,
+              "row": 3,
+              "column": 1,
+              "action": "dynamite",
+              "name": "dynamite-1",
+              "path": "/assets/game/nft-directional-v2/frames/elite/north/dynamite/dynamite-1.webp",
+              "alphaCoverage": 0.201614
+            },
+            {
+              "index": 20,
+              "row": 3,
+              "column": 2,
+              "action": "dynamite",
+              "name": "dynamite-2",
+              "path": "/assets/game/nft-directional-v2/frames/elite/north/dynamite/dynamite-2.webp",
+              "alphaCoverage": 0.193405
+            },
+            {
+              "index": 21,
+              "row": 3,
+              "column": 3,
+              "action": "dynamite",
+              "name": "dynamite-3",
+              "path": "/assets/game/nft-directional-v2/frames/elite/north/dynamite/dynamite-3.webp",
+              "alphaCoverage": 0.19577
+            },
+            {
+              "index": 22,
+              "row": 3,
+              "column": 4,
+              "action": "dynamite",
+              "name": "dynamite-4",
+              "path": "/assets/game/nft-directional-v2/frames/elite/north/dynamite/dynamite-4.webp",
+              "alphaCoverage": 0.193985
+            },
+            {
+              "index": 23,
+              "row": 3,
+              "column": 5,
+              "action": "dynamite",
+              "name": "dynamite-5",
+              "path": "/assets/game/nft-directional-v2/frames/elite/north/dynamite/dynamite-5.webp",
+              "alphaCoverage": 0.190781
+            }
+          ]
+        },
+        "south": {
+          "atlas": "/assets/game/nft-directional-v2/atlases/elite/south.webp",
+          "atlasSha256": "84ba44f9964896b7cd99eabc3a84d889ad6f6b8df6f78779ca763659124fff10",
+          "frames": [
+            {
+              "index": 0,
+              "row": 0,
+              "column": 0,
+              "action": "idle",
+              "name": "idle-0",
+              "path": "/assets/game/nft-directional-v2/frames/elite/south/idle/idle-0.webp",
+              "alphaCoverage": 0.208542
+            },
+            {
+              "index": 1,
+              "row": 0,
+              "column": 1,
+              "action": "walk",
+              "name": "walk-1",
+              "path": "/assets/game/nft-directional-v2/frames/elite/south/walk/walk-1.webp",
+              "alphaCoverage": 0.19754
+            },
+            {
+              "index": 2,
+              "row": 0,
+              "column": 2,
+              "action": "walk",
+              "name": "walk-2",
+              "path": "/assets/game/nft-directional-v2/frames/elite/south/walk/walk-2.webp",
+              "alphaCoverage": 0.193726
+            },
+            {
+              "index": 3,
+              "row": 0,
+              "column": 3,
+              "action": "walk",
+              "name": "walk-3",
+              "path": "/assets/game/nft-directional-v2/frames/elite/south/walk/walk-3.webp",
+              "alphaCoverage": 0.189178
+            },
+            {
+              "index": 4,
+              "row": 0,
+              "column": 4,
+              "action": "walk",
+              "name": "walk-4",
+              "path": "/assets/game/nft-directional-v2/frames/elite/south/walk/walk-4.webp",
+              "alphaCoverage": 0.195923
+            },
+            {
+              "index": 5,
+              "row": 0,
+              "column": 5,
+              "action": "knockout",
+              "name": "knockout-0",
+              "path": "/assets/game/nft-directional-v2/frames/elite/south/knockout/knockout-0.webp",
+              "alphaCoverage": 0.110703
+            },
+            {
+              "index": 6,
+              "row": 1,
+              "column": 0,
+              "action": "pickaxe",
+              "name": "pickaxe-0",
+              "path": "/assets/game/nft-directional-v2/frames/elite/south/pickaxe/pickaxe-0.webp",
+              "alphaCoverage": 0.228394
+            },
+            {
+              "index": 7,
+              "row": 1,
+              "column": 1,
+              "action": "pickaxe",
+              "name": "pickaxe-1",
+              "path": "/assets/game/nft-directional-v2/frames/elite/south/pickaxe/pickaxe-1.webp",
+              "alphaCoverage": 0.211441
+            },
+            {
+              "index": 8,
+              "row": 1,
+              "column": 2,
+              "action": "pickaxe",
+              "name": "pickaxe-2",
+              "path": "/assets/game/nft-directional-v2/frames/elite/south/pickaxe/pickaxe-2.webp",
+              "alphaCoverage": 0.217285
+            },
+            {
+              "index": 9,
+              "row": 1,
+              "column": 3,
+              "action": "pickaxe",
+              "name": "pickaxe-3",
+              "path": "/assets/game/nft-directional-v2/frames/elite/south/pickaxe/pickaxe-3.webp",
+              "alphaCoverage": 0.200027
+            },
+            {
+              "index": 10,
+              "row": 1,
+              "column": 4,
+              "action": "pickaxe",
+              "name": "pickaxe-4",
+              "path": "/assets/game/nft-directional-v2/frames/elite/south/pickaxe/pickaxe-4.webp",
+              "alphaCoverage": 0.203018
+            },
+            {
+              "index": 11,
+              "row": 1,
+              "column": 5,
+              "action": "pickaxe",
+              "name": "pickaxe-5",
+              "path": "/assets/game/nft-directional-v2/frames/elite/south/pickaxe/pickaxe-5.webp",
+              "alphaCoverage": 0.2397
+            },
+            {
+              "index": 12,
+              "row": 2,
+              "column": 0,
+              "action": "blaster",
+              "name": "blaster-0",
+              "path": "/assets/game/nft-directional-v2/frames/elite/south/blaster/blaster-0.webp",
+              "alphaCoverage": 0.195999
+            },
+            {
+              "index": 13,
+              "row": 2,
+              "column": 1,
+              "action": "blaster",
+              "name": "blaster-1",
+              "path": "/assets/game/nft-directional-v2/frames/elite/south/blaster/blaster-1.webp",
+              "alphaCoverage": 0.216339
+            },
+            {
+              "index": 14,
+              "row": 2,
+              "column": 2,
+              "action": "blaster",
+              "name": "blaster-2",
+              "path": "/assets/game/nft-directional-v2/frames/elite/south/blaster/blaster-2.webp",
+              "alphaCoverage": 0.181305
+            },
+            {
+              "index": 15,
+              "row": 2,
+              "column": 3,
+              "action": "blaster",
+              "name": "blaster-3",
+              "path": "/assets/game/nft-directional-v2/frames/elite/south/blaster/blaster-3.webp",
+              "alphaCoverage": 0.197617
+            },
+            {
+              "index": 16,
+              "row": 2,
+              "column": 4,
+              "action": "blaster",
+              "name": "blaster-4",
+              "path": "/assets/game/nft-directional-v2/frames/elite/south/blaster/blaster-4.webp",
+              "alphaCoverage": 0.188477
+            },
+            {
+              "index": 17,
+              "row": 2,
+              "column": 5,
+              "action": "blaster",
+              "name": "blaster-5",
+              "path": "/assets/game/nft-directional-v2/frames/elite/south/blaster/blaster-5.webp",
+              "alphaCoverage": 0.195587
+            },
+            {
+              "index": 18,
+              "row": 3,
+              "column": 0,
+              "action": "dynamite",
+              "name": "dynamite-0",
+              "path": "/assets/game/nft-directional-v2/frames/elite/south/dynamite/dynamite-0.webp",
+              "alphaCoverage": 0.21907
+            },
+            {
+              "index": 19,
+              "row": 3,
+              "column": 1,
+              "action": "dynamite",
+              "name": "dynamite-1",
+              "path": "/assets/game/nft-directional-v2/frames/elite/south/dynamite/dynamite-1.webp",
+              "alphaCoverage": 0.217697
+            },
+            {
+              "index": 20,
+              "row": 3,
+              "column": 2,
+              "action": "dynamite",
+              "name": "dynamite-2",
+              "path": "/assets/game/nft-directional-v2/frames/elite/south/dynamite/dynamite-2.webp",
+              "alphaCoverage": 0.225418
+            },
+            {
+              "index": 21,
+              "row": 3,
+              "column": 3,
+              "action": "dynamite",
+              "name": "dynamite-3",
+              "path": "/assets/game/nft-directional-v2/frames/elite/south/dynamite/dynamite-3.webp",
+              "alphaCoverage": 0.201035
+            },
+            {
+              "index": 22,
+              "row": 3,
+              "column": 4,
+              "action": "dynamite",
+              "name": "dynamite-4",
+              "path": "/assets/game/nft-directional-v2/frames/elite/south/dynamite/dynamite-4.webp",
+              "alphaCoverage": 0.195068
+            },
+            {
+              "index": 23,
+              "row": 3,
+              "column": 5,
+              "action": "dynamite",
+              "name": "dynamite-5",
+              "path": "/assets/game/nft-directional-v2/frames/elite/south/dynamite/dynamite-5.webp",
+              "alphaCoverage": 0.208359
+            }
+          ]
+        }
+      }
+    },
+    "mine-legend": {
+      "directions": {
+        "east": {
+          "atlas": "/assets/game/nft-directional-v2/atlases/mine-legend/east.webp",
+          "atlasSha256": "7b499566e699505536666483a25d28c59e3213bc982e77bcdf5f74c2cf9cec3d",
+          "frames": [
+            {
+              "index": 0,
+              "row": 0,
+              "column": 0,
+              "action": "idle",
+              "name": "idle-0",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/east/idle/idle-0.webp",
+              "alphaCoverage": 0.220856
+            },
+            {
+              "index": 1,
+              "row": 0,
+              "column": 1,
+              "action": "walk",
+              "name": "walk-1",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/east/walk/walk-1.webp",
+              "alphaCoverage": 0.213806
+            },
+            {
+              "index": 2,
+              "row": 0,
+              "column": 2,
+              "action": "walk",
+              "name": "walk-2",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/east/walk/walk-2.webp",
+              "alphaCoverage": 0.216095
+            },
+            {
+              "index": 3,
+              "row": 0,
+              "column": 3,
+              "action": "walk",
+              "name": "walk-3",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/east/walk/walk-3.webp",
+              "alphaCoverage": 0.21402
+            },
+            {
+              "index": 4,
+              "row": 0,
+              "column": 4,
+              "action": "walk",
+              "name": "walk-4",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/east/walk/walk-4.webp",
+              "alphaCoverage": 0.212402
+            },
+            {
+              "index": 5,
+              "row": 0,
+              "column": 5,
+              "action": "knockout",
+              "name": "knockout-0",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/east/knockout/knockout-0.webp",
+              "alphaCoverage": 0.143204
+            },
+            {
+              "index": 6,
+              "row": 1,
+              "column": 0,
+              "action": "pickaxe",
+              "name": "pickaxe-0",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/east/pickaxe/pickaxe-0.webp",
+              "alphaCoverage": 0.234299
+            },
+            {
+              "index": 7,
+              "row": 1,
+              "column": 1,
+              "action": "pickaxe",
+              "name": "pickaxe-1",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/east/pickaxe/pickaxe-1.webp",
+              "alphaCoverage": 0.224655
+            },
+            {
+              "index": 8,
+              "row": 1,
+              "column": 2,
+              "action": "pickaxe",
+              "name": "pickaxe-2",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/east/pickaxe/pickaxe-2.webp",
+              "alphaCoverage": 0.221878
+            },
+            {
+              "index": 9,
+              "row": 1,
+              "column": 3,
+              "action": "pickaxe",
+              "name": "pickaxe-3",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/east/pickaxe/pickaxe-3.webp",
+              "alphaCoverage": 0.242188
+            },
+            {
+              "index": 10,
+              "row": 1,
+              "column": 4,
+              "action": "pickaxe",
+              "name": "pickaxe-4",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/east/pickaxe/pickaxe-4.webp",
+              "alphaCoverage": 0.261993
+            },
+            {
+              "index": 11,
+              "row": 1,
+              "column": 5,
+              "action": "pickaxe",
+              "name": "pickaxe-5",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/east/pickaxe/pickaxe-5.webp",
+              "alphaCoverage": 0.222809
+            },
+            {
+              "index": 12,
+              "row": 2,
+              "column": 0,
+              "action": "blaster",
+              "name": "blaster-0",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/east/blaster/blaster-0.webp",
+              "alphaCoverage": 0.223236
+            },
+            {
+              "index": 13,
+              "row": 2,
+              "column": 1,
+              "action": "blaster",
+              "name": "blaster-1",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/east/blaster/blaster-1.webp",
+              "alphaCoverage": 0.225739
+            },
+            {
+              "index": 14,
+              "row": 2,
+              "column": 2,
+              "action": "blaster",
+              "name": "blaster-2",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/east/blaster/blaster-2.webp",
+              "alphaCoverage": 0.225479
+            },
+            {
+              "index": 15,
+              "row": 2,
+              "column": 3,
+              "action": "blaster",
+              "name": "blaster-3",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/east/blaster/blaster-3.webp",
+              "alphaCoverage": 0.242874
+            },
+            {
+              "index": 16,
+              "row": 2,
+              "column": 4,
+              "action": "blaster",
+              "name": "blaster-4",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/east/blaster/blaster-4.webp",
+              "alphaCoverage": 0.224854
+            },
+            {
+              "index": 17,
+              "row": 2,
+              "column": 5,
+              "action": "blaster",
+              "name": "blaster-5",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/east/blaster/blaster-5.webp",
+              "alphaCoverage": 0.212204
+            },
+            {
+              "index": 18,
+              "row": 3,
+              "column": 0,
+              "action": "dynamite",
+              "name": "dynamite-0",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/east/dynamite/dynamite-0.webp",
+              "alphaCoverage": 0.217209
+            },
+            {
+              "index": 19,
+              "row": 3,
+              "column": 1,
+              "action": "dynamite",
+              "name": "dynamite-1",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/east/dynamite/dynamite-1.webp",
+              "alphaCoverage": 0.224991
+            },
+            {
+              "index": 20,
+              "row": 3,
+              "column": 2,
+              "action": "dynamite",
+              "name": "dynamite-2",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/east/dynamite/dynamite-2.webp",
+              "alphaCoverage": 0.234253
+            },
+            {
+              "index": 21,
+              "row": 3,
+              "column": 3,
+              "action": "dynamite",
+              "name": "dynamite-3",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/east/dynamite/dynamite-3.webp",
+              "alphaCoverage": 0.213074
+            },
+            {
+              "index": 22,
+              "row": 3,
+              "column": 4,
+              "action": "dynamite",
+              "name": "dynamite-4",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/east/dynamite/dynamite-4.webp",
+              "alphaCoverage": 0.218231
+            },
+            {
+              "index": 23,
+              "row": 3,
+              "column": 5,
+              "action": "dynamite",
+              "name": "dynamite-5",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/east/dynamite/dynamite-5.webp",
+              "alphaCoverage": 0.198624
+            }
+          ]
+        },
+        "north": {
+          "atlas": "/assets/game/nft-directional-v2/atlases/mine-legend/north.webp",
+          "atlasSha256": "1b259a5bc8226aff7e7b20b1dcdb16420e8936898feee109253e1d6d5937d3fe",
+          "frames": [
+            {
+              "index": 0,
+              "row": 0,
+              "column": 0,
+              "action": "idle",
+              "name": "idle-0",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/north/idle/idle-0.webp",
+              "alphaCoverage": 0.224182
+            },
+            {
+              "index": 1,
+              "row": 0,
+              "column": 1,
+              "action": "walk",
+              "name": "walk-1",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/north/walk/walk-1.webp",
+              "alphaCoverage": 0.191635
+            },
+            {
+              "index": 2,
+              "row": 0,
+              "column": 2,
+              "action": "walk",
+              "name": "walk-2",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/north/walk/walk-2.webp",
+              "alphaCoverage": 0.18512
+            },
+            {
+              "index": 3,
+              "row": 0,
+              "column": 3,
+              "action": "walk",
+              "name": "walk-3",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/north/walk/walk-3.webp",
+              "alphaCoverage": 0.199234
+            },
+            {
+              "index": 4,
+              "row": 0,
+              "column": 4,
+              "action": "walk",
+              "name": "walk-4",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/north/walk/walk-4.webp",
+              "alphaCoverage": 0.183914
+            },
+            {
+              "index": 5,
+              "row": 0,
+              "column": 5,
+              "action": "knockout",
+              "name": "knockout-0",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/north/knockout/knockout-0.webp",
+              "alphaCoverage": 0.105057
+            },
+            {
+              "index": 6,
+              "row": 1,
+              "column": 0,
+              "action": "pickaxe",
+              "name": "pickaxe-0",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/north/pickaxe/pickaxe-0.webp",
+              "alphaCoverage": 0.236755
+            },
+            {
+              "index": 7,
+              "row": 1,
+              "column": 1,
+              "action": "pickaxe",
+              "name": "pickaxe-1",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/north/pickaxe/pickaxe-1.webp",
+              "alphaCoverage": 0.221344
+            },
+            {
+              "index": 8,
+              "row": 1,
+              "column": 2,
+              "action": "pickaxe",
+              "name": "pickaxe-2",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/north/pickaxe/pickaxe-2.webp",
+              "alphaCoverage": 0.218307
+            },
+            {
+              "index": 9,
+              "row": 1,
+              "column": 3,
+              "action": "pickaxe",
+              "name": "pickaxe-3",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/north/pickaxe/pickaxe-3.webp",
+              "alphaCoverage": 0.213882
+            },
+            {
+              "index": 10,
+              "row": 1,
+              "column": 4,
+              "action": "pickaxe",
+              "name": "pickaxe-4",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/north/pickaxe/pickaxe-4.webp",
+              "alphaCoverage": 0.24205
+            },
+            {
+              "index": 11,
+              "row": 1,
+              "column": 5,
+              "action": "pickaxe",
+              "name": "pickaxe-5",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/north/pickaxe/pickaxe-5.webp",
+              "alphaCoverage": 0.231506
+            },
+            {
+              "index": 12,
+              "row": 2,
+              "column": 0,
+              "action": "blaster",
+              "name": "blaster-0",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/north/blaster/blaster-0.webp",
+              "alphaCoverage": 0.22023
+            },
+            {
+              "index": 13,
+              "row": 2,
+              "column": 1,
+              "action": "blaster",
+              "name": "blaster-1",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/north/blaster/blaster-1.webp",
+              "alphaCoverage": 0.21756
+            },
+            {
+              "index": 14,
+              "row": 2,
+              "column": 2,
+              "action": "blaster",
+              "name": "blaster-2",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/north/blaster/blaster-2.webp",
+              "alphaCoverage": 0.203583
+            },
+            {
+              "index": 15,
+              "row": 2,
+              "column": 3,
+              "action": "blaster",
+              "name": "blaster-3",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/north/blaster/blaster-3.webp",
+              "alphaCoverage": 0.22612
+            },
+            {
+              "index": 16,
+              "row": 2,
+              "column": 4,
+              "action": "blaster",
+              "name": "blaster-4",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/north/blaster/blaster-4.webp",
+              "alphaCoverage": 0.204376
+            },
+            {
+              "index": 17,
+              "row": 2,
+              "column": 5,
+              "action": "blaster",
+              "name": "blaster-5",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/north/blaster/blaster-5.webp",
+              "alphaCoverage": 0.21196
+            },
+            {
+              "index": 18,
+              "row": 3,
+              "column": 0,
+              "action": "dynamite",
+              "name": "dynamite-0",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/north/dynamite/dynamite-0.webp",
+              "alphaCoverage": 0.226501
+            },
+            {
+              "index": 19,
+              "row": 3,
+              "column": 1,
+              "action": "dynamite",
+              "name": "dynamite-1",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/north/dynamite/dynamite-1.webp",
+              "alphaCoverage": 0.21698
+            },
+            {
+              "index": 20,
+              "row": 3,
+              "column": 2,
+              "action": "dynamite",
+              "name": "dynamite-2",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/north/dynamite/dynamite-2.webp",
+              "alphaCoverage": 0.214355
+            },
+            {
+              "index": 21,
+              "row": 3,
+              "column": 3,
+              "action": "dynamite",
+              "name": "dynamite-3",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/north/dynamite/dynamite-3.webp",
+              "alphaCoverage": 0.206482
+            },
+            {
+              "index": 22,
+              "row": 3,
+              "column": 4,
+              "action": "dynamite",
+              "name": "dynamite-4",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/north/dynamite/dynamite-4.webp",
+              "alphaCoverage": 0.192413
+            },
+            {
+              "index": 23,
+              "row": 3,
+              "column": 5,
+              "action": "dynamite",
+              "name": "dynamite-5",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/north/dynamite/dynamite-5.webp",
+              "alphaCoverage": 0.215347
+            }
+          ]
+        },
+        "south": {
+          "atlas": "/assets/game/nft-directional-v2/atlases/mine-legend/south.webp",
+          "atlasSha256": "e81a97dee982e1abc3460debdbe66a790248d36c79b5c0b460bd30bb585ecb9c",
+          "frames": [
+            {
+              "index": 0,
+              "row": 0,
+              "column": 0,
+              "action": "idle",
+              "name": "idle-0",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/south/idle/idle-0.webp",
+              "alphaCoverage": 0.224976
+            },
+            {
+              "index": 1,
+              "row": 0,
+              "column": 1,
+              "action": "walk",
+              "name": "walk-1",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/south/walk/walk-1.webp",
+              "alphaCoverage": 0.213608
+            },
+            {
+              "index": 2,
+              "row": 0,
+              "column": 2,
+              "action": "walk",
+              "name": "walk-2",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/south/walk/walk-2.webp",
+              "alphaCoverage": 0.203964
+            },
+            {
+              "index": 3,
+              "row": 0,
+              "column": 3,
+              "action": "walk",
+              "name": "walk-3",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/south/walk/walk-3.webp",
+              "alphaCoverage": 0.209671
+            },
+            {
+              "index": 4,
+              "row": 0,
+              "column": 4,
+              "action": "walk",
+              "name": "walk-4",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/south/walk/walk-4.webp",
+              "alphaCoverage": 0.210312
+            },
+            {
+              "index": 5,
+              "row": 0,
+              "column": 5,
+              "action": "knockout",
+              "name": "knockout-0",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/south/knockout/knockout-0.webp",
+              "alphaCoverage": 0.151657
+            },
+            {
+              "index": 6,
+              "row": 1,
+              "column": 0,
+              "action": "pickaxe",
+              "name": "pickaxe-0",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/south/pickaxe/pickaxe-0.webp",
+              "alphaCoverage": 0.242279
+            },
+            {
+              "index": 7,
+              "row": 1,
+              "column": 1,
+              "action": "pickaxe",
+              "name": "pickaxe-1",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/south/pickaxe/pickaxe-1.webp",
+              "alphaCoverage": 0.22937
+            },
+            {
+              "index": 8,
+              "row": 1,
+              "column": 2,
+              "action": "pickaxe",
+              "name": "pickaxe-2",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/south/pickaxe/pickaxe-2.webp",
+              "alphaCoverage": 0.224991
+            },
+            {
+              "index": 9,
+              "row": 1,
+              "column": 3,
+              "action": "pickaxe",
+              "name": "pickaxe-3",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/south/pickaxe/pickaxe-3.webp",
+              "alphaCoverage": 0.237793
+            },
+            {
+              "index": 10,
+              "row": 1,
+              "column": 4,
+              "action": "pickaxe",
+              "name": "pickaxe-4",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/south/pickaxe/pickaxe-4.webp",
+              "alphaCoverage": 0.248566
+            },
+            {
+              "index": 11,
+              "row": 1,
+              "column": 5,
+              "action": "pickaxe",
+              "name": "pickaxe-5",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/south/pickaxe/pickaxe-5.webp",
+              "alphaCoverage": 0.244553
+            },
+            {
+              "index": 12,
+              "row": 2,
+              "column": 0,
+              "action": "blaster",
+              "name": "blaster-0",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/south/blaster/blaster-0.webp",
+              "alphaCoverage": 0.222595
+            },
+            {
+              "index": 13,
+              "row": 2,
+              "column": 1,
+              "action": "blaster",
+              "name": "blaster-1",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/south/blaster/blaster-1.webp",
+              "alphaCoverage": 0.229507
+            },
+            {
+              "index": 14,
+              "row": 2,
+              "column": 2,
+              "action": "blaster",
+              "name": "blaster-2",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/south/blaster/blaster-2.webp",
+              "alphaCoverage": 0.22493
+            },
+            {
+              "index": 15,
+              "row": 2,
+              "column": 3,
+              "action": "blaster",
+              "name": "blaster-3",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/south/blaster/blaster-3.webp",
+              "alphaCoverage": 0.24675
+            },
+            {
+              "index": 16,
+              "row": 2,
+              "column": 4,
+              "action": "blaster",
+              "name": "blaster-4",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/south/blaster/blaster-4.webp",
+              "alphaCoverage": 0.222046
+            },
+            {
+              "index": 17,
+              "row": 2,
+              "column": 5,
+              "action": "blaster",
+              "name": "blaster-5",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/south/blaster/blaster-5.webp",
+              "alphaCoverage": 0.222122
+            },
+            {
+              "index": 18,
+              "row": 3,
+              "column": 0,
+              "action": "dynamite",
+              "name": "dynamite-0",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/south/dynamite/dynamite-0.webp",
+              "alphaCoverage": 0.234207
+            },
+            {
+              "index": 19,
+              "row": 3,
+              "column": 1,
+              "action": "dynamite",
+              "name": "dynamite-1",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/south/dynamite/dynamite-1.webp",
+              "alphaCoverage": 0.226715
+            },
+            {
+              "index": 20,
+              "row": 3,
+              "column": 2,
+              "action": "dynamite",
+              "name": "dynamite-2",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/south/dynamite/dynamite-2.webp",
+              "alphaCoverage": 0.23259
+            },
+            {
+              "index": 21,
+              "row": 3,
+              "column": 3,
+              "action": "dynamite",
+              "name": "dynamite-3",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/south/dynamite/dynamite-3.webp",
+              "alphaCoverage": 0.221939
+            },
+            {
+              "index": 22,
+              "row": 3,
+              "column": 4,
+              "action": "dynamite",
+              "name": "dynamite-4",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/south/dynamite/dynamite-4.webp",
+              "alphaCoverage": 0.219971
+            },
+            {
+              "index": 23,
+              "row": 3,
+              "column": 5,
+              "action": "dynamite",
+              "name": "dynamite-5",
+              "path": "/assets/game/nft-directional-v2/frames/mine-legend/south/dynamite/dynamite-5.webp",
+              "alphaCoverage": 0.22583
+            }
+          ]
+        }
+      }
+    }
+  }
+}

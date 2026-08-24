@@ -275,6 +275,52 @@ test('MATT Dyno swaps weapon sheets and uses front and back walking rows', async
   assert.equal(draws.at(-1)[8], 180);
 });
 
+test('NFT Miners select true north and south atlases and mirror east only for west', async () => {
+  const { canvas, profile, context } = installBrowserStubs(true);
+  const { MattMineGame } = await import('../src/game/GameV3.js');
+  const game = new MattMineGame(canvas, profile);
+  const draws = [];
+  const scales = [];
+  context.drawImage = (...args) => draws.push(args);
+  context.scale = (...args) => scales.push(args);
+  const image = (id) => ({ id, complete: true, naturalWidth: 1536, naturalHeight: 1024 });
+  game.runContext = {
+    mode: 'practice',
+    characterId: 'matt',
+    character: {},
+    tuning: {},
+    nftRun: { minerId: 1 }
+  };
+  game.startRun();
+  game.visualAssets = {
+    nftMinerDirectionalAtlases: {
+      east: image('east'),
+      north: image('north'),
+      south: image('south')
+    }
+  };
+
+  game.player.vx = 0;
+  game.player.vy = -100;
+  game.player.visualAngle = -Math.PI / 2;
+  game.drawPlayer(context);
+  assert.equal(draws.at(-1)[0].id, 'north');
+  assert.equal(scales.at(-1)[0] > 0, true);
+
+  game.player.vy = 100;
+  game.player.visualAngle = Math.PI / 2;
+  game.drawPlayer(context);
+  assert.equal(draws.at(-1)[0].id, 'south');
+  assert.equal(scales.at(-1)[0] > 0, true);
+
+  game.player.vx = -100;
+  game.player.vy = 0;
+  game.player.visualAngle = Math.PI;
+  game.drawPlayer(context);
+  assert.equal(draws.at(-1)[0].id, 'east');
+  assert.equal(scales.at(-1)[0] < 0, true);
+});
+
 test('Ronke, Axie, and Orc use their own walk, Pickaxe, Blaster, and Dynamite rows', async () => {
   const { canvas, profile, context } = installBrowserStubs(true);
   const { MattMineGame } = await import('../src/game/GameV3.js');
