@@ -8,14 +8,16 @@ export const NFT_MINER_ACTION_DURATION = Object.freeze({
 });
 
 const NFT_MINER_EVOLUTIONS = Object.freeze([
-  Object.freeze({ minimumLevel: 100, asset: 'nftMineLegendAtlas', file: 'mine-legend-atlas-v1.png' }),
-  Object.freeze({ minimumLevel: 75, asset: 'nftEliteAtlas', file: 'elite-atlas-v1.png' }),
-  Object.freeze({ minimumLevel: 50, asset: 'nftVaultRaiderAtlas', file: 'vault-raider-atlas-v1.png' }),
-  Object.freeze({ minimumLevel: 35, asset: 'nftVeteranAtlas', file: 'veteran-atlas-v1.png' }),
-  Object.freeze({ minimumLevel: 25, asset: 'nftCrystalHunterAtlas', file: 'crystal-hunter-atlas-v1.png' }),
-  Object.freeze({ minimumLevel: 10, asset: 'nftApprenticeAtlas', file: 'apprentice-atlas-v1.png' }),
-  Object.freeze({ minimumLevel: 1, asset: 'nftRookieAtlas', file: 'rookie-atlas-v1.png' })
+  Object.freeze({ minimumLevel: 100, asset: 'nftMineLegendAtlas', slug: 'mine-legend' }),
+  Object.freeze({ minimumLevel: 75, asset: 'nftEliteAtlas', slug: 'elite' }),
+  Object.freeze({ minimumLevel: 50, asset: 'nftVaultRaiderAtlas', slug: 'vault-raider' }),
+  Object.freeze({ minimumLevel: 35, asset: 'nftVeteranAtlas', slug: 'veteran' }),
+  Object.freeze({ minimumLevel: 25, asset: 'nftCrystalHunterAtlas', slug: 'crystal-hunter' }),
+  Object.freeze({ minimumLevel: 10, asset: 'nftApprenticeAtlas', slug: 'apprentice' }),
+  Object.freeze({ minimumLevel: 1, asset: 'nftRookieAtlas', slug: 'rookie' })
 ]);
+
+export const NFT_MINER_STORED_DIRECTIONS = Object.freeze(['east', 'north', 'south']);
 
 const WEAPON_ROWS = Object.freeze({
   pickaxe: 1,
@@ -33,11 +35,22 @@ export function nftMinerAtlasAssetForLevel(level) {
     || 'nftRookieAtlas';
 }
 
-export function nftMinerAtlasSourceForLevel(level) {
+export function nftMinerAtlasSourceForLevel(level, direction = 'east') {
   const normalizedLevel = Math.max(1, Math.floor(Number(level) || 1));
-  const file = NFT_MINER_EVOLUTIONS.find((evolution) => normalizedLevel >= evolution.minimumLevel)?.file
-    || 'rookie-atlas-v1.png';
-  return `/assets/game/nft-evolution/${file}`;
+  const slug = NFT_MINER_EVOLUTIONS.find((evolution) => normalizedLevel >= evolution.minimumLevel)?.slug
+    || 'rookie';
+  const storedDirection = NFT_MINER_STORED_DIRECTIONS.includes(direction) ? direction : 'east';
+  return `/assets/game/nft-directional-v2/atlases/${slug}/${storedDirection}.webp`;
+}
+
+export function nftMinerAtlasSourcesForLevel(level) {
+  const east = nftMinerAtlasSourceForLevel(level, 'east');
+  return Object.freeze({
+    east,
+    west: east,
+    north: nftMinerAtlasSourceForLevel(level, 'north'),
+    south: nftMinerAtlasSourceForLevel(level, 'south')
+  });
 }
 
 export function nftMinerActionDuration(weapon) {

@@ -8,7 +8,7 @@ import {
 } from './arenaControls.js';
 import { seededRandom, withRandomSource } from './utils.js';
 import { endlessScale } from './expansionConfig.js';
-import { nftMinerAtlasSourceForLevel } from './v3/nftMinerAnimation.js';
+import { nftMinerAtlasSourcesForLevel } from './v3/nftMinerAnimation.js';
 
 const DETERMINISTIC_SERVER_MODES = new Set(['arena', 'practice', 'free', 'paid', 'weekly', 'endless']);
 
@@ -81,6 +81,7 @@ export class MattMineGame extends V3MattMineGame {
     if (!this.headless) {
       delete this.visualAssets.nftMiner;
       delete this.visualAssets.nftMinerAtlas;
+      delete this.visualAssets.nftMinerDirectionalAtlases;
       const minerId = Number(this.runContext.nftRun?.minerId || 0);
       if (Number.isSafeInteger(minerId) && minerId > 0 && typeof globalThis.Image === 'function') {
         const fallbackImage = new globalThis.Image();
@@ -93,10 +94,17 @@ export class MattMineGame extends V3MattMineGame {
           this.runContext.nftRun?.profile?.progression?.level ??
           1
         );
-        const atlasImage = new globalThis.Image();
-        atlasImage.decoding = 'async';
-        atlasImage.src = nftMinerAtlasSourceForLevel(level);
-        this.visualAssets.nftMinerAtlas = atlasImage;
+        const atlasSources = nftMinerAtlasSourcesForLevel(level);
+        const directionalAtlases = Object.fromEntries(
+          ['east', 'north', 'south'].map((direction) => {
+            const image = new globalThis.Image();
+            image.decoding = 'async';
+            image.src = atlasSources[direction];
+            return [direction, image];
+          })
+        );
+        this.visualAssets.nftMinerDirectionalAtlases = directionalAtlases;
+        this.visualAssets.nftMinerAtlas = directionalAtlases.east;
       }
     }
     this.baseRunTuning = structuredClone(this.runContext.tuning);

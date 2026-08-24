@@ -30,12 +30,15 @@ const ROSTER_WEAPON_ROWS = Object.freeze({
 function drawNftMiner(game, ctx, player, movement) {
   if (!game.runContext?.nftRun) return false;
 
-  const atlas = game.visualAssets?.nftMinerAtlas;
+  const visualDirection = nftMinerVisualDirection(player, movement);
+  const storedDirection = visualDirection.verticalFacing ? visualDirection.direction : 'east';
+  const atlas = game.visualAssets?.nftMinerDirectionalAtlases?.[storedDirection]
+    || game.visualAssets?.nftMinerAtlas;
   if (!imageIsReady(atlas)) {
     const fallback = game.visualAssets?.nftMiner;
     if (!imageIsReady(fallback)) return false;
     ctx.save();
-    ctx.scale(Math.cos(visualAngle) >= 0 ? 1 : -1, 1);
+    ctx.scale(visualDirection.direction === 'west' ? -1 : 1, 1);
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(fallback, -55, -114, 110, 132);
     ctx.restore();
@@ -51,7 +54,7 @@ function drawNftMiner(game, ctx, player, movement) {
   ctx.save();
   ctx.translate(motion.offsetX, motion.offsetY);
   ctx.rotate(motion.rotation);
-  ctx.scale(motion.facingSign * motion.scaleX, motion.scaleY);
+  ctx.scale((visualDirection.direction === 'west' ? -1 : 1) * motion.scaleX, motion.scaleY);
   ctx.imageSmoothingEnabled = false;
   ctx.filter = player.hitFlash > 0
     ? 'sepia(1) saturate(6) hue-rotate(310deg) brightness(1.15)'
