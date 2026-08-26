@@ -2,7 +2,9 @@ import { readFile } from 'node:fs/promises';
 import { glob } from 'node:fs/promises';
 
 const reviewedLegacyLimits = new Map(Object.entries({
-  'src/admin.js': 33,
+  // Four additional templates render the fixed Endless Admin schema. All
+  // variable strings pass through escapeHtml; remaining values are normalized numbers.
+  'src/admin.js': 37,
   'src/adminCompetitionStudio.js': 9,
   'src/adminPlayerEditor.js': 3,
   'src/main.js': 40,

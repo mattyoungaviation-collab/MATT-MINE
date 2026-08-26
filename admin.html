@@ -37,6 +37,7 @@
         <button data-tab="players"><span>Players</span><small>Search &amp; moderation</small></button>
         <span class="nav-label">Game</span>
         <button data-tab="studio"><span>Competition Studio</span><small>Maps &amp; schedules</small></button>
+        <button data-tab="endless"><span>MATT Mine Endless</span><small>Generator, economy &amp; runs</small></button>
         <button data-tab="tuning"><span>Game Balance</span><small>Per-lobby tuning</small></button>
         <button data-tab="expansion"><span>Features &amp; Practice</span><small>Gates, controllers &amp; roster</small></button>
         <span class="nav-label">Economy</span>
@@ -397,6 +398,25 @@
             <thead><tr><th>Rank</th><th>Wallet</th><th>Best score</th><th>Entries</th><th>MATT payout</th></tr></thead>
             <tbody id="arena-admin-winners"><tr><td colspan="5">Select a day to load its immutable snapshot.</td></tr></tbody>
           </table>
+        </div>
+      </section>
+
+      <section id="tab-endless" class="tab">
+        <div class="section-heading">
+          <div><p class="eyebrow">PERMANENT PROCEDURAL MODE</p><h2>MATT Mine Endless</h2><p>Different map. Different experience. Same opportunity.</p></div>
+          <button id="refresh-endless-admin" type="button" class="ghost">Refresh live state</button>
+        </div>
+        <div id="endless-admin-status" class="notice">Loading the active generator and reward readiness…</div>
+        <form id="endless-config-form">
+          <div id="endless-config-groups" class="tuning-groups"></div>
+          <article class="panel">
+            <label>Required publish reason<input id="endless-config-reason" maxlength="500" placeholder="Why is this version changing?" required></label>
+            <div class="action-row"><button type="submit">Publish immutable config version</button><button id="evaluate-endless-smart" type="button" class="ghost">Run Smart Engine analysis</button></div>
+          </article>
+        </form>
+        <div class="grid two">
+          <article class="panel"><h2>Active and recent runs</h2><div id="endless-admin-runs" class="table-wrap"></div></article>
+          <article class="panel"><h2>Config history and Smart Engine</h2><div id="endless-admin-history"></div></article>
         </div>
       </section>
 

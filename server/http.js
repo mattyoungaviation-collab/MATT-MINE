@@ -287,7 +287,7 @@ async function handleApiRequest({
     sendJson(response, 200, { ok: true, ...mines });
     return;
   }
-  const publicMineMatch = path.match(/^\/api\/mines\/(practice|arena|pass)$/);
+  const publicMineMatch = path.match(/^\/api\/mines\/(practice|arena|pass|endless)$/);
   if (method === 'GET' && publicMineMatch) {
     const result = await service.publicMineSlot(
       publicMineMatch[1],

@@ -228,6 +228,13 @@ export const spawnTuningMethods = {
       guardianReinforcement: false,
       behavior
     };
+    if (isBoss && this.runContext?.mode === 'endless') {
+      const boss = this.run?.endlessManifest?.map?.objects?.find((object) => object.classification === 'boss');
+      enemy.manifestObjectId = boss?.id || `guardian-${this.run.depth}`;
+      enemy.spawnClassification = 'boss';
+      enemy.requiredForBoss = false;
+      enemy.pointValue = Math.max(0, Math.floor(Number(boss?.points) || 0));
+    }
     this.enemies.push(enemy);
     if (isBoss && Array.isArray(this.run?.customGuardianSpawns)) {
       const authoredPosition = this.run.customGuardianSpawns.shift();
@@ -291,19 +298,24 @@ export const spawnTuningMethods = {
     this.enemies = this.enemies.filter((entry) => entry.id !== enemy.id);
     this.run.kills += 1;
     this.run.bossKills = Math.max(0, Math.floor(this.run.bossKills || 0)) + 1;
-    this.run.rawScore += Math.max(0, Math.round(tuning.bossPointValue || 0));
+    const awardedPoints = this.runContext?.mode === 'endless'
+      ? Math.max(0, Math.round(enemy.pointValue || 0))
+      : Math.max(0, Math.round(tuning.bossPointValue || 0));
+    this.run.rawScore += awardedPoints;
     this.hooks.onArenaEvent?.({
       type: 'guardian_defeated',
       tick: Math.round(this.run.elapsed * 1_000),
-      targetId: enemy.id
+      targetId: enemy.manifestObjectId || enemy.id,
+      points: awardedPoints,
+      classification: enemy.spawnClassification || 'runtime'
     });
     this.gainXp(enemy.xp);
 
-    const payout = 180 + this.run.depth * 45;
+    const payout = this.runContext?.mode === 'endless' ? 0 : 180 + this.run.depth * 45;
     const count = 16;
     const baseValue = Math.floor(payout / count);
     const remainder = payout % count;
-    for (let index = 0; index < count; index += 1) {
+    for (let index = 0; index < (payout > 0 ? count : 0); index += 1) {
       this.pickups.push({
         id: this.entityId++,
         type: 'score',
@@ -382,6 +394,7 @@ export const spawnTuningMethods = {
       const remaining = this.enemies.filter((enemy) => enemy.isBoss).length;
       text = `Defeat the Guardian force · ${remaining} remaining`;
     } else if (this.run.bossReady) text = 'Enter the Guardian Vault';
+    else if (this.runContext?.mode === 'endless') text = `Required enemies: ${this.run.endlessRequiredRemaining || 0} remaining - crystals do not unlock the Guardian`;
     else text = `MATT crystals: ${this.run.crystals} / ${goal}`;
     this.hooks.onObjective?.(text);
   }

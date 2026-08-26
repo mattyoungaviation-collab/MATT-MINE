@@ -126,6 +126,7 @@ let nftWalletSnapshot = null;
 let nftCrystalTransactionHash = '';
 const SELECTED_MINER_STORAGE_KEY = 'matt-mine:selected-nft-miner';
 const PENDING_MINE_STORAGE_KEY = 'matt-mine:pending-mine-destination';
+const ENDLESS_RUN_STORAGE_KEY = 'matt-mine:endless-run-v1';
 let selectedNftMinerId = 0;
 let minerSelectionBusy = false;
 let pendingMineDestination = restoredPendingMineDestination();
@@ -142,6 +143,8 @@ let arenaBusy = false;
 let arenaCountdownTimer = null;
 let activeArenaRun = null;
 let activeArenaTranscript = null;
+let activeEndlessEvents = [];
+let endlessCheckpointBusy = false;
 let activePracticeClaim = null;
 let resultScreenMode = null;
 let returnToMinerAfterRun = false;
@@ -162,6 +165,7 @@ const wallet = new RoninWalletAdapter({
     activeServerRun = null;
     activeArenaRun = null;
     activeArenaTranscript = null;
+    activeEndlessEvents = [];
     nftGarageSnapshot = null;
     nftWalletSnapshot = null;
     nftCrystalTransactionHash = '';
@@ -193,6 +197,13 @@ const ui = {
   dashFill: $('#dash-fill'),
   dashMobileText: $('#dash-mobile-text'),
   runModeHud: $('#run-mode-hud'),
+  endlessHud: $('#endless-hud'),
+  endlessPhase: $('#endless-phase'),
+  endlessRequired: $('#endless-required'),
+  endlessDifficulty: $('#endless-difficulty'),
+  endlessCapability: $('#endless-capability'),
+  endlessDanger: $('#endless-danger'),
+  endlessModifier: $('#endless-modifier'),
   arenaRoundTimer: $('#arena-round-timer'),
   arenaRoundTime: $('#arena-round-time'),
   weaponSlots: [...document.querySelectorAll('.weapon-slot')],
@@ -711,6 +722,10 @@ function openMineRoute(destination) {
     }
     if (destination === 'pass-mine') {
       openPassMine();
+      return;
+    }
+    if (destination === 'endless') {
+      void startRunMode(RUN_MODES.ENDLESS);
       return;
     }
   }
@@ -1346,6 +1361,7 @@ async function startRunMode(mode, options = {}) {
   const useServer =
     options.restartInterruptedNftPractice === true ||
     (mode === RUN_MODES.PAID && serverConfig?.paidRunsEnabled === true) ||
+    mode === RUN_MODES.ENDLESS ||
     mode === RUN_MODES.BETA;
   activePracticeClaim = null;
   resultScreenMode = null;
@@ -1368,6 +1384,8 @@ async function startRunMode(mode, options = {}) {
         : await startApprovedNftServerRun(mode, selectedNftMinerId);
       issuedRun = run;
       activeServerRun = run;
+      activeEndlessEvents = mode === RUN_MODES.ENDLESS ? [] : activeEndlessEvents;
+      if (mode === RUN_MODES.ENDLESS) persistEndlessRun(run);
       if (serverPlayer && options.restartInterruptedNftPractice === true) {
         serverPlayer.interruptedNftPractice = null;
       }
@@ -1399,6 +1417,10 @@ async function startRunMode(mode, options = {}) {
         character: run.character,
         weeklyStage: run.weeklyStage,
         endlessSnapshot: run.endlessSnapshot,
+        endlessRunId: run.runId,
+        endlessConfigVersion: run.configVersion,
+        endlessManifest: run.manifest,
+        currentPhase: run.currentPhase,
         competitionSnapshot: run.competitionSnapshot,
         allowPaidRevive: run.paidReviveEligible === true,
         reviveLimitPerRun: run.reviveLimitPerRun,
@@ -1492,14 +1514,14 @@ function rememberSelectedMiner(minerId) {
 function restoredPendingMineDestination() {
   try {
     const destination = sessionStorage.getItem(PENDING_MINE_STORAGE_KEY) || '';
-    return ['arena', 'pass-mine'].includes(destination) ? destination : '';
+    return ['arena', 'pass-mine', 'endless'].includes(destination) ? destination : '';
   } catch {
     return '';
   }
 }
 
 function rememberPendingMineDestination(destination = '') {
-  const normalizedDestination = ['arena', 'pass-mine'].includes(destination) ? destination : '';
+  const normalizedDestination = ['arena', 'pass-mine', 'endless'].includes(destination) ? destination : '';
   pendingMineDestination = normalizedDestination;
   try {
     if (normalizedDestination) sessionStorage.setItem(PENDING_MINE_STORAGE_KEY, normalizedDestination);
@@ -2335,6 +2357,22 @@ const game = new MattMineGame(canvas, profile, {
     ui.dashFill.style.width = `${Math.round(stats.dashReady * 100)}%`;
     ui.runModeHud.textContent = modeLabel(stats.runMode, stats.rewardWeight);
     ui.runModeHud.dataset.mode = stats.runMode;
+    const endless = stats.runMode === RUN_MODES.ENDLESS ? stats.endless : null;
+    if (ui.endlessHud) {
+      ui.endlessHud.hidden = !endless;
+      if (endless) {
+        ui.endlessPhase.textContent = formatNumber(stats.depth);
+        ui.endlessRequired.textContent = formatNumber(endless.requiredRemaining);
+        ui.endlessDifficulty.textContent = formatNumber(endless.difficulty?.budget || 0);
+        ui.endlessCapability.textContent = formatNumber(Math.round(endless.capability?.rating || 0));
+        ui.endlessDanger.textContent = endless.danger?.tier || 'LOW';
+        ui.endlessDanger.dataset.tier = endless.danger?.tier || 'LOW';
+        ui.endlessModifier.hidden = !endless.modifier && !endless.milestone;
+        ui.endlessModifier.textContent = endless.milestone
+          ? `MILESTONE${endless.modifier ? ` · ${String(endless.modifier).replaceAll('_', ' ').toUpperCase()}` : ''}`
+          : String(endless.modifier || '').replaceAll('_', ' ').toUpperCase();
+      }
+    }
     const showArenaRoundTimer = stats.runMode === 'arena' && stats.roundDurationMs > 0;
     if (ui.arenaRoundTimer) {
       ui.arenaRoundTimer.hidden = !showArenaRoundTimer;
@@ -2392,7 +2430,9 @@ const game = new MattMineGame(canvas, profile, {
     toast(`${upgrade.name} equipped`);
   },
   onDepthChoice(data) {
-    $('#depth-summary').textContent = `You can secure ${formatNumber(data.projectedPayout)} score now, or descend for a x${data.nextMultiplier.toFixed(1)} total score multiplier.`;
+    $('#depth-summary').textContent = activeServerRun?.mode === RUN_MODES.ENDLESS
+      ? `Phase ${data.depth} is server verified. Bank ${formatNumber(data.projectedPayout)} total score now, or descend into a new unique map. Difficulty rises; point opportunity follows the published phase budget.`
+      : `You can secure ${formatNumber(data.projectedPayout)} score now, or descend for a x${data.nextMultiplier.toFixed(1)} total score multiplier.`;
     $('#descend-button').textContent = activeServerRun?.mode === RUN_MODES.ENDLESS
       ? 'DESCEND ENDLESS'
       : data.depth >= 5 ? 'MAX DEPTH — EXTRACT' : 'DESCEND DEEPER';
@@ -2447,7 +2487,14 @@ const game = new MattMineGame(canvas, profile, {
     setGameplayUi(false);
     updateMenu();
     if (arenaRun) void submitArenaRun(arenaRun);
-    else if (serverRun) void submitServerRun(serverRun, result);
+    else if (serverRun?.mode === RUN_MODES.ENDLESS) {
+      if (serverRun.endlessBankSummary) {
+        renderEndlessBankSummary(serverRun.endlessBankSummary);
+        activeServerRun = null;
+        activeEndlessEvents = [];
+        clearPersistedEndlessRun();
+      } else void finalizeEndlessKnockout(serverRun);
+    } else if (serverRun) void submitServerRun(serverRun, result);
   },
   onPaidReviveOffered(data) {
     paidRevivePending = true;
@@ -2524,6 +2571,9 @@ const game = new MattMineGame(canvas, profile, {
   onArenaInput(event) {
     activeArenaTranscript?.record(event);
   },
+  onArenaEvent(event) {
+    if (activeServerRun?.mode === RUN_MODES.ENDLESS) activeEndlessEvents.push(structuredClone(event));
+  },
   onToast: toast
 });
 game.setScreenShakeEnabled(gameplayPreferences.screenShake);
@@ -2543,7 +2593,7 @@ for (const button of document.querySelectorAll('[data-launch-action]')) {
       openMines();
       return;
     }
-    if (action === 'pass-mine' || action === 'arena') {
+    if (action === 'pass-mine' || action === 'arena' || action === 'endless') {
       openMineRoute(action);
       return;
     }
@@ -2650,6 +2700,10 @@ $('#enter-mines-button').addEventListener('click', () => {
     openPassMine();
     return;
   }
+  if (destination === 'endless') {
+    void startRunMode(RUN_MODES.ENDLESS);
+    return;
+  }
   openMines();
 });
 $('#select-loadout-button').addEventListener('click', () => void openMinerCommandCenter());
@@ -2676,6 +2730,7 @@ $('#garage-withdraw-all-button').addEventListener('click', () => {
   syncCrystalWithdrawalButton();
 });
 $('#practice-run-button').addEventListener('click', () => void startRunMode(RUN_MODES.PRACTICE));
+$('#endless-run-button').addEventListener('click', () => openMineRoute('endless'));
 $('#resume-nft-practice-button').addEventListener('click', () => void resumeInterruptedNftPractice());
 $('#beta-run-button').addEventListener('click', () => void startRunMode(RUN_MODES.BETA));
 document.querySelectorAll('[data-beta-action]').forEach((button) => button.addEventListener('click', () => {
@@ -2771,8 +2826,14 @@ $('#abandon-run-button').addEventListener('click', () => {
   resetAbandonButton();
   game.abandonRun();
 });
-$('#extract-button').addEventListener('click', () => game.extract());
-$('#descend-button').addEventListener('click', () => game.descend());
+$('#extract-button').addEventListener('click', () => {
+  if (activeServerRun?.mode === RUN_MODES.ENDLESS) void checkpointEndlessChoice('bank');
+  else game.extract();
+});
+$('#descend-button').addEventListener('click', () => {
+  if (activeServerRun?.mode === RUN_MODES.ENDLESS) void checkpointEndlessChoice('descend');
+  else game.descend();
+});
 $('#sound-button').addEventListener('click', () => {
   renderAudioSettings();
   showScreen('sound-settings');
@@ -4047,6 +4108,7 @@ function modeLabel(mode, rewardWeight = 0) {
   if (mode === RUN_MODES.FREE) return 'FREE RANKED · 1×';
   if (mode === RUN_MODES.PAID) return `PASS RANKED · ${rewardWeight || 2}×`;
   if (mode === 'arena') return 'MATT ARENA';
+  if (mode === RUN_MODES.ENDLESS) return 'MATT MINE ENDLESS · NFT ONLY';
   return 'PRACTICE · NO XP · NO CRYSTALS';
 }
 
@@ -4057,9 +4119,127 @@ async function approveNftRun(mode, minerId) {
 }
 
 async function startApprovedNftServerRun(mode, minerId) {
+  if (mode === RUN_MODES.ENDLESS) return apiClient.startRun(mode, minerId);
   if (mode !== RUN_MODES.PAID) return apiClient.startRun(mode, 0);
   const approval = await approveNftRun(mode, minerId);
   return apiClient.startRun(mode, minerId, approval);
+}
+
+async function checkpointEndlessChoice(action) {
+  const run = activeServerRun;
+  if (endlessCheckpointBusy || run?.mode !== RUN_MODES.ENDLESS || game.state !== 'depthchoice') return;
+  endlessCheckpointBusy = true;
+  const extractButton = $('#extract-button');
+  const descendButton = $('#descend-button');
+  extractButton.disabled = true;
+  descendButton.disabled = true;
+  const originalExtract = extractButton.textContent;
+  const originalDescend = descendButton.textContent;
+  if (action === 'bank') extractButton.textContent = 'SERVER BANKING...';
+  else descendButton.textContent = 'VERIFYING PHASE...';
+  try {
+    const accepted = await retryRunFinalization(() => apiClient.checkpointEndlessPhase(
+      run.runId,
+      run.runToken,
+      run.checkpoint,
+      activeEndlessEvents,
+      action
+    ), { onRetry: showDatabaseReconnect });
+    run.checkpoint = accepted.checkpoint;
+    run.currentPhase = accepted.run.currentPhase;
+    run.completedPhases = accepted.run.completedPhases;
+    run.score = accepted.run.score;
+    run.crystalsCarried = accepted.run.crystalsCarried;
+    run.manifest = accepted.nextManifest || accepted.run.manifest;
+    activeEndlessEvents = [];
+    if (action === 'descend') {
+      game.runContext.endlessManifest = accepted.nextManifest;
+      toast(`Phase ${accepted.phase.phase} verified · ${formatNumber(accepted.phase.score)} points · descending`);
+      game.descend();
+    } else {
+      run.endlessBankSummary = accepted.summary;
+      if (accepted.rewardSettlement?.pending) {
+        toast('Run verified. Reward settlement is queued and can be retried safely.');
+      }
+      toast(`${formatNumber(accepted.summary.totalScore)} verified Endless points banked`);
+      game.extract();
+    }
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    endlessCheckpointBusy = false;
+    extractButton.disabled = false;
+    descendButton.disabled = false;
+    extractButton.textContent = originalExtract;
+    descendButton.textContent = originalDescend;
+  }
+}
+
+function renderEndlessBankSummary(summary = {}) {
+  $('#economy-result').innerHTML = `
+    <strong>ENDLESS RUN SERVER VERIFIED</strong>
+    <span>${formatNumber(summary.totalScore)} points · Phase ${formatNumber(summary.deepestPhase)} · ${formatNumber(summary.crystalsCarried)} crystals carried</span>
+    <small>${formatNumber(summary.requiredEnemiesDefeated)} required enemies · ${formatNumber(summary.guardiansDefeated)} Guardians · ${formatNumber(summary.oreBroken)} ore · checkpoint ${escapeHtml(String(summary.digest || '').slice(0, 16))}</small>
+  `;
+  toast('Endless run banked and added to the leaderboard');
+}
+
+function persistEndlessRun(run) {
+  try {
+    sessionStorage.setItem(ENDLESS_RUN_STORAGE_KEY, JSON.stringify({ runId: run.runId, runToken: run.runToken }));
+  } catch {}
+}
+
+function clearPersistedEndlessRun() {
+  try { sessionStorage.removeItem(ENDLESS_RUN_STORAGE_KEY); } catch {}
+}
+
+async function reconnectPersistedEndlessRun() {
+  if (!serverPlayer || activeServerRun || activeArenaRun) return false;
+  let saved = null;
+  try { saved = JSON.parse(sessionStorage.getItem(ENDLESS_RUN_STORAGE_KEY) || 'null'); } catch {}
+  if (!saved?.runId || !saved?.runToken) return false;
+  try {
+    const run = await apiClient.reconnectEndlessRun(saved.runId, saved.runToken);
+    activeServerRun = run;
+    activeEndlessEvents = [];
+    rememberSelectedMiner(run.minerId);
+    await showMineLoadingScreen({ id: 'endless', name: 'MATT Mine Endless', snapshot: { map: run.manifest?.map } });
+    game.startRun({
+      mode: RUN_MODES.ENDLESS,
+      runId: run.runId,
+      seed: run.seed,
+      endlessRunId: run.runId,
+      endlessConfigVersion: run.configVersion,
+      endlessSnapshot: run.endlessSnapshot,
+      endlessManifest: run.manifest,
+      currentPhase: run.currentPhase,
+      nftRun: run.nftRun,
+      tuning: {}
+    });
+    toast(`Reconnected to Endless Phase ${run.currentPhase}`);
+    return true;
+  } catch (error) {
+    clearPersistedEndlessRun();
+    console.warn('[MATT Mine] Endless reconnect unavailable.', error);
+    return false;
+  }
+}
+
+async function finalizeEndlessKnockout(run) {
+  showFinalizationBusy('CLOSING ENDLESS RUN');
+  try {
+    const accepted = await apiClient.abandonEndlessRun(run.runId, run.runToken, 'knockout');
+    renderEndlessBankSummary(accepted.summary);
+  } catch (error) {
+    $('#economy-result').innerHTML = `<strong>ENDLESS CLOSE PENDING</strong><span>${escapeHtml(error.message)}</span><small>Previously signed phase checkpoints remain on the server.</small>`;
+    toast(error.message);
+  } finally {
+    if (activeServerRun === run) activeServerRun = null;
+    activeEndlessEvents = [];
+    clearPersistedEndlessRun();
+    runFinalizationBusy = false;
+  }
 }
 
 function renderAudioSettings() {
@@ -4314,6 +4494,8 @@ function abandonIssuedRun(context = {}) {
   activeServerRun = null;
   activeArenaRun = null;
   activeArenaTranscript = null;
+  activeEndlessEvents = [];
+  if (serverRun?.mode === RUN_MODES.ENDLESS) clearPersistedEndlessRun();
   const transcriptDiscard = transcript?.discard() || Promise.resolve();
   toast('Run abandoned - no score was submitted');
 
@@ -4327,7 +4509,9 @@ function abandonIssuedRun(context = {}) {
         await refreshArena(true);
       } else if (serverRun) {
         await retryRunFinalization(
-          () => apiClient.abandonRun(serverRun.runId, serverRun.runToken)
+          () => serverRun.mode === RUN_MODES.ENDLESS
+            ? apiClient.abandonEndlessRun(serverRun.runId, serverRun.runToken)
+            : apiClient.abandonRun(serverRun.runId, serverRun.runToken)
         );
         await refreshServerPlayer();
       }
@@ -4345,7 +4529,9 @@ async function releaseIssuedServerRun(serverRun, transcript = null) {
   await transcript?.discard?.().catch(() => undefined);
   try {
     await retryRunFinalization(
-      () => apiClient.abandonRun(serverRun.runId, serverRun.runToken)
+      () => serverRun.mode === RUN_MODES.ENDLESS
+        ? apiClient.abandonEndlessRun(serverRun.runId, serverRun.runToken)
+        : apiClient.abandonRun(serverRun.runId, serverRun.runToken)
     );
     return true;
   } catch (error) {
@@ -4418,6 +4604,7 @@ function slotIdForMode(mode) {
   return {
     [RUN_MODES.PRACTICE]: 'practice',
     [RUN_MODES.PAID]: 'pass',
+    [RUN_MODES.ENDLESS]: 'endless',
     arena: 'arena'
   }[mode] || 'practice';
 }
@@ -4472,6 +4659,10 @@ window.addEventListener('mattmine:slot-enter', (event) => {
     openMineRoute('pass-mine');
     return;
   }
+  if (slot.id === 'endless') {
+    openMineRoute('endless');
+    return;
+  }
   const mode = { practice: RUN_MODES.PRACTICE }[slot.id];
   if (mode) void startRunMode(mode);
 });
@@ -4506,6 +4697,7 @@ async function bootstrapServer() {
     }
     await refreshArena(true);
     await mountMineHub(apiClient);
+    await reconnectPersistedEndlessRun();
   } catch (error) {
     console.warn('[MATT Mine] Server bootstrap unavailable.', error);
     await mountMineHub(apiClient);
@@ -4529,3 +4721,11 @@ async function bootstrapServer() {
 updateMenu();
 showScreen('launch');
 void bootstrapServer();
+
+setInterval(() => {
+  const run = activeServerRun;
+  if (run?.mode !== RUN_MODES.ENDLESS || !run.checkpoint || endlessCheckpointBusy) return;
+  void apiClient.heartbeatEndlessRun(run.runId, run.runToken, run.checkpoint).catch((error) => {
+    if (!isRetryableAppendError(error)) console.warn('[MATT Mine] Endless heartbeat rejected.', error);
+  });
+}, 30_000);

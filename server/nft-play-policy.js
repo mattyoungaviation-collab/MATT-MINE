@@ -10,16 +10,16 @@ export const PRACTICE_PLAY_POLICY = Object.freeze({
 });
 
 const NFT_REWARD_RUN_MODES = new Set([
-  SERVER_RUN_MODES.PAID
+  SERVER_RUN_MODES.PAID,
+  SERVER_RUN_MODES.ENDLESS
 ]);
 
 const RETIRED_RUN_MODES = new Set([
   SERVER_RUN_MODES.FREE,
-  SERVER_RUN_MODES.WEEKLY,
-  SERVER_RUN_MODES.ENDLESS
+  SERVER_RUN_MODES.WEEKLY
 ]);
 
-export const MINER_GATED_MINE_IDS = Object.freeze(['arena', 'pass']);
+export const MINER_GATED_MINE_IDS = Object.freeze(['arena', 'pass', 'endless']);
 
 export function requiresMinerNft(mode) {
   return NFT_REWARD_RUN_MODES.has(String(mode || '').toLowerCase());

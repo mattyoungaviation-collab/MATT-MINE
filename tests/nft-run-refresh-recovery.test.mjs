@@ -182,11 +182,11 @@ test('reward-bearing mines reject a wallet without a selected owned Miner before
   assert.equal(Object.keys(state.runs).length, 0);
 });
 
-test('retired run modes cannot be reopened by legacy server settings', async () => {
+test('legacy retired run modes remain closed after Endless becomes permanent', async () => {
   const harness = createHarness();
   const session = await signIn(harness.service);
 
-  for (const mode of [SERVER_RUN_MODES.FREE, SERVER_RUN_MODES.WEEKLY, SERVER_RUN_MODES.ENDLESS]) {
+  for (const mode of [SERVER_RUN_MODES.FREE, SERVER_RUN_MODES.WEEKLY]) {
     await assert.rejects(
       () => harness.service.startRun(session.token, mode, { minerId: 1 }),
       (error) => error.code === 'mine_retired'

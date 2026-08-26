@@ -23,7 +23,16 @@ const PRODUCTION_PATHS = new Set([
   '/api/admin/reconciliation',
   '/api/competitions/weekly/leaderboard',
   '/api/competitions/endless/leaderboard',
-  '/api/runs/competitive/events'
+  '/api/runs/competitive/events',
+  '/api/endless/status',
+  '/api/endless/checkpoint',
+  '/api/endless/heartbeat',
+  '/api/endless/reconnect',
+  '/api/endless/abandon',
+  '/api/endless/settle',
+  '/api/admin/endless',
+  '/api/admin/endless/config',
+  '/api/admin/endless/smart-engine/evaluate'
 ]);
 
 export function createProductionMattMineHttpServer({ root, service, maxRequestBytes = MAX_REQUEST_BYTES }) {
@@ -60,6 +69,35 @@ export function createProductionMattMineHttpServer({ root, service, maxRequestBy
 
       if (method === 'GET' && path === '/api/expansion/status') {
         sendJson(response, 200, { ok: true, expansion: await service.expansionStatus(bearerToken(request)) });
+        return;
+      }
+      if (method === 'GET' && path === '/api/endless/status') {
+        sendJson(response, 200, { ok: true, endless: await service.endlessStatus() });
+        return;
+      }
+      if (method === 'POST' && path === '/api/endless/checkpoint') {
+        const body = await readJson(request, maxRequestBytes);
+        sendJson(response, 200, { ok: true, ...(await service.checkpointEndlessPhase(bearerToken(request), body)) });
+        return;
+      }
+      if (method === 'POST' && path === '/api/endless/heartbeat') {
+        const body = await readJson(request, maxRequestBytes);
+        sendJson(response, 200, { ok: true, ...(await service.heartbeatEndlessRun(bearerToken(request), body)) });
+        return;
+      }
+      if (method === 'POST' && path === '/api/endless/reconnect') {
+        const body = await readJson(request, maxRequestBytes);
+        sendJson(response, 200, { ok: true, run: await service.reconnectEndlessRun(bearerToken(request), body) });
+        return;
+      }
+      if (method === 'POST' && path === '/api/endless/abandon') {
+        const body = await readJson(request, maxRequestBytes);
+        sendJson(response, 200, { ok: true, ...(await service.abandonEndlessRun(bearerToken(request), body)) });
+        return;
+      }
+      if (method === 'POST' && path === '/api/endless/settle') {
+        const body = await readJson(request, maxRequestBytes);
+        sendJson(response, 200, { ok: true, settlement: await service.retryEndlessSettlement(bearerToken(request), body) });
         return;
       }
       if (method === 'POST' && path === '/api/runs/competitive/events') {
@@ -134,15 +172,30 @@ export function createProductionMattMineHttpServer({ root, service, maxRequestBy
         sendJson(response, 200, { ok: true, reconciliation: await service.adminPaymentReconciliation(request.headers['x-matt-admin-key']) });
         return;
       }
+      if (method === 'GET' && path === '/api/admin/endless') {
+        sendJson(response, 200, { ok: true, endless: await service.adminEndless(request.headers['x-matt-admin-key']) });
+        return;
+      }
+      if (method === 'PUT' && path === '/api/admin/endless/config') {
+        const body = await readJson(request, maxRequestBytes);
+        sendJson(response, 200, { ok: true, configVersion: await service.publishEndlessConfig(request.headers['x-matt-admin-key'], body) });
+        return;
+      }
+      if (method === 'POST' && path === '/api/admin/endless/smart-engine/evaluate') {
+        sendJson(response, 200, { ok: true, recommendation: await service.evaluateEndlessSmartEngine(request.headers['x-matt-admin-key']) });
+        return;
+      }
       const competitionMatch = path.match(/^\/api\/competitions\/(weekly|endless)\/leaderboard$/);
       if (method === 'GET' && competitionMatch) {
         sendJson(response, 200, {
           ok: true,
-          leaderboard: await service.competitionLeaderboard(
-            bearerToken(request),
-            competitionMatch[1],
-            requestUrl.searchParams.get('period')
-          )
+          leaderboard: competitionMatch[1] === 'endless'
+            ? await service.endlessLeaderboard(bearerToken(request), requestUrl.searchParams.get('scope') || 'all-time')
+            : await service.competitionLeaderboard(
+                bearerToken(request),
+                competitionMatch[1],
+                requestUrl.searchParams.get('period')
+              )
         });
         return;
       }

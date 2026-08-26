@@ -56,12 +56,19 @@ import {
   resolveCompetitionSnapshot,
   validateCompetitionDraft
 } from '../src/game/competitionStudio.js';
+import { endlessLeaderboard as endlessPhaseLeaderboard } from './endless-engine.js';
+import { generateEndlessPhase } from '../src/game/endlessMine.js';
 
 const FREE_PASS_XP = 25;
 const PAID_PASS_XP = 100;
 const ARENA_PASS_XP = PAID_PASS_XP;
 const ADMIN_SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 const ADMIN_STEP_UP_TTL_MS = 5 * 60 * 1000;
+const ENDLESS_PUBLIC_SLOT = Object.freeze({
+  id: 'endless', number: 4, name: 'MATT Mine Endless', mode: 'endless',
+  leaderboard: true, color: '#59e4ff', procedural: true,
+  subtitle: 'Miner NFT required. Free entry. A unique server-authorized map every phase.'
+});
 
 export class MattMineService {
   constructor(database, options = {}) {
@@ -1340,21 +1347,24 @@ export class MattMineService {
     const state = await this.database.readPublicMineState?.() || await this.database.read();
     return {
       generatedAt: timestamp,
-      slots: COMPETITION_SLOTS.map((definition) => {
+      slots: [...COMPETITION_SLOTS.map((definition) => {
         const snapshot = resolveCompetitionSnapshot(state.competitionStudio, definition.id, timestamp);
         return publicCompetitionSlot(definition, snapshot, state.operations);
-      })
+      }), publicEndlessCompetitionSlot(state, timestamp)]
     };
   }
 
   async publicMineSlot(slotId, requestedPeriod = '') {
-    const definition = COMPETITION_SLOTS.find((slot) => slot.id === String(slotId || ''));
+    const definition = COMPETITION_SLOTS.find((slot) => slot.id === String(slotId || '')) ||
+      (String(slotId || '') === 'endless' ? ENDLESS_PUBLIC_SLOT : null);
     assertApi(definition, 404, 'mine_slot_unknown', 'That mine does not exist.');
     const timestamp = this.now();
     const state = definition.id === 'arena' && this.database.readPublicMineState
       ? await this.database.readPublicMineState()
       : await this.database.read();
-    const snapshot = resolveCompetitionSnapshot(state.competitionStudio, definition.id, timestamp);
+    const snapshot = definition.id === 'endless'
+      ? publicEndlessSnapshot(state)
+      : resolveCompetitionSnapshot(state.competitionStudio, definition.id, timestamp);
     let leaderboard = null;
     if (definition.id === 'pass') {
       const week = normalizeWeekKey(requestedPeriod, utcWeekKey(timestamp));
@@ -1364,9 +1374,18 @@ export class MattMineService {
         await this.arenaLeaderboard(requestedPeriod),
         state
       );
+    } else if (definition.id === 'endless') {
+      const config = state.endlessCompetition.configVersions[state.endlessCompetition.activeConfigVersion].config;
+      leaderboard = {
+        mode: 'endless',
+        scope: ['daily', 'weekly', 'season', 'all-time'].includes(requestedPeriod) ? requestedPeriod : 'all-time',
+        rows: endlessPhaseLeaderboard(state.endlessCompetition.leaderboardEntries || [], ['daily', 'weekly', 'season', 'all-time'].includes(requestedPeriod) ? requestedPeriod : 'all-time', timestamp, config.leaderboards.seasonDays)
+      };
     }
     return {
-      slot: publicCompetitionSlot(definition, snapshot, state.operations),
+      slot: definition.id === 'endless'
+        ? publicEndlessCompetitionSlot(state, timestamp)
+        : publicCompetitionSlot(definition, snapshot, state.operations),
       leaderboard
     };
   }
@@ -2946,6 +2965,55 @@ function publicCompetitionSlot(definition, snapshot, operations = {}) {
       loadout: structuredClone(snapshot.loadout),
       rules: structuredClone(snapshot.rules)
     } : null
+  };
+}
+
+function publicEndlessSnapshot(state) {
+  const store = state.endlessCompetition;
+  const version = store.activeConfigVersion;
+  const config = store.configVersions[version].config;
+  const manifest = generateEndlessPhase({
+    runId: 'public-endless-preview',
+    runSeed: 'MATT-ENDLESS-PUBLIC-PREVIEW',
+    phase: 1,
+    configVersion: version,
+    config,
+    minerProfile: {}
+  });
+  return {
+    id: `endless-preview-v${version}`,
+    name: 'MATT Mine Endless',
+    subtitle: ENDLESS_PUBLIC_SLOT.subtitle,
+    status: config.enabled ? 'live' : 'paused',
+    effectiveAt: store.configVersions[version].publishedAt,
+    expiresAt: 0,
+    fingerprint: manifest.fingerprint,
+    map: manifest.map,
+    depths: [{ depth: 1, map: manifest.map }],
+    loadout: {
+      characterId: 'matt', startingWeapon: 'pickaxe', availableWeapons: ['pickaxe', 'dynamite', 'blaster'],
+      startingHealth: 100, startingDynamite: 0, blasterEnergy: 115, runUpgrades: true, maximumDrones: 4, paidRevive: false
+    },
+    rules: {
+      attemptLimit: 0,
+      safeStartSeconds: config.generation.safeStartSeconds,
+      leaderboardTitle: 'MATT Mine Endless Leaderboard',
+      rewardLabel: config.rewards.enabled ? 'Miner NFT · Server Verified Rewards' : 'Miner NFT · Free Entry · Rewards Await Published Economy',
+      instructions: 'Defeat every required natural enemy, beat the Guardian, then bank or descend into a new map.'
+    }
+  };
+}
+
+function publicEndlessCompetitionSlot(state, timestamp) {
+  const snapshot = publicEndlessSnapshot(state);
+  const config = state.endlessCompetition.configVersions[state.endlessCompetition.activeConfigVersion].config;
+  return {
+    ...publicCompetitionSlot(ENDLESS_PUBLIC_SLOT, snapshot, state.operations),
+    state: config.enabled ? 'live' : 'paused',
+    entriesPaused: state.operations.maintenanceMode === true || config.enabled !== true,
+    freeEntry: config.entry.paidEnabled !== true,
+    entryPriceMatt: config.entry.mattPrice,
+    generatedAt: timestamp
   };
 }
 

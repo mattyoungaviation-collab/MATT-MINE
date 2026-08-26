@@ -243,6 +243,10 @@ export const stateMethods = {
           if (enemy) {
             enemy.x = placed.x + index * 12;
             enemy.y = placed.y + index * 9;
+            enemy.manifestObjectId = placed.quantity === 1 ? placed.id : `${placed.id}:${index + 1}`;
+            enemy.spawnClassification = placed.classification || 'authored';
+            enemy.requiredForBoss = placed.requiredForBoss === true;
+            enemy.pointValue = Math.max(0, Math.floor(Number(placed.points) || 0));
           }
         }
         continue;
@@ -256,6 +260,10 @@ export const stateMethods = {
           const ore = this.ores.at(-1);
           ore.x = placed.x + index * 13;
           ore.y = placed.y + index * 10;
+          ore.manifestObjectId = placed.quantity === 1 ? placed.id : `${placed.id}:${index + 1}`;
+          ore.pointValue = Math.max(0, Math.floor(Number(placed.points) || 0));
+          ore.scoreValue = ore.pointValue;
+          ore.mattCrystal = placed.mattCrystal === true;
           if (placed.type === 'weapon_blaster') ore.grantsWeapon = 'blaster';
           if (placed.type === 'weapon_dynamite') ore.grantsWeapon = 'dynamite';
           if (placed.type === 'crystal') requiredCrystals += 1;
@@ -307,7 +315,10 @@ export const stateMethods = {
         .reduce((sum, object) => sum + object.quantity, 0)
     );
     this.run.customCrystalGoal = requiredCrystals > 0 ? Math.min(requiredCrystals, 3) : 0;
-    if (this.run.customCrystalGoal === 0) this.run.bossReady = true;
+    if (this.runContext?.mode === 'endless') {
+      this.run.customCrystalGoal = 0;
+      this.run.bossReady = Number(this.run.endlessRequiredRemaining || 0) === 0;
+    } else if (this.run.customCrystalGoal === 0) this.run.bossReady = true;
   },
   addOre(type, room, luck = 0, forceRich = false) {
     const tuning = this.runContext?.tuning || {};
@@ -702,6 +713,7 @@ export const stateMethods = {
     } else if (this.run.bossKilled) text = 'Return to the extraction lift';
     else if (this.run.bossSpawned) text = 'Defeat the Guardian';
     else if (this.run.bossReady) text = 'Enter the Guardian Vault';
+    else if (this.runContext?.mode === 'endless') text = `Required enemies: ${this.run.endlessRequiredRemaining || 0} remaining - crystals do not unlock the Guardian`;
     else text = `MATT crystals: ${this.run.crystals} / ${goal}`;
     this.hooks.onObjective?.(text);
   },

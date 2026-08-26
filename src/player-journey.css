@@ -435,6 +435,7 @@
 #menu .practice-run-card::before { background-image: url('../assets/game/mine-cards/practice.webp'); }
 #menu .arena-run-card::before { background-image: url('../assets/game/mine-cards/arena.webp'); }
 #menu .paid-run-card::before { background-image: url('../assets/game/mine-cards/pass.webp'); }
+#menu .endless-run-card::before { background-image: url('../assets/game/mine-cards/weekly.webp'); }
 
 #menu .run-mode-card::after {
   z-index: -1;

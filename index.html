@@ -124,7 +124,7 @@
                 <div><span>MINE PASS</span><strong><span id="launch-pass-price">95</span> RON</strong></div>
                 <div><span>PASS RUN</span><strong><span id="launch-run-price">10</span> RON</strong></div>
               </div>
-              <button type="button" data-launch-action="mines">VIEW THE THREE MINES</button>
+              <button type="button" data-launch-action="mines">VIEW THE FOUR MINES</button>
             </aside>
 
             <div class="launch-scroll-cue" aria-hidden="true"><span></span> DESCEND</div>
@@ -132,7 +132,7 @@
 
           <section class="launch-mine-select" aria-labelledby="launch-mine-select-title">
             <div class="launch-mine-select-heading">
-              <span></span><h2 id="launch-mine-select-title">THREE WAYS INTO THE MINE</h2><span></span>
+              <span></span><h2 id="launch-mine-select-title">FOUR WAYS INTO THE MINE</h2><span></span>
             </div>
             <div class="launch-mine-card-grid">
               <button class="launch-mine-card practice" type="button" data-launch-action="practice">
@@ -144,6 +144,9 @@
               <button class="launch-mine-card pass" type="button" data-launch-action="pass-mine">
                 <i aria-hidden="true">M</i><strong>PASS MINE</strong><small>Miner NFT + Mine Pass required</small><b>SELECT MINER</b><em>PASS HOLDERS</em>
               </button>
+              <button class="launch-mine-card endless" type="button" data-launch-action="endless">
+                <i aria-hidden="true">∞</i><strong>MATT MINE ENDLESS</strong><small>Miner NFT · Free entry · A unique server-authorized map every phase</small><b>SELECT MINER</b><em>PERMANENT MODE</em>
+              </button>
             </div>
             <button class="journey-continue" type="button" data-launch-action="how-to-play">
               <span>NOT SURE WHICH MINE?</span><strong>SEE HOW A RUN WORKS →</strong>
@@ -151,7 +154,7 @@
           </section>
 
           <section class="launch-proof-rail" aria-label="Game highlights">
-            <div><strong>3</strong><span>ACTIVE MINES<br />PRACTICE · ARENA · PASS</span></div>
+            <div><strong>4</strong><span>ACTIVE MINES<br />PRACTICE · ARENA · PASS · ENDLESS</span></div>
             <div><strong>3</strong><span>WEAPONS TO MASTER<br />PICKAXE · DYNAMITE · BLASTER</span></div>
             <div><strong>5</strong><span>DEPTHS PER MINE<br />ADMIN-BUILT MAPS</span></div>
             <div><strong>100%</strong><span>SERVER CONTROLLED<br />GAMEPLAY + POINTS</span></div>
@@ -213,7 +216,7 @@
 
           <section id="launch-economy" class="launch-section launch-economy-section">
             <div class="launch-section-heading centered">
-              <p>ONE GAME · THREE LIVE MINES</p>
+              <p>ONE GAME · FOUR LIVE MINES</p>
               <h2>Practice freely.<br /><span>Compete with your Miner.</span></h2>
               <p class="launch-section-copy">Learn in public Practice, then bring an owned Miner NFT into MATT Arena or the premium Pass Mine.</p>
             </div>
@@ -521,7 +524,7 @@
             <div class="mine-briefing-column">
               <div class="menu-mine-overview">
                 <div class="menu-map-heading">
-                  <span><b>THREE LIVE MINES</b><small>Practice · MATT Arena · Pass Mine</small></span>
+                  <span><b>FOUR LIVE MINES</b><small>Practice · MATT Arena · Pass Mine · Endless</small></span>
                   <em>MAPS + GAMEPLAY CONTROLLED BY ADMIN</em>
                 </div>
               </div>
@@ -537,7 +540,7 @@
                 <span>SELECT A MINE</span>
                 <small>Practice is public. Arena and Pass use the Miner NFT selected for this session.</small>
               </div>
-              <div class="run-mode-grid four-lobbies three-lobbies" aria-label="Choose one of three live mines">
+              <div class="run-mode-grid four-lobbies three-lobbies" aria-label="Choose one of four live mines">
                 <button id="practice-run-button" class="run-mode-card practice-run-card">
                   <span class="lobby-number">1</span>
                   <span class="mode-kicker">PRACTICE MINE</span>
@@ -562,6 +565,14 @@
                   <span class="lobby-status"><strong id="pass-status">FREE TIER</strong><small id="pass-days">Pass needed</small></span>
                   <span class="lobby-credit"><b id="paid-credit-count">0</b> credits · <small id="paid-daily-status">0 / 10 today</small></span>
                   <b id="paid-run-cta">GET MINE PASS</b>
+                </button>
+                <button id="endless-run-button" class="run-mode-card endless-run-card" type="button">
+                  <span class="lobby-number">4</span>
+                  <span class="mode-kicker">MATT MINE ENDLESS</span>
+                  <strong>Different every phase</strong>
+                  <small>Selected Miner NFT required. Free entry at launch; bank or descend forever.</small>
+                  <span class="lobby-status"><strong>SERVER GENERATED</strong><small>Exact phase point budgets</small></span>
+                  <b>ENTER ENDLESS</b>
                 </button>
               </div>
               <div id="interrupted-nft-practice" class="interrupted-nft-practice" hidden>
@@ -1006,6 +1017,14 @@
 
       <section id="hud" class="hud" aria-live="polite">
         <div class="run-mode-hud" id="run-mode-hud">PRACTICE</div>
+        <div id="endless-hud" class="endless-hud" hidden>
+          <span>PHASE <b id="endless-phase">1</b></span>
+          <span>REQUIRED <b id="endless-required">0</b></span>
+          <span>DIFFICULTY <b id="endless-difficulty">0</b></span>
+          <span>CAPABILITY <b id="endless-capability">0</b></span>
+          <span>DANGER <b id="endless-danger">LOW</b></span>
+          <span id="endless-modifier" hidden></span>
+        </div>
         <div id="arena-round-timer" class="arena-round-timer" hidden>
           <span>ARENA TIME</span>
           <strong id="arena-round-time">20:00</strong>

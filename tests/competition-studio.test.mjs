@@ -328,7 +328,7 @@ test('public mine cards expose authoritative entry pauses without hiding leaderb
   );
 
   const overview = await service.publicMineSlots();
-  assert.deepEqual(overview.slots.map((slot) => slot.id), ['practice', 'arena', 'pass']);
+  assert.deepEqual(overview.slots.map((slot) => slot.id), ['practice', 'arena', 'pass', 'endless']);
   assert.equal(overview.slots.find((slot) => slot.id === 'pass').entriesPaused, true);
   assert.equal(overview.slots.find((slot) => slot.id === 'practice').entriesPaused, false);
 
@@ -559,7 +559,7 @@ test('Admin Practice playtests begin on the selected authored depth', async () =
   assert.equal(ordinaryPractice.run.depth, 1, 'only explicit Admin test snapshots may skip depths');
 });
 
-test('production surfaces include the exact three-mine hub, loading screen, and visual Admin editor', async () => {
+test('production surfaces include the four-mine hub, loading screen, and visual Admin editor', async () => {
   const [admin, main, hub, loading, productionCss, studioJs, ...mineCardAssets] = await Promise.all([
     readFile(new URL('../admin.html', import.meta.url), 'utf8'),
     readFile(new URL('../src/main.js', import.meta.url), 'utf8'),
@@ -584,7 +584,8 @@ test('production surfaces include the exact three-mine hub, loading screen, and 
   assert.match(hub, /slot-character-preview/);
   assert.match(hub, /MATT Arena/);
   assert.match(hub, /Pass Mine/);
-  assert.doesNotMatch(hub, /Daily Mine|Seven-Day Mine|PvP Mine|Endless/i);
+  assert.match(hub, /Endless/i);
+  assert.doesNotMatch(hub, /Daily Mine|Seven-Day Mine|PvP Mine/i);
   assert.match(hub, /MINER NFT REQUIRED · OPEN MINE/);
   assert.match(hub, /VIEW BOARD · ENTRY PAUSED/);
   assert.match(hub, /MINE PAUSED/);

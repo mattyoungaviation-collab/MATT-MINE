@@ -92,20 +92,36 @@ export const enemySpawnMethods = {
     const tuning = this.runContext?.tuning || {};
     this.enemies = this.enemies.filter((entry) => entry.id !== enemy.id);
     this.run.kills += 1;
-    this.run.rawScore += enemy.isBoss
-      ? Math.max(0, Math.round(tuning.bossPointValue || 0))
-      : Math.max(0, Math.round(tuning.killPointValue || 0));
+    const endlessMode = this.runContext?.mode === 'endless';
+    const awardedPoints = endlessMode
+      ? Math.max(0, Math.round(enemy.pointValue || 0))
+      : enemy.isBoss
+        ? Math.max(0, Math.round(tuning.bossPointValue || 0))
+        : Math.max(0, Math.round(tuning.killPointValue || 0));
+    this.run.rawScore += awardedPoints;
+    if (endlessMode && enemy.requiredForBoss === true) {
+      const killed = new Set(this.run.endlessRequiredKilled || []);
+      killed.add(enemy.manifestObjectId);
+      this.run.endlessRequiredKilled = [...killed];
+      this.run.endlessRequiredRemaining = Math.max(0, Number(this.run.endlessManifest?.gate?.requiredCount || 0) - killed.size);
+      if (this.run.endlessRequiredRemaining === 0 && !this.run.bossReady) {
+        this.run.bossReady = true;
+        this.hooks.onToast?.(`${this.layout.guardianRoom.name} unlocked - all required enemies defeated`);
+      }
+    }
     this.hooks.onArenaEvent?.({
       type: enemy.isBoss ? 'guardian_defeated' : 'enemy_killed',
       tick: Math.round(this.run.elapsed * 1_000),
-      targetId: enemy.id
+      targetId: enemy.manifestObjectId || enemy.id,
+      points: awardedPoints,
+      classification: enemy.spawnClassification || (enemy.guardianReinforcement ? 'reinforcement' : 'runtime')
     });
     this.gainXp(enemy.xp);
-    const payout = enemy.isBoss ? 180 + this.run.depth * 45 : randomInt(2, 8);
+    const payout = endlessMode ? 0 : enemy.isBoss ? 180 + this.run.depth * 45 : randomInt(2, 8);
     const count = enemy.isBoss ? 16 : 1;
     const baseValue = Math.floor(payout / count);
     const remainder = payout % count;
-    for (let index = 0; index < count; index += 1) {
+    for (let index = 0; index < (payout > 0 ? count : 0); index += 1) {
       this.pickups.push({
         id: this.entityId++,
         type: 'score',

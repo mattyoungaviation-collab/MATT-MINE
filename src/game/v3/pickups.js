@@ -19,6 +19,14 @@ export const pickupMethods = {
       }
 
       if (dist < pickup.radius + this.player.radius + 5) {
+        let crystalAccepted = true;
+        if (pickup.type === 'crystal') {
+          const carryLimit = nftCarryCapacity(this.runContext);
+          if (Number(this.run.crystalsCollected || 0) >= carryLimit) {
+            this.addFloater(this.player.x, this.player.y - 52, 'CRYSTAL PACK FULL', '#ffcf73');
+            crystalAccepted = false;
+          }
+        }
         if (pickup.type === 'health') {
           const amount = nftHealAmount(this.runContext, Math.max(1, pickup.value || 30));
           this.player.health = Math.min(this.player.maxHealth, this.player.health + amount);
@@ -31,14 +39,15 @@ export const pickupMethods = {
         } else {
           this.run.rawScore += pickup.value;
         }
-        if (pickup.type === 'crystal') {
-          const carryLimit = nftCarryCapacity(this.runContext);
-          if (Number(this.run.crystalsCollected || 0) >= carryLimit) {
-            this.addFloater(this.player.x, this.player.y - 52, 'CRYSTAL PACK FULL', '#ffcf73');
-            continue;
-          }
+        if (pickup.type === 'crystal' && crystalAccepted) {
           this.run.crystals += 1;
           this.run.crystalsCollected = Math.max(0, Number(this.run.crystalsCollected || 0)) + 1;
+          this.hooks.onArenaEvent?.({
+            type: 'crystal_collected',
+            tick: Math.round(this.run.elapsed * 1_000),
+            targetId: pickup.sourceObjectId || '',
+            totalCarried: this.run.crystalsCollected
+          });
           this.audio.play('crystal');
           this.addFloater(this.player.x, this.player.y - 52, 'MATT CRYSTAL', CONFIG.colors.crystal);
         }
@@ -49,7 +58,7 @@ export const pickupMethods = {
     this.pickups = this.pickups.filter((pickup) => !pickup.collected);
 
     const goal = this.crystalGoal();
-    if (this.run.crystals >= goal && !this.run.bossReady) {
+    if (this.runContext?.mode !== 'endless' && this.run.crystals >= goal && !this.run.bossReady) {
       this.run.bossReady = true;
       this.hooks.onToast?.(`${this.layout.guardianRoom.name} unlocked`);
     }

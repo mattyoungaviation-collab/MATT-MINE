@@ -1353,6 +1353,36 @@ button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{ou
   font-weight: 900;
 }
 
+.endless-hud {
+  position: absolute;
+  z-index: 8;
+  top: 54px;
+  left: 18px;
+  display: flex;
+  flex-wrap: wrap;
+  max-width: min(760px, calc(100vw - 36px));
+  gap: 5px;
+  pointer-events: none;
+}
+
+.endless-hud[hidden] { display: none; }
+
+.endless-hud span {
+  padding: 5px 8px;
+  border: 1px solid rgba(89, 228, 255, .42);
+  border-radius: 6px;
+  color: #a8b7c0;
+  background: rgba(4, 10, 14, .86);
+  font: 800 10px/1.1 Inter, sans-serif;
+  letter-spacing: .07em;
+  box-shadow: inset 0 0 16px rgba(89, 228, 255, .06);
+}
+
+.endless-hud b { color: #e9fbff; }
+.endless-hud #endless-danger[data-tier='SEVERE'],
+.endless-hud #endless-danger[data-tier='EXTREME'] { color: #ff7c72; }
+.endless-hud #endless-modifier { color: #ffe17a; border-color: rgba(255, 225, 122, .5); }
+
 .run-mode-hud[data-mode='free'],
 .run-mode-result[data-mode='free'] { color: #f4d75e; border-color: rgba(244,215,94,0.55); }
 .run-mode-hud[data-mode='paid'],

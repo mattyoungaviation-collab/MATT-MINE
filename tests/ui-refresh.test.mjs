@@ -26,16 +26,17 @@ test('approved UI refresh exposes every player dashboard and unique control id',
     assert.match(html, new RegExp(`id="${id}"`));
   }
   assert.equal((html.match(/data-profile-tab=/g) || []).length, 4);
-  assert.equal((html.match(/class="launch-mine-card /g) || []).length, 3);
+  assert.equal((html.match(/class="launch-mine-card /g) || []).length, 4);
   assert.match(html, /data-site-action="how-to-play"/);
   assert.match(html, /data-launch-action="practice"/);
   assert.match(html, /data-launch-action="arena"/);
   assert.match(html, /data-launch-action="pass-mine"/);
+  assert.match(html, /data-launch-action="endless"/);
   assert.match(html, /id="select-loadout-button"[^>]*>MANAGE LOADOUT</);
   assert.doesNotMatch(html, /id="select-loadout-button"[^>]*href="\.\/nft-lab\.html"/);
   assert.match(html, /id="miner-number-input"[^>]*min="1"[^>]*max="1000"/);
   assert.match(html, /class="leaderboard-tab arena-leaderboard-tab active" data-board="arena"/);
-  assert.doesNotMatch(html, /FREE DAILY MINE|SEVEN-DAY MINE|ENDLESS MINE|PVP MINE/i);
+  assert.doesNotMatch(html, /FREE DAILY MINE|SEVEN-DAY MINE|PVP MINE/i);
   assert.match(html, /src\/ui-refresh\.css/);
   assert.match(html, /src\/player-journey\.css/);
 });

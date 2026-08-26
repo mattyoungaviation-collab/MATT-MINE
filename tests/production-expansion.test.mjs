@@ -214,7 +214,7 @@ test('Beta completion awards no Pass XP, profile progress, or leaderboard result
   assert.deepEqual(finished.leaderboard.rows, []);
 });
 
-test('Beta remains private while Weekly and Endless stay retired', async () => {
+test('Beta remains private, Weekly stays retired, and Endless enforces the Miner gate', async () => {
   const { service } = harness({ competitive: true });
   const token = await login(service);
   await assert.rejects(() => service.startRun(token, 'beta'), (error) => error.code === 'beta_mode_disabled');
@@ -227,7 +227,10 @@ test('Beta remains private while Weekly and Endless stay retired', async () => {
   assert.equal(beta.mode, 'beta');
   assert.match(beta.seed, /^MATT-BETA-/);
   await assert.rejects(() => service.startRun(token, 'weekly'), (error) => error.code === 'mine_retired');
-  await assert.rejects(() => service.startRun(token, 'endless'), (error) => error.code === 'mine_retired');
+  await assert.rejects(
+    () => service.startRun(token, 'endless', { minerId: 1 }),
+    (error) => error.code === 'nft_gameplay_required'
+  );
 });
 
 test('all launch characters are available without a browser-currency purchase', async () => {

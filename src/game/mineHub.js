@@ -10,7 +10,7 @@ export async function mountMineHub(apiClient) {
     <div class="competition-hub">
       <div class="competition-hub-heading">
         <div><span>LIVE MINES</span><strong>Choose your mine</strong></div>
-        <small>Practice is public. MATT Arena and Pass Mine require your selected Miner NFT.</small>
+        <small>Practice is public. Arena, Pass, and Endless require your selected Miner NFT.</small>
       </div>
       <div class="competition-slot-grid" data-mine-cards aria-label="MATT Mine competitions"></div>
     </div>
@@ -102,7 +102,9 @@ function renderCards(container, slots) {
         ? 'VIEW BOARD · ENTRY PAUSED →'
         : slot.id === 'practice'
           ? 'OPEN PRACTICE →'
-          : 'MINER NFT REQUIRED · OPEN MINE →';
+          : slot.id === 'endless'
+            ? 'FREE ENTRY · MINER NFT REQUIRED · OPEN ENDLESS →'
+            : 'MINER NFT REQUIRED · OPEN MINE →';
     const accessibleLabel = slot.comingSoon
       ? `${escapeHtml(slot.name)} coming soon`
       : paused
@@ -169,7 +171,7 @@ function drawCardCharacter(canvas, characterId) {
 
 function renderDetail(modal, slot, leaderboard) {
   const snapshot = slot.snapshot || {};
-  modal.classList.remove('slot-practice', 'slot-arena', 'slot-pass');
+  modal.classList.remove('slot-practice', 'slot-arena', 'slot-pass', 'slot-endless');
   modal.classList.add(`slot-${slot.id}`);
   modal.querySelector('[data-mine-kicker]').textContent = slot.leaderboard ? 'MINER-GATED MINE' : 'PUBLIC PRACTICE MINE';
   modal.querySelector('[data-mine-name]').textContent = snapshot.name || slot.name;
@@ -191,7 +193,7 @@ function renderDetail(modal, slot, leaderboard) {
   const rows = leaderboard?.rows || [];
   modal.querySelector('[data-mine-board]').innerHTML = slot.leaderboard
     ? rows.length
-      ? rows.slice(0, 100).map((row) => `<tr><td>${row.rank || '—'}</td><td>${escapeHtml(row.identity?.name || row.walletId || shortAddress(row.address))}</td><td>${format(row.score)}</td><td>${row.depth || row.completedDays || '—'}</td></tr>`).join('')
+      ? rows.slice(0, 100).map((row) => `<tr><td>${row.rank || '—'}</td><td>${escapeHtml(row.identity?.name || row.walletId || shortAddress(row.address))}</td><td>${format(row.score)}</td><td>${row.deepestPhase || row.depth || row.completedDays || '—'}</td></tr>`).join('')
       : '<tr><td colspan="4">Be the first miner on this board.</td></tr>'
     : '<tr><td colspan="4">Practice is unlimited and never affects a ranked leaderboard.</td></tr>';
   const enterButton = modal.querySelector('[data-mine-enter]');
@@ -201,13 +203,17 @@ function renderDetail(modal, slot, leaderboard) {
       ? 'START PRACTICE'
       : slot.id === 'arena'
         ? 'ENTER ARENA'
-        : 'ENTER THIS MINE';
+        : slot.id === 'endless'
+          ? 'ENTER ENDLESS - FREE'
+          : 'ENTER THIS MINE';
   enterButton.disabled = slot.entriesPaused === true;
   modal.dataset.depth = '1';
-  modal.querySelector('[data-mine-depth-tabs]').innerHTML = Array.from(
-    { length: COMPETITION_DEPTH_COUNT },
-    (_, index) => `<button type="button" data-mine-depth="${index + 1}" class="${index === 0 ? 'active' : ''}">DEPTH ${index + 1}</button>`
-  ).join('');
+  modal.querySelector('[data-mine-depth-tabs]').innerHTML = slot.id === 'endless'
+    ? '<button type="button" data-mine-depth="1" class="active">PROCEDURAL PHASE PREVIEW</button>'
+    : Array.from(
+        { length: COMPETITION_DEPTH_COUNT },
+        (_, index) => `<button type="button" data-mine-depth="${index + 1}" class="${index === 0 ? 'active' : ''}">DEPTH ${index + 1}</button>`
+      ).join('');
   renderDetailDepth(modal, slot, 1);
 }
 
@@ -229,7 +235,8 @@ function fallbackSlots() {
   return [
     ['practice', 1, 'Practice Mine', false, '#55dfb4'],
     ['arena', 2, 'MATT Arena', true, '#ffcf32'],
-    ['pass', 3, 'Pass Mine', true, '#bd74ff']
+    ['pass', 3, 'Pass Mine', true, '#bd74ff'],
+    ['endless', 4, 'MATT Mine Endless', true, '#59e4ff']
   ].map(([id, number, name, leaderboard, color, comingSoon = false]) => ({ id, number, name, leaderboard, color, comingSoon }));
 }
 

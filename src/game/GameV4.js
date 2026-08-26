@@ -7,7 +7,7 @@ import {
   normalizeArenaControlState
 } from './arenaControls.js';
 import { seededRandom, withRandomSource } from './utils.js';
-import { endlessScale } from './expansionConfig.js';
+import { generateEndlessPhase, normalizeEndlessConfig } from './endlessMine.js';
 import { nftMinerAtlasSourcesForLevel } from './v3/nftMinerAnimation.js';
 
 const DETERMINISTIC_SERVER_MODES = new Set(['arena', 'practice', 'free', 'paid', 'weekly', 'endless']);
@@ -24,9 +24,11 @@ export class MattMineGame extends V3MattMineGame {
       : context.tuning?._competitionSnapshot && typeof context.tuning._competitionSnapshot === 'object'
         ? structuredClone(context.tuning._competitionSnapshot)
         : null;
-    const startingDepth = context.mode === 'practice' && competitionSnapshot?.status === 'test'
-      ? Math.max(1, Math.min(5, Math.floor(Number(context.startingDepth) || 1)))
-      : 1;
+    const startingDepth = context.mode === 'endless'
+      ? Math.max(1, Math.floor(Number(context.currentPhase) || 1))
+      : context.mode === 'practice' && competitionSnapshot?.status === 'test'
+        ? Math.max(1, Math.min(5, Math.floor(Number(context.startingDepth) || 1)))
+        : 1;
     const runtimeTuning = context.tuning && typeof context.tuning === 'object'
       ? { ...context.tuning }
       : {};
@@ -55,6 +57,11 @@ export class MattMineGame extends V3MattMineGame {
       character: context.character && typeof context.character === 'object' ? { ...context.character } : {},
       weeklyStage: context.weeklyStage && typeof context.weeklyStage === 'object' ? { ...context.weeklyStage } : null,
       endlessSnapshot: context.endlessSnapshot && typeof context.endlessSnapshot === 'object' ? { ...context.endlessSnapshot } : null,
+      endlessRunId: String(context.endlessRunId || context.runId || ''),
+      endlessConfigVersion: Math.max(1, Math.floor(Number(context.endlessConfigVersion || 1))),
+      endlessManifest: context.endlessManifest && typeof context.endlessManifest === 'object'
+        ? structuredClone(context.endlessManifest)
+        : null,
       competitionSnapshot,
       startingDepth,
       roundDurationMs: context.mode === 'arena'
@@ -124,31 +131,48 @@ export class MattMineGame extends V3MattMineGame {
   generateDepth() {
     if (this.runContext?.mode === 'endless' && this.runContext.endlessSnapshot) {
       const depth = this.run?.depth || 1;
-      const snapshot = this.runContext.endlessSnapshot;
-      const scale = endlessScale(depth, {
-        endlessHealthGrowth: snapshot.healthGrowth,
-        endlessDamageGrowth: snapshot.damageGrowth,
-        endlessSpeedGrowth: snapshot.speedGrowth,
-        endlessMultiplierGrowth: snapshot.multiplierGrowth,
-        endlessMaximumScale: snapshot.maximumScale
-      });
-      const rules = {
-        ...scale,
-        bossCount: depth % snapshot.bossFrequency === 0
-          ? Math.min(10, snapshot.bossCount + Math.floor(depth / 10))
-          : 0,
-        roomCount: Math.min(30, snapshot.roomCount + Math.floor((depth - 1) / 3))
-      };
+      const config = normalizeEndlessConfig(this.runContext.endlessSnapshot.config || this.runContext.endlessSnapshot);
+      const supplied = this.runContext.endlessManifest;
+      const manifest = supplied?.phase === depth
+        ? structuredClone(supplied)
+        : generateEndlessPhase({
+            runId: this.runContext.endlessRunId || this.runContext.seed,
+            runSeed: this.runContext.seed,
+            phase: depth,
+            configVersion: this.runContext.endlessConfigVersion,
+            config,
+            minerProfile: this.runContext.nftRun?.profile || this.runContext.tuning?._nftRun?.profile
+          });
       const tuning = structuredClone(this.baseRunTuning || this.runContext.tuning || {});
-      tuning.roomsPerDepth = rules.roomCount;
-      tuning.enemyHealthMultiplier = (tuning.enemyHealthMultiplier || 1) * rules.health;
-      tuning.enemyDamageMultiplier = (tuning.enemyDamageMultiplier || 1) * rules.damage;
-      tuning.enemySpeedMultiplier = (tuning.enemySpeedMultiplier || 1) * rules.speed;
-      for (let depth = 1; depth <= 5; depth += 1) {
-        tuning[`depth${depth}GuardianBosses`] = rules.bossCount;
-      }
+      tuning.enemyHealthMultiplier = (tuning.enemyHealthMultiplier || 1) * manifest.difficulty.statScale.health;
+      tuning.enemyDamageMultiplier = (tuning.enemyDamageMultiplier || 1) * manifest.difficulty.statScale.damage;
+      tuning.enemySpeedMultiplier = (tuning.enemySpeedMultiplier || 1) * manifest.difficulty.statScale.speed;
+      tuning.safeStartSeconds = manifest.rules.safeStartSeconds;
+      tuning.usePerDepthRoomSpawns = false;
+      tuning._endlessManifest = manifest;
+      const dynamicSnapshot = {
+        id: `${manifest.generatorVersion}:${manifest.fingerprint}`,
+        slotId: 'endless',
+        status: 'live',
+        enemyPlanMode: 'authored',
+        guardianAiMode: 'advanced',
+        monsterTuning: {},
+        map: manifest.map,
+        depths: [{ depth: Math.min(depth, 5), map: manifest.map }],
+        loadout: {
+          characterId: 'matt', startingWeapon: 'pickaxe', availableWeapons: ['pickaxe', 'dynamite', 'blaster'],
+          startingHealth: 100, startingDynamite: 0, blasterEnergy: 115, runUpgrades: true, maximumDrones: 4, paidRevive: false
+        },
+        rules: { safeStartSeconds: manifest.rules.safeStartSeconds }
+      };
+      this.runContext.competitionSnapshot = dynamicSnapshot;
+      tuning._competitionSnapshot = dynamicSnapshot;
       this.runContext.tuning = tuning;
-      this.run.endlessRules = rules;
+      this.run.endlessManifest = manifest;
+      this.run.endlessRequiredRemaining = manifest.gate.requiredCount;
+      this.run.endlessRequiredKilled = [];
+      this.run.endlessCompletionCredited = false;
+      this.run.endlessRules = structuredClone(manifest.difficulty);
     }
     const seed = `${this.runContext?.seed || 'MATT-RANDOM'}:DEPTH:${this.run?.depth || 1}`;
     const source = DETERMINISTIC_SERVER_MODES.has(this.runContext?.mode)
@@ -249,6 +273,15 @@ export class MattMineGame extends V3MattMineGame {
       ...stats,
       runMode: this.runContext?.mode || 'practice',
       rewardWeight: this.runContext?.rewardWeight || 0,
+      endless: this.runContext?.mode === 'endless' ? {
+        phasePoints: this.run?.endlessManifest?.pointBudget || 0,
+        requiredRemaining: this.run?.endlessRequiredRemaining || 0,
+        difficulty: this.run?.endlessManifest?.difficulty || null,
+        capability: this.run?.endlessManifest?.capability || null,
+        danger: this.run?.endlessManifest?.danger || null,
+        modifier: this.run?.endlessManifest?.difficulty?.modifier || '',
+        milestone: this.run?.endlessManifest?.difficulty?.milestone === true
+      } : null,
       roundDurationMs,
       roundRemainingMs: Math.max(0, roundDurationMs - roundElapsedMs)
     });
@@ -299,11 +332,28 @@ export class MattMineGame extends V3MattMineGame {
   }
 
   depthMultiplier(depth = this.run?.depth || 1) {
-    if (this.runContext?.mode === 'endless') {
-      const growth = Number(this.runContext.endlessSnapshot?.multiplierGrowth || .25);
-      return 1 + Math.max(0, depth - 1) * growth;
-    }
+    if (this.runContext?.mode === 'endless') return 1;
     return super.depthMultiplier(depth);
+  }
+
+  updatePortal() {
+    const previousState = this.state;
+    super.updatePortal();
+    if (
+      this.runContext?.mode === 'endless' && previousState === 'playing' &&
+      this.state === 'depthchoice' && !this.run.endlessCompletionCredited
+    ) {
+      const points = Math.max(0, Math.floor(Number(this.run.endlessManifest?.pointLedger?.completion) || 0));
+      this.run.rawScore += points;
+      this.run.endlessCompletionCredited = true;
+      this.hooks.onArenaEvent?.({
+        type: 'phase_completed',
+        tick: Math.round((this.run?.elapsed || 0) * 1_000),
+        phase: this.run.depth,
+        points,
+        manifestFingerprint: this.run.endlessManifest?.fingerprint || ''
+      });
+    }
   }
 
   extract() {
@@ -414,6 +464,8 @@ export class MattMineGame extends V3MattMineGame {
       day: this.runContext?.day || '',
       week: this.runContext?.week || '',
       rewardWeight: this.runContext?.rewardWeight || 0,
+      endlessManifest: this.run?.endlessManifest ? structuredClone(this.run.endlessManifest) : null,
+      endlessRequiredKilled: Array.isArray(this.run?.endlessRequiredKilled) ? [...this.run.endlessRequiredKilled] : [],
       timeLimitReached: this.run?.timeLimitReached === true
     });
     try {

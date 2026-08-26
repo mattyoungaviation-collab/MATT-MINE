@@ -258,7 +258,7 @@ button,
 }
 
 .run-mode-grid.four-lobbies.three-lobbies {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .four-lobbies .run-mode-card {
@@ -1078,7 +1078,7 @@ button,
 
 .competition-slot-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -1122,6 +1122,8 @@ button,
 .mine-detail.slot-pass { --slot-color: #bd74ff; }
 .competition-slot-card.slot-weekly,
 .mine-detail.slot-weekly { --slot-color: #ff805e; }
+.competition-slot-card.slot-endless,
+.mine-detail.slot-endless { --slot-color: #59e4ff; }
 .competition-slot-card.slot-pvp,
 .mine-detail.slot-pvp { --slot-color: #6f7787; }
 
@@ -1130,6 +1132,7 @@ button,
 .competition-slot-card.slot-daily { --mine-card-image: url("../assets/game/mine-cards/daily.webp"); }
 .competition-slot-card.slot-pass { --mine-card-image: url("../assets/game/mine-cards/pass.webp"); }
 .competition-slot-card.slot-weekly { --mine-card-image: url("../assets/game/mine-cards/weekly.webp"); }
+.competition-slot-card.slot-endless { --mine-card-image: url("../assets/game/mine-cards/weekly.webp"); }
 .competition-slot-card.slot-pvp { --mine-card-image: url("../assets/game/mine-cards/pvp.webp"); }
 
 .competition-slot-card > * {

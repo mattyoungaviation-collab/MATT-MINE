@@ -287,7 +287,9 @@ export const weaponsMethods = {
     this.hooks.onArenaEvent?.({
       type: 'ore_broken',
       tick: Math.round(this.run.elapsed * 1_000),
-      targetId: ore.id
+      targetId: ore.manifestObjectId || ore.id,
+      points: Math.max(0, Math.floor(Number(ore.pointValue ?? ore.scoreValue) || 0)),
+      mattCrystal: ore.mattCrystal === true
     });
     this.gainXp(ore.xp);
     const drops = Math.max(1, Math.ceil(ore.scoreValue / (ore.kind === 'cache' ? 9 : 6)));
@@ -301,6 +303,8 @@ export const weaponsMethods = {
         y: ore.y + randomRange(-18, 18),
         radius: ore.kind === 'crystal' && index === 0 ? 11 : ore.kind === 'cache' ? 9 : 7,
         value: baseDropValue + (index < remainder ? 1 : 0),
+        sourceObjectId: ore.manifestObjectId || '',
+        mattCrystal: ore.mattCrystal === true,
         color: ore.kind === 'crystal' && index === 0 ? CONFIG.colors.crystal : ore.kind === 'cache' ? CONFIG.colors.treasure : CONFIG.colors.pickup,
         vx: randomRange(-90, 90),
         vy: randomRange(-90, 90)

@@ -19,6 +19,7 @@ import {
   defaultCompetitionStudio,
   normalizeCompetitionStudio
 } from '../src/game/competitionStudio.js';
+import { defaultEndlessConfig, normalizeEndlessConfig } from '../src/game/endlessMine.js';
 
 export function defaultServerState() {
   return {
@@ -36,7 +37,7 @@ export function defaultServerState() {
     gameTuning: defaultGameTuning(),
     expansionConfig: defaultExpansionConfig(),
     weeklyCompetition: { weeks: {} },
-    endlessCompetition: { seasons: {} },
+    endlessCompetition: defaultEndlessCompetition(),
     competitionStudio: defaultCompetitionStudio(),
     nftV2Protocol: defaultNftV2Protocol(),
     operations: defaultOperations(),
@@ -81,7 +82,7 @@ export function normalizeServerState(input = {}) {
     gameTuning: normalizeGameTuning(migrateLegacyGameTuning(source.gameTuning, source.version)),
     expansionConfig: safeExpansionConfig(source.expansionConfig),
     weeklyCompetition: normalizeCompetitionStore(source.weeklyCompetition, 'weeks'),
-    endlessCompetition: normalizeCompetitionStore(source.endlessCompetition, 'seasons'),
+    endlessCompetition: normalizeEndlessCompetition(source.endlessCompetition),
     competitionStudio: normalizeCompetitionStudio(source.competitionStudio),
     nftV2Protocol: normalizeNftV2Protocol(source.nftV2Protocol),
     operations: normalizeOperations(source.operations),
@@ -330,6 +331,75 @@ function normalizeCompetitionStore(input, bucket) {
       .filter(([key, value]) => key.length <= 40 && isRecord(value))
       .slice(-250)
       .map(([key, value]) => [key, structuredClone(value)]))
+  };
+}
+
+export function defaultEndlessCompetition(timestamp = 0) {
+  const config = defaultEndlessConfig();
+  // Gameplay launches free and NFT-only. Economic awards stay fail-closed
+  // until Admin publishes explicit conversion and XP values.
+  config.rewards = {
+    ...config.rewards,
+    enabled: false,
+    crystalsEnabled: false,
+    minerXpEnabled: false
+  };
+  return {
+    version: 1,
+    activeConfigVersion: 1,
+    configVersions: {
+      1: { version: 1, config, publishedAt: timestamp, publishedBy: 'SYSTEM_BOOTSTRAP', reason: 'Free NFT-only launch defaults' }
+    },
+    runs: {},
+    leaderboardEntries: [],
+    paymentTransactions: {},
+    smartEngine: { recommendations: [], lastEvaluatedAt: 0 },
+    seasons: {}
+  };
+}
+
+function normalizeEndlessCompetition(input) {
+  const defaults = defaultEndlessCompetition();
+  const source = isRecord(input) ? input : {};
+  const configVersions = isRecord(source.configVersions)
+    ? Object.fromEntries(Object.entries(source.configVersions)
+        .filter(([key, value]) => /^\d{1,10}$/.test(key) && isRecord(value))
+        .sort(([left], [right]) => Number(left) - Number(right))
+        .slice(-100)
+        .map(([key, value]) => [key, {
+          version: Number(key),
+          config: normalizeEndlessConfig(value.config),
+          publishedAt: safeTimestamp(value.publishedAt),
+          publishedBy: typeof value.publishedBy === 'string' ? value.publishedBy.slice(0, 100) : 'SERVER_ADMIN',
+          reason: typeof value.reason === 'string' ? value.reason.slice(0, 500) : ''
+        }]))
+    : {};
+  if (!Object.keys(configVersions).length) Object.assign(configVersions, defaults.configVersions);
+  const requestedActive = safeBoundedInteger(source.activeConfigVersion, 1_000_000_000);
+  const activeConfigVersion = configVersions[requestedActive] ? requestedActive : Math.max(...Object.keys(configVersions).map(Number));
+  const runs = isRecord(source.runs)
+    ? Object.fromEntries(Object.entries(source.runs).filter(([, value]) => isRecord(value)).slice(-25_000).map(([key, value]) => [String(key).slice(0, 200), structuredClone(value)]))
+    : {};
+  const entries = Array.isArray(source.leaderboardEntries)
+    ? source.leaderboardEntries.filter(isRecord).slice(-100_000).map((entry) => structuredClone(entry))
+    : [];
+  const paymentTransactions = isRecord(source.paymentTransactions)
+    ? Object.fromEntries(Object.entries(source.paymentTransactions).filter(([, value]) => isRecord(value)).slice(-25_000).map(([key, value]) => [String(key).slice(0, 100), structuredClone(value)]))
+    : {};
+  return {
+    version: 1,
+    activeConfigVersion,
+    configVersions,
+    runs,
+    leaderboardEntries: entries,
+    paymentTransactions,
+    smartEngine: isRecord(source.smartEngine)
+      ? {
+          recommendations: Array.isArray(source.smartEngine.recommendations) ? source.smartEngine.recommendations.filter(isRecord).slice(-500).map((value) => structuredClone(value)) : [],
+          lastEvaluatedAt: safeTimestamp(source.smartEngine.lastEvaluatedAt)
+        }
+      : defaults.smartEngine,
+    seasons: normalizeCompetitionStore(source, 'seasons').seasons
   };
 }
 

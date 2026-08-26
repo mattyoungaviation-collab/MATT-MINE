@@ -263,7 +263,15 @@ export function normalizeCompetitionMap(input) {
         roomId: cleanId(object?.roomId),
         x: boundedNumber(object?.x, -0.46, 0.46, 0),
         y: boundedNumber(object?.y, -0.46, 0.46, 0),
-        quantity: boundedInteger(object?.quantity, 1, 50, 1)
+        quantity: boundedInteger(object?.quantity, 1, 50, 1),
+        ...(object?.classification ? {
+          classification: ['natural', 'ore', 'hazard', 'boss', 'summon', 'reinforcement', 'respawn'].includes(object.classification)
+            ? object.classification
+            : 'authored'
+        } : {}),
+        ...(object?.requiredForBoss === true ? { requiredForBoss: true } : {}),
+        ...(object?.mattCrystal === true ? { mattCrystal: true } : {}),
+        ...(Number.isSafeInteger(object?.points) ? { points: boundedInteger(object.points, 0, 100_000_000, 0) } : {})
       })).filter((object) => roomIds.has(object.roomId))
     : [];
   return {

@@ -37,6 +37,59 @@ export class MattMineApiClient {
     return this.request(`/api/mines/${encodeURIComponent(slotId)}${query}`);
   }
 
+  async endlessStatus() {
+    const response = await this.request('/api/endless/status');
+    return response.endless;
+  }
+
+  async checkpointEndlessPhase(runId, runToken, previousCheckpoint, events, action) {
+    return this.request('/api/endless/checkpoint', {
+      method: 'POST',
+      authenticated: true,
+      body: { runId, runToken, previousCheckpoint, events, action }
+    });
+  }
+
+  async heartbeatEndlessRun(runId, runToken, checkpoint) {
+    return this.request('/api/endless/heartbeat', {
+      method: 'POST',
+      authenticated: true,
+      body: { runId, runToken, checkpoint }
+    });
+  }
+
+  async reconnectEndlessRun(runId, runToken) {
+    const response = await this.request('/api/endless/reconnect', {
+      method: 'POST',
+      authenticated: true,
+      body: { runId, runToken }
+    });
+    return response.run;
+  }
+
+  async abandonEndlessRun(runId, runToken, reason = 'abandoned') {
+    return this.request('/api/endless/abandon', {
+      method: 'POST',
+      authenticated: true,
+      body: { runId, runToken, reason }
+    });
+  }
+
+  async retryEndlessSettlement(runId, runToken) {
+    const response = await this.request('/api/endless/settle', {
+      method: 'POST',
+      authenticated: true,
+      body: { runId, runToken }
+    });
+    return response.settlement;
+  }
+
+  async endlessLeaderboard(scope = 'all-time') {
+    const query = new URLSearchParams({ scope });
+    const response = await this.request(`/api/competitions/endless/leaderboard?${query}`, { authenticated: true });
+    return response.leaderboard;
+  }
+
   async createChallenge(address, chainId, origin = globalThis.location?.origin) {
     const response = await this.request('/api/auth/challenge', {
       method: 'POST',

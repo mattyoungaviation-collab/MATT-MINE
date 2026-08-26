@@ -19,6 +19,7 @@ const state = {
   expansionDraft: null,
   mineOperations: null,
   nftV2: null,
+  endless: null,
   controlIndex: [],
   activeTab: 'overview',
   overviewTimer: null
@@ -73,6 +74,7 @@ async function activateTab(name) {
   if (name === 'tuning') await loadTuning();
   if (name === 'expansion') await loadExpansion();
   if (name === 'nft-v2') await loadNftV2Protocol();
+  if (name === 'endless') await loadEndlessAdmin();
   if (name === 'operations') await loadMineOperations();
   if (name === 'arena') await loadArenaAdmin();
   if (name === 'audit') await loadAudit();
@@ -1624,6 +1626,124 @@ function setLinkedInput(selector, value) {
 
 function objectDiff(original = {}, next = {}) {
   return Object.fromEntries(Object.entries(next).filter(([key, value]) => original[key] !== value));
+}
+
+const ENDLESS_ADMIN_FIELDS = Object.freeze([
+  ['Launch', 'enabled', 'Endless enabled', 'boolean', 0, 1],
+  ['Entry', 'entry.paidEnabled', 'Paid MATT entry enabled', 'boolean', 0, 1],
+  ['Entry', 'entry.mattPrice', 'MATT entry price', 'integer', 0, 10_000_000],
+  ['Exact scoring', 'scoring.basePhasePoints', 'Base phase point budget', 'integer', 100, 10_000_000],
+  ['Exact scoring', 'scoring.pointsPerGrowthStep', 'Points per growth step', 'integer', 0, 1_000_000],
+  ['Exact scoring', 'scoring.phasesPerGrowthStep', 'Phases per score step', 'integer', 1, 10_000],
+  ['Exact scoring', 'scoring.maximumPhasePoints', 'Maximum phase point budget', 'integer', 100, 100_000_000],
+  ['Exact scoring', 'scoring.completionShareBps', 'Completion share (bps)', 'integer', 0, 8_000],
+  ['Exact scoring', 'scoring.bossShareBps', 'Guardian share (bps)', 'integer', 0, 8_000],
+  ['Difficulty', 'difficulty.baseBudget', 'Base difficulty budget', 'number', 1, 1_000_000],
+  ['Difficulty', 'difficulty.growthPerPhase', 'Growth per phase', 'number', 0, 100_000],
+  ['Difficulty', 'difficulty.growthCurve', 'Growth curve', 'number', .1, 2],
+  ['Difficulty', 'difficulty.maximumBudget', 'Maximum difficulty budget', 'number', 1, 100_000_000],
+  ['Difficulty', 'difficulty.healthScalePerTier', 'Health scale per tier', 'number', 0, 1],
+  ['Difficulty', 'difficulty.damageScalePerTier', 'Damage scale per tier', 'number', 0, 1],
+  ['Difficulty', 'difficulty.speedScalePerTier', 'Speed scale per tier', 'number', 0, .25],
+  ['Difficulty', 'difficulty.maximumStatScale', 'Maximum stat scale', 'number', 1, 100],
+  ['Difficulty', 'difficulty.milestoneEvery', 'Milestone every N phases', 'integer', 1, 10_000],
+  ['Difficulty', 'difficulty.modifierEvery', 'Modifier every N phases', 'integer', 1, 10_000],
+  ['Generation', 'generation.baseNaturalEnemies', 'Base required enemies', 'integer', 1, 64],
+  ['Generation', 'generation.maximumNaturalEnemies', 'Maximum required enemies', 'integer', 1, 96],
+  ['Generation', 'generation.baseOreObjects', 'Base ore objects', 'integer', 4, 64],
+  ['Generation', 'generation.maximumOreObjects', 'Maximum ore objects', 'integer', 4, 96],
+  ['Generation', 'generation.maximumHazards', 'Maximum hazards', 'integer', 0, 24],
+  ['Generation', 'generation.maximumObjects', 'Maximum map objects', 'integer', 32, 300],
+  ['Generation', 'generation.crystalObjectsPerPhase', 'MATT crystal objects per phase', 'integer', 1, 20],
+  ['Generation', 'generation.safeStartSeconds', 'Safe start seconds', 'number', 0, 30],
+  ['Rewards', 'rewards.enabled', 'Rewards enabled', 'boolean', 0, 1],
+  ['Rewards', 'rewards.crystalsEnabled', 'CRYSTALS enabled', 'boolean', 0, 1],
+  ['Rewards', 'rewards.minerXpEnabled', 'Miner XP enabled', 'boolean', 0, 1],
+  ['Rewards', 'rewards.economyVersion', 'Published economy version', 'text', 0, 80],
+  ['Rewards', 'rewards.crystalConversionNumerator', 'CRYSTALS conversion numerator', 'integer', 0, 1_000_000_000],
+  ['Rewards', 'rewards.crystalConversionDenominator', 'CRYSTALS conversion denominator', 'integer', 1, 1_000_000_000],
+  ['Rewards', 'rewards.phaseXp', 'Miner XP per verified phase', 'integer', 0, 1_000_000],
+  ['Integrity', 'integrity.heartbeatSeconds', 'Heartbeat seconds', 'integer', 10, 300],
+  ['Integrity', 'integrity.missedHeartbeatTolerance', 'Missed heartbeat tolerance', 'integer', 0, 1_000],
+  ['Integrity', 'integrity.reconnectWindowSeconds', 'Reconnect window seconds', 'integer', 60, 604_800],
+  ['Integrity', 'integrity.maximumReconnectsPerRun', 'Maximum reconnects per run', 'integer', 0, 10_000],
+  ['Integrity', 'integrity.maximumReconnectsPerPhase', 'Maximum reconnects per phase', 'integer', 0, 1_000],
+  ['Integrity', 'integrity.maximumEventsPerPhase', 'Maximum events per phase', 'integer', 100, 100_000],
+  ['Integrity', 'integrity.maximumPhaseSeconds', 'Maximum phase seconds', 'integer', 60, 86_400],
+  ['Leaderboards', 'leaderboards.daily', 'Daily board', 'boolean', 0, 1],
+  ['Leaderboards', 'leaderboards.weekly', 'Weekly board', 'boolean', 0, 1],
+  ['Leaderboards', 'leaderboards.season', 'Season board', 'boolean', 0, 1],
+  ['Leaderboards', 'leaderboards.allTime', 'All-time board', 'boolean', 0, 1],
+  ['Leaderboards', 'leaderboards.seasonDays', 'Season length (days)', 'integer', 1, 365],
+  ['Smart Engine', 'smartEngine.enabled', 'Recommendation engine enabled', 'boolean', 0, 1],
+  ['Smart Engine', 'smartEngine.targetClearSeconds', 'Target phase clear seconds', 'integer', 30, 7_200],
+  ['Smart Engine', 'smartEngine.maximumAdjustmentBps', 'Maximum suggested adjustment (bps)', 'integer', 0, 5_000],
+  ['Smart Engine', 'smartEngine.minimumSamples', 'Minimum verified samples', 'integer', 5, 10_000]
+]);
+
+async function loadEndlessAdmin() {
+  const payload = await api('/api/admin/endless');
+  state.endless = payload.endless;
+  renderEndlessAdmin();
+}
+
+function renderEndlessAdmin() {
+  const endless = state.endless;
+  if (!endless) return;
+  const status = endless.status || {};
+  $('#endless-admin-status').innerHTML = `<strong>${status.enabled ? 'ENDLESS LIVE' : 'ENDLESS PAUSED'} · CONFIG V${Number(status.configVersion || 0)}</strong><br>
+    NFT REQUIRED · ${status.paidEntryEnabled ? `${Number(status.entryPriceMatt || 0).toLocaleString()} MATT ENTRY` : 'FREE ENTRY'} · REWARDS ${status.rewardsEnabled ? 'READY' : escapeHtml(words(status.rewardReadiness || 'not ready'))}
+    ${status.rewardErrors?.length ? `<br><small>${status.rewardErrors.map(escapeHtml).join(' ')}</small>` : ''}`;
+  const config = endless.activeConfig?.config || {};
+  const categories = [...new Set(ENDLESS_ADMIN_FIELDS.map(([category]) => category))];
+  $('#endless-config-groups').innerHTML = categories.map((category) => `<details class="panel" open>
+    <summary><strong>${escapeHtml(category)}</strong><span>${ENDLESS_ADMIN_FIELDS.filter(([value]) => value === category).length} controls</span></summary>
+    <div class="tuning-grid">${ENDLESS_ADMIN_FIELDS.filter(([value]) => value === category).map(([, path, label, type, minimum, maximum]) => {
+      const value = endlessPath(config, path);
+      return type === 'boolean'
+        ? `<label class="toggle">${escapeHtml(label)}<input type="checkbox" data-endless-path="${path}" ${value === true ? 'checked' : ''}></label>`
+        : `<label>${escapeHtml(label)}<input data-endless-path="${path}" type="${type === 'text' ? 'text' : 'number'}" ${type === 'text' ? `maxlength="${maximum}"` : `min="${minimum}" max="${maximum}" step="${type === 'integer' ? 1 : 'any'}"`} value="${escapeHtml(value)}"></label>`;
+    }).join('')}</div>
+  </details>`).join('');
+  const runs = endless.recentRuns || [];
+  $('#endless-admin-runs').innerHTML = `<table><thead><tr><th>Run</th><th>Miner</th><th>Status</th><th>Phase</th><th>Score</th><th>Heartbeat</th></tr></thead><tbody>${runs.map((run) => `<tr>
+    <td><small>${escapeHtml(run.runId)}</small></td><td>#${Number(run.minerId)}</td><td>${escapeHtml(words(run.status))}</td><td>${Number(run.completedPhases)} / ${Number(run.currentPhase)}</td><td>${Number(run.score).toLocaleString()}</td><td>${new Date(run.lastHeartbeatAt).toLocaleString()}</td>
+  </tr>`).join('') || '<tr><td colspan="6">No Endless runs yet.</td></tr>'}</tbody></table>`;
+  const recommendations = endless.smartEngine?.recommendations || [];
+  $('#endless-admin-history').innerHTML = `<h3>Published versions</h3>${(endless.configHistory || []).map((entry) => `<p><strong>V${entry.version}</strong> · ${new Date(entry.publishedAt).toLocaleString()}<br><small>${escapeHtml(entry.reason)}</small></p>`).join('')}
+    <h3>Recommendations</h3>${recommendations.slice().reverse().map((entry) => `<p><strong>${Number(entry.suggestedDifficultyAdjustmentBps) >= 0 ? '+' : ''}${Number(entry.suggestedDifficultyAdjustmentBps)} bps</strong> · ${Number(entry.samples)} samples<br><small>Median ${Number(entry.medianPhaseSeconds).toFixed(1)}s; review only, never auto-applied.</small></p>`).join('') || '<p>No recommendation has enough verified samples yet.</p>'}`;
+}
+
+$('#refresh-endless-admin')?.addEventListener('click', () => void loadEndlessAdmin());
+$('#endless-config-form')?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const config = structuredClone(state.endless?.activeConfig?.config || {});
+  document.querySelectorAll('[data-endless-path]').forEach((input) => {
+    const definition = ENDLESS_ADMIN_FIELDS.find(([, path]) => path === input.dataset.endlessPath);
+    const type = definition?.[3];
+    setEndlessPath(config, input.dataset.endlessPath, type === 'boolean' ? input.checked : type === 'text' ? input.value : Number(input.value));
+  });
+  if (!await confirmAction('Publish this Endless config version?', 'Active runs keep their frozen version. New runs receive this version immediately.')) return;
+  await api('/api/admin/endless/config', { method: 'PUT', body: { config, reason: $('#endless-config-reason').value } });
+  $('#endless-config-reason').value = '';
+  await loadEndlessAdmin();
+  showAlert('New Endless configuration version published.');
+});
+$('#evaluate-endless-smart')?.addEventListener('click', async () => {
+  await api('/api/admin/endless/smart-engine/evaluate', { method: 'POST', body: {} });
+  await loadEndlessAdmin();
+  showAlert('Smart Engine analysis completed. Recommendations were not auto-applied.');
+});
+
+function endlessPath(object, path) {
+  return path.split('.').reduce((value, key) => value?.[key], object);
+}
+
+function setEndlessPath(object, path, value) {
+  const keys = path.split('.');
+  const leaf = keys.pop();
+  const target = keys.reduce((record, key) => record[key] ||= {}, object);
+  target[leaf] = value;
 }
 
 async function api(path, options = {}) {

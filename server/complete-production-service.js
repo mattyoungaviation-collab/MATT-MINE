@@ -35,6 +35,7 @@ import {
   isRetiredRunMode,
   requiresMinerNft
 } from './nft-play-policy.js';
+import { endlessServiceMethods } from './endless-service.js';
 
 const BETA_CAPABILITIES = Object.freeze([
   'jumpDepth', 'jumpRoom', 'triggerBoss', 'spawnBoss', 'setBossPhase',
@@ -90,6 +91,12 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     this.revivePaymentVerifier = options.revivePaymentVerifier || new DisabledRevivePaymentVerifier();
     this.reviveEligibilityValidator = options.reviveEligibilityValidator || null;
     this.competitiveReplayValidator = options.competitiveReplayValidator || null;
+    this.endlessPaymentVerifier = options.endlessPaymentVerifier || null;
+    this.endlessRewardSettler = options.endlessRewardSettler || null;
+    this.endlessCheckpointSecret = String(
+      options.endlessCheckpointSecret ||
+      createHash('sha256').update(`MATT-ENDLESS|${this.adminKey}|${this.buildCommit}`).digest('hex')
+    );
     this.nftV2AdminService = options.nftV2AdminService || null;
     this.adminControlLinkPromise = null;
     const requestedHealthCacheMs = Number(options.nftHealthCacheMs);
@@ -486,6 +493,9 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
         ...input,
         [NFT_PHASE_XP_BARRIER_HELD]: true
       }));
+    }
+    if (normalizedMode === SERVER_RUN_MODES.ENDLESS) {
+      return this.startEndlessRun(token, input);
     }
     if (isRetiredRunMode(normalizedMode)) {
       throw new ApiError(
@@ -1907,6 +1917,8 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
   }
 
 }
+
+Object.assign(CompleteProductionMattMineService.prototype, endlessServiceMethods);
 
 export function arenaStudioAllowsPaidRevives(snapshot, settings = {}, infrastructureReady = false) {
   return infrastructureReady === true &&

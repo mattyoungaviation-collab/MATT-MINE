@@ -390,19 +390,20 @@ test('Arena screen promises the locked economic rules without test-token copy', 
   assert.doesNotMatch(html, /TEST MATT/i);
 });
 
-test('production run selection exposes exactly three live mines with official Ronin branding', () => {
+test('production run selection exposes all four live mines with official Ronin branding', () => {
   const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const css = fs.readFileSync(new URL('../src/production.css', import.meta.url), 'utf8');
   const roninLogo = fs.statSync(new URL('../assets/ronin-mark-official.png', import.meta.url));
 
-  assert.match(html, /Choose one of three live mines/i);
+  assert.match(html, /Choose one of four live mines/i);
   assert.match(html, /PASS MINE/);
   assert.match(html, /MATT ARENA/);
   assert.match(html, /PRACTICE MINE/);
-  assert.equal((html.match(/class="lobby-number"/g) || []).length, 3);
-  assert.match(html, /THREE LIVE MINES/);
+  assert.match(html, /MATT MINE ENDLESS/);
+  assert.equal((html.match(/class="lobby-number"/g) || []).length, 4);
+  assert.match(html, /FOUR LIVE MINES/);
   assert.equal((html.match(/data-daily-mine-preview/g) || []).length, 0);
-  assert.doesNotMatch(html, /FREE DAILY MINE|SEVEN-DAY MINE|ENDLESS MINE|PVP MINE/i);
+  assert.doesNotMatch(html, /FREE DAILY MINE|SEVEN-DAY MINE|PVP MINE/i);
   assert.match(html, /ronin-mark-official\.png/);
   assert.match(html, /BUILT ON RONIN/);
   assert.ok(roninLogo.size > 1_000);

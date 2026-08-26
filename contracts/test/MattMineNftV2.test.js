@@ -141,6 +141,19 @@ async function deploySystem() {
   ]);
   const settlement = settlementDeployment.contract;
 
+  const endlessSettlementDeployment = await deployProxy("MattV2EndlessSettlement", timelock, [
+    admin.address,
+    pauser.address,
+    gameOperator.address,
+    admin.address,
+    rewardSigner.address,
+    miner.target,
+    loadout.target,
+    bank.target,
+    passive.target
+  ]);
+  const endlessSettlement = endlessSettlementDeployment.contract;
+
   const chestDeployment = await deployProxy("MattV2Chest", timelock, [
     admin.address,
     pauser.address,
@@ -154,6 +167,8 @@ async function deploySystem() {
 
   await (await miner.grantRole(PROGRESSION_ROLE, settlement.target)).wait();
   await (await miner.grantRole(LOCK_ROLE, settlement.target)).wait();
+  await (await miner.grantRole(PROGRESSION_ROLE, endlessSettlement.target)).wait();
+  await (await miner.grantRole(LOCK_ROLE, endlessSettlement.target)).wait();
   await (await miner.grantRole(PASSIVE_ROLE, passive.target)).wait();
   await (await miner.grantRole(METADATA_ROLE, loadout.target)).wait();
 
@@ -163,8 +178,11 @@ async function deploySystem() {
   await (await equipment.grantRole(BURNER_ROLE, loadout.target)).wait();
 
   await (await loadout.grantRole(GAME_ROLE, settlement.target)).wait();
+  await (await loadout.grantRole(GAME_ROLE, endlessSettlement.target)).wait();
   await (await bank.grantRole(CREDIT_ROLE, settlement.target)).wait();
+  await (await bank.grantRole(CREDIT_ROLE, endlessSettlement.target)).wait();
   await (await passive.grantRole(SETTLEMENT_ROLE, settlement.target)).wait();
+  await (await passive.grantRole(SETTLEMENT_ROLE, endlessSettlement.target)).wait();
   await (await crystal.setMinter(bank.target, true)).wait();
   await (await crystal.setMinter(passive.target, true)).wait();
 
@@ -196,6 +214,7 @@ async function deploySystem() {
   await (await bank.unpause()).wait();
   await (await passive.unpause()).wait();
   await (await settlement.unpause()).wait();
+  await (await endlessSettlement.unpause()).wait();
   await (await chest.unpause()).wait();
 
   await (await miner.mint(player.address)).wait();
@@ -225,6 +244,8 @@ async function deploySystem() {
     passiveImplementation: passiveDeployment.implementation,
     settlement,
     settlementImplementation: settlementDeployment.implementation,
+    endlessSettlement,
+    endlessSettlementImplementation: endlessSettlementDeployment.implementation,
     chest,
     chestImplementation: chestDeployment.implementation,
     mapVersion
@@ -322,6 +343,102 @@ async function signRunResult(system, active, overrides = {}) {
     },
     result
   );
+  return { result, signature };
+}
+
+const ENDLESS_DOMAIN = (system, chainId) => ({
+  name: "MATT Mine V2 Endless Settlement",
+  version: "1",
+  chainId,
+  verifyingContract: system.endlessSettlement.target
+});
+
+async function beginEndlessRun(system, versionId) {
+  const { chainId } = await ethers.provider.getNetwork();
+  const latest = await ethers.provider.getBlock("latest");
+  const authorization = {
+    player: system.player.address,
+    minerId: 1n,
+    versionId,
+    loadoutHash: await system.loadout.loadoutHash(1n),
+    nonce: await system.endlessSettlement.playerNonces(system.player.address),
+    deadline: BigInt(latest.timestamp + 3600)
+  };
+  const signature = await system.player.signTypedData(ENDLESS_DOMAIN(system, chainId), {
+    EndlessRunAuthorization: [
+      { name: "player", type: "address" },
+      { name: "minerId", type: "uint256" },
+      { name: "versionId", type: "bytes32" },
+      { name: "loadoutHash", type: "bytes32" },
+      { name: "nonce", type: "uint256" },
+      { name: "deadline", type: "uint256" }
+    ]
+  }, authorization);
+  await (await system.endlessSettlement.connect(system.gameOperator).beginRun(authorization, signature)).wait();
+  return system.endlessSettlement.activeRun(1n);
+}
+
+async function signEndlessCheckpoint(system, active, values) {
+  const { chainId } = await ethers.provider.getNetwork();
+  const latest = await ethers.provider.getBlock("latest");
+  const receipt = {
+    player: system.player.address,
+    minerId: 1n,
+    runId: active.runId,
+    versionId: active.versionId,
+    previousDigest: values.previousDigest,
+    checkpointDigest: values.checkpointDigest,
+    completedPhases: values.completedPhases,
+    minedCrystalUnits: values.minedCrystalUnits,
+    nonce: active.nonce,
+    deadline: BigInt(latest.timestamp + 3600)
+  };
+  const signature = await system.rewardSigner.signTypedData(ENDLESS_DOMAIN(system, chainId), {
+    EndlessCheckpoint: [
+      { name: "player", type: "address" },
+      { name: "minerId", type: "uint256" },
+      { name: "runId", type: "bytes32" },
+      { name: "versionId", type: "bytes32" },
+      { name: "previousDigest", type: "bytes32" },
+      { name: "checkpointDigest", type: "bytes32" },
+      { name: "completedPhases", type: "uint32" },
+      { name: "minedCrystalUnits", type: "uint32" },
+      { name: "nonce", type: "uint256" },
+      { name: "deadline", type: "uint256" }
+    ]
+  }, receipt);
+  return { receipt, signature };
+}
+
+async function signEndlessResult(system, active, values) {
+  const { chainId } = await ethers.provider.getNetwork();
+  const latest = await ethers.provider.getBlock("latest");
+  const result = {
+    player: system.player.address,
+    minerId: 1n,
+    runId: active.runId,
+    versionId: active.versionId,
+    checkpointDigest: values.checkpointDigest,
+    outcome: values.outcome ?? 0,
+    completedPhases: values.completedPhases,
+    minedCrystalUnits: values.minedCrystalUnits,
+    nonce: active.nonce,
+    deadline: BigInt(latest.timestamp + 3600)
+  };
+  const signature = await system.rewardSigner.signTypedData(ENDLESS_DOMAIN(system, chainId), {
+    EndlessResult: [
+      { name: "player", type: "address" },
+      { name: "minerId", type: "uint256" },
+      { name: "runId", type: "bytes32" },
+      { name: "versionId", type: "bytes32" },
+      { name: "checkpointDigest", type: "bytes32" },
+      { name: "outcome", type: "uint8" },
+      { name: "completedPhases", type: "uint32" },
+      { name: "minedCrystalUnits", type: "uint32" },
+      { name: "nonce", type: "uint256" },
+      { name: "deadline", type: "uint256" }
+    ]
+  }, result);
   return { result, signature };
 }
 
@@ -477,6 +594,63 @@ describe("MATT Mine NFT V2", function () {
       system.settlement,
       "InvalidConfiguration"
     );
+  });
+
+  it("settles chained Endless checkpoints beyond five phases with frozen XP and emission caps", async function () {
+    const system = await networkHelpers.loadFixture(deploySystem);
+    const version = {
+      generatorHash: ethers.id("endless-map-v1"),
+      configHash: ethers.id("endless-config-v1"),
+      conversionRate: ethers.parseEther("0.01"),
+      maximumPayout: ethers.parseEther("100000"),
+      maximumDailyPayout: ethers.parseEther("1000000"),
+      mineableCrystalUnits: 5_000,
+      maximumPhases: 10_000,
+      phaseXp: 25,
+      maximumRunXp: 140,
+      maximumWalletXpPerDay: 1_000,
+      maximumMinerXpPerDay: 1_000,
+      checkpointTimeout: 2 * 60 * 60,
+      failedRunsRetainXp: false,
+      approved: false,
+      retired: false
+    };
+    const versionId = await system.endlessSettlement.approveVersion.staticCall(version);
+    await (await system.endlessSettlement.approveVersion(version)).wait();
+    const active = await beginEndlessRun(system, versionId);
+    assert.equal(await system.miner.isRunLocked(1n), true);
+
+    let previousDigest = ethers.ZeroHash;
+    for (let phase = 1; phase <= 6; phase += 1) {
+      const checkpointDigest = ethers.id(`endless-checkpoint-${phase}`);
+      const signed = await signEndlessCheckpoint(system, active, {
+        previousDigest,
+        checkpointDigest,
+        completedPhases: phase,
+        minedCrystalUnits: phase
+      });
+      await (await system.endlessSettlement.connect(system.gameOperator).checkpoint(
+        signed.receipt,
+        signed.signature
+      )).wait();
+      previousDigest = checkpointDigest;
+    }
+    const progress = await system.endlessSettlement.activeRun(1n);
+    assert.equal(progress.completedPhases, 6n);
+    assert.equal(progress.checkpointDigest, previousDigest);
+
+    const signedResult = await signEndlessResult(system, active, {
+      checkpointDigest: previousDigest,
+      completedPhases: 6,
+      minedCrystalUnits: 6
+    });
+    await (await system.endlessSettlement.connect(system.gameOperator).settle(
+      signedResult.result,
+      signedResult.signature
+    )).wait();
+    assert.equal((await system.miner.progressionOf(1n)).bankedXp, 140n);
+    assert.equal(await system.bank.bankBalance(system.player.address), ethers.parseEther("0.06"));
+    assert.equal(await system.miner.isRunLocked(1n), false);
   });
 
   it("freezes Miner transfer and loadout mutation for the exact active run snapshot", async function () {
