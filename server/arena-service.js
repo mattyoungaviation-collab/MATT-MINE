@@ -970,7 +970,46 @@ export class DailyArenaService {
   async adminOverview(dayInput, suspendedAddresses = []) {
     const timestamp = this.now();
     const day = normalizeDay(dayInput || '', timestamp);
-    const contest = await this.#ensureDay(day, timestamp);
+    let contest;
+    try {
+      contest = await this.#ensureDay(day, timestamp);
+    } catch (error) {
+      if (error?.code !== 'arena_day_not_scheduled') throw error;
+      const chainDay = await this.chain.dayStatus(day).catch(() => ({
+        entriesPaused: false,
+        settlementPaused: false
+      }));
+      const config = publicUnscheduledDay(
+        day,
+        timestamp,
+        this.publicConfig(),
+        this.#dailySeed(day),
+        chainDay
+      );
+      return {
+        day,
+        config,
+        leaderboard: {
+          day,
+          status: 'unscheduled',
+          closed: false,
+          provisional: false,
+          finalized: false,
+          finalizedAt: 0,
+          participantCount: 0,
+          entryCount: 0,
+          entryPoolRaw: '0',
+          seedRaw: '0',
+          prizePoolRaw: '0',
+          rows: []
+        },
+        settlement: null,
+        controls: {
+          entriesPaused: chainDay.entriesPaused === true,
+          settlementPaused: chainDay.settlementPaused === true
+        }
+      };
+    }
     const [leaderboard, chainDay] = await Promise.all([
       this.store.leaderboard(day, suspendedAddresses, timestamp),
       this.chain.dayStatus(day)

@@ -424,6 +424,7 @@ test('production admin separates Treasury Safe packages from direct emergency-pa
   assert.doesNotMatch(source, /result\.control\?\.safe/);
   assert.match(source, /button\.disabled = !replayReady/);
   assert.match(source, /Blocked by replay gate/);
+  assert.match(source, /config\.status === 'unscheduled'/);
   assert.match(source, /\/api\/admin\/arena\/days\/\$\{encodeURIComponent\(day\)\}\/cancel/);
 });
 

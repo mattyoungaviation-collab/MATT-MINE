@@ -936,6 +936,24 @@ test('unscheduled current day returns a configured security-preview document ins
   assert.equal(config.feeRaw, '0');
 });
 
+test('admin overview returns an actionable document for an unscheduled future Arena day', async () => {
+  const store = await new MemoryArenaStore().init();
+  const arena = arenaService(
+    store,
+    fakeArenaAdapter(() => unscheduledChainDay({ day: NEXT_DAY })),
+    Date.parse(`${DAY}T12:00:00Z`)
+  );
+
+  const overview = await arena.adminOverview(NEXT_DAY);
+
+  assert.equal(overview.day, NEXT_DAY);
+  assert.equal(overview.config.status, 'unscheduled');
+  assert.equal(overview.config.replayReady, true);
+  assert.equal(overview.leaderboard.status, 'unscheduled');
+  assert.deepEqual(overview.leaderboard.rows, []);
+  assert.equal(overview.settlement, null);
+});
+
 test('stale active run from a prior UTC day expires before a new attempt consumes its entry', async () => {
   const previous = '2026-07-24';
   const store = await new MemoryArenaStore().init();

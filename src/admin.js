@@ -1353,7 +1353,10 @@ async function loadArenaAdmin() {
       arena.day && typeof arena.day === 'object'
         ? arena.day
         : arena.config || arena.dayConfig || board;
-    const feeMatt = config.fee?.matt ?? config.feeMatt ?? config.entryFeeMatt ?? 25_000;
+    const configuredFeeMatt = config.fee?.matt ?? config.feeMatt ?? config.entryFeeMatt;
+    const feeMatt = config.status === 'unscheduled'
+      ? 25_000
+      : configuredFeeMatt ?? 25_000;
     const seedMatt = config.seed?.matt ?? config.seedMatt ?? config.seededMatt ?? 0;
     const replayReady = config.replayReady === true;
     $('#arena-admin-fee').value = Number(feeMatt);
