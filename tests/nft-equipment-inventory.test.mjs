@@ -8,7 +8,11 @@ import { ApiError } from '../server/errors.js';
 import { createMattMineHttpServer } from '../server/http.js';
 import { NftMetadataService, ViemNftChainReader } from '../server/nft-metadata-service.js';
 import { MattMineApiClient } from '../src/game/apiClient.js';
-import { NftGarageClient } from '../src/game/nftGarageClient.js';
+import {
+  NftGarageClient,
+  garageChestOutcomes,
+  garageEquipmentBonus
+} from '../src/game/nftGarageClient.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OWNER = '0x1DAb596D0121C250a24B00137E84170FA6874be6';
@@ -18,6 +22,18 @@ const ADDRESSES = Object.freeze({
   miner: '0x545d5d4c714eB4d2242BBFE82C31fe9a1E5Cff29',
   equipment: '0x73A4Ad9a2b4bfeeE1b98F5D99AaB24B702dEb093',
   loadout: '0x6cf168cdD198D0d111faE2286aE6dcD86FA960d8'
+});
+
+test('Equipment chest previews disclose the exact immutable rarity odds and slot bonuses', () => {
+  const armor = garageChestOutcomes({ slot: 0 });
+  assert.deepEqual(armor.map((outcome) => outcome.chanceBps), [6_800, 1_800, 800, 500, 100]);
+  assert.equal(armor.reduce((total, outcome) => total + outcome.chanceBps, 0), 10_000);
+  assert.deepEqual(armor.map((outcome) => outcome.bonus), [25, 50, 75, 100, 150]);
+  assert.equal(armor[4].name, 'Legendary Mineheart Armor');
+  assert.equal(garageEquipmentBonus(1, 4), 10);
+  assert.equal(garageEquipmentBonus(3, 4), 25);
+  assert.equal(garageEquipmentBonus(5, 4), 15_000);
+  assert.equal(garageChestOutcomes({ slot: 5 })[4].stat, '+150% CARRY CAPACITY');
 });
 
 function transfer(tokenId, from, to, blockNumber, logIndex = 0) {

@@ -1603,7 +1603,38 @@ button,
 .garage-chest-product span { color: #ffcf37; font: 1000 9px Inter, sans-serif; }
 .garage-chest-product strong { font: 1000 12px Inter, sans-serif; }
 .garage-chest-product small { color: #a79c74; font: 700 8px Inter, sans-serif; }
+.garage-chest-product:hover { border-color: #ffcf37; background: linear-gradient(145deg, #282008, #0d1011); transform: translateY(-2px); }
 .garage-chest-product:disabled { opacity: .45; cursor: wait; }
+.garage-chest-dialog { width: min(820px, calc(100vw - 28px)); max-height: calc(100dvh - 28px); padding: 0; overflow: auto; color: #fff; border: 1px solid #80691d; background: #070b0e; box-shadow: 0 34px 110px rgba(0,0,0,.82); }
+.garage-chest-dialog::backdrop { background: rgba(1,3,5,.86); backdrop-filter: blur(10px); }
+.garage-chest-dialog-card { padding: 22px; background: radial-gradient(circle at 90% 0, rgba(255,207,55,.13), transparent 34%), linear-gradient(145deg, #12150f, #070b0e 62%); }
+.garage-chest-dialog-card > header { display: flex; align-items: start; justify-content: space-between; gap: 20px; padding-bottom: 16px; border-bottom: 1px solid #493f20; }
+.garage-chest-dialog-card h2 { margin: 5px 0 0; font: 1000 clamp(28px, 5vw, 48px)/.95 Impact, sans-serif; letter-spacing: .02em; }
+.garage-chest-dialog-card > header button { min-height: 36px; padding: 0 12px; color: #c8d1d6; border: 1px solid #45515a; background: #0a1014; font: 900 8px Inter, sans-serif; letter-spacing: .1em; }
+.garage-chest-dialog-intro { margin: 16px 0; color: #aab5bb; font: 700 11px/1.55 Inter, sans-serif; }
+.garage-chest-dialog-intro b { color: #ffcf37; }
+.garage-chest-dialog-costs { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-bottom: 14px; }
+.garage-chest-dialog-costs article { display: grid; gap: 7px; padding: 13px; border: 1px solid #3b4141; background: #080d10; }
+.garage-chest-dialog-costs span, .garage-chest-dialog-table-heading { color: #87959c; font: 900 8px Inter, sans-serif; letter-spacing: .12em; }
+.garage-chest-dialog-costs strong { color: #fff; font: 1000 18px Inter, sans-serif; }
+.garage-chest-dialog-costs article:first-child strong { color: #ffcf37; }
+.garage-chest-dialog-table-heading { display: grid; grid-template-columns: 110px 1fr; padding: 0 12px 7px; }
+.garage-chest-dialog-outcomes { display: grid; gap: 6px; }
+.garage-chest-dialog-outcomes article { display: grid; grid-template-columns: 96px 1fr; align-items: center; gap: 14px; min-height: 62px; padding: 10px 12px; border: 1px solid #303a40; background: #0a1014; }
+.garage-chest-dialog-outcomes article > strong { color: #fff; font: 1000 19px Inter, sans-serif; }
+.garage-chest-dialog-outcomes article > span { display: grid; gap: 4px; }
+.garage-chest-dialog-outcomes b { color: #fff; font: 900 11px Inter, sans-serif; }
+.garage-chest-dialog-outcomes small { color: #93a2aa; font: 800 9px Inter, sans-serif; }
+.garage-chest-dialog-outcomes [data-rarity="common"] { border-left: 3px solid #9ba8ae; }
+.garage-chest-dialog-outcomes [data-rarity="uncommon"] { border-left: 3px solid #56df82; }
+.garage-chest-dialog-outcomes [data-rarity="rare"] { border-left: 3px solid #4a9cff; }
+.garage-chest-dialog-outcomes [data-rarity="mythic"] { border-left: 3px solid #b65cff; }
+.garage-chest-dialog-outcomes [data-rarity="legendary"] { border-left: 3px solid #ffcf37; background: linear-gradient(90deg, rgba(255,207,55,.1), #0a1014 48%); }
+.garage-chest-dialog-note, .garage-chest-dialog-affordability { margin: 13px 0 0; color: #87969e; font: 700 9px/1.5 Inter, sans-serif; }
+.garage-chest-dialog-affordability { color: #d9e3e7; }
+.garage-chest-dialog-card > footer { display: grid; grid-template-columns: .55fr 1fr; gap: 10px; margin-top: 17px; }
+.garage-chest-dialog-card > footer button { min-height: 48px; }
+.garage-chest-dialog-card > footer button:disabled { opacity: .48; cursor: not-allowed; }
 .garage-status { margin-top: 12px; padding: 12px 14px; border-left: 3px solid #47eee3; background: #071215; color: #b7c5cc; font: 800 10px/1.5 Inter, sans-serif; }
 .garage-status.error { border-color: #ff7668; color: #ffaaa2; }
 .garage-status.busy { border-color: #ffcf37; color: #ffe49a; }
@@ -1627,6 +1658,11 @@ button,
 
 @media (max-width: 520px) {
   .garage-balance-strip, .garage-equipment-list, .garage-chest-list { grid-template-columns: 1fr; }
+  .garage-chest-dialog-card { padding: 15px; }
+  .garage-chest-dialog-costs, .garage-chest-dialog-card > footer { grid-template-columns: 1fr; }
+  .garage-chest-dialog-table-heading { grid-template-columns: 80px 1fr; }
+  .garage-chest-dialog-outcomes article { grid-template-columns: 68px 1fr; }
+  .garage-chest-dialog-outcomes article > strong { font-size: 16px; }
 }
 
 @media (max-width: 700px) {

@@ -1066,6 +1066,28 @@
         <div class="action-row"><button id="beta-apply-config" type="button">APPLY</button><button id="beta-copy-config" type="button">COPY JSON</button></div>
       </aside>
 
+      <dialog id="garage-chest-dialog" class="garage-chest-dialog" aria-labelledby="garage-chest-dialog-title">
+        <div class="garage-chest-dialog-card">
+          <header>
+            <div><p class="eyebrow">EQUIPMENT CHEST PREVIEW</p><h2 id="garage-chest-dialog-title">ITEM ODDS &amp; STATS</h2></div>
+            <button id="garage-chest-dialog-close" type="button" aria-label="Close equipment chest preview">CLOSE</button>
+          </header>
+          <p class="garage-chest-dialog-intro"><b id="garage-chest-dialog-label">EQUIPMENT CHEST</b> mints one randomly selected Equipment NFT using Ronin VRF. Review every possible outcome before approving MATT.</p>
+          <div class="garage-chest-dialog-costs">
+            <article><span>EXACT PRICE</span><strong id="garage-chest-dialog-price">--</strong></article>
+            <article><span>YOUR MATT BALANCE</span><strong id="garage-chest-dialog-balance">--</strong></article>
+          </div>
+          <div class="garage-chest-dialog-table-heading"><span>DROP CHANCE</span><span>ITEM &amp; FIXED GAMEPLAY STAT</span></div>
+          <div id="garage-chest-dialog-outcomes" class="garage-chest-dialog-outcomes"></div>
+          <p class="garage-chest-dialog-note">Odds total 100%. The rarity roll and fixed stat values come from the active V2 contracts. Armor provides no shield while damaged; an equipped Backpack burns on death.</p>
+          <p id="garage-chest-dialog-affordability" class="garage-chest-dialog-affordability"></p>
+          <footer>
+            <button id="garage-chest-dialog-cancel" class="secondary-button" type="button">NOT NOW</button>
+            <button id="garage-chest-dialog-purchase" class="primary-button" type="button">OPEN CHEST</button>
+          </footer>
+        </div>
+      </dialog>
+
       <dialog id="arena-eligibility-dialog" class="arena-eligibility-dialog" aria-labelledby="arena-eligibility-title">
         <form id="arena-eligibility-form">
           <p class="eyebrow">PUBLIC PAID ARENA</p>

@@ -29,7 +29,7 @@ import {
   weeklyUserScore
 } from './game/economy.js';
 import { formatNumber } from './game/utils.js';
-import { nftGameplayTraits } from './game/nftTraits.js';
+import { nftGameplayTraits, nftXpProgress } from './game/nftTraits.js';
 import {
   PASS_CHEST_ID,
   PASS_COSMETICS,
@@ -62,6 +62,7 @@ import {
   NFT_GARAGE_SLOTS,
   crystalWithdrawalAvailability,
   formatTokenUnits as formatGarageTokenUnits,
+  garageChestOutcomes,
   garageImageUrl,
   parseTokenUnits
 } from './game/nftGarageClient.js';
@@ -119,6 +120,7 @@ let nftPracticeRecoveryBusy = false;
 let lockedMinerRecoveryBusy = false;
 let nftGarageBusy = false;
 let nftGarageSnapshot = null;
+let pendingGarageChestProduct = null;
 let nftCrystalBankBusy = false;
 let nftWalletSnapshot = null;
 let nftCrystalTransactionHash = '';
@@ -1616,9 +1618,12 @@ function renderMinerSelect() {
   stats.replaceChildren();
   if (selected) {
     const traits = nftGameplayTraits({ nftRun: { profile: selected } });
+    const xp = nftXpProgress(selected);
     const values = traits
       ? [
           ['LEVEL', traits.level],
+          ['BANKED XP', `${xp.bankedXp.toLocaleString()} XP`],
+          ['NEXT LEVEL', xp.nextLevelXp === null ? 'MAX LEVEL' : `${xp.nextLevelXp.toLocaleString()} XP`],
           ['HEALTH', traits.maximumHealth],
           ['ARMOR SHIELD', traits.armorShield],
           ['PICKAXE', traits.pickaxeAttack],
@@ -1632,6 +1637,8 @@ function renderMinerSelect() {
         ]
       : [
           ['LEVEL', selected.progression?.level || 1],
+          ['BANKED XP', `${xp.bankedXp.toLocaleString()} XP`],
+          ['NEXT LEVEL', xp.nextLevelXp === null ? 'MAX LEVEL' : `${xp.nextLevelXp.toLocaleString()} XP`],
           ['HEALTH', selected.gameplay?.maximumHealth || 100],
           ['CRYSTAL CARRY', `${selected.gameplay?.crystalCarryMultiplier || 1}x`],
           ['ARMOR', selected.equipped?.armor ? selected.gameplay?.armorEffective ? 'ACTIVE' : 'DAMAGED' : 'NONE']
@@ -2022,11 +2029,63 @@ function renderGarageChests(snapshot) {
     const price = document.createElement('strong');
     price.textContent = product.priceRaw === undefined ? 'LOADING...' : `${formatGarageTokenUnits(product.priceRaw)} MATT`;
     const detail = document.createElement('small');
-    detail.textContent = 'OPEN RANDOM EQUIPMENT';
+    detail.textContent = 'VIEW ODDS & EXACT STATS';
     button.append(label, price, detail);
-    button.addEventListener('click', () => void openGarageChest(product));
+    button.addEventListener('click', () => showGarageChestPreview(product));
     container.append(button);
   }
+}
+
+function showGarageChestPreview(product) {
+  const snapshot = nftGarageSnapshot?.minerId === selectedNftMinerId ? nftGarageSnapshot : null;
+  if (!snapshot || nftGarageBusy || product?.priceRaw === undefined) return;
+  pendingGarageChestProduct = product;
+  const dialog = $('#garage-chest-dialog');
+  const priceRaw = BigInt(product.priceRaw);
+  const canAfford = BigInt(snapshot.mattBalanceRaw || 0) >= priceRaw;
+  $('#garage-chest-dialog-label').textContent = product.label;
+  $('#garage-chest-dialog-title').textContent = `${product.label} ODDS & STATS`;
+  $('#garage-chest-dialog-price').textContent = `${formatGarageTokenUnits(priceRaw)} MATT`;
+  $('#garage-chest-dialog-balance').textContent = `${formatGarageTokenUnits(snapshot.mattBalanceRaw)} MATT`;
+  const outcomes = $('#garage-chest-dialog-outcomes');
+  outcomes.replaceChildren();
+  for (const outcome of garageChestOutcomes(product)) {
+    const row = document.createElement('article');
+    row.dataset.rarity = outcome.rarity.toLowerCase();
+    const chance = document.createElement('strong');
+    chance.textContent = outcome.chance;
+    const copy = document.createElement('span');
+    const name = document.createElement('b');
+    name.textContent = outcome.name;
+    const stat = document.createElement('small');
+    stat.textContent = `${outcome.rarity} · ${outcome.stat}`;
+    copy.append(name, stat);
+    row.append(chance, copy);
+    outcomes.append(row);
+  }
+  const purchase = $('#garage-chest-dialog-purchase');
+  purchase.disabled = !canAfford;
+  purchase.textContent = canAfford
+    ? `OPEN FOR ${formatGarageTokenUnits(priceRaw)} MATT`
+    : `NEED ${formatGarageTokenUnits(priceRaw - BigInt(snapshot.mattBalanceRaw || 0))} MORE MATT`;
+  $('#garage-chest-dialog-affordability').textContent = canAfford
+    ? 'Your balance covers this chest. Ronin Wallet confirmation is still required.'
+    : 'Your wallet does not currently have enough MATT for this chest.';
+  if (typeof dialog.showModal === 'function') dialog.showModal();
+  else dialog.setAttribute('open', '');
+}
+
+function closeGarageChestPreview() {
+  const dialog = $('#garage-chest-dialog');
+  if (typeof dialog.close === 'function' && dialog.open) dialog.close('cancel');
+  else dialog.removeAttribute('open');
+}
+
+function confirmGarageChestPurchase() {
+  const product = pendingGarageChestProduct;
+  if (!product || $('#garage-chest-dialog-purchase').disabled) return;
+  closeGarageChestPreview();
+  void openGarageChest(product);
 }
 
 function setGarageStatus(message, state = '') {
@@ -2599,6 +2658,15 @@ $('#garage-equipment-load-more').addEventListener('click', () => void loadMoreNf
 $('#garage-crystal-refresh-button').addEventListener('click', () => void refreshWalletCrystalBank());
 $('#garage-close-button').addEventListener('click', closeMinerCommandCenter);
 $('#garage-repair-button').addEventListener('click', () => void repairGarageArmor());
+$('#garage-chest-dialog-close').addEventListener('click', closeGarageChestPreview);
+$('#garage-chest-dialog-cancel').addEventListener('click', closeGarageChestPreview);
+$('#garage-chest-dialog-purchase').addEventListener('click', confirmGarageChestPurchase);
+$('#garage-chest-dialog').addEventListener('click', (event) => {
+  if (event.target === $('#garage-chest-dialog')) closeGarageChestPreview();
+});
+$('#garage-chest-dialog').addEventListener('close', () => {
+  pendingGarageChestProduct = null;
+});
 $('#garage-withdraw-button').addEventListener('click', () => void withdrawGarageCrystals());
 $('#garage-withdraw-input').addEventListener('input', syncCrystalWithdrawalButton);
 $('#garage-withdraw-all-button').addEventListener('click', () => {

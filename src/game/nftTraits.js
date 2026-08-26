@@ -10,6 +10,10 @@ const V2_TRAIT_KEYS = Object.freeze([
   'deathRetentionBps'
 ]);
 
+const NFT_MAX_LEVEL = 100;
+const NFT_LEVEL_100_XP = 360_000n;
+const NFT_LEVEL_DENOMINATOR = 99n;
+
 export function nftGameplayTraits(input = {}) {
   const nftRun = input?.nftRun && typeof input.nftRun === 'object'
     ? input.nftRun
@@ -54,6 +58,35 @@ export function nftGameplayTraits(input = {}) {
     deathRetentionBps: integer(source.deathRetentionBps, 0, 10_000),
     level: integer(source.level ?? progression.level, 1, 100, 1),
     crystalsPerHour: integer(source.crystalsPerHour, 0, 50)
+  });
+}
+
+export function nftXpThreshold(levelInput) {
+  const level = Number(levelInput);
+  if (!Number.isSafeInteger(level) || level < 1 || level > NFT_MAX_LEVEL) {
+    throw new RangeError('Miner level must be a whole number from 1 to 100.');
+  }
+  const offset = BigInt(level - 1);
+  return Number(
+    (NFT_LEVEL_100_XP * offset * offset) /
+    (NFT_LEVEL_DENOMINATOR * NFT_LEVEL_DENOMINATOR)
+  );
+}
+
+export function nftXpProgress(input = {}) {
+  const profile = firstRecord(input?.nftRun?.profile, input?.profile, input);
+  const progression = record(profile.progression);
+  const bankedXp = unsignedBigInt(progression.bankedXp ?? profile.bankedXp);
+  const level = integer(progression.level ?? profile.level, 1, NFT_MAX_LEVEL, 1);
+  const nextLevelXp = level >= NFT_MAX_LEVEL ? null : nftXpThreshold(level + 1);
+  return Object.freeze({
+    bankedXp,
+    level,
+    nextLevelXp,
+    xpToNextLevel: nextLevelXp === null
+      ? 0n
+      : BigInt(nextLevelXp) > bankedXp ? BigInt(nextLevelXp) - bankedXp : 0n,
+    maximumLevelXp: NFT_LEVEL_100_XP
   });
 }
 
@@ -146,4 +179,13 @@ function integer(value, fallback, maximum = Number.MAX_SAFE_INTEGER, minimum = 0
 function finite(value, fallback = 0) {
   const number = Number(value);
   return Number.isFinite(number) ? number : Number(fallback) || 0;
+}
+
+function unsignedBigInt(value) {
+  try {
+    const parsed = BigInt(value || 0);
+    return parsed > 0n ? parsed : 0n;
+  } catch {
+    return 0n;
+  }
 }

@@ -54,6 +54,57 @@ export const NFT_GARAGE_CHESTS = Object.freeze([
 export const NFT_GARAGE_RARITIES = Object.freeze(['COMMON', 'UNCOMMON', 'RARE', 'MYTHIC', 'LEGENDARY']);
 export const NFT_GARAGE_EQUIPMENT_PAGE_SIZE = 50;
 
+const NFT_GARAGE_RARITY_ODDS_BPS = Object.freeze([6_800, 1_800, 800, 500, 100]);
+const NFT_GARAGE_ITEM_NAMES = Object.freeze([
+  Object.freeze(['Common Prospector Armor', 'Uncommon Copperguard Armor', 'Rare Crystalbreaker Armor', 'Mythic Voidvault Armor', 'Legendary Mineheart Armor']),
+  Object.freeze(['Common Riveted Pickaxe', 'Uncommon Coppercoil Pickaxe', 'Rare Crystal Fang Pickaxe', 'Mythic Voidcore Pickaxe', 'Legendary Sunforge Pickaxe']),
+  Object.freeze(['Common Ore Blaster', 'Uncommon Coppercoil Blaster', 'Rare Crystal Blaster', 'Mythic Voidcore Blaster', 'Legendary Sunforge Blaster']),
+  Object.freeze(['Common Mining Charge', 'Uncommon Copper Charge', 'Rare Crystal Charge', 'Mythic Void Charge', 'Legendary Sunforge Charge']),
+  Object.freeze(['Common Riveted Pit Cap', 'Uncommon Coppercoil Cap', 'Rare Crystal Surveyor Helm', 'Mythic Voidglass Deepseer', 'Legendary Sunforge Helm']),
+  Object.freeze(['Common Crystal Hauler', 'Uncommon Crystal Hauler', 'Rare Crystal Hauler', 'Mythic Crystal Hauler', 'Legendary Crystal Hauler'])
+]);
+
+export function garageEquipmentBonus(slotInput, rarityInput) {
+  const slot = nonnegativeInteger(slotInput, 'Equipment slot');
+  const rarity = nonnegativeInteger(rarityInput, 'Equipment rarity');
+  if (slot >= NFT_GARAGE_SLOTS.length || rarity >= NFT_GARAGE_RARITIES.length) {
+    throw new Error('The Equipment chest outcome is invalid.');
+  }
+  const tier = rarity + 1;
+  if (slot === 0) return tier === 5 ? 150 : 25 * tier;
+  if (slot === 1 || slot === 2) return 2 * tier;
+  if (slot === 3 || slot === 4) return 5 * tier;
+  return tier === 5 ? 15_000 : 2_500 * tier;
+}
+
+export function garageChestOutcomes(productInput = {}) {
+  const slot = nonnegativeInteger(productInput.slot, 'Equipment chest slot');
+  if (slot >= NFT_GARAGE_CHESTS.length) throw new Error('The Equipment chest slot is invalid.');
+  return Object.freeze(NFT_GARAGE_RARITIES.map((rarity, rarityIndex) => {
+    const bonus = garageEquipmentBonus(slot, rarityIndex);
+    const stat = slot === 0
+      ? `+${bonus} SHIELD`
+      : slot === 1
+        ? `+${bonus} PICKAXE ATTACK`
+        : slot === 2
+          ? `+${bonus} BLASTER ATTACK`
+          : slot === 3
+            ? `+${bonus} DYNAMITE ATTACK`
+            : slot === 4
+              ? `+${bonus} MAX HEALTH`
+              : `+${bonus / 100}% CARRY CAPACITY`;
+    return Object.freeze({
+      rarity,
+      rarityIndex,
+      chanceBps: NFT_GARAGE_RARITY_ODDS_BPS[rarityIndex],
+      chance: `${NFT_GARAGE_RARITY_ODDS_BPS[rarityIndex] / 100}%`,
+      name: NFT_GARAGE_ITEM_NAMES[slot][rarityIndex],
+      bonus,
+      stat
+    });
+  }));
+}
+
 const EQUIPMENT_INVENTORY_DRIFT_CODES = new Set([
   'nft_equipment_inventory_changed',
   'nft_equipment_index_changed'

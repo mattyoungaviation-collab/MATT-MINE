@@ -94,6 +94,12 @@ test('Miner selection, loadout, balances, repair, chests, and mine entry share o
   assert.match(html, /id="garage-withdraw-button"/);
   assert.match(html, /id="garage-withdraw-all-button" class="garage-withdraw-all-button"/);
   assert.match(html, /id="garage-chest-list"/);
+  assert.match(html, /id="garage-chest-dialog"/);
+  assert.match(html, /id="garage-chest-dialog-outcomes"/);
+  assert.match(source, /VIEW ODDS & EXACT STATS/);
+  assert.match(source, /garageChestOutcomes\(product\)/);
+  assert.match(source, /\['BANKED XP'/);
+  assert.match(source, /\['NEXT LEVEL'/);
   assert.doesNotMatch(html, /id="select-loadout-button"[^>]*href=/);
   assert.match(source, /new NftGarageClient\(\{ wallet, api: apiClient \}\)/);
   assert.match(source, /No separate confirmation is needed/);

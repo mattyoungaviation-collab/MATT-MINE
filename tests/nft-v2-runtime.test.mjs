@@ -8,7 +8,9 @@ import { normalizeGameTuning } from '../src/game/tuning.js';
 import {
   gameplayRuntimeSnapshot,
   nftCarryCapacity,
-  nftGameplayTraits
+  nftGameplayTraits,
+  nftXpProgress,
+  nftXpThreshold
 } from '../src/game/nftTraits.js';
 import {
   buildArenaChallenge,
@@ -122,6 +124,21 @@ test('V2 Miner traits replace legacy profile power while Admin multipliers remai
   game.player.dynamiteAmmo = 1;
   game.throwDynamite();
   assert.equal(game.projectiles[0].damage, TRAITS.dynamiteAttack * 1.5);
+});
+
+test('Miner XP progress uses the exact quadratic on-chain level thresholds', () => {
+  assert.equal(nftXpThreshold(1), 0);
+  assert.equal(nftXpThreshold(2), 36);
+  assert.equal(nftXpThreshold(50), 88_191);
+  assert.equal(nftXpThreshold(100), 360_000);
+  assert.deepEqual(nftXpProgress({ progression: { level: 50, bankedXp: 90_000 } }), {
+    bankedXp: 90_000n,
+    level: 50,
+    nextLevelXp: 91_827,
+    xpToNextLevel: 1_827n,
+    maximumLevelXp: 360_000n
+  });
+  assert.equal(nftXpProgress({ progression: { level: 100, bankedXp: 361_000 } }).nextLevelXp, null);
 });
 
 test('V2 Armor shield depletes before Base Health and reports both pools to the HUD', () => {
