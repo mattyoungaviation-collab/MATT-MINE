@@ -225,6 +225,28 @@ test('a verified Endless extract command banks without an impossible second fini
   const verified = verifyEndlessPhaseEvents(run, replayed.outcomeEvents, 1_100_000);
   assert.ok(verified.score > 0);
   assert.ok(verified.score <= run.manifest.pointBudget);
+
+  const delayedBoundary = structuredClone(events);
+  delayedBoundary.at(-1).tick += 20;
+  const recovered = replayArenaTranscript({
+    version: ARENA_TRANSCRIPT_VERSION,
+    dailySeed: run.runSeed,
+    tickMs: 20,
+    maxTicks: run.config.integrity.maximumPhaseSeconds * 1_000,
+    maxEvents: run.config.integrity.maximumInputEventsPerPhase,
+    maxDepth: 2,
+    verificationMode: 'deterministic-input-replay',
+    tuning: {}
+  }, delayedBoundary, {
+    mode: 'endless', requireTerminal: false, maxDepth: 2, currentPhase: 1,
+    endlessRunId: run.id, endlessConfigVersion: run.configVersion,
+    endlessSnapshot: { config: run.config }, endlessManifest: run.manifest,
+    nftRun: { minerId: run.minerId, profile: run.minerProfile }
+  });
+  assert.equal(recovered.state, 'ended');
+  assert.equal(recovered.extracted, true);
+  assert.equal(recovered.boundaryRecoveryCount, 1);
+  assert.ok(recovered.boundaryRecoveries.some((entry) => entry.command === 'extract' && entry.state === 'depthchoice'));
 });
 
 test('a verified descent carries exact health, inventory, upgrades, and phase-specific RNG into phase two', () => {
@@ -296,7 +318,7 @@ test('Endless phase replay accepts only contiguous raw controls and rejects a fo
   });
   await assert.rejects(
     () => service.verifyEndlessPhase({ run, checkpoint: finalCheckpoint, action: 'descend' }),
-    (error) => ['arena_replay_stalled', 'arena_descend_unavailable', 'arena_guardian_required', 'endless_replay_not_descended'].includes(error.code)
+    (error) => ['arena_descend_unavailable', 'arena_guardian_required', 'endless_replay_not_descended'].includes(error.code)
   );
 });
 

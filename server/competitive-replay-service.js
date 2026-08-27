@@ -234,6 +234,8 @@ export class CompetitiveReplayService {
         runtime: replayed.runtime,
         rawScore: replayed.rawScore,
         state: replayed.state,
+        boundaryRecoveryCount: Number(replayed.boundaryRecoveryCount || 0),
+        boundaryRecoveries: structuredClone(replayed.boundaryRecoveries || []),
         playerState: structuredClone(replayed.phaseState?.player || {}),
         inventoryState: {
           weapon: replayed.phaseState?.player?.weapon || 'pickaxe',

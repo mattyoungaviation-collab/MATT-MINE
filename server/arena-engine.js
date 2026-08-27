@@ -19,6 +19,7 @@ export const ARENA_MAX_TICKS = 20 * 60_000;
 // upgrade, depth, revive, and other command events.
 export const ARENA_MAX_EVENTS = Math.ceil(ARENA_MAX_TICKS / ARENA_TICK_MS) + 1_024;
 export const ARENA_MAX_BATCH_EVENTS = 256;
+const MAX_RECORDED_BOUNDARY_RECOVERIES = 25;
 export const ARENA_EVENT_TYPES = Object.freeze(['input', 'command', 'finish']);
 export const ARENA_COMMANDS = Object.freeze([
   'upgrade',
@@ -177,17 +178,31 @@ export function replayArenaTranscript(challenge, inputEvents, options = {}) {
   });
   let lastTick = -1;
   let reviveCommands = 0;
+  let boundaryRecoveryCount = 0;
+  const boundaryRecoveries = [];
 
   for (let index = 0; index < inputEvents.length; index += 1) {
     const event = normalizeArenaEvent(inputEvents[index], index + 1, challenge);
     assertApi(!finishSeen, 422, 'arena_event_after_terminal', 'The input transcript continues after its finish marker.');
     assertApi(event.tick >= lastTick, 422, 'arena_tick_regressed', 'Arena input ticks must be monotonic.');
-    assertApi(
-      game.advanceArenaToTick(event.tick, control),
-      422,
-      'arena_replay_stalled',
-      'The input transcript skipped a required upgrade, descent, extraction, or knockout boundary.'
-    );
+    const advancedToEventTick = game.advanceArenaToTick(event.tick, control);
+    if (!advancedToEventTick) {
+      // Upgrade, depth-choice, extraction, and knockout screens pause the
+      // gameplay clock. Network batching can place the signed boundary command
+      // a tick or two after that paused clock. Process the command against the
+      // authoritative boundary state instead of rejecting the entire run.
+      boundaryRecoveryCount += 1;
+      if (boundaryRecoveries.length < MAX_RECORDED_BOUNDARY_RECOVERIES) {
+        boundaryRecoveries.push({
+          sequence: event.seq,
+          eventTick: event.tick,
+          replayTick: Math.max(0, Math.round((game.run?.elapsed || 0) * 1_000)),
+          state: String(game.state || ''),
+          eventType: event.type,
+          command: event.type === 'command' ? event.command : ''
+        });
+      }
+    }
     lastTick = event.tick;
 
     if (event.type === 'input') {
@@ -254,6 +269,8 @@ export function replayArenaTranscript(challenge, inputEvents, options = {}) {
     state: game.state,
     rawScore: Math.max(0, Math.floor(Number(game.run?.rawScore || 0))),
     outcomeEvents,
+    boundaryRecoveryCount,
+    boundaryRecoveries,
     phaseState,
     continuation: replayMode === 'endless' ? captureEndlessContinuation(game) : null
   };
