@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   CompetitiveReplayService,
+  endlessPhaseOutcomeEvents,
   latestEndlessDecisionEvents
 } from '../server/competitive-replay-service.js';
 import { MemoryCompetitiveReplayStore } from '../server/competitive-replay-store.js';
@@ -83,6 +84,57 @@ test('Endless retries keep only the latest extract or descend decision', () => {
   assert.deepEqual(events.map((event) => event.seq), [1, 2]);
   assert.equal(events.at(-1).command, 'extract');
   assert.equal(events.some((event) => event.command === 'descend'), false);
+});
+
+test('Endless settlement ignores replay-only knockout and other non-scoring events', () => {
+  const events = endlessPhaseOutcomeEvents([
+    { type: 'damage_taken', tick: 100, amount: 10 },
+    { type: 'knockout', tick: 120 },
+    { type: 'future_visual_event', tick: 120 },
+    { type: 'phase_completed', tick: 120 }
+  ]);
+
+  assert.deepEqual(events.map((event) => event.type), ['damage_taken', 'phase_completed']);
+});
+
+test('a replay-only knockout at phase five cannot block the signed descend choice', () => {
+  const run = endlessRun();
+  run.currentPhase = 5;
+  run.manifest = generateEndlessPhase({
+    runId: run.id,
+    runSeed: run.runSeed,
+    phase: run.currentPhase,
+    configVersion: run.configVersion,
+    config: run.config,
+    minerProfile: run.minerProfile
+  });
+  const outcomeEvents = [];
+  const game = new MattMineGame(null, defaultProfile(), {
+    headless: true,
+    audio: NOOP_AUDIO,
+    onArenaEvent(event) { outcomeEvents.push(structuredClone(event)); }
+  });
+  game.startRun({
+    mode: 'endless', seed: run.runSeed, currentPhase: run.currentPhase,
+    endlessRunId: run.id, endlessConfigVersion: run.configVersion,
+    endlessSnapshot: { config: run.config }, endlessManifest: run.manifest,
+    nftRun: { minerId: run.minerId, profile: run.minerProfile }
+  });
+  game.player.health = 0;
+  game.endRun(false);
+
+  applyReplayCommand(game, { command: 'descend', tick: 0 }, {
+    mode: 'endless',
+    maxDepth: 6
+  });
+
+  const settlementEvents = endlessPhaseOutcomeEvents(outcomeEvents);
+  assert.equal(game.state, 'playing');
+  assert.equal(game.run.depth, 6);
+  assert.equal(game.player.health, game.player.maxHealth);
+  assert.equal(settlementEvents.some((event) => event.type === 'knockout'), false);
+  const phase = verifyEndlessPhaseEvents(run, settlementEvents, 1_010_000);
+  assert.equal(phase.bossKills, 1);
 });
 
 test('Endless verification accepts the latest signed decision after an earlier one failed', async () => {

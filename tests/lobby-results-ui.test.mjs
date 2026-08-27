@@ -130,6 +130,13 @@ test('Endless terminal choices are not rejected by a second replay-state asserti
   assert.doesNotMatch(source, /authoritative replay did not complete and descend/);
 });
 
+test('Endless settlement removes unknown replay events before phase scoring', async () => {
+  const source = await readFile(`${root}server/competitive-replay-service.js`, 'utf8');
+
+  assert.match(source, /outcomeEvents: endlessPhaseOutcomeEvents\(replayed\.outcomeEvents\)/);
+  assert.match(source, /ENDLESS_PHASE_OUTCOME_TYPES/);
+});
+
 test('pending Endless rewards have an authenticated history recovery action with fractional Crystal display', async () => {
   const source = await readFile(`${root}src/main.js`, 'utf8');
   const apiSource = await readFile(`${root}src/game/apiClient.js`, 'utf8');

@@ -16,6 +16,15 @@ import {
 import { ApiError, assertApi } from './errors.js';
 
 const CLOCK_TOLERANCE_MS = 15_000;
+const ENDLESS_PHASE_OUTCOME_TYPES = new Set([
+  'enemy_killed',
+  'ore_broken',
+  'crystal_collected',
+  'guardian_defeated',
+  'phase_completed',
+  'damage_taken',
+  'extract'
+]);
 // Practice is the unlimited MATT Mine gameplay lane. It uses the same
 // authoritative replay as ranked modes before NFT state can change.
 const REPLAY_MODES = new Set(['practice', 'paid']);
@@ -227,7 +236,7 @@ export class CompetitiveReplayService {
     // with the server checkpoint; the Endless service owns phase advancement.
     return {
       replayId,
-      outcomeEvents: replayed.outcomeEvents,
+      outcomeEvents: endlessPhaseOutcomeEvents(replayed.outcomeEvents),
       evidence: {
         schemaVersion: transcript.replaySchemaVersion,
         eventCount: replayed.eventCount,
@@ -490,6 +499,12 @@ export function latestEndlessDecisionEvents(events = []) {
       !['extract', 'descend'].includes(event.command)
     ))
     .map((event, index) => ({ ...event, seq: index + 1 }));
+}
+
+export function endlessPhaseOutcomeEvents(events = []) {
+  return events
+    .filter((event) => ENDLESS_PHASE_OUTCOME_TYPES.has(String(event?.type || '')))
+    .map((event) => structuredClone(event));
 }
 
 function hashToken(value) {

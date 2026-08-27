@@ -493,6 +493,10 @@ function recoverEndlessTerminalBoundary(game) {
   const killedRequired = new Set(run?.endlessRequiredKilled || []);
   const tick = Math.max(0, Math.round(Number(run?.elapsed || 0) * 1_000));
 
+  if (Number(game.player?.health || 0) <= 0) {
+    game.player.health = Math.max(1, Number(game.player?.maxHealth || 1));
+  }
+
   for (const targetId of requiredIds) {
     if (killedRequired.has(targetId)) continue;
     const object = byId.get(targetId);
