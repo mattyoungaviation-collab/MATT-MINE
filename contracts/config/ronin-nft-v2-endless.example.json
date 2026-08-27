@@ -23,6 +23,20 @@
       "maximumMinerXpPerDay": 2500,
       "checkpointTimeoutSeconds": 86400,
       "failedRunsRetainXp": false
+    },
+    "endless-one-to-one-v1": {
+      "generatorVersion": "endless-map-v2",
+      "conversionRateWei": "1000000000000000000",
+      "maximumPayoutWei": "10000000000000000000",
+      "maximumDailyPayoutWei": "500000000000000000000",
+      "mineableCrystalUnits": 3750,
+      "maximumPhases": 1000000,
+      "phaseXp": 10,
+      "maximumRunXp": 500,
+      "maximumWalletXpPerDay": 2500,
+      "maximumMinerXpPerDay": 2500,
+      "checkpointTimeoutSeconds": 86400,
+      "failedRunsRetainXp": false
     }
   }
 }

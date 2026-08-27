@@ -177,10 +177,10 @@ export class EndlessSettlementService {
     if (!isAddressEqual(settlementLoadout, this.loadoutAddress)) throw new Error(`Endless Loadout is ${settlementLoadout}.`);
     if (BigInt(crystalUnit) !== 10n ** 18n) throw new Error('Endless CRYSTALS must use 18 decimals.');
     if (!operatorAuthorized) throw new Error('Endless Game Operator lacks OPERATOR_ROLE.');
-    for (const [economyVersion, versionId] of Object.entries(this.versionIds)) {
-      const version = await this.#version(versionId);
-      if (!version.approved || version.retired) throw new Error(`${economyVersion} is not an active on-chain Endless version.`);
-    }
+    // Version routes are allowed to be staged before their approval
+    // transaction lands. Existing approved routes must remain usable while a
+    // new Admin economy is being prepared.
+    await Promise.all(Object.values(this.versionIds).map((versionId) => this.#version(versionId)));
     return this;
   }
 
@@ -208,7 +208,7 @@ export class EndlessSettlementService {
         this.publicClient.getBalance({ address: this.operatorAddress })
       ]);
       const versions = Object.fromEntries(await Promise.all(Object.entries(this.versionIds).map(async ([name, id]) => [name, await this.#version(id)])));
-      const versionsReady = Object.values(versions).every((value) => value.approved && !value.retired);
+      const versionsReady = Object.values(versions).some((value) => value.approved && !value.retired);
       const signerMatches = isAddressEqual(signer, this.signerAddress);
       const loadoutMatches = isAddressEqual(settlementLoadout, this.loadoutAddress);
       const crystalUnitMatches = BigInt(crystalUnit) === 10n ** 18n;
@@ -232,14 +232,12 @@ export class EndlessSettlementService {
 
   async prepareRunAuthorization({ address, minerId, economyVersion, economyConfig }) {
     const player = getAddress(address);
-    const versionId = this.#versionId(economyVersion);
-    const [nonce, loadoutHash, version] = await Promise.all([
+    const [nonce, loadoutHash, route] = await Promise.all([
       this.publicClient.readContract({ address: this.settlementAddress, abi: ENDLESS_ABI, functionName: 'playerNonces', args: [player] }),
       this.publicClient.readContract({ address: this.loadoutAddress, abi: LOADOUT_ABI, functionName: 'loadoutHash', args: [BigInt(minerId)] }),
-      this.#version(versionId)
+      this.#resolveVersionRoute(economyVersion, economyConfig)
     ]);
-    assertApi(version.approved && !version.retired, 503, 'endless_version_unavailable', 'The configured Endless economy version is not active on-chain.');
-    assertEconomyVersion(version, economyConfig);
+    const versionId = route.versionId;
     const authorization = {
       player,
       minerId: BigInt(minerId),
@@ -251,7 +249,8 @@ export class EndlessSettlementService {
     return {
       contractVersion: 2,
       mode: 'endless',
-      economyVersion,
+      economyVersion: route.economyVersion,
+      requestedEconomyVersion: String(economyVersion || ''),
       authorization: jsonSafe(authorization),
       typedData: {
         domain: this.#domain(),
@@ -266,10 +265,8 @@ export class EndlessSettlementService {
     return this.#serialize(async () => {
       const player = getAddress(address);
       const supplied = normalizeAuthorization(authorization);
-      const expectedVersion = this.#versionId(economyVersion);
-      const version = await this.#version(expectedVersion);
-      assertApi(version.approved && !version.retired, 503, 'endless_version_unavailable', 'The configured Endless economy version is not active on-chain.');
-      assertEconomyVersion(version, economyConfig);
+      const route = await this.#resolveVersionRoute(economyVersion, economyConfig);
+      const expectedVersion = route.versionId;
       assertApi(isAddressEqual(supplied.player, player), 422, 'endless_authorization_player', 'Endless approval belongs to another wallet.');
       assertApi(supplied.minerId === BigInt(minerId), 422, 'endless_authorization_miner', 'Endless approval belongs to another Miner.');
       assertApi(supplied.versionId === expectedVersion, 422, 'endless_authorization_version', 'Endless approval belongs to another economy version.');
@@ -298,6 +295,11 @@ export class EndlessSettlementService {
       assertApi(matchesAuthorization(active, supplied), 502, 'endless_chain_start_missing', 'The confirmed Endless Miner lock was not found on-chain.');
       return { transactionHash, recovered: !transactionHash, chainRun: publicChainRun(active) };
     });
+  }
+
+  async assertEconomyConfig({ economyVersion, economyConfig }) {
+    const route = await this.#resolveVersionRoute(economyVersion, economyConfig);
+    return { economyVersion: route.economyVersion, versionId: route.versionId };
   }
 
   async checkpoint({ address, minerId, chainRun, completedPhases, minedCrystalUnits, rollingDigest }) {
@@ -656,10 +658,27 @@ export class EndlessSettlementService {
     };
   }
 
-  #versionId(economyVersion) {
-    const value = this.versionIds[String(economyVersion || '')];
-    if (!value) throw new ApiError(503, 'endless_version_unmapped', 'This Endless economy version has no approved on-chain route.');
-    return value;
+  async #resolveVersionRoute(economyVersion, economyConfig) {
+    const requestedName = String(economyVersion || '').trim();
+    const entries = Object.entries(this.versionIds);
+    const preferredIndex = entries.findIndex(([name]) => name === requestedName);
+    if (preferredIndex > 0) entries.unshift(entries.splice(preferredIndex, 1)[0]);
+    const routes = await Promise.all(entries.map(async ([name, versionId]) => ({
+      economyVersion: name,
+      versionId,
+      version: await this.#version(versionId)
+    })));
+    const exact = routes.find((route) => (
+      route.version.approved && !route.version.retired && economyVersionMatches(route.version, economyConfig)
+    ));
+    if (exact) return exact;
+    if (!this.versionIds[requestedName]) {
+      throw new ApiError(503, 'endless_version_unmapped', 'This Endless economy has no approved on-chain route yet. The Miner was not locked.');
+    }
+    const requested = routes.find((route) => route.economyVersion === requestedName);
+    assertApi(requested?.version?.approved && !requested.version.retired, 503, 'endless_version_unavailable', 'The configured Endless economy version is not active on-chain. The Miner was not locked.');
+    assertEconomyVersion(requested.version, economyConfig);
+    return requested;
   }
 
   #domain() {
@@ -801,6 +820,15 @@ function boundedUint32(value, label) {
 }
 
 function assertEconomyVersion(version, config = {}) {
+  assertApi(
+    economyVersionMatches(version, config),
+    503,
+    'endless_economy_route_mismatch',
+    'This Admin economy needs its matching Ronin version approved before play can start. The Miner was not locked.'
+  );
+}
+
+function economyVersionMatches(version, config = {}) {
   let expected;
   try {
     expected = {
@@ -817,12 +845,11 @@ function assertEconomyVersion(version, config = {}) {
       failedRunsRetainXp: config.failedRunsRetainXp === true
     };
   } catch {
-    throw new ApiError(503, 'endless_economy_route_invalid', 'The active Endless economy cannot be represented exactly on-chain.');
+    return false;
   }
-  const matches = Object.entries(expected).every(([key, value]) => (
+  return Object.entries(expected).every(([key, value]) => (
     typeof value === 'boolean' ? version[key] === value : BigInt(version[key]) === value
   ));
-  assertApi(matches, 503, 'endless_economy_route_mismatch', 'The active Endless Admin economy does not match its approved on-chain version. Publish and map a new version before enabling rewards.');
 }
 
 function rationalTokenWei(numerator, denominator) {

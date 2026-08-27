@@ -412,6 +412,9 @@ test('a confirmed Ronin checkpoint resyncs the bank before reward settlement', a
   };
   const active = harness({
     endlessRewardSettler: {
+      async assertEconomyConfig() {
+        return { economyVersion: 'endless-test-v1', versionId: `0x${'41'.repeat(32)}` };
+      },
       async beginRun() {
         return { transactionHash: `0x${'61'.repeat(32)}`, chainRun };
       },
@@ -520,6 +523,9 @@ test('a temporary reward failure keeps the banked run idempotently retryable', a
   };
   const active = harness({
     endlessRewardSettler: {
+      async assertEconomyConfig() {
+        return { economyVersion: 'endless-test-v1', versionId: `0x${'41'.repeat(32)}` };
+      },
       async beginRun() {
         return { transactionHash: `0x${'61'.repeat(32)}`, chainRun };
       },

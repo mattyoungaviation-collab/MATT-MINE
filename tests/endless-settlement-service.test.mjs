@@ -12,6 +12,7 @@ const PLAYER = '0x1111111111111111111111111111111111111111';
 const SETTLEMENT = '0x2222222222222222222222222222222222222222';
 const LOADOUT = '0x3333333333333333333333333333333333333333';
 const VERSION = `0x${'44'.repeat(32)}`;
+const ONE_TO_ONE_VERSION = `0x${'45'.repeat(32)}`;
 const LOADOUT_HASH = `0x${'55'.repeat(32)}`;
 const ZERO = `0x${'00'.repeat(32)}`;
 const SETTLED_EVENT = parseAbiItem('event EndlessRunSettled(bytes32 indexed runId,address indexed player,uint256 indexed minerId,uint8 outcome,uint32 completedPhases,uint32 minedCrystalUnits,uint256 xpBanked,uint256 crystalsBanked,bytes32 checkpointDigest)');
@@ -72,14 +73,14 @@ function harness(options = {}) {
       if (options.settlementSimulationError) throw options.settlementSimulationError;
       return { request };
     },
-    async readContract({ functionName }) {
+    async readContract({ functionName, args = [] }) {
       if (functionName === 'OPERATOR_ROLE') return `0x${'66'.repeat(32)}`;
       if (functionName === 'paused') return false;
       if (functionName === 'rewardSigner') return SIGNER.address;
       if (functionName === 'loadout') return LOADOUT;
       if (functionName === 'crystalUnit') return 10n ** 18n;
       if (functionName === 'hasRole') return true;
-      if (functionName === 'versions') return {
+      if (functionName === 'versions') return options.versionStates?.[args[0]] || {
         generatorHash: `0x${'77'.repeat(32)}`,
         configHash: `0x${'88'.repeat(32)}`,
         conversionRate: 2_500_000_000_000_000n,
@@ -172,7 +173,7 @@ function harness(options = {}) {
     signerAddress: SIGNER.address,
     operatorPrivateKey: OPERATOR_KEY,
     signerPrivateKey: SIGNER_KEY,
-    versionIds: { 'endless-conservative-v1': VERSION },
+    versionIds: options.versionIds || { 'endless-conservative-v1': VERSION },
     settlementReconciliationAttempts: options.settlementReconciliationAttempts || 6,
     settlementReconciliationDelayMs: 0,
     wait: async () => undefined,
@@ -589,7 +590,85 @@ test('Endless chain adapter fails closed when Admin economy values do not match 
     minerId: 7,
     economyVersion: 'endless-conservative-v1',
     economyConfig: { ...ECONOMY, maximumPayoutNumerator: 11 }
-  }), /does not match its approved on-chain version/i);
+  }), (error) => error.code === 'endless_economy_route_mismatch' && /Miner was not locked/i.test(error.message));
+});
+
+test('Endless chain adapter automatically selects another approved route whose exact economy matches', async () => {
+  const oneToOneEconomy = { ...ECONOMY, crystalConversionDenominator: 1 };
+  const { service } = harness({
+    versionIds: {
+      'endless-conservative-v1': VERSION,
+      'endless-one-to-one-v1': ONE_TO_ONE_VERSION
+    },
+    versionStates: {
+      [ONE_TO_ONE_VERSION]: {
+        generatorHash: `0x${'79'.repeat(32)}`,
+        configHash: `0x${'89'.repeat(32)}`,
+        conversionRate: 10n ** 18n,
+        maximumPayout: 10n * 10n ** 18n,
+        maximumDailyPayout: 500n * 10n ** 18n,
+        mineableCrystalUnits: 3_750,
+        maximumPhases: 1_000_000,
+        phaseXp: 10,
+        maximumRunXp: 500,
+        maximumWalletXpPerDay: 2_500,
+        maximumMinerXpPerDay: 2_500,
+        checkpointTimeout: 86_400,
+        failedRunsRetainXp: false,
+        approved: true,
+        retired: false
+      }
+    }
+  });
+  await service.init();
+
+  const prepared = await service.prepareRunAuthorization({
+    address: PLAYER,
+    minerId: 7,
+    // A previously saved Admin draft may still carry the old label. Exact
+    // immutable values, rather than the stale label, select the safe route.
+    economyVersion: 'endless-conservative-v1',
+    economyConfig: oneToOneEconomy
+  });
+
+  assert.equal(prepared.authorization.versionId, ONE_TO_ONE_VERSION);
+  assert.equal(prepared.economyVersion, 'endless-one-to-one-v1');
+  assert.equal(prepared.requestedEconomyVersion, 'endless-conservative-v1');
+  assert.deepEqual(
+    await service.assertEconomyConfig({ economyVersion: 'endless-conservative-v1', economyConfig: oneToOneEconomy }),
+    { economyVersion: 'endless-one-to-one-v1', versionId: ONE_TO_ONE_VERSION }
+  );
+});
+
+test('Endless startup keeps approved routes playable while a mapped version is awaiting approval', async () => {
+  const { service } = harness({
+    versionIds: {
+      'endless-conservative-v1': VERSION,
+      'endless-one-to-one-v1': ONE_TO_ONE_VERSION
+    },
+    versionStates: {
+      [ONE_TO_ONE_VERSION]: {
+        generatorHash: `0x${'79'.repeat(32)}`,
+        configHash: `0x${'89'.repeat(32)}`,
+        conversionRate: 10n ** 18n,
+        maximumPayout: 10n * 10n ** 18n,
+        maximumDailyPayout: 500n * 10n ** 18n,
+        mineableCrystalUnits: 3_750,
+        maximumPhases: 1_000_000,
+        phaseXp: 10,
+        maximumRunXp: 500,
+        maximumWalletXpPerDay: 2_500,
+        maximumMinerXpPerDay: 2_500,
+        checkpointTimeout: 86_400,
+        failedRunsRetainXp: false,
+        approved: false,
+        retired: false
+      }
+    }
+  });
+
+  await service.init();
+  assert.equal((await service.health()).ok, true);
 });
 
 function emptyActive() {

@@ -881,6 +881,18 @@ export const endlessServiceMethods = {
     const validation = validateEndlessConfig(requestedConfig, { forActivation: normalized.enabled && normalized.rewards.enabled });
     assertApi(validation.ok, 422, 'endless_config_invalid', 'The Endless configuration is invalid.', validation.errors);
     const config = validation.config;
+    if (config.enabled && config.rewards.enabled) {
+      assertApi(
+        typeof this.endlessRewardSettler?.assertEconomyConfig === 'function',
+        503,
+        'endless_reward_settler_required',
+        'Endless rewards cannot be published until Ronin settlement verification is available.'
+      );
+      await this.endlessRewardSettler.assertEconomyConfig({
+        economyVersion: config.rewards.economyVersion,
+        economyConfig: config.rewards
+      });
+    }
     const timestamp = this.now();
     return this.database.transact(async (state, transaction) => {
       const store = state.endlessCompetition;

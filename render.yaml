@@ -94,7 +94,7 @@ services:
       - key: MATT_MINE_ENDLESS_DEPLOYMENT_BLOCK
         value: "60167705"
       - key: MATT_MINE_ENDLESS_VERSION_IDS_JSON
-        value: '{"endless-conservative-v1":"0xc4cb8bea0ac168b3bb27c5e1b21fa1e17e58b1ba152cc02cba82206a3bb8336f"}'
+        value: '{"endless-conservative-v1":"0xc4cb8bea0ac168b3bb27c5e1b21fa1e17e58b1ba152cc02cba82206a3bb8336f","endless-one-to-one-v1":"0x4d6d208aa91861779e626ed8425cf4afc471ac363e19f0f6a79e19e8e2ab773c"}'
       - key: MATT_MINE_ENDLESS_RECONCILIATION_ATTEMPTS
         value: "6"
       - key: MATT_MINE_ENDLESS_RECONCILIATION_DELAY_MS
