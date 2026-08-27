@@ -1,4 +1,4 @@
-import { getCreateAddress, parseEther } from "ethers";
+import { getAddress, getCreateAddress, parseEther } from "ethers";
 import { network } from "hardhat";
 import {
   ENDLESS_MAINNET_CHAIN_ID,
