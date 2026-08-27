@@ -295,6 +295,9 @@ export function validateEndlessConfig(input, { forActivation = false } = {}) {
   if (forActivation && config.rewards.enabled && !config.rewards.economyVersion) {
     errors.push('A published economy version is required before Endless rewards can be activated.');
   }
+  if (forActivation && config.rewards.enabled && (!config.rewards.crystalsEnabled || !config.rewards.minerXpEnabled)) {
+    errors.push('The compact Endless settlement requires both CRYSTALS and Miner XP, or reward settlement must be disabled entirely.');
+  }
   if (forActivation && config.rewards.crystalsEnabled && config.rewards.crystalConversionNumerator <= 0) {
     errors.push('A positive CRYSTALS conversion is required before crystal rewards can be activated.');
   }

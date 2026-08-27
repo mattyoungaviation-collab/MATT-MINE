@@ -417,7 +417,10 @@ contract MattV2EndlessSettlement is MattV2UpgradeableModule, EIP712Upgradeable {
                 || miner.ownerOf(result.minerId) != result.player
         ) revert RunMismatch();
         if (!_validResult(result, rewardSignature)) revert InvalidSignature();
-        if (result.completedPhases == 0 || result.completedPhases > active.maximumPhases) {
+        if (
+            result.completedPhases > active.maximumPhases
+                || (result.completedPhases == 0 && result.outcome != MattV2Types.Outcome.Death)
+        ) {
             revert InvalidRunResult();
         }
         _settleVerified(result, active);
@@ -448,6 +451,23 @@ contract MattV2EndlessSettlement is MattV2UpgradeableModule, EIP712Upgradeable {
     }
 
     function _settleVerified(EndlessResult calldata result, ActiveEndlessRun memory active) private {
+        if (result.completedPhases == 0) {
+            processedRuns[result.runId] = true;
+            delete _activeRuns[result.minerId];
+            miner.setRunLocked(result.minerId, false);
+            emit EndlessRunSettled(
+                result.runId,
+                result.player,
+                result.minerId,
+                result.outcome,
+                0,
+                0,
+                0,
+                0,
+                result.checkpointDigest
+            );
+            return;
+        }
         uint256 carriedUnits = Math.min(result.minedCrystalUnits, active.carryCapacity);
         uint256 converted = Math.min(carriedUnits * uint256(active.conversionRate), active.maximumPayout);
         converted = Math.min(converted, HARD_RUN_PAYOUT_TOKENS * crystalUnit);

@@ -4119,7 +4119,11 @@ async function approveNftRun(mode, minerId) {
 }
 
 async function startApprovedNftServerRun(mode, minerId) {
-  if (mode === RUN_MODES.ENDLESS) return apiClient.startRun(mode, minerId);
+  if (mode === RUN_MODES.ENDLESS) {
+    const status = await apiClient.endlessStatus();
+    const approval = status.runApprovalRequired ? await approveNftRun(mode, minerId) : null;
+    return apiClient.startRun(mode, minerId, approval);
+  }
   if (mode !== RUN_MODES.PAID) return apiClient.startRun(mode, 0);
   const approval = await approveNftRun(mode, minerId);
   return apiClient.startRun(mode, minerId, approval);

@@ -116,7 +116,7 @@ export class RoninWalletAdapter {
     if (!this.player) throw new Error('Sign in with Ronin Wallet before approving a Miner run.');
     await this.ensureProvider();
     const typedData = prepared?.typedData;
-    if (!typedData?.domain || typedData.primaryType !== 'RunAuthorization' || !typedData.message) {
+    if (!typedData?.domain || !['RunAuthorization', 'EndlessRunAuthorization'].includes(typedData.primaryType) || !typedData.message) {
       throw new Error('The server did not provide a valid Miner run approval.');
     }
     const accounts = await this.provider.request({ method: 'eth_requestAccounts' });

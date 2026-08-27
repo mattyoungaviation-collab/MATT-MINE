@@ -653,6 +653,53 @@ describe("MATT Mine NFT V2", function () {
     assert.equal(await system.miner.isRunLocked(1n), false);
   });
 
+  it("releases only an uncheckpointed Endless start without rewards or death effects", async function () {
+    const system = await networkHelpers.loadFixture(deploySystem);
+    const version = {
+      generatorHash: ethers.id("endless-map-v1"),
+      configHash: ethers.id("endless-cancel-v1"),
+      conversionRate: ethers.parseEther("0.0025"),
+      maximumPayout: ethers.parseEther("10"),
+      maximumDailyPayout: ethers.parseEther("500"),
+      mineableCrystalUnits: 3_750,
+      maximumPhases: 1_000_000,
+      phaseXp: 10,
+      maximumRunXp: 500,
+      maximumWalletXpPerDay: 2_500,
+      maximumMinerXpPerDay: 2_500,
+      checkpointTimeout: 86_400,
+      failedRunsRetainXp: false,
+      approved: false,
+      retired: false
+    };
+    const versionId = await system.endlessSettlement.approveVersion.staticCall(version);
+    await (await system.endlessSettlement.approveVersion(version)).wait();
+    const active = await beginEndlessRun(system, versionId);
+    const before = await system.miner.traitsOf(1n);
+
+    const cancelled = await signEndlessResult(system, active, {
+      checkpointDigest: ethers.ZeroHash,
+      outcome: 1,
+      completedPhases: 0,
+      minedCrystalUnits: 0
+    });
+    await expectCustomError(
+      system.endlessSettlement.connect(system.outsider).settle(cancelled.result, cancelled.signature),
+      system.endlessSettlement,
+      "AccessControlUnauthorizedAccount"
+    );
+    await (await system.endlessSettlement.connect(system.gameOperator).settle(
+      cancelled.result,
+      cancelled.signature
+    )).wait();
+
+    const after = await system.miner.traitsOf(1n);
+    assert.equal(await system.miner.isRunLocked(1n), false);
+    assert.equal(await system.endlessSettlement.processedRuns(active.runId), true);
+    assert.equal(after.bankedXp, before.bankedXp);
+    assert.equal(await system.bank.bankBalance(system.player.address), 0n);
+  });
+
   it("freezes Miner transfer and loadout mutation for the exact active run snapshot", async function () {
     const system = await networkHelpers.loadFixture(deploySystem);
     const pickaxe = await mintEquipment(system, SLOT.Pickaxe, RARITY.Common, 7001);

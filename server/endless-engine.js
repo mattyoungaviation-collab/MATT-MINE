@@ -24,7 +24,8 @@ export function createEndlessRunRecord({
   config,
   startedAt,
   expiresAt,
-  payment = null
+  payment = null,
+  chainRun = null
 }) {
   const normalizedConfig = normalizeEndlessConfig(config);
   const manifest = generateEndlessPhase({
@@ -72,7 +73,9 @@ export function createEndlessRunRecord({
     expiresAt,
     finishedAt: 0,
     finishReason: '',
-    payment: payment ? structuredClone(payment) : null
+    payment: payment ? structuredClone(payment) : null,
+    chainRun: chainRun ? structuredClone(chainRun) : null,
+    chainTransactions: []
   };
 }
 

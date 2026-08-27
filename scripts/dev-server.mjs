@@ -29,6 +29,7 @@ import { NftMetadataService } from '../server/nft-metadata-service.js';
 import { createSaigonChestKeeperFromEnvironment } from '../server/saigon-chest-keeper.js';
 import { createNftGameplayServiceFromEnvironment } from '../server/nft-gameplay-service.js';
 import { createNftV2AdminServiceFromEnvironment } from '../server/nft-v2-admin-service.js';
+import { createEndlessSettlementServiceFromEnvironment } from '../server/endless-settlement-service.js';
 import { nftRpcUrlFromEnvironment } from '../server/nft-rpc-url.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -216,6 +217,8 @@ if (nftGameplayService) {
 }
 const nftV2AdminService = createNftV2AdminServiceFromEnvironment(nftGameplayService, process.env, { rpcUrl: nftRpcUrl });
 if (nftV2AdminService) await nftV2AdminService.init();
+const endlessSettlementService = createEndlessSettlementServiceFromEnvironment(process.env, { rpcUrl: nftRpcUrl });
+if (endlessSettlementService) await endlessSettlementService.init();
 const saigonChestKeeper = createSaigonChestKeeperFromEnvironment();
 if (saigonChestKeeper) await saigonChestKeeper.init();
 const service = new CompleteProductionMattMineService(database, {
@@ -242,6 +245,7 @@ const service = new CompleteProductionMattMineService(database, {
   nftMetadataService,
   nftGameplayService,
   nftV2AdminService,
+  endlessRewardSettler: endlessSettlementService,
   operationsStage: process.env.MATT_MINE_OPERATIONS_STAGE || 'public',
   operationsMonitorCacheMs: Number(process.env.MATT_MINE_OPERATIONS_CACHE_MS || 20_000),
   ...(revivePaymentVerifier && competitiveReplayValidator ? {

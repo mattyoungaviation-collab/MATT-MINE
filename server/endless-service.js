@@ -28,12 +28,33 @@ export const endlessServiceMethods = {
       paidEntryEnabled: published.config.entry.paidEnabled === true,
       entryPriceMatt: published.config.entry.mattPrice,
       rewardsEnabled: published.config.rewards.enabled === true && activation.ok && Boolean(this.endlessRewardSettler),
+      runApprovalRequired: published.config.rewards.enabled === true && activation.ok && Boolean(this.endlessRewardSettler),
       rewardReadiness: activation.ok ? (this.endlessRewardSettler ? 'ready' : 'settler-required') : 'configuration-required',
       rewardErrors: activation.errors,
       configVersion: version,
       generatorVersion: published.config.generatorVersion,
       leaderboardScopes: ['daily', 'weekly', 'season', 'all-time']
     };
+  },
+
+  async prepareEndlessRunAuthorization(token, input = {}) {
+    const session = await this.authenticate(token);
+    assertApi(this.endlessRewardSettler?.prepareRunAuthorization, 503, 'endless_reward_settler_required', 'Endless on-chain settlement is not configured.');
+    const minerId = Number(input.minerId);
+    assertApi(Number.isSafeInteger(minerId) && minerId >= 1 && minerId <= 1_000_000, 422, 'miner_selection_required', 'Select one of this wallet’s Miner NFTs before entering Endless.');
+    const state = await this.database.read();
+    const store = state.endlessCompetition;
+    const config = normalizeEndlessConfig(store.configVersions[store.activeConfigVersion].config);
+    const activation = validateEndlessConfig(config, { forActivation: config.rewards.enabled });
+    assertApi(config.rewards.enabled && activation.ok, 409, 'endless_rewards_inactive', 'This free Endless version does not need an on-chain reward approval.');
+    const miner = await this.nftGameplayService?.playerMiner(session.address, minerId);
+    assertApi(miner, 403, 'miner_nft_required', 'Endless requires a Miner NFT owned by this wallet.');
+    return this.endlessRewardSettler.prepareRunAuthorization({
+      address: session.address,
+      minerId,
+      economyVersion: config.rewards.economyVersion,
+      economyConfig: config.rewards
+    });
   },
 
   async startEndlessRun(token, input = {}) {
@@ -47,54 +68,82 @@ export const endlessServiceMethods = {
     const runId = `run_${this.randomHex(12)}`;
     const runToken = this.randomHex(24);
     const runSeed = `MATT-ENDLESS-${this.randomHex(24)}`;
-    const created = await this.database.transact(async (state, transaction) => {
-      assertApi(!state.operations.maintenanceMode, 503, 'maintenance_mode', state.operations.announcement || 'MATT Mine is temporarily under maintenance.');
-      const wallet = state.wallets[session.address];
-      assertApi(wallet && !wallet.suspended, 403, 'wallet_suspended', 'This wallet cannot enter ranked play.');
-      const store = state.endlessCompetition;
-      const version = store.activeConfigVersion;
-      const published = store.configVersions[version];
-      assertApi(published?.config?.enabled === true, 503, 'endless_mode_disabled', 'Endless is temporarily paused.');
-      const config = normalizeEndlessConfig(published.config);
-      const activation = validateEndlessConfig(config, { forActivation: config.rewards.enabled });
-      assertApi(activation.ok, 503, 'endless_economy_not_ready', activation.errors.join(' '));
-      if (config.rewards.enabled) {
-        assertApi(this.endlessRewardSettler, 503, 'endless_reward_settler_required', 'Endless rewards remain closed until checkpoint settlement is available.');
-      }
-      if (config.entry.paidEnabled) {
-        assertApi(this.endlessPaymentVerifier, 503, 'endless_payment_verifier_required', 'Paid Endless entry remains closed until transaction verification is available.');
-        throw new ApiError(409, 'endless_payment_confirmation_required', 'Confirm the one-time Endless entry transaction before starting.');
-      }
-      const active = Object.values(store.runs).find((run) =>
-        run.address === session.address && run.status === 'active'
-      );
-      assertApi(!active, 409, 'endless_run_active', 'Reconnect to or finish the current Endless run first.');
-      const activeRanked = Object.values(state.runs).find((run) =>
-        run.address === session.address && run.status === 'active' && !['practice', 'beta'].includes(run.mode)
-      );
-      assertApi(!activeRanked, 409, 'ranked_run_active', 'Finish or reconnect to the current ranked run before starting Endless.');
-      const minerBusy = Object.values(state.runs).find((run) =>
-        activeRunMinerId(run) === minerId && ['active', 'settlement_pending'].includes(run.status)
-      );
-      assertApi(!minerBusy, 409, 'nft_miner_in_run', `Miner #${minerId} is already active in Endless.`);
-      const record = createEndlessRunRecord({
-        id: runId,
-        tokenHash: endlessTokenHash(runToken),
-        address: session.address,
-        minerId,
-        minerProfile,
-        runSeed,
-        configVersion: version,
-        config,
-        startedAt: timestamp,
-        expiresAt: timestamp + config.integrity.reconnectWindowSeconds * 1_000
+    let chainStart = null;
+    let created;
+    try {
+      created = await this.database.transact(async (state, transaction) => {
+        assertApi(!state.operations.maintenanceMode, 503, 'maintenance_mode', state.operations.announcement || 'MATT Mine is temporarily under maintenance.');
+        const wallet = state.wallets[session.address];
+        assertApi(wallet && !wallet.suspended, 403, 'wallet_suspended', 'This wallet cannot enter ranked play.');
+        const store = state.endlessCompetition;
+        const version = store.activeConfigVersion;
+        const published = store.configVersions[version];
+        assertApi(published?.config?.enabled === true, 503, 'endless_mode_disabled', 'Endless is temporarily paused.');
+        const config = normalizeEndlessConfig(published.config);
+        const activation = validateEndlessConfig(config, { forActivation: config.rewards.enabled });
+        assertApi(activation.ok, 503, 'endless_economy_not_ready', activation.errors.join(' '));
+        if (config.rewards.enabled) {
+          assertApi(this.endlessRewardSettler, 503, 'endless_reward_settler_required', 'Endless rewards remain closed until checkpoint settlement is available.');
+          assertApi(input.authorization && input.playerSignature, 422, 'endless_run_approval_required', 'Approve this Endless Miner lock in Ronin Wallet.');
+        }
+        if (config.entry.paidEnabled) {
+          assertApi(this.endlessPaymentVerifier, 503, 'endless_payment_verifier_required', 'Paid Endless entry remains closed until transaction verification is available.');
+          throw new ApiError(409, 'endless_payment_confirmation_required', 'Confirm the one-time Endless entry transaction before starting.');
+        }
+        const active = Object.values(store.runs).find((run) =>
+          run.address === session.address && run.status === 'active'
+        );
+        assertApi(!active, 409, 'endless_run_active', 'Reconnect to or finish the current Endless run first.');
+        const activeRanked = Object.values(state.runs).find((run) =>
+          run.address === session.address && run.status === 'active' && !['practice', 'beta'].includes(run.mode)
+        );
+        assertApi(!activeRanked, 409, 'ranked_run_active', 'Finish or reconnect to the current ranked run before starting Endless.');
+        const minerBusy = Object.values(state.runs).find((run) =>
+          activeRunMinerId(run) === minerId && ['active', 'settlement_pending'].includes(run.status)
+        );
+        assertApi(!minerBusy, 409, 'nft_miner_in_run', `Miner #${minerId} is already active in Endless.`);
+        if (config.rewards.enabled) {
+          chainStart = await this.endlessRewardSettler.beginRun({
+            address: session.address,
+            minerId,
+            economyVersion: config.rewards.economyVersion,
+            economyConfig: config.rewards,
+            authorization: input.authorization,
+            playerSignature: input.playerSignature
+          });
+        }
+        const record = createEndlessRunRecord({
+          id: runId,
+          tokenHash: endlessTokenHash(runToken),
+          address: session.address,
+          minerId,
+          minerProfile,
+          runSeed,
+          configVersion: version,
+          config,
+          startedAt: timestamp,
+          expiresAt: timestamp + config.integrity.reconnectWindowSeconds * 1_000,
+          chainRun: chainStart?.chainRun || null
+        });
+        if (chainStart?.transactionHash) record.chainTransactions.push({ type: 'start', hash: chainStart.transactionHash, recordedAt: timestamp });
+        record.checkpointSignature = signEndlessCheckpoint(record, this.endlessCheckpointSecret);
+        store.runs[runId] = record;
+        state.runs[runId] = record;
+        await transaction?.upsertRun(record);
+        return structuredClone(record);
       });
-      record.checkpointSignature = signEndlessCheckpoint(record, this.endlessCheckpointSecret);
-      store.runs[runId] = record;
-      state.runs[runId] = record;
-      await transaction?.upsertRun(record);
-      return structuredClone(record);
-    });
+    } catch (error) {
+      if (chainStart?.chainRun && this.endlessRewardSettler?.cancelUnstarted) {
+        try {
+          await this.endlessRewardSettler.cancelUnstarted({ minerId, chainRun: chainStart.chainRun });
+        } catch (cancellationError) {
+          const uncertain = new ApiError(503, 'endless_start_uncertain', 'The server could not save or release the confirmed Endless Miner lock. Recovery is required before this Miner can start again.');
+          uncertain.cause = cancellationError;
+          throw uncertain;
+        }
+      }
+      throw error;
+    }
     return publicEndlessRun(created, runToken);
   },
 
@@ -111,6 +160,21 @@ export const endlessServiceMethods = {
       recordHeartbeatIntegrity(run, timestamp);
       const verification = verifyEndlessPhaseEvents(run, input.events, timestamp);
       const nextManifest = applyEndlessPhaseCheckpoint(run, verification, String(input.action || ''), timestamp);
+      if (run.config.rewards.enabled) {
+        const chainCheckpoint = await this.endlessRewardSettler.checkpoint({
+          address: run.address,
+          minerId: run.minerId,
+          chainRun: run.chainRun,
+          completedPhases: run.completedPhases,
+          minedCrystalUnits: run.crystalsCarried,
+          rollingDigest: run.rollingDigest
+        });
+        run.chainRun = chainCheckpoint.chainRun;
+        if (chainCheckpoint.transactionHash) {
+          run.chainTransactions.push({ type: 'checkpoint', phase: run.completedPhases, hash: chainCheckpoint.transactionHash, recordedAt: timestamp });
+          run.chainTransactions = run.chainTransactions.slice(-500);
+        }
+      }
       run.checkpointSignature = signEndlessCheckpoint(run, this.endlessCheckpointSecret);
       state.runs[runId] = run;
       await transaction?.upsertRun(run);
@@ -210,6 +274,23 @@ export const endlessServiceMethods = {
       assertEndlessRunOwner(current, session.address, runToken);
       assertApi(current.status === 'active', 409, 'endless_run_closed', 'This Endless run is already closed.');
       const knockout = input.reason === 'knockout';
+      if (current.config.rewards.enabled) {
+        const receipt = current.completedPhases > 0
+          ? await this.endlessRewardSettler.settle({
+              address: current.address,
+              minerId: current.minerId,
+              chainRun: current.chainRun,
+              completedPhases: current.completedPhases,
+              minedCrystalUnits: current.crystalsCarried,
+              rollingDigest: current.rollingDigest,
+              outcome: 'death'
+            })
+          : await this.endlessRewardSettler.cancelUnstarted({ minerId: current.minerId, chainRun: current.chainRun });
+        current.rewardSettlement = current.completedPhases > 0 ? { settled: true, ...structuredClone(receipt), settledAt: timestamp } : null;
+        current.crystalsBanked = Math.max(0, Number(receipt.crystalsBanked || 0));
+        current.minerXpBanked = Math.max(0, Number(receipt.minerXpBanked || 0));
+        if (receipt.transactionHash) current.chainTransactions.push({ type: current.completedPhases > 0 ? 'death-settlement' : 'start-cancel', hash: receipt.transactionHash, recordedAt: timestamp });
+      }
       current.status = knockout ? 'knocked_out' : 'abandoned';
       current.finishReason = knockout ? 'knockout' : 'abandoned';
       current.finishedAt = timestamp;
@@ -299,6 +380,7 @@ export const endlessServiceMethods = {
       minerId: run.minerId,
       completedPhases: run.completedPhases,
       crystalsCarried: run.crystalsCarried,
+      minedCrystalUnits: run.crystalsCarried,
       rollingDigest: run.rollingDigest,
       economyVersion: run.config.rewards.economyVersion,
       phaseXp: run.config.rewards.phaseXp,
@@ -314,7 +396,11 @@ export const endlessServiceMethods = {
       maximumWalletXpPerDay: run.config.rewards.maximumWalletXpPerDay,
       maximumMinerXpPerDay: run.config.rewards.maximumMinerXpPerDay,
       checkpointTimeoutSeconds: run.config.rewards.checkpointTimeoutSeconds,
-      failedRunsRetainXp: run.config.rewards.failedRunsRetainXp
+      failedRunsRetainXp: run.config.rewards.failedRunsRetainXp,
+      crystalsEnabled: run.config.rewards.crystalsEnabled,
+      minerXpEnabled: run.config.rewards.minerXpEnabled,
+      chainRun: structuredClone(run.chainRun),
+      outcome: 'extraction'
     });
     await this.database.transact(async (state, transaction) => {
       const stored = state.endlessCompetition.runs[run.id];

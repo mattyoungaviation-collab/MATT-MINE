@@ -150,8 +150,31 @@ test('Endless cannot reuse a Miner or wallet already active in another ranked ru
 test('a temporary reward failure keeps the banked run idempotently retryable', async () => {
   let attempts = 0;
   let settlementPayload;
+  const chainRun = {
+    runId: `0x${'31'.repeat(32)}`,
+    versionId: `0x${'41'.repeat(32)}`,
+    loadoutHash: `0x${'51'.repeat(32)}`,
+    checkpointDigest: `0x${'00'.repeat(32)}`,
+    nonce: '0',
+    completedPhases: 0,
+    minedCrystalUnits: 0
+  };
   const active = harness({
     endlessRewardSettler: {
+      async beginRun() {
+        return { transactionHash: `0x${'61'.repeat(32)}`, chainRun };
+      },
+      async checkpoint(input) {
+        return {
+          transactionHash: `0x${'71'.repeat(32)}`,
+          chainRun: {
+            ...chainRun,
+            checkpointDigest: `0x${input.rollingDigest}`,
+            completedPhases: input.completedPhases,
+            minedCrystalUnits: input.minedCrystalUnits
+          }
+        };
+      },
       async settle(input) {
         attempts += 1;
         settlementPayload = input;
@@ -184,7 +207,11 @@ test('a temporary reward failure keeps the banked run idempotently retryable', a
     config,
     reason: 'Enable tested settlement retry values.'
   });
-  const run = await active.service.startRun(token, 'endless', { minerId: 7 });
+  const run = await active.service.startRun(token, 'endless', {
+    minerId: 7,
+    authorization: { player: ADDRESS },
+    playerSignature: `0x${'11'.repeat(65)}`
+  });
   active.advance(20_000);
   const banked = await active.service.checkpointEndlessPhase(token, {
     runId: run.runId,
@@ -204,6 +231,7 @@ test('a temporary reward failure keeps the banked run idempotently retryable', a
   assert.equal(settlementPayload.maximumDailyPayoutNumerator, 500);
   assert.equal(settlementPayload.maximumRunXp, 500);
   assert.equal(settlementPayload.failedRunsRetainXp, false);
+  assert.equal(settlementPayload.chainRun.completedPhases, 1);
   const state = await active.database.read();
   assert.equal(state.endlessCompetition.runs[run.runId].rewardSettlement.settled, true);
   assert.equal(state.endlessCompetition.leaderboardEntries[0].crystalsBanked, 3);

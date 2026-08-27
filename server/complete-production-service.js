@@ -310,6 +310,7 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     assertApi(this.nftGameplayService, 503, 'nft_gameplay_required', 'NFT V2 gameplay is not enabled.');
     const session = await this.authenticate(token);
     const mode = String(input.mode || '').toLowerCase();
+    if (mode === SERVER_RUN_MODES.ENDLESS) return this.prepareEndlessRunAuthorization(token, input);
     assertApi(requiresMinerNft(mode) || mode === 'arena', 422, 'nft_map_mode_invalid', 'Choose MATT Arena or Pass Mine.');
     const minerId = selectedMinerId(input.minerId);
     assertApi(minerId > 0, 422, 'miner_selection_required', 'Select a MATT Mine Miner NFT first.');
