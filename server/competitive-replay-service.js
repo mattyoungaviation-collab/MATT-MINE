@@ -186,12 +186,21 @@ export class CompetitiveReplayService {
 
   async verifyEndlessPhase({ run, checkpoint, action }) {
     const replayId = endlessPhaseReplayId(run);
-    const transcript = await this.store.getRun(replayId);
+    let transcript = await this.store.getRun(replayId);
     assertApi(transcript?.address === run.address && transcript.mode === 'endless-phase', 404, 'endless_replay_missing', 'The authoritative Endless phase input transcript was not found.');
     assertApi(this.#validCheckpoint(transcript, normalizeCheckpoint(checkpoint)), 401, 'competitive_checkpoint_invalid', 'Finish with the latest server-signed Endless input checkpoint.');
-    const events = (await this.store.getEvents(replayId)).map(publicEvent);
+    let events = (await this.store.getEvents(replayId)).map(publicEvent);
     const expectedCommand = action === 'bank' ? 'extract' : 'descend';
-    const last = events.at(-1);
+    let last = events.at(-1);
+    const currentChoice = last?.type === 'command' && ['extract', 'descend'].includes(last.command);
+    if (!currentChoice) {
+      const recovered = await this.#recoverDisconnectedEndlessChoice(run, expectedCommand);
+      if (recovered) {
+        transcript = recovered.transcript;
+        events = recovered.events;
+        last = events.at(-1);
+      }
+    }
     assertApi(last?.type === 'command' && last.command === expectedCommand, 422, 'endless_replay_action_missing', 'The authoritative input transcript is missing the selected bank or descend action.');
     const snapshot = transcript.runSnapshot;
     assertApi(snapshot?.manifest?.fingerprint === run.manifest?.fingerprint, 409, 'endless_replay_manifest_mismatch', 'The replay manifest does not match the current server phase.');
@@ -236,6 +245,28 @@ export class CompetitiveReplayService {
         continuation: structuredClone(replayed.continuation)
       }
     };
+  }
+
+  async #recoverDisconnectedEndlessChoice(run, expectedCommand) {
+    const currentAttempt = Number(run?.phaseAttempt || 1);
+    const firstAttempt = Math.max(1, currentAttempt - 25);
+    for (let attempt = currentAttempt - 1; attempt >= firstAttempt; attempt -= 1) {
+      const replayId = endlessPhaseReplayId({ ...run, phaseAttempt: attempt });
+      const transcript = await this.store.getRun(replayId);
+      if (
+        transcript?.status !== 'disconnected' ||
+        transcript.address !== run.address ||
+        transcript.mode !== 'endless-phase' ||
+        transcript.runSnapshot?.parentRunId !== run.id ||
+        transcript.runSnapshot?.manifest?.fingerprint !== run.manifest?.fingerprint
+      ) continue;
+      const events = (await this.store.getEvents(replayId)).map(publicEvent);
+      const last = events.at(-1);
+      if (last?.type === 'command' && last.command === expectedCommand) {
+        return { transcript, events };
+      }
+    }
+    return null;
   }
 
   async finalizeEndlessPhase(run, status = 'verified') {
