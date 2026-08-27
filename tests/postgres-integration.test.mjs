@@ -10,7 +10,7 @@ test('normalized migrations, dual-write backfill, validation, and lossless rollb
     const backfill = await database.backfillNormalized();
     assert.equal(backfill.ok, true);
     const migrations = await database.query('SELECT version FROM matt_mine_normalized.schema_migrations ORDER BY version');
-    assert.deepEqual(migrations.rows.map((row) => row.version), ['001', '002', '003', '004', '005', '006']);
+    assert.deepEqual(migrations.rows.map((row) => row.version), ['001', '002', '003', '004', '005', '006', '007']);
     const initialCutover = await database.query(`SELECT read_source,dual_write_enabled
       FROM matt_mine_normalized.cutover_state WHERE singleton=TRUE`);
     assert.equal(initialCutover.rows[0].read_source, 'legacy');
