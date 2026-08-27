@@ -10,7 +10,7 @@ import {
 
 const EVENT_TYPES = new Set([
   'enemy_killed', 'ore_broken', 'crystal_collected', 'guardian_defeated',
-  'phase_completed', 'damage_taken'
+  'phase_completed', 'damage_taken', 'extract'
 ]);
 
 export function createEndlessRunRecord({
@@ -116,12 +116,14 @@ export function verifyEndlessPhaseEvents(run, rawEvents, now = Date.now()) {
   const collectedCrystals = new Set();
   let guardianKilled = false;
   let completed = false;
+  let extracted = false;
   let damageTaken = 0;
   let previousTick = 0;
   let score = 0;
   const scoreBreakdown = { naturalEnemies: 0, ore: 0, guardian: 0, completion: 0 };
   const events = rawEvents.map((raw, index) => normalizeEvent(raw, index + 1));
   for (const event of events) {
+    assertApi(!extracted, 422, 'endless_event_after_extract', 'No phase event can occur after extraction.');
     assertApi(event.tick >= previousTick, 422, 'endless_event_order', 'Phase event ticks must be ordered.');
     assertApi(event.tick <= manifest.rules.maximumSeconds * 1_000, 422, 'endless_phase_too_long', 'The phase exceeded its maximum verified duration.');
     previousTick = event.tick;
@@ -171,6 +173,11 @@ export function verifyEndlessPhaseEvents(run, rawEvents, now = Date.now()) {
       completed = true;
       score += manifest.pointLedger.completion;
       scoreBreakdown.completion += manifest.pointLedger.completion;
+      continue;
+    }
+    if (event.type === 'extract') {
+      assertApi(completed, 422, 'endless_extract_before_completion', 'Extraction is only valid after the phase-complete marker.');
+      extracted = true;
     }
   }
   assertApi(completed, 422, 'endless_phase_marker_required', 'The server needs the phase-complete marker before banking or descending.');

@@ -91,6 +91,22 @@ test('server rejects Guardian bypasses, duplicate targets, fabricated crystals, 
   assert.equal(validEndlessCheckpoint(active, checkpoint, 'secret'), false);
 });
 
+test('server accepts extraction only as the final event after a completed phase', () => {
+  const active = run();
+  const events = completeEvents(active.manifest);
+  const extract = { type: 'extract', tick: events.at(-1).tick };
+  const verification = verifyEndlessPhaseEvents(active, [...events, extract], 20_000);
+  assert.equal(verification.score, active.manifest.pointBudget);
+  assert.throws(
+    () => verifyEndlessPhaseEvents(active, [extract, ...events], 20_000),
+    (error) => error.code === 'endless_extract_before_completion'
+  );
+  assert.throws(
+    () => verifyEndlessPhaseEvents(active, [...events, extract, { type: 'damage_taken', tick: extract.tick, amount: 1 }], 20_000),
+    (error) => error.code === 'endless_event_after_extract'
+  );
+});
+
 test('bank closes a run and bounded history keeps only recent phase audit data', () => {
   const active = run();
   active.phaseHistory = Array.from({ length: 500 }, (_, index) => ({ phase: index + 1 }));

@@ -4331,12 +4331,20 @@ async function checkpointEndlessChoice(action) {
   else descendButton.textContent = 'VERIFYING PHASE...';
   try {
     if (!activeEndlessTranscript) throw new Error('The authoritative Endless input transcript is unavailable. Reconnect to restart this phase safely.');
-    activeEndlessTranscript.record({
-      type: 'command',
-      tick: Math.round(Number(game.run?.elapsed || 0) * 1_000),
-      command: action === 'bank' ? 'extract' : 'descend'
-    });
-    const inputCheckpoint = await activeEndlessTranscript.close();
+    const pending = run.pendingEndlessCheckpoint;
+    if (pending && pending.action !== action) {
+      throw new Error(`The signed ${pending.action === 'bank' ? 'extract' : 'descend'} action is awaiting server acceptance. Retry that same choice.`);
+    }
+    let inputCheckpoint = pending?.inputCheckpoint || null;
+    if (!inputCheckpoint) {
+      activeEndlessTranscript.record({
+        type: 'command',
+        tick: Math.round(Number(game.run?.elapsed || 0) * 1_000),
+        command: action === 'bank' ? 'extract' : 'descend'
+      });
+      inputCheckpoint = await activeEndlessTranscript.close();
+      run.pendingEndlessCheckpoint = { action, inputCheckpoint };
+    }
     const accepted = await retryRunFinalization(() => apiClient.checkpointEndlessPhase(
       run.runId,
       run.runToken,
@@ -4344,6 +4352,7 @@ async function checkpointEndlessChoice(action) {
       inputCheckpoint,
       action
     ), { onRetry: showDatabaseReconnect });
+    run.pendingEndlessCheckpoint = null;
     run.checkpoint = accepted.checkpoint;
     run.currentPhase = accepted.run.currentPhase;
     run.completedPhases = accepted.run.completedPhases;

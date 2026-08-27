@@ -10,6 +10,7 @@ import { gameplayRuntimeSnapshot } from '../src/game/nftTraits.js';
 import { defaultProfile } from '../src/game/storage.js';
 import { captureEndlessContinuation } from '../src/game/endlessContinuation.js';
 import { pointInLayout } from '../src/game/layout.js';
+import { verifyEndlessPhaseEvents } from '../server/endless-engine.js';
 
 const ADDRESS = '0x1111111111111111111111111111111111111111';
 const RUN_TOKEN = 'ab'.repeat(24);
@@ -220,6 +221,10 @@ test('a verified Endless extract command banks without an impossible second fini
   assert.equal(replayed.terminal, false);
   assert.equal(replayed.state, 'ended');
   assert.equal(replayed.extracted, true);
+  assert.equal(replayed.outcomeEvents.at(-1)?.type, 'extract');
+  const verified = verifyEndlessPhaseEvents(run, replayed.outcomeEvents, 1_100_000);
+  assert.ok(verified.score > 0);
+  assert.ok(verified.score <= run.manifest.pointBudget);
 });
 
 test('a verified descent carries exact health, inventory, upgrades, and phase-specific RNG into phase two', () => {
