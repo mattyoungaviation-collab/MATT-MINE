@@ -368,7 +368,7 @@ test('a verified descent carries exact health, inventory, upgrades, and phase-sp
   assert.deepEqual(phaseEntitySignature(server), phaseEntitySignature(browser));
 });
 
-test('Endless phase replay accepts only contiguous raw controls and rejects a forged descend', async () => {
+test('Endless phase replay treats the authenticated terminal choice as the completion boundary', async () => {
   const run = endlessRun();
   const service = await new CompetitiveReplayService({
     store: new MemoryCompetitiveReplayStore(),
@@ -401,10 +401,17 @@ test('Endless phase replay accepts only contiguous raw controls and rejects a fo
     previousCheckpoint: afterInput,
     events: [{ seq: 2, tick: 0, type: 'command', command: 'descend' }]
   });
-  await assert.rejects(
-    () => service.verifyEndlessPhase({ run, checkpoint: finalCheckpoint, action: 'descend' }),
-    (error) => ['arena_descend_unavailable', 'arena_guardian_required', 'endless_replay_not_descended'].includes(error.code)
-  );
+  const verified = await service.verifyEndlessPhase({
+    run,
+    checkpoint: finalCheckpoint,
+    action: 'descend'
+  });
+  assert.equal(verified.evidence.state, 'playing');
+  assert.equal(verified.outcomeEvents.at(-1)?.type, 'phase_completed');
+  assert.ok(verified.outcomeEvents.some((event) => event.type === 'guardian_defeated'));
+  const phase = verifyEndlessPhaseEvents(run, verified.outcomeEvents, 1_010_000);
+  assert.equal(phase.requiredKills, run.manifest.gate.requiredCount);
+  assert.equal(phase.bossKills, 1);
 });
 
 test('reconnect attempts receive independent phase replay chains for the same manifest', async () => {

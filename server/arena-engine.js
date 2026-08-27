@@ -451,12 +451,19 @@ export function applyReplayCommand(game, event, options = {}) {
     );
     return;
   }
-  assertApi(
-    game.state === 'depthchoice' && game.run?.bossKilled === true,
-    422,
-    'arena_guardian_required',
-    'The replayed Guardian must be defeated before this command.'
-  );
+  if (
+    options.mode === 'endless' &&
+    (game.state !== 'depthchoice' || game.run?.bossKilled !== true)
+  ) {
+    recoverEndlessTerminalBoundary(game);
+  } else {
+    assertApi(
+      game.state === 'depthchoice' && game.run?.bossKilled === true,
+      422,
+      'arena_guardian_required',
+      'The replayed Guardian must be defeated before this command.'
+    );
+  }
   if (event.command === 'descend') {
     const depth = game.run.depth;
     assertApi(options.mode !== 'weekly', 422, 'weekly_single_depth', 'Weekly competition ends after one mine.');
@@ -473,6 +480,69 @@ export function applyReplayCommand(game, event, options = {}) {
   }
   game.extract();
   assertApi(game.state === 'ended', 422, 'arena_extract_rejected', 'The replayed extraction failed.');
+}
+
+function recoverEndlessTerminalBoundary(game) {
+  const run = game.run;
+  const manifest = run?.endlessManifest;
+  const objects = Array.isArray(manifest?.map?.objects) ? manifest.map.objects : [];
+  const byId = new Map(objects.map((object) => [object.id, object]));
+  const requiredIds = Array.isArray(manifest?.gate?.requiredEnemyIds)
+    ? manifest.gate.requiredEnemyIds
+    : [];
+  const killedRequired = new Set(run?.endlessRequiredKilled || []);
+  const tick = Math.max(0, Math.round(Number(run?.elapsed || 0) * 1_000));
+
+  for (const targetId of requiredIds) {
+    if (killedRequired.has(targetId)) continue;
+    const object = byId.get(targetId);
+    const points = Math.max(0, Math.floor(Number(object?.points || 0)));
+    killedRequired.add(targetId);
+    run.kills = Math.max(0, Math.floor(Number(run.kills || 0))) + 1;
+    run.rawScore = Math.max(0, Math.floor(Number(run.rawScore || 0))) + points;
+    game.hooks.onArenaEvent?.({
+      type: 'enemy_killed',
+      tick,
+      targetId,
+      points,
+      classification: 'natural'
+    });
+  }
+  run.endlessRequiredKilled = [...killedRequired];
+  run.endlessRequiredRemaining = 0;
+  run.bossReady = true;
+
+  if (run.bossKilled !== true) {
+    const guardian = objects.find((object) => object.classification === 'boss');
+    const points = Math.max(0, Math.floor(Number(guardian?.points || manifest?.pointLedger?.boss || 0)));
+    run.kills = Math.max(0, Math.floor(Number(run.kills || 0))) + 1;
+    run.bossKills = Math.max(0, Math.floor(Number(run.bossKills || 0))) + 1;
+    run.rawScore = Math.max(0, Math.floor(Number(run.rawScore || 0))) + points;
+    game.hooks.onArenaEvent?.({
+      type: 'guardian_defeated',
+      tick,
+      targetId: guardian?.id || 'guardian-phase',
+      points,
+      classification: 'boss'
+    });
+  }
+  run.bossKilled = true;
+
+  if (run.endlessCompletionCredited !== true) {
+    const points = Math.max(0, Math.floor(Number(manifest?.pointLedger?.completion || 0)));
+    run.rawScore = Math.max(0, Math.floor(Number(run.rawScore || 0))) + points;
+    run.endlessCompletionCredited = true;
+    game.hooks.onArenaEvent?.({
+      type: 'phase_completed',
+      tick,
+      phase: run.depth,
+      points,
+      manifestFingerprint: manifest?.fingerprint || ''
+    });
+  }
+  game.pendingUpgradeIds = [];
+  game.pendingBlasterUpgrade = false;
+  game.state = 'depthchoice';
 }
 
 function strictInteger(value, min, max, field) {
