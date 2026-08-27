@@ -342,6 +342,34 @@ test('the signed-in wallet can rotate a lost token and resume its active Endless
   assert.ok(heartbeat.expiresAt >= resumed.expiresAt);
 });
 
+test('a lost bank response can retry the same signed checkpoint and recover the saved result', async () => {
+  const active = harness();
+  const token = await login(active.service);
+  const started = await active.service.startRun(token, 'endless', { minerId: 7 });
+  const inputCheckpoint = await active.service.appendEndlessInputs(token, {
+    runId: started.runId,
+    runToken: started.runToken,
+    previousCheckpoint: started.inputCheckpoint,
+    events: [{ seq: 1, type: 'command', tick: 1_000, command: 'extract' }]
+  });
+  const request = {
+    runId: started.runId,
+    runToken: started.runToken,
+    previousCheckpoint: started.checkpoint,
+    inputCheckpoint: inputCheckpoint.inputCheckpoint,
+    action: 'bank'
+  };
+
+  const first = await active.service.checkpointEndlessPhase(token, request);
+  const recovered = await active.service.checkpointEndlessPhase(token, request);
+
+  assert.equal(first.summary.status, 'banked');
+  assert.equal(recovered.summary.status, 'banked');
+  assert.equal(recovered.summary.totalScore, first.summary.totalScore);
+  assert.equal(recovered.checkpoint.signature, first.checkpoint.signature);
+  assert.equal(recovered.alreadyAccepted, true);
+});
+
 test('Endless cannot reuse a Miner or wallet already active in another ranked run', async () => {
   const active = harness();
   const token = await login(active.service);

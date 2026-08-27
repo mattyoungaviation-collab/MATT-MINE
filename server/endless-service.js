@@ -249,6 +249,9 @@ export const endlessServiceMethods = {
     const before = await this.database.read();
     const replayRun = before.endlessCompetition.runs[runId];
     assertEndlessRunOwner(replayRun, session.address, runToken);
+    if (previouslyAcceptedEndlessBank(replayRun, input.previousCheckpoint, input.action, this.endlessCheckpointSecret)) {
+      return recoveredEndlessBankResponse(replayRun, before.endlessCompetition.operations);
+    }
     assertApi(replayRun.expiresAt > timestamp, 410, 'endless_run_expired', 'The reconnect window for this Endless run expired.');
     assertApi(validEndlessCheckpoint(replayRun, input.previousCheckpoint, this.endlessCheckpointSecret), 401, 'endless_checkpoint_invalid', 'Use the latest server-signed Endless checkpoint.');
     assertApi(this.competitiveReplayValidator?.verifyEndlessPhase, 503, 'endless_input_replay_required', 'Authoritative Endless phase replay is unavailable.');
@@ -963,6 +966,43 @@ function publicEndlessRun(run, runToken = '', inputCheckpoint = null) {
     payment: publicEndlessPayment(run.payment),
     minerProfile: structuredClone(run.minerProfile),
     nftRun: { minerId: run.minerId, profile: structuredClone(run.minerProfile) }
+  };
+}
+
+function previouslyAcceptedEndlessBank(run, checkpoint, action, secret) {
+  if (String(action || '') !== 'bank' || run?.status !== 'banked' || run.finishReason !== 'banked') return false;
+  const verification = Array.isArray(run.phaseHistory) ? run.phaseHistory.at(-1) : null;
+  if (!verification || Number(run.checkpointSequence || 0) !== Number(checkpoint?.sequence || 0) + 1) return false;
+  const previous = {
+    ...run,
+    checkpointSequence: Number(checkpoint.sequence),
+    currentPhase: Number(verification.phase),
+    rollingDigest: String(verification.previousCheckpoint || ''),
+    status: 'active'
+  };
+  return validEndlessCheckpoint(previous, checkpoint, secret);
+}
+
+function recoveredEndlessBankResponse(run, operations = {}) {
+  const verification = Array.isArray(run.phaseHistory) ? run.phaseHistory.at(-1) : null;
+  const rewardsEnabled = run.config?.rewards?.enabled === true;
+  const settled = run.rewardSettlement?.settled === true;
+  return {
+    checkpoint: publicEndlessCheckpoint(run),
+    phase: publicEndlessPhaseVerification(verification),
+    run: publicEndlessRun(run),
+    nextManifest: null,
+    nextInputCheckpoint: null,
+    summary: {
+      ...endlessBankSummary(run),
+      leaderboardSubmitted: operations.leaderboardSubmissionsEnabled !== false
+    },
+    rewardSettlement: rewardsEnabled
+      ? settled
+        ? { pending: false, receipt: structuredClone(run.rewardSettlement) }
+        : { pending: true, error: 'Verified rewards are queued for retry.' }
+      : null,
+    alreadyAccepted: true
   };
 }
 

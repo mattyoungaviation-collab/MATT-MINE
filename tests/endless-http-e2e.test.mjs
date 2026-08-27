@@ -138,7 +138,7 @@ test('Endless production HTTP routes complete one player run and enforce an Admi
   assert.notEqual(resumed.body.run.runToken, started.body.run.runToken);
 
   timestamp += 20_000;
-  const banked = await jsonRequest(baseUrl, '/api/endless/checkpoint', {
+  const bankRequest = {
     method: 'POST',
     headers: playerHeaders,
     body: {
@@ -147,10 +147,15 @@ test('Endless production HTTP routes complete one player run and enforce an Admi
       previousCheckpoint: resumed.body.run.checkpoint,
       action: 'bank'
     }
-  });
+  };
+  const banked = await jsonRequest(baseUrl, '/api/endless/checkpoint', bankRequest);
   assert.equal(banked.status, 200);
   assert.equal(banked.body.summary.status, 'banked');
   assert.equal(banked.body.phase.integrity, 'verified');
+  const recoveredBank = await jsonRequest(baseUrl, '/api/endless/checkpoint', bankRequest);
+  assert.equal(recoveredBank.status, 200);
+  assert.equal(recoveredBank.body.alreadyAccepted, true);
+  assert.equal(recoveredBank.body.summary.totalScore, banked.body.summary.totalScore);
 
   const player = await jsonRequest(baseUrl, '/api/endless/player', { headers: playerHeaders });
   assert.equal(player.status, 200);
