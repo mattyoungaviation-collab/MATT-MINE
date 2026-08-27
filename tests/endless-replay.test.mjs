@@ -1,9 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { CompetitiveReplayService } from '../server/competitive-replay-service.js';
+import {
+  CompetitiveReplayService,
+  latestEndlessDecisionEvents
+} from '../server/competitive-replay-service.js';
 import { MemoryCompetitiveReplayStore } from '../server/competitive-replay-store.js';
-import { replayArenaTranscript, ARENA_TRANSCRIPT_VERSION } from '../server/arena-engine.js';
+import {
+  applyReplayCommand,
+  replayArenaTranscript,
+  ARENA_TRANSCRIPT_VERSION
+} from '../server/arena-engine.js';
 import { MattMineGame } from '../src/game/GameV4.js';
 import { generateEndlessPhase, normalizeEndlessConfig, defaultEndlessConfig } from '../src/game/endlessMine.js';
 import { gameplayRuntimeSnapshot } from '../src/game/nftTraits.js';
@@ -52,6 +59,84 @@ function endlessRun() {
   });
   return run;
 }
+
+test('Endless replay accepts the authenticated upgrade even when its random offer differs', () => {
+  const run = endlessRun();
+  const game = createHeadlessEndlessGame(run, run.manifest);
+  game.state = 'levelup';
+  game.pendingUpgradeIds = ['speed'];
+
+  applyReplayCommand(game, { command: 'upgrade', value: 'power' }, { mode: 'endless' });
+
+  assert.equal(game.player.runUpgradeCounts.power, 1);
+  assert.equal(game.state, 'playing');
+  assert.deepEqual(game.pendingUpgradeIds, []);
+});
+
+test('Endless retries keep only the latest extract or descend decision', () => {
+  const events = latestEndlessDecisionEvents([
+    { seq: 1, tick: 0, type: 'input', moveX: 0, moveY: 0, aim: null, attack: false, dash: false, weapon: '' },
+    { seq: 2, tick: 20, type: 'command', command: 'descend' },
+    { seq: 3, tick: 20, type: 'command', command: 'extract' }
+  ]);
+
+  assert.deepEqual(events.map((event) => event.seq), [1, 2]);
+  assert.equal(events.at(-1).command, 'extract');
+  assert.equal(events.some((event) => event.command === 'descend'), false);
+});
+
+test('Endless verification accepts the latest signed decision after an earlier one failed', async () => {
+  const run = endlessRun();
+  run.minerProfile = {
+    progression: { level: 50, bankedXp: 90_000 },
+    gameplay: {
+      maximumHealth: 10_000, armorShield: 2_000, pickaxeAttack: 1_500,
+      blasterAttack: 1_500, dynamiteAttack: 2_000, healAmount: 500,
+      carryCapacity: 100, deathRetentionBps: 8_000, level: 50
+    },
+    traits: { level: 50, health: 10_000, damage: 1_500, armor: 2_000, speed: 1, luck: 1, crystalCarryCapacity: 100 },
+    equipped: {}
+  };
+  run.manifest = generateEndlessPhase({
+    runId: run.id, runSeed: run.runSeed, phase: 1,
+    configVersion: run.configVersion, config: run.config, minerProfile: run.minerProfile
+  });
+  const inputEvents = [];
+  const game = new MattMineGame(null, defaultProfile(), {
+    headless: true, audio: NOOP_AUDIO,
+    onArenaInput(event) { inputEvents.push({ ...event }); }
+  });
+  game.startRun({
+    mode: 'endless', seed: run.runSeed, currentPhase: 1,
+    endlessRunId: run.id, endlessConfigVersion: run.configVersion,
+    endlessSnapshot: { config: run.config }, endlessManifest: run.manifest,
+    nftRun: { minerId: run.minerId, profile: run.minerProfile }
+  });
+  driveEndlessPhaseWithControls(game);
+  const decisionTick = Math.round(game.run.elapsed * 1_000);
+  inputEvents.push({ type: 'command', tick: decisionTick, command: 'descend' });
+  inputEvents.push({ type: 'command', tick: decisionTick, command: 'extract' });
+
+  const service = await new CompetitiveReplayService({
+    store: new MemoryCompetitiveReplayStore(),
+    secret: 'endless-latest-decision-replay-test-secret',
+    now: () => 1_100_000,
+    resolveRun: async () => run
+  }).init();
+  let checkpoint = await service.registerEndlessPhase(run, RUN_TOKEN);
+  const sequenced = inputEvents.map((event, index) => ({ seq: index + 1, ...event }));
+  for (let offset = 0; offset < sequenced.length; offset += 256) {
+    checkpoint = await service.appendEndlessPhase(ADDRESS, {
+      runId: run.id, runToken: RUN_TOKEN, phase: 1,
+      previousCheckpoint: checkpoint,
+      events: sequenced.slice(offset, offset + 256)
+    });
+  }
+
+  const verified = await service.verifyEndlessPhase({ run, checkpoint, action: 'bank' });
+  assert.equal(verified.evidence.state, 'ended');
+  assert.equal(verified.outcomeEvents.at(-1)?.type, 'extract');
+});
 
 test('legitimate Endless controls reproduce the exact browser runtime and outcome events', () => {
   const run = endlessRun();

@@ -4367,9 +4367,15 @@ async function checkpointEndlessChoice(action) {
   else descendButton.textContent = 'VERIFYING PHASE...';
   try {
     if (!activeEndlessTranscript) throw new Error('The authoritative Endless input transcript is unavailable. Reconnect to restart this phase safely.');
-    const pending = run.pendingEndlessCheckpoint;
+    let pending = run.pendingEndlessCheckpoint;
     if (pending && pending.action !== action) {
-      throw new Error(`The signed ${pending.action === 'bank' ? 'extract' : 'descend'} action is awaiting server acceptance. Retry that same choice.`);
+      // The previous choice already failed. Start from its latest signed input
+      // checkpoint and let the player's newest extract/descend choice replace
+      // it instead of forcing an endlessly failing retry.
+      run.inputCheckpoint = pending.inputCheckpoint;
+      run.pendingEndlessCheckpoint = null;
+      activeEndlessTranscript = createEndlessTranscript(run);
+      pending = null;
     }
     let inputCheckpoint = pending?.inputCheckpoint || null;
     if (!inputCheckpoint) {
@@ -4425,7 +4431,15 @@ async function checkpointEndlessChoice(action) {
       game.extract();
     }
   } catch (error) {
-    toast(error.message);
+    const rejected = run.pendingEndlessCheckpoint;
+    if (rejected?.inputCheckpoint) {
+      run.inputCheckpoint = rejected.inputCheckpoint;
+      run.pendingEndlessCheckpoint = null;
+      activeEndlessTranscript = createEndlessTranscript(run);
+      toast(`${error.message} The failed choice was cleared; choose extract or descend again.`);
+    } else {
+      toast(error.message);
+    }
   } finally {
     endlessCheckpointBusy = false;
     extractButton.disabled = false;

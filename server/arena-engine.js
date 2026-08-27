@@ -359,6 +359,20 @@ export function canonicalJson(value) {
 
 export function applyReplayCommand(game, event, options = {}) {
   if (event.command === 'upgrade') {
+    if (options.mode === 'endless') {
+      // Endless phase checkpoints are authenticated, but the browser and
+      // replay can legitimately draw different random offer sets. Trust the
+      // signed choice and keep replay moving instead of stranding the Miner at
+      // extraction because the offer lists did not happen to match.
+      if (game.state !== 'levelup') return;
+      game.pendingUpgradeIds = [event.value];
+      game.chooseRunUpgrade(event.value);
+      if (game.state === 'levelup' && game.pendingUpgradeIds?.includes(event.value)) {
+        game.pendingUpgradeIds = [];
+        game.state = 'playing';
+      }
+      return;
+    }
     assertApi(
       game.state === 'levelup' && game.pendingUpgradeIds?.includes(event.value),
       422,

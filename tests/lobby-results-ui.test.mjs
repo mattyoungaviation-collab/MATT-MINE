@@ -112,6 +112,16 @@ test('a failed Endless death close remains readable and retryable without cleari
   assert.doesNotMatch(finalizer.slice(finalizer.indexOf('} catch (error)')), /clearPersistedEndlessRun\(\)/);
 });
 
+test('a rejected Endless checkpoint clears its pending choice and allows either decision next', async () => {
+  const source = await readFile(`${root}src/main.js`, 'utf8');
+  const checkpointChoice = source.match(/async function checkpointEndlessChoice\(action\) \{[\s\S]*?\n\}/)?.[0] || '';
+
+  assert.doesNotMatch(checkpointChoice, /action is awaiting server acceptance/);
+  assert.match(checkpointChoice, /run\.pendingEndlessCheckpoint = null;/);
+  assert.match(checkpointChoice, /The failed choice was cleared; choose extract or descend again\./);
+  assert.match(checkpointChoice, /activeEndlessTranscript = createEndlessTranscript\(run\);/);
+});
+
 test('pending Endless rewards have an authenticated history recovery action with fractional Crystal display', async () => {
   const source = await readFile(`${root}src/main.js`, 'utf8');
   const apiSource = await readFile(`${root}src/game/apiClient.js`, 'utf8');

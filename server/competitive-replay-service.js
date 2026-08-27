@@ -201,6 +201,8 @@ export class CompetitiveReplayService {
         last = events.at(-1);
       }
     }
+    events = latestEndlessDecisionEvents(events);
+    last = events.at(-1);
     assertApi(last?.type === 'command' && last.command === expectedCommand, 422, 'endless_replay_action_missing', 'The authoritative input transcript is missing the selected bank or descend action.');
     const snapshot = transcript.runSnapshot;
     assertApi(snapshot?.manifest?.fingerprint === run.manifest?.fingerprint, 409, 'endless_replay_manifest_mismatch', 'The replay manifest does not match the current server phase.');
@@ -470,6 +472,25 @@ function publicEvent(event) {
   delete copy.eventHash;
   delete copy.receivedAt;
   return copy;
+}
+
+export function latestEndlessDecisionEvents(events = []) {
+  let latestDecisionIndex = -1;
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event?.type === 'command' && ['extract', 'descend'].includes(event.command)) {
+      latestDecisionIndex = index;
+      break;
+    }
+  }
+  if (latestDecisionIndex < 0) return events.map((event, index) => ({ ...event, seq: index + 1 }));
+  return events
+    .filter((event, index) => (
+      index === latestDecisionIndex ||
+      event?.type !== 'command' ||
+      !['extract', 'descend'].includes(event.command)
+    ))
+    .map((event, index) => ({ ...event, seq: index + 1 }));
 }
 
 function hashToken(value) {
