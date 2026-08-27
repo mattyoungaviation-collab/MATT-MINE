@@ -489,7 +489,6 @@ export class EndlessSettlementService {
     try {
       const rewardSignature = await this.signerAccount.signTypedData({ domain: this.#domain(), types: RESULT_TYPES, primaryType: 'EndlessResult', message: result });
       const request = {
-        account: this.operatorAddress,
         address: this.settlementAddress,
         abi: ENDLESS_ABI,
         functionName: 'settle',
@@ -498,7 +497,7 @@ export class EndlessSettlementService {
       };
       stage = 'simulating';
       try {
-        await this.publicClient.simulateContract(request);
+        await this.publicClient.simulateContract({ ...request, account: this.operatorAddress });
       } catch (error) {
         // A decoded contract rejection is authoritative and must not be sent.
         // An undecoded RPC/preflight outage is not: the signed contract call is

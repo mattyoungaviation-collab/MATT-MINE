@@ -37,6 +37,7 @@ function harness(options = {}) {
   let processedRunId = '';
   let settlementEventReads = 0;
   let settlementSimulation = null;
+  let settlementBroadcast = null;
   const publicClient = {
     async getChainId() { return 2020; },
     async getBalance() { return 10n ** 18n; },
@@ -86,7 +87,8 @@ function harness(options = {}) {
     }
   };
   const operatorClient = {
-    async writeContract({ functionName, args }) {
+    async writeContract(request) {
+      const { functionName, args } = request;
       transaction += 1;
       if (functionName === 'beginRun') {
         const authorization = args[0];
@@ -107,6 +109,7 @@ function harness(options = {}) {
           minedCrystalUnits: receipt.minedCrystalUnits
         };
       } else if (functionName === 'settle') {
+        settlementBroadcast = request;
         const result = args[0];
         processedRunId = result.runId;
         settledEvent = {
@@ -145,6 +148,7 @@ function harness(options = {}) {
     service,
     activeRun: () => active,
     settlementEventReads: () => settlementEventReads,
+    settlementBroadcast: () => settlementBroadcast,
     settlementSimulation: () => settlementSimulation
   };
 }
@@ -369,7 +373,7 @@ test('Endless chain adapter exposes a safe exact Ronin reason before broadcastin
 });
 
 test('Endless chain adapter broadcasts a signed close when only RPC simulation is unavailable', async () => {
-  const { service, activeRun, settlementSimulation } = harness({
+  const { service, activeRun, settlementBroadcast, settlementSimulation } = harness({
     settlementSimulationError: new Error('RPC preflight is temporarily unavailable')
   });
   await service.init();
@@ -392,7 +396,10 @@ test('Endless chain adapter broadcasts a signed close when only RPC simulation i
 
   assert.equal(cancelled.cancelled, true);
   assert.equal(cancelled.settlement.recovered, false);
+  assert.equal(settlementSimulation().account, OPERATOR.address);
   assert.equal(settlementSimulation().gas, 1_200_000n);
+  assert.equal(settlementBroadcast().account, undefined);
+  assert.equal(settlementBroadcast().gas, 1_200_000n);
   assert.notEqual(cancelled.transactionHash, '');
   assert.equal(activeRun().runId, ZERO);
 });
