@@ -52,6 +52,10 @@ export class MemoryDatabase {
     return this.read();
   }
 
+  async readEndlessRunReview() {
+    return null;
+  }
+
   async transact(mutator) {
     const operation = this.queue.then(async () => {
       const draft = structuredClone(this.state);
@@ -305,6 +309,43 @@ export class PostgresDatabase {
       wallets: session?.address && wallet ? { [session.address]: wallet } : {},
       operations: parseJsonValue(row.operations)
     });
+  }
+
+  async readEndlessRunReview(runId) {
+    await this.init();
+    if (!this.normalizedMigrationsEnabled) return null;
+    const [run, phases, integrity, payment, settlements] = await Promise.all([
+      this.query('SELECT run_payload FROM matt_mine_endless.runs WHERE run_id=$1', [runId]),
+      this.query(
+        `SELECT checkpoint_payload FROM matt_mine_endless.phase_checkpoints
+         WHERE run_id=$1 ORDER BY phase`,
+        [runId]
+      ),
+      this.query(
+        `SELECT event_payload FROM matt_mine_endless.integrity_events
+         WHERE run_id=$1 ORDER BY created_at_ms`,
+        [runId]
+      ),
+      this.query('SELECT payment_payload FROM matt_mine_endless.entry_payments WHERE run_id=$1', [runId]),
+      this.query(
+        `SELECT transaction_hash,phase,transaction_type,recorded_at_ms
+         FROM matt_mine_endless.settlement_transactions WHERE run_id=$1 ORDER BY recorded_at_ms`,
+        [runId]
+      )
+    ]);
+    if (!run.rows[0]) return null;
+    return {
+      run: parseJsonValue(run.rows[0].run_payload),
+      phases: phases.rows.map((row) => parseJsonValue(row.checkpoint_payload)),
+      integrityEvents: integrity.rows.map((row) => parseJsonValue(row.event_payload)),
+      payment: parseJsonValue(payment.rows[0]?.payment_payload),
+      settlementTransactions: settlements.rows.map((row) => ({
+        transactionHash: row.transaction_hash,
+        phase: safeIntegerValue(row.phase),
+        type: row.transaction_type,
+        recordedAt: safeIntegerValue(row.recorded_at_ms)
+      }))
+    };
   }
 
   async query(sql, params = []) {

@@ -353,11 +353,12 @@ export function defaultEndlessCompetition(timestamp = 0) {
     version: 1,
     activeConfigVersion: 1,
     configVersions: {
-      1: { version: 1, config, publishedAt: timestamp, publishedBy: 'SYSTEM_BOOTSTRAP', reason: 'Free NFT-only launch defaults' }
+      1: { version: 1, config, publishedAt: timestamp, activatedAt: timestamp, publishedBy: 'SYSTEM_BOOTSTRAP', reason: 'Free NFT-only launch defaults' }
     },
     runs: {},
     leaderboardEntries: [],
     paymentTransactions: {},
+    operations: defaultEndlessOperations(),
     smartEngine: { recommendations: [], lastEvaluatedAt: 0 },
     seasons: {}
   };
@@ -375,6 +376,7 @@ function normalizeEndlessCompetition(input) {
           version: Number(key),
           config: normalizeEndlessConfig(value.config),
           publishedAt: safeTimestamp(value.publishedAt),
+          activatedAt: safeTimestamp(value.activatedAt || value.publishedAt),
           publishedBy: typeof value.publishedBy === 'string' ? value.publishedBy.slice(0, 100) : 'SERVER_ADMIN',
           reason: typeof value.reason === 'string' ? value.reason.slice(0, 500) : ''
         }]))
@@ -391,6 +393,9 @@ function normalizeEndlessCompetition(input) {
   const paymentTransactions = isRecord(source.paymentTransactions)
     ? Object.fromEntries(Object.entries(source.paymentTransactions).filter(([, value]) => isRecord(value)).slice(-25_000).map(([key, value]) => [String(key).slice(0, 100), structuredClone(value)]))
     : {};
+  const operationSource = isRecord(source.operations) ? source.operations : {};
+  const thresholdSource = isRecord(operationSource.alertThresholds) ? operationSource.alertThresholds : {};
+  const operationDefaults = defaultEndlessOperations();
   return {
     version: 1,
     activeConfigVersion,
@@ -398,6 +403,31 @@ function normalizeEndlessCompetition(input) {
     runs,
     leaderboardEntries: entries,
     paymentTransactions,
+    operations: {
+      newEntriesEnabled: operationSource.newEntriesEnabled !== false,
+      bankingEnabled: operationSource.bankingEnabled !== false,
+      rewardsEnabled: operationSource.rewardsEnabled !== false,
+      leaderboardSubmissionsEnabled: operationSource.leaderboardSubmissionsEnabled !== false,
+      temporaryMaximumPhase: safeBoundedInteger(operationSource.temporaryMaximumPhase, 1_000_000),
+      monitoringWindowHours: Math.max(1, safeBoundedInteger(operationSource.monitoringWindowHours, 8_760) || operationDefaults.monitoringWindowHours),
+      alertThresholds: {
+        staleHeartbeatSeconds: Math.max(10, safeBoundedInteger(thresholdSource.staleHeartbeatSeconds, 86_400) || operationDefaults.alertThresholds.staleHeartbeatSeconds),
+        unexpectedlyDeepPhase: Math.max(1, safeBoundedInteger(thresholdSource.unexpectedlyDeepPhase, 1_000_000) || operationDefaults.alertThresholds.unexpectedlyDeepPhase),
+        maximumRunMinutes: Math.max(1, safeBoundedInteger(thresholdSource.maximumRunMinutes, 525_600) || operationDefaults.alertThresholds.maximumRunMinutes),
+        maximumPendingSettlements: thresholdSource.maximumPendingSettlements === undefined
+          ? operationDefaults.alertThresholds.maximumPendingSettlements
+          : safeBoundedInteger(thresholdSource.maximumPendingSettlements, 1_000_000),
+        maximumFlaggedRuns: thresholdSource.maximumFlaggedRuns === undefined
+          ? operationDefaults.alertThresholds.maximumFlaggedRuns
+          : safeBoundedInteger(thresholdSource.maximumFlaggedRuns, 1_000_000),
+        maximumDisconnectRateBps: thresholdSource.maximumDisconnectRateBps === undefined
+          ? operationDefaults.alertThresholds.maximumDisconnectRateBps
+          : safeBoundedInteger(thresholdSource.maximumDisconnectRateBps, 10_000)
+      },
+      updatedAt: safeTimestamp(operationSource.updatedAt),
+      updatedBy: typeof operationSource.updatedBy === 'string' ? operationSource.updatedBy.slice(0, 100) : operationDefaults.updatedBy,
+      reason: typeof operationSource.reason === 'string' ? operationSource.reason.slice(0, 500) : ''
+    },
     smartEngine: isRecord(source.smartEngine)
       ? {
           recommendations: Array.isArray(source.smartEngine.recommendations) ? source.smartEngine.recommendations.filter(isRecord).slice(-500).map((value) => structuredClone(value)) : [],
@@ -405,6 +435,28 @@ function normalizeEndlessCompetition(input) {
         }
       : defaults.smartEngine,
     seasons: normalizeCompetitionStore(source, 'seasons').seasons
+  };
+}
+
+function defaultEndlessOperations() {
+  return {
+    newEntriesEnabled: true,
+    bankingEnabled: true,
+    rewardsEnabled: true,
+    leaderboardSubmissionsEnabled: true,
+    temporaryMaximumPhase: 0,
+    monitoringWindowHours: 24,
+    alertThresholds: {
+      staleHeartbeatSeconds: 120,
+      unexpectedlyDeepPhase: 50,
+      maximumRunMinutes: 240,
+      maximumPendingSettlements: 5,
+      maximumFlaggedRuns: 5,
+      maximumDisconnectRateBps: 2_500
+    },
+    updatedAt: 0,
+    updatedBy: 'SYSTEM_BOOTSTRAP',
+    reason: ''
   };
 }
 

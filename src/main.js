@@ -4214,7 +4214,9 @@ async function checkpointEndlessChoice(action) {
       if (accepted.rewardSettlement?.pending) {
         toast('Run verified. Reward settlement is queued and can be retried safely.');
       }
-      toast(`${formatNumber(accepted.summary.totalScore)} verified Endless points banked`);
+      toast(accepted.summary.leaderboardSubmitted
+        ? `${formatNumber(accepted.summary.totalScore)} verified Endless points banked`
+        : `${formatNumber(accepted.summary.totalScore)} verified points saved; leaderboard submissions are paused`);
       game.extract();
     }
   } catch (error) {
@@ -4234,7 +4236,9 @@ function renderEndlessBankSummary(summary = {}) {
     <span>${formatNumber(summary.totalScore)} points · Phase ${formatNumber(summary.deepestPhase)} · ${formatNumber(summary.crystalsCarried)} crystals carried</span>
     <small>${formatNumber(summary.requiredEnemiesDefeated)} required enemies · ${formatNumber(summary.guardiansDefeated)} Guardians · ${formatNumber(summary.oreBroken)} ore · checkpoint ${escapeHtml(String(summary.digest || '').slice(0, 16))}</small>
   `;
-  toast('Endless run banked and added to the leaderboard');
+  toast(summary.leaderboardSubmitted === false
+    ? 'Endless run banked; leaderboard submissions are temporarily paused'
+    : 'Endless run banked and added to the leaderboard');
 }
 
 function persistEndlessRun(run) {

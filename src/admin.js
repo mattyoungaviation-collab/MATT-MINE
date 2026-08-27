@@ -1700,6 +1700,21 @@ const ENDLESS_ADMIN_FIELDS = Object.freeze([
   ['Smart Engine', 'smartEngine.minimumSamples', 'Minimum verified samples', 'integer', 5, 10_000]
 ]);
 
+const ENDLESS_OPERATION_FIELDS = Object.freeze([
+  ['newEntriesEnabled', 'Accept new entries', 'boolean', 0, 1],
+  ['bankingEnabled', 'Allow players to bank', 'boolean', 0, 1],
+  ['rewardsEnabled', 'Settle verified rewards', 'boolean', 0, 1],
+  ['leaderboardSubmissionsEnabled', 'Submit new leaderboard results', 'boolean', 0, 1],
+  ['temporaryMaximumPhase', 'Temporary maximum phase (0 = off)', 'integer', 0, 1_000_000],
+  ['monitoringWindowHours', 'Monitoring window (hours)', 'integer', 1, 8_760],
+  ['alertThresholds.staleHeartbeatSeconds', 'Stale heartbeat alert (seconds)', 'integer', 10, 86_400],
+  ['alertThresholds.unexpectedlyDeepPhase', 'Unexpected depth alert phase', 'integer', 1, 1_000_000],
+  ['alertThresholds.maximumRunMinutes', 'Maximum average run minutes', 'integer', 1, 525_600],
+  ['alertThresholds.maximumPendingSettlements', 'Pending settlement alert count', 'integer', 0, 1_000_000],
+  ['alertThresholds.maximumFlaggedRuns', 'Flagged run alert count', 'integer', 0, 1_000_000],
+  ['alertThresholds.maximumDisconnectRateBps', 'Disconnect alert rate (bps)', 'integer', 0, 10_000]
+]);
+
 async function loadEndlessAdmin() {
   const payload = await api('/api/admin/endless');
   state.endless = payload.endless;
@@ -1713,6 +1728,14 @@ function renderEndlessAdmin() {
   $('#endless-admin-status').innerHTML = `<strong>${status.enabled ? 'ENDLESS LIVE' : 'ENDLESS PAUSED'} · CONFIG V${Number(status.configVersion || 0)}</strong><br>
     NFT REQUIRED · ${status.paidEntryEnabled ? `${Number(status.entryPriceMatt || 0).toLocaleString()} MATT ENTRY` : 'FREE ENTRY'} · REWARDS ${status.rewardsEnabled ? 'READY' : escapeHtml(words(status.rewardReadiness || 'not ready'))}
     ${status.rewardErrors?.length ? `<br><small>${status.rewardErrors.map(escapeHtml).join(' ')}</small>` : ''}`;
+  const operations = endless.operations || {};
+  setReviewedEndlessAdminHtml($('#endless-operation-controls'), ENDLESS_OPERATION_FIELDS.map(([path, label, type, minimum, maximum]) => {
+    const value = endlessPath(operations, path);
+    return type === 'boolean'
+      ? `<label class="toggle">${escapeHtml(label)}<input type="checkbox" data-endless-operation="${path}" ${value !== false ? 'checked' : ''}></label>`
+      : `<label>${escapeHtml(label)}<input type="number" data-endless-operation="${path}" min="${minimum}" max="${maximum}" step="1" value="${Number(value || 0)}"></label>`;
+  }).join(''));
+  renderEndlessMonitoring(endless.monitoring || {});
   const config = endless.activeConfig?.config || {};
   const categories = [...new Set(ENDLESS_ADMIN_FIELDS.map(([category]) => category))];
   $('#endless-config-groups').innerHTML = categories.map((category) => `<details class="panel" open>
@@ -1731,15 +1754,124 @@ function renderEndlessAdmin() {
     ${category === 'Rewards' ? '<div class="button-row"><button type="button" class="ghost" data-endless-preset="conservative-v1">LOAD CONSERVATIVE V1</button><small>Loads editable launch values; nothing changes until you publish the new version.</small></div>' : ''}
   </details>`).join('');
   const runs = endless.recentRuns || [];
-  $('#endless-admin-runs').innerHTML = `<table><thead><tr><th>Run</th><th>Miner</th><th>Status</th><th>Phase</th><th>Score</th><th>Heartbeat</th></tr></thead><tbody>${runs.map((run) => `<tr>
-    <td><small>${escapeHtml(run.runId)}</small></td><td>#${Number(run.minerId)}</td><td>${escapeHtml(words(run.status))}</td><td>${Number(run.completedPhases)} / ${Number(run.currentPhase)}</td><td>${Number(run.score).toLocaleString()}</td><td>${new Date(run.lastHeartbeatAt).toLocaleString()}</td>
-  </tr>`).join('') || '<tr><td colspan="6">No Endless runs yet.</td></tr>'}</tbody></table>`;
+  $('#endless-admin-runs').innerHTML = `<table><thead><tr><th>Run</th><th>Miner</th><th>Status</th><th>Phase</th><th>Score</th><th>Heartbeat</th><th>Review</th></tr></thead><tbody>${runs.map((run) => `<tr>
+    <td><small>${escapeHtml(run.runId)}</small></td><td>#${Number(run.minerId)}</td><td>${escapeHtml(words(run.status))}</td><td>${Number(run.completedPhases)} / ${Number(run.currentPhase)}</td><td>${Number(run.score).toLocaleString()}</td><td>${new Date(run.lastHeartbeatAt).toLocaleString()}</td><td><button type="button" class="ghost" data-endless-review="${escapeHtml(run.runId)}">Inspect</button></td>
+  </tr>`).join('') || '<tr><td colspan="7">No Endless runs yet.</td></tr>'}</tbody></table>`;
   const recommendations = endless.smartEngine?.recommendations || [];
   $('#endless-admin-history').innerHTML = `<h3>Published versions</h3>${(endless.configHistory || []).map((entry) => `<p><strong>V${entry.version}</strong> · ${new Date(entry.publishedAt).toLocaleString()}<br><small>${escapeHtml(entry.reason)}</small></p>`).join('')}
     <h3>Recommendations</h3>${recommendations.slice().reverse().map((entry) => `<p><strong>${Number(entry.suggestedDifficultyAdjustmentBps) >= 0 ? '+' : ''}${Number(entry.suggestedDifficultyAdjustmentBps)} bps</strong> · ${Number(entry.samples)} samples<br><small>Median ${Number(entry.medianPhaseSeconds).toFixed(1)}s; review only, never auto-applied.</small></p>`).join('') || '<p>No recommendation has enough verified samples yet.</p>'}`;
+  const changedVersions = (endless.configHistory || []).filter((entry) => entry.changedSettings?.length);
+  if (changedVersions.length) $('#endless-admin-history').insertAdjacentHTML('afterbegin', `<h3>Version changes</h3>${changedVersions.map((entry) => `<p><strong>V${Number(entry.version)}${entry.active ? ' · ACTIVE' : ''}</strong> · activated ${new Date(entry.activatedAt || entry.publishedAt).toLocaleString()}<br><small>${escapeHtml(entry.publishedBy)} · ${entry.changedSettings.map(escapeHtml).join(', ')}</small></p>`).join('')}`);
+}
+
+function renderEndlessMonitoring(monitoring) {
+  const counts = monitoring.counts || {};
+  const performance = monitoring.performance || {};
+  const entries = monitoring.entries || {};
+  const values = {
+    activeRuns: counts.activeRuns,
+    staleRuns: counts.staleRuns,
+    flaggedRuns: counts.flaggedRuns,
+    pendingSettlements: counts.pendingSettlements,
+    deepestPhase: performance.deepestPhase,
+    averageRunMinutes: Number(performance.averageRunMinutes || 0).toFixed(1),
+    disconnectRateBps: performance.disconnectRateBps,
+    crystalsToday: performance.crystalsToday,
+    mattCollectedToday: entries.mattCollectedToday,
+    uniquePayingWallets: entries.uniquePayingWallets
+  };
+  setReviewedEndlessAdminHtml($('#endless-monitoring-metrics'), Object.entries(values).map(([key, value]) =>
+    `<div class="metric"><span class="muted">${escapeHtml(words(key))}</span><strong>${Number(value || 0).toLocaleString()}</strong></div>`
+  ).join(''));
+  const alerts = monitoring.alerts || [];
+  setReviewedEndlessAdminHtml($('#endless-monitoring-alerts'), alerts.length
+    ? alerts.map((alert) => `<div class="notice ${alert.severity === 'critical' ? 'warning' : ''}"><strong>${escapeHtml(words(alert.code))}</strong><br>${escapeHtml(alert.message)}<br><small>Observed ${Number(alert.observed).toLocaleString()} · threshold ${Number(alert.threshold).toLocaleString()}</small></div>`).join('')
+    : '<div class="notice"><strong>NO ACTIVE ENDLESS ALERTS</strong><br><small>Every adjustable threshold is currently within range.</small></div>');
 }
 
 $('#refresh-endless-admin')?.addEventListener('click', () => void loadEndlessAdmin());
+$('#endless-operations-form')?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const patch = {};
+  document.querySelectorAll('[data-endless-operation]').forEach((input) => {
+    const definition = ENDLESS_OPERATION_FIELDS.find(([path]) => path === input.dataset.endlessOperation);
+    setEndlessPath(patch, input.dataset.endlessOperation, definition?.[2] === 'boolean' ? input.checked : Number(input.value));
+  });
+  if (!await confirmAction('Apply these live Endless operations?', 'This changes entry, banking, settlement, leaderboard, phase ceiling, or alert behavior immediately. Historical run data remains intact.')) return;
+  await api('/api/admin/endless/operations', {
+    method: 'PUT',
+    body: { patch, reason: $('#endless-operations-reason').value }
+  });
+  $('#endless-operations-reason').value = '';
+  await loadEndlessAdmin();
+  showAlert('Audited Endless operations applied.');
+});
+
+$('#endless-admin-runs')?.addEventListener('click', async (event) => {
+  const runId = event.target.closest('[data-endless-review]')?.dataset.endlessReview;
+  if (!runId) return;
+  const payload = await api(`/api/admin/endless/runs/${encodeURIComponent(runId)}`);
+  renderEndlessRunReview(payload.run);
+});
+
+$('#endless-run-review')?.addEventListener('click', async (event) => {
+  const runId = event.target.closest('[data-endless-terminate]')?.dataset.endlessTerminate;
+  if (!runId) return;
+  const reason = prompt('Required reason for rejecting and safely terminating this run:')?.trim();
+  if (!reason) return;
+  if (!await confirmAction('Terminate this Endless run?', 'The server will first release or death-settle the Miner on Ronin. The run closes as rejected only if that safety step succeeds.')) return;
+  await api(`/api/admin/endless/runs/${encodeURIComponent(runId)}/terminate`, { method: 'POST', body: { reason } });
+  await loadEndlessAdmin();
+  const payload = await api(`/api/admin/endless/runs/${encodeURIComponent(runId)}`);
+  renderEndlessRunReview(payload.run);
+  showAlert('Endless run safely terminated and preserved as rejected.');
+});
+
+function renderEndlessRunReview(run) {
+  const panel = $('#endless-run-review');
+  const phases = Array.isArray(run.phaseHistory) ? run.phaseHistory : [];
+  const recentPhases = phases.slice(-100);
+  panel.hidden = false;
+  setReviewedEndlessAdminHtml(panel, `<div class="section-heading"><div><p class="eyebrow">AUTHORITATIVE RUN REVIEW</p><h2>${escapeHtml(run.runId)}</h2><p>${escapeHtml(run.wallet)} · Miner #${Number(run.minerId)}</p></div>${run.status === 'active' ? `<button type="button" class="danger" data-endless-terminate="${escapeHtml(run.runId)}">Reject and terminate</button>` : ''}</div>
+    <div class="metrics">
+      <div class="metric"><span class="muted">Status</span><strong>${escapeHtml(words(run.status))}</strong></div>
+      <div class="metric"><span class="muted">Highest phase</span><strong>${Number(run.highestPhase).toLocaleString()}</strong></div>
+      <div class="metric"><span class="muted">Score</span><strong>${Number(run.score).toLocaleString()}</strong></div>
+      <div class="metric"><span class="muted">Integrity</span><strong>${Number(run.integrityScore)}/100</strong></div>
+      <div class="metric"><span class="muted">CRYSTALS banked</span><strong>${Number(run.crystalsBreakdown?.banked || 0).toLocaleString()}</strong></div>
+      <div class="metric"><span class="muted">Miner XP banked</span><strong>${Number(run.minerXpBanked || 0).toLocaleString()}</strong></div>
+      <div class="metric"><span class="muted">Config</span><strong>V${Number(run.configVersion)}</strong></div>
+      <div class="metric"><span class="muted">Leaderboard</span><strong>${escapeHtml(words(run.leaderboardStatus))}</strong></div>
+    </div>
+    <div class="grid two">
+      <div><h3>Verification and economy</h3>${[
+        row('Started', new Date(run.startTime).toLocaleString()),
+        row('Ended', run.endTime ? new Date(run.endTime).toLocaleString() : 'Active'),
+        row('Duration', `${(Number(run.durationMs || 0) / 60_000).toFixed(1)} minutes`),
+        row('Digest', String(run.verification?.digest || '').slice(0, 32)),
+        row('Payment', run.payment ? `${Number(run.payment.amountMatt).toLocaleString()} MATT · ${short(run.payment.transactionHash)}` : 'Free entry'),
+        row('Reward status', run.rewardStatus?.settled ? 'Settled' : run.rewardStatus?.pending ? 'Pending' : 'Not settled')
+      ].join('')}</div>
+      <div><h3>Miner and integrity</h3>${[
+        row('Miner level', Number(run.minerLevel).toLocaleString()),
+        row('Maximum carry', Number(run.maximumCarry).toLocaleString()),
+        row('Required enemies', Number(run.enemyBreakdown?.requiredDefeated || 0).toLocaleString()),
+        row('Guardians', Number(run.enemyBreakdown?.guardiansDefeated || 0).toLocaleString()),
+        row('Ore broken', Number(run.oreBreakdown?.broken || 0).toLocaleString()),
+        row('Reconnects', Number(run.disconnectHistory?.reconnects || 0).toLocaleString()),
+        row('Integrity flags', Number(run.integrityFlags?.length || 0).toLocaleString())
+      ].join('')}</div>
+    </div>
+    <h3>Verified phase history (${phases.length.toLocaleString()})</h3>
+    <div class="table-wrap"><table><thead><tr><th>Phase</th><th>Score</th><th>CRYSTALS</th><th>Damage</th><th>Time</th><th>Digest</th></tr></thead><tbody>${recentPhases.map((phase) => `<tr><td>${Number(phase.phase)}</td><td>${Number(phase.score || 0).toLocaleString()}</td><td>${Number(phase.crystalsAdded || phase.grossCrystalsEarned || 0).toLocaleString()}</td><td>${Number(phase.damageTaken || 0).toLocaleString()}</td><td>${(Number(phase.elapsedMs || 0) / 1_000).toFixed(1)}s</td><td><small>${escapeHtml(String(phase.digest || '').slice(0, 16))}</small></td></tr>`).join('') || '<tr><td colspan="6">No verified phase checkpoint yet.</td></tr>'}</tbody></table></div>
+    ${phases.length > recentPhases.length ? `<p class="muted">Showing the latest ${recentPhases.length} phases; the complete durable history remains stored.</p>` : ''}`);
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function setReviewedEndlessAdminHtml(node, html) {
+  node.innerHTML = html; // dom-security-reviewed: fixed Admin templates; strings are escaped and server numbers are normalized.
+}
+
 $('#endless-config-groups')?.addEventListener('click', (event) => {
   if (!event.target.closest('[data-endless-preset="conservative-v1"]')) return;
   const config = state.endless?.activeConfig?.config;

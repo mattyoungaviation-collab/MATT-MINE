@@ -25,11 +25,13 @@ export const endlessServiceMethods = {
     const payment = this.endlessPaymentVerifier?.publicStatus?.() || null;
     const paidEntryEnabled = published.config.entry.paidEnabled === true;
     const paymentReady = !paidEntryEnabled || payment?.configured === true;
+    const operations = publicEndlessOperations(store.operations);
     return {
       mode: 'endless',
       permanent: true,
       tagline: 'Different map. Different experience. Same opportunity.',
-      enabled: published.config.enabled === true,
+      enabled: published.config.enabled === true && operations.newEntriesEnabled,
+      configuredEnabled: published.config.enabled === true,
       nftRequired: true,
       paidEntryEnabled,
       entryPriceMatt: published.config.entry.mattPrice,
@@ -39,14 +41,19 @@ export const endlessServiceMethods = {
       entryTransaction: paidEntryEnabled && paymentReady
         ? this.endlessPaymentVerifier.transactionForPayment(published.config.entry.mattPrice)
         : null,
-      rewardsEnabled: published.config.rewards.enabled === true && activation.ok && Boolean(this.endlessRewardSettler),
+      rewardsEnabled: published.config.rewards.enabled === true && activation.ok && Boolean(this.endlessRewardSettler) && operations.rewardsEnabled,
       runApprovalRequired: published.config.rewards.enabled === true && activation.ok && Boolean(this.endlessRewardSettler),
-      rewardReadiness: activation.ok ? (this.endlessRewardSettler ? 'ready' : 'settler-required') : 'configuration-required',
+      rewardReadiness: operations.rewardsEnabled === false
+        ? 'operations-paused'
+        : activation.ok ? (this.endlessRewardSettler ? 'ready' : 'settler-required') : 'configuration-required',
       rewardErrors: activation.errors,
+      operations,
       inputReplayReady: Boolean(this.competitiveReplayValidator?.registerEndlessPhase && this.competitiveReplayValidator?.verifyEndlessPhase),
       configVersion: version,
       generatorVersion: published.config.generatorVersion,
-      leaderboardScopes: ['daily', 'weekly', 'season', 'all-time']
+      leaderboardScopes: operations.leaderboardSubmissionsEnabled
+        ? ['daily', 'weekly', 'season', 'all-time'].filter((scope) => published.config.leaderboards?.[scope === 'all-time' ? 'allTime' : scope] !== false)
+        : []
     };
   },
 
@@ -61,6 +68,7 @@ export const endlessServiceMethods = {
     const store = state.endlessCompetition;
     const configVersion = store.activeConfigVersion;
     const published = store.configVersions[configVersion];
+    assertApi(store.operations?.newEntriesEnabled !== false, 503, 'endless_entries_paused', 'New Endless entries are temporarily paused. Active runs are preserved.');
     assertApi(published?.config?.enabled === true, 503, 'endless_mode_disabled', 'Endless is temporarily paused.');
     const config = normalizeEndlessConfig(published.config);
     const activation = validateEndlessConfig(config, { forActivation: config.rewards.enabled });
@@ -117,6 +125,7 @@ export const endlessServiceMethods = {
     const preflightStore = preflightState.endlessCompetition;
     const preflightVersion = preflightStore.activeConfigVersion;
     const preflightPublished = preflightStore.configVersions[preflightVersion];
+    assertApi(preflightStore.operations?.newEntriesEnabled !== false, 503, 'endless_entries_paused', 'New Endless entries are temporarily paused. Active runs are preserved.');
     assertApi(preflightPublished?.config?.enabled === true, 503, 'endless_mode_disabled', 'Endless is temporarily paused.');
     const preflightConfig = normalizeEndlessConfig(preflightPublished.config);
     assertApi(this.competitiveReplayValidator?.registerEndlessPhase, 503, 'endless_input_replay_required', 'Endless entry remains closed until authoritative phase replay is available. No payment was requested.');
@@ -151,6 +160,7 @@ export const endlessServiceMethods = {
         const wallet = state.wallets[session.address];
         assertApi(wallet && !wallet.suspended, 403, 'wallet_suspended', 'This wallet cannot enter ranked play.');
         const store = state.endlessCompetition;
+        assertApi(store.operations?.newEntriesEnabled !== false, 503, 'endless_entries_paused', 'New Endless entries are temporarily paused. Active runs are preserved.');
         const version = store.activeConfigVersion;
         assertApi(version === preflightVersion, 409, 'endless_config_changed', 'The Endless entry settings changed while the transaction confirmed. Refresh and try again.');
         const published = store.configVersions[version];
@@ -256,8 +266,15 @@ export const endlessServiceMethods = {
     const result = await this.database.transact(async (state, transaction) => {
       const run = state.endlessCompetition.runs[runId];
       assertEndlessRunOwner(run, session.address, runToken);
+      assertApi(!run.adminTerminationPending, 409, 'run_admin_termination_pending', 'An administrator is ending this run, so its checkpoint was not accepted.');
       assertApi(run.expiresAt > timestamp, 410, 'endless_run_expired', 'The reconnect window for this Endless run expired.');
       assertApi(validEndlessCheckpoint(run, input.previousCheckpoint, this.endlessCheckpointSecret), 401, 'endless_checkpoint_invalid', 'Use the latest server-signed Endless checkpoint.');
+      const operations = state.endlessCompetition.operations || {};
+      if (String(input.action || '') === 'bank') {
+        assertApi(operations.bankingEnabled !== false, 503, 'endless_banking_paused', 'Endless banking is temporarily paused. Your signed run checkpoint remains active.');
+      } else if (Number(operations.temporaryMaximumPhase || 0) > 0) {
+        assertApi(run.currentPhase < Number(operations.temporaryMaximumPhase), 422, 'endless_temporary_phase_limit', 'This run reached the temporary Admin phase ceiling. Bank the verified run instead.');
+      }
       recordHeartbeatIntegrity(run, timestamp);
       const verification = verifyEndlessPhaseEvents(run, replay.outcomeEvents, timestamp);
       verification.inputReplay = structuredClone(replay.evidence);
@@ -301,30 +318,35 @@ export const endlessServiceMethods = {
         nextInputCheckpoint = await this.competitiveReplayValidator.registerEndlessPhase(run, runToken);
       }
       state.runs[runId] = run;
-      if (run.status === 'banked') {
+      if (run.status === 'banked' && operations.leaderboardSubmissionsEnabled !== false) {
         finalizeLeaderboardEntry(state.endlessCompetition, run);
       }
       await transaction?.upsertEndlessRun?.(run);
       await transaction?.insertEndlessCheckpoint?.(run, verification);
-      if (run.status === 'banked') {
+      if (run.status === 'banked' && operations.leaderboardSubmissionsEnabled !== false) {
         const leaderboard = state.endlessCompetition.leaderboardEntries.find((entry) => entry.runId === run.id);
         await transaction?.upsertEndlessLeaderboard?.(leaderboard, run);
       }
       return {
         run: structuredClone(run),
         verification,
-        nextManifest: nextManifest ? structuredClone(nextManifest) : null
+        nextManifest: nextManifest ? structuredClone(nextManifest) : null,
+        rewardsOperational: operations.rewardsEnabled !== false,
+        leaderboardSubmitted: run.status === 'banked' && operations.leaderboardSubmissionsEnabled !== false
       };
     });
     await this.competitiveReplayValidator.finalizeEndlessPhase(replayIdentity, 'verified').catch(() => undefined);
     let rewardSettlement = null;
-    if (result.run.status === 'banked' && result.run.config.rewards.enabled) {
+    if (result.run.status === 'banked' && result.run.config.rewards.enabled && result.rewardsOperational) {
       try {
         rewardSettlement = { pending: false, receipt: await this.settleEndlessRewards(result.run) };
       } catch (error) {
         await markEndlessSettlementPending(this, result.run.id, error);
         rewardSettlement = { pending: true, error: 'Verified rewards are queued for retry.' };
       }
+    } else if (result.run.status === 'banked' && result.run.config.rewards.enabled) {
+      await markEndlessSettlementPending(this, result.run.id, { code: 'endless_rewards_paused' });
+      rewardSettlement = { pending: true, error: 'Verified rewards are paused by Admin and remain safely queued.' };
     }
     return {
       checkpoint: publicEndlessCheckpoint(result.run),
@@ -332,7 +354,9 @@ export const endlessServiceMethods = {
       run: publicEndlessRun(result.run),
       nextManifest: result.nextManifest,
       nextInputCheckpoint,
-      summary: result.run.status === 'banked' ? endlessBankSummary(result.run) : null,
+      summary: result.run.status === 'banked'
+        ? { ...endlessBankSummary(result.run), leaderboardSubmitted: result.leaderboardSubmitted }
+        : null,
       rewardSettlement
     };
   },
@@ -345,6 +369,7 @@ export const endlessServiceMethods = {
     const run = state.endlessCompetition.runs[runId];
     assertEndlessRunOwner(run, session.address, runToken);
     assertApi(run.status === 'banked' && run.config.rewards.enabled, 409, 'endless_settlement_unavailable', 'This run has no pending Endless reward settlement.');
+    assertApi(state.endlessCompetition.operations?.rewardsEnabled !== false, 503, 'endless_rewards_paused', 'Endless reward settlement is temporarily paused by Admin. The verified reward remains queued.');
     if (run.rewardSettlement?.settled === true) {
       return { settled: true, alreadySettled: true, receipt: structuredClone(run.rewardSettlement) };
     }
@@ -456,9 +481,11 @@ export const endlessServiceMethods = {
       current.updatedAt = timestamp;
       current.checkpointSignature = signEndlessCheckpoint(current, this.endlessCheckpointSecret);
       state.runs[runId] = current;
-      if (knockout && current.completedPhases > 0) finalizeLeaderboardEntry(state.endlessCompetition, current);
+      if (knockout && current.completedPhases > 0 && state.endlessCompetition.operations?.leaderboardSubmissionsEnabled !== false) {
+        finalizeLeaderboardEntry(state.endlessCompetition, current);
+      }
       await transaction?.upsertEndlessRun?.(current);
-      if (knockout && current.completedPhases > 0) {
+      if (knockout && current.completedPhases > 0 && state.endlessCompetition.operations?.leaderboardSubmissionsEnabled !== false) {
         const leaderboard = state.endlessCompetition.leaderboardEntries.find((entry) => entry.runId === current.id);
         await transaction?.upsertEndlessLeaderboard?.(leaderboard, current);
       }
@@ -472,6 +499,9 @@ export const endlessServiceMethods = {
     await this.authenticate(token);
     const state = await this.database.read();
     const config = state.endlessCompetition.configVersions[state.endlessCompetition.activeConfigVersion].config;
+    assertApi(state.endlessCompetition.operations?.leaderboardSubmissionsEnabled !== false, 503, 'endless_leaderboards_paused', 'Endless leaderboards are temporarily paused by Admin. Verified run history remains stored.');
+    const scopeKey = scope === 'all-time' ? 'allTime' : scope;
+    assertApi(config.leaderboards?.[scopeKey] !== false, 404, 'endless_leaderboard_disabled', 'This Endless leaderboard scope is disabled in the active configuration.');
     return {
       mode: 'endless',
       scope,
@@ -485,14 +515,141 @@ export const endlessServiceMethods = {
     const store = state.endlessCompetition;
     const activeRuns = Object.values(store.runs).filter((run) => run.status === 'active');
     const activeConfig = store.configVersions[store.activeConfigVersion];
+    const history = Object.values(store.configVersions).sort((a, b) => b.version - a.version);
     return {
       status: await this.endlessStatus(),
       activeConfig: structuredClone(activeConfig),
-      configHistory: Object.values(store.configVersions).sort((a, b) => b.version - a.version).map((value) => structuredClone(value)),
+      configHistory: history.map((value, index) => ({
+        ...structuredClone(value),
+        active: value.version === store.activeConfigVersion,
+        changedSettings: changedConfigPaths(history[index + 1]?.config, value.config).slice(0, 40)
+      })),
+      operations: publicEndlessOperations(store.operations),
+      monitoring: endlessMonitoring(store, this.now()),
       activeRuns: activeRuns.map((run) => adminRunSummary(run)),
       recentRuns: Object.values(store.runs).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 100).map((run) => adminRunSummary(run)),
       smartEngine: structuredClone(store.smartEngine)
     };
+  },
+
+  async updateEndlessOperations(adminKey, input = {}) {
+    this.assertAdminKey(adminKey);
+    const reason = endlessAdminReason(input.reason);
+    const patch = normalizeEndlessOperationsPatch(input.patch);
+    const timestamp = this.now();
+    return this.database.transact((state) => {
+      const store = state.endlessCompetition;
+      store.operations = {
+        ...store.operations,
+        ...patch,
+        alertThresholds: {
+          ...store.operations?.alertThresholds,
+          ...(patch.alertThresholds || {})
+        },
+        updatedAt: timestamp,
+        updatedBy: 'SERVER_ADMIN',
+        reason
+      };
+      const changed = Object.keys(patch).join(', ');
+      state.audit.push({
+        action: 'ENDLESS_OPERATIONS_UPDATED',
+        details: `${reason}; ${changed}`.slice(0, 500),
+        timestamp,
+        address: 'SERVER_ADMIN'
+      });
+      state.audit = state.audit.slice(-2_000);
+      return publicEndlessOperations(store.operations);
+    });
+  },
+
+  async adminEndlessRun(adminKey, runIdInput) {
+    this.assertAdminKey(adminKey);
+    const runId = cleanRunId(runIdInput);
+    const state = await this.database.read();
+    const compatibilityRun = state.endlessCompetition.runs[runId];
+    const durable = await this.database.readEndlessRunReview?.(runId);
+    const run = durable?.run || compatibilityRun;
+    assertApi(run, 404, 'endless_run_missing', 'The Endless run was not found.');
+    return adminRunReview(run, {
+      phases: durable?.phases || run.phaseHistory || [],
+      integrityEvents: durable?.integrityEvents || run.integrityFlags || [],
+      payment: durable?.payment || run.payment || null,
+      settlementTransactions: durable?.settlementTransactions || run.chainTransactions || [],
+      leaderboardEntry: state.endlessCompetition.leaderboardEntries.find((entry) => entry.runId === run.id) || null
+    });
+  },
+
+  async terminateEndlessRun(adminKey, runIdInput, input = {}) {
+    this.assertAdminKey(adminKey);
+    const runId = cleanRunId(runIdInput);
+    const reason = endlessAdminReason(input.reason);
+    const timestamp = this.now();
+    let reserved;
+    await this.database.transact(async (state, transaction) => {
+      const run = state.endlessCompetition.runs[runId];
+      assertApi(run, 404, 'endless_run_missing', 'The Endless run was not found.');
+      assertApi(run.status === 'active', 409, 'endless_run_closed', 'Only an active Endless run can be terminated.');
+      assertApi(!run.adminTerminationPending, 409, 'run_admin_termination_pending', 'This Endless run is already being terminated.');
+      run.adminTerminationPending = true;
+      run.updatedAt = timestamp;
+      state.runs[runId] = run;
+      await transaction?.upsertEndlessRun?.(run);
+      reserved = structuredClone(run);
+    });
+    let receipt = null;
+    try {
+      if (reserved.config.rewards.enabled) {
+        assertApi(this.endlessRewardSettler, 503, 'endless_reward_settler_required', 'The on-chain Endless operator is required to release this Miner safely.');
+        receipt = reserved.completedPhases > 0
+          ? await this.endlessRewardSettler.settle({
+              address: reserved.address,
+              minerId: reserved.minerId,
+              chainRun: reserved.chainRun,
+              completedPhases: reserved.completedPhases,
+              minedCrystalUnits: reserved.crystalsCarried,
+              rollingDigest: reserved.rollingDigest,
+              outcome: 'death'
+            })
+          : await this.endlessRewardSettler.cancelUnstarted({ minerId: reserved.minerId, chainRun: reserved.chainRun });
+      }
+      const rejected = await this.database.transact(async (state, transaction) => {
+        const run = state.endlessCompetition.runs[runId];
+        assertApi(run?.status === 'active' && run.adminTerminationPending, 409, 'admin_run_termination_changed', 'The Endless run changed while it was being terminated.');
+        run.status = 'rejected';
+        run.finishReason = 'admin_rejected';
+        run.finishedAt = this.now();
+        run.updatedAt = run.finishedAt;
+        run.adminTerminationPending = false;
+        run.adminReview = { decision: 'rejected', reason, reviewedAt: run.finishedAt, reviewedBy: 'SERVER_ADMIN' };
+        if (receipt) {
+          run.rewardSettlement = { settled: true, rejected: true, ...structuredClone(receipt), settledAt: run.finishedAt };
+          run.crystalsBanked = Math.max(0, Number(receipt.crystalsBanked || 0));
+          run.minerXpBanked = Math.max(0, Number(receipt.minerXpBanked || 0));
+          if (receipt.transactionHash) {
+            run.chainTransactions ||= [];
+            run.chainTransactions.push({ type: 'admin-rejection', hash: receipt.transactionHash, recordedAt: run.finishedAt });
+            run.chainTransactions = run.chainTransactions.slice(-50);
+          }
+        }
+        state.runs[runId] = run;
+        state.audit.push({ action: 'ENDLESS_RUN_REJECTED', details: `${runId}; ${reason}`.slice(0, 500), timestamp: run.finishedAt, address: 'SERVER_ADMIN' });
+        state.audit = state.audit.slice(-2_000);
+        await transaction?.upsertEndlessRun?.(run);
+        return structuredClone(run);
+      });
+      await this.competitiveReplayValidator?.finalizeEndlessPhase?.(reserved, 'admin_rejected').catch(() => undefined);
+      return adminRunSummary(rejected);
+    } catch (error) {
+      await this.database.transact(async (state, transaction) => {
+        const run = state.endlessCompetition.runs[runId];
+        if (!run || run.status !== 'active') return;
+        run.adminTerminationPending = false;
+        run.updatedAt = this.now();
+        state.runs[runId] = run;
+        await transaction?.upsertEndlessRun?.(run);
+      }).catch(() => undefined);
+      throw error;
+    }
   },
 
   async publishEndlessConfig(adminKey, input = {}) {
@@ -508,7 +665,7 @@ export const endlessServiceMethods = {
     return this.database.transact(async (state, transaction) => {
       const store = state.endlessCompetition;
       const version = Math.max(0, ...Object.keys(store.configVersions).map(Number)) + 1;
-      const record = { version, config, publishedAt: timestamp, publishedBy: 'SERVER_ADMIN', reason };
+      const record = { version, config, publishedAt: timestamp, activatedAt: timestamp, publishedBy: 'SERVER_ADMIN', reason };
       store.configVersions[version] = record;
       store.activeConfigVersion = version;
       state.audit.push({ action: 'ENDLESS_CONFIG_PUBLISHED', details: `v${version}; ${reason}`, timestamp, address: 'SERVER_ADMIN' });
@@ -779,6 +936,209 @@ function endlessEntryWindow(timestamp, periodHours, resetUtcHour) {
   const anchorMs = Number(resetUtcHour) * 60 * 60 * 1_000;
   const startedAt = Math.floor((timestamp - anchorMs) / periodMs) * periodMs + anchorMs;
   return { startedAt, endsAt: startedAt + periodMs };
+}
+
+function publicEndlessOperations(input = {}) {
+  return {
+    newEntriesEnabled: input.newEntriesEnabled !== false,
+    bankingEnabled: input.bankingEnabled !== false,
+    rewardsEnabled: input.rewardsEnabled !== false,
+    leaderboardSubmissionsEnabled: input.leaderboardSubmissionsEnabled !== false,
+    temporaryMaximumPhase: Number(input.temporaryMaximumPhase || 0),
+    monitoringWindowHours: Number(input.monitoringWindowHours || 24),
+    alertThresholds: structuredClone(input.alertThresholds || {}),
+    updatedAt: Number(input.updatedAt || 0),
+    updatedBy: String(input.updatedBy || 'SYSTEM_BOOTSTRAP'),
+    reason: String(input.reason || '')
+  };
+}
+
+function normalizeEndlessOperationsPatch(input) {
+  assertApi(input && typeof input === 'object' && !Array.isArray(input), 400, 'endless_operations_patch_invalid', 'Endless operations changes must be an object.');
+  const allowed = new Set([
+    'newEntriesEnabled', 'bankingEnabled', 'rewardsEnabled',
+    'leaderboardSubmissionsEnabled', 'temporaryMaximumPhase',
+    'monitoringWindowHours', 'alertThresholds'
+  ]);
+  const unknown = Object.keys(input).filter((key) => !allowed.has(key));
+  assertApi(unknown.length === 0, 422, 'endless_operations_field_unknown', `Unknown Endless operations field: ${unknown[0] || ''}.`);
+  const patch = {};
+  for (const key of ['newEntriesEnabled', 'bankingEnabled', 'rewardsEnabled', 'leaderboardSubmissionsEnabled']) {
+    if (input[key] === undefined) continue;
+    assertApi(typeof input[key] === 'boolean', 422, 'endless_operations_boolean_invalid', `${key} must be true or false.`);
+    patch[key] = input[key];
+  }
+  if (input.temporaryMaximumPhase !== undefined) {
+    patch.temporaryMaximumPhase = endlessAdminInteger(input.temporaryMaximumPhase, 0, 1_000_000, 'Temporary maximum phase');
+  }
+  if (input.monitoringWindowHours !== undefined) {
+    patch.monitoringWindowHours = endlessAdminInteger(input.monitoringWindowHours, 1, 8_760, 'Monitoring window hours');
+  }
+  if (input.alertThresholds !== undefined) {
+    assertApi(input.alertThresholds && typeof input.alertThresholds === 'object' && !Array.isArray(input.alertThresholds), 422, 'endless_alert_thresholds_invalid', 'Alert thresholds must be an object.');
+    const bounds = {
+      staleHeartbeatSeconds: [10, 86_400],
+      unexpectedlyDeepPhase: [1, 1_000_000],
+      maximumRunMinutes: [1, 525_600],
+      maximumPendingSettlements: [0, 1_000_000],
+      maximumFlaggedRuns: [0, 1_000_000],
+      maximumDisconnectRateBps: [0, 10_000]
+    };
+    const thresholdUnknown = Object.keys(input.alertThresholds).filter((key) => !bounds[key]);
+    assertApi(thresholdUnknown.length === 0, 422, 'endless_alert_threshold_unknown', `Unknown Endless alert threshold: ${thresholdUnknown[0] || ''}.`);
+    patch.alertThresholds = Object.fromEntries(Object.entries(input.alertThresholds).map(([key, value]) => [
+      key,
+      endlessAdminInteger(value, bounds[key][0], bounds[key][1], key)
+    ]));
+  }
+  assertApi(Object.keys(patch).length > 0, 400, 'endless_operations_patch_empty', 'Change at least one Endless operations setting.');
+  return patch;
+}
+
+function endlessMonitoring(store, timestamp) {
+  const operations = publicEndlessOperations(store.operations);
+  const thresholds = operations.alertThresholds;
+  const windowStart = timestamp - operations.monitoringWindowHours * 60 * 60 * 1_000;
+  const runs = Object.values(store.runs || {});
+  const windowRuns = runs.filter((run) => Number(run.startedAt || 0) >= windowStart || Number(run.updatedAt || 0) >= windowStart);
+  const active = runs.filter((run) => run.status === 'active');
+  const finished = windowRuns.filter((run) => run.status !== 'active');
+  const staleRuns = active.filter((run) => timestamp - Number(run.lastHeartbeatAt || run.startedAt || timestamp) > thresholds.staleHeartbeatSeconds * 1_000);
+  const flaggedRuns = windowRuns.filter((run) => Number(run.integrityScore ?? 100) < 100 || (run.integrityFlags || []).length > 0);
+  const disconnectedRuns = windowRuns.filter((run) => Number(run.reconnectCount || 0) > 0 || run.status === 'expired');
+  const pendingSettlements = runs.filter((run) => run.rewardSettlement?.pending === true && run.rewardSettlement?.settled !== true);
+  const completedDurations = finished.map((run) => Math.max(0, Number(run.finishedAt || run.updatedAt || 0) - Number(run.startedAt || 0))).filter(Boolean);
+  const averageRunMinutes = completedDurations.length
+    ? completedDurations.reduce((total, value) => total + value, 0) / completedDurations.length / 60_000
+    : 0;
+  const deepestPhase = windowRuns.reduce((maximum, run) => Math.max(maximum, Number(run.completedPhases || 0)), 0);
+  const disconnectRateBps = windowRuns.length ? Math.round(disconnectedRuns.length * 10_000 / windowRuns.length) : 0;
+  const dayStart = Math.floor(timestamp / 86_400_000) * 86_400_000;
+  const weekStart = dayStart - ((new Date(dayStart).getUTCDay() + 6) % 7) * 86_400_000;
+  const monthStart = Date.UTC(new Date(timestamp).getUTCFullYear(), new Date(timestamp).getUTCMonth(), 1);
+  const payments = Object.values(store.paymentTransactions || {});
+  const collected = (from) => payments.filter((payment) => Number(payment.consumedAt || 0) >= from)
+    .reduce((total, payment) => total + Number(payment.amountMatt || 0), 0);
+  const uniquePayers = new Set(payments.filter((payment) => Number(payment.consumedAt || 0) >= windowStart).map((payment) => payment.payer)).size;
+  const crystalsToday = runs.filter((run) => Number(run.finishedAt || 0) >= dayStart)
+    .reduce((total, run) => total + Number(run.crystalsBanked || 0), 0);
+  const xpInWindow = windowRuns.reduce((total, run) => total + Number(run.minerXpBanked || 0), 0);
+  const alerts = [];
+  if (staleRuns.length) alerts.push(endlessAlert('stale_heartbeat', 'critical', `${staleRuns.length} active run(s) exceeded the heartbeat threshold.`, staleRuns.length, 0));
+  if (deepestPhase >= thresholds.unexpectedlyDeepPhase) alerts.push(endlessAlert('unexpected_depth', 'warning', `A run reached phase ${deepestPhase} inside the monitoring window.`, deepestPhase, thresholds.unexpectedlyDeepPhase));
+  if (averageRunMinutes > thresholds.maximumRunMinutes) alerts.push(endlessAlert('run_duration', 'warning', 'Average completed run duration is above target.', averageRunMinutes, thresholds.maximumRunMinutes));
+  if (pendingSettlements.length > thresholds.maximumPendingSettlements) alerts.push(endlessAlert('pending_settlements', 'critical', 'Pending reward settlements exceeded the configured threshold.', pendingSettlements.length, thresholds.maximumPendingSettlements));
+  if (flaggedRuns.length > thresholds.maximumFlaggedRuns) alerts.push(endlessAlert('integrity_flags', 'critical', 'Flagged runs exceeded the configured threshold.', flaggedRuns.length, thresholds.maximumFlaggedRuns));
+  if (disconnectRateBps > thresholds.maximumDisconnectRateBps) alerts.push(endlessAlert('disconnect_rate', 'warning', 'Disconnect rate exceeded the configured threshold.', disconnectRateBps, thresholds.maximumDisconnectRateBps));
+  const activeConfig = store.configVersions?.[store.activeConfigVersion]?.config;
+  const dailyCeiling = Number(activeConfig?.rewards?.maximumDailyPayoutNumerator || 0) / Math.max(1, Number(activeConfig?.rewards?.maximumDailyPayoutDenominator || 1));
+  if (dailyCeiling > 0 && crystalsToday > dailyCeiling) alerts.push(endlessAlert('crystals_daily_ceiling', 'critical', 'Daily CRYSTALS settlement exceeded the active hard ceiling.', crystalsToday, dailyCeiling));
+  return {
+    windowHours: operations.monitoringWindowHours,
+    generatedAt: timestamp,
+    counts: {
+      activeRuns: active.length,
+      completedRuns: finished.length,
+      uniqueWallets: new Set(windowRuns.map((run) => run.address)).size,
+      uniqueMiners: new Set(windowRuns.map((run) => Number(run.minerId))).size,
+      staleRuns: staleRuns.length,
+      flaggedRuns: flaggedRuns.length,
+      pendingSettlements: pendingSettlements.length
+    },
+    performance: { deepestPhase, averageRunMinutes, disconnectRateBps, crystalsToday, xpInWindow },
+    entries: {
+      freeRuns: windowRuns.filter((run) => !run.payment).length,
+      paidRuns: windowRuns.filter((run) => run.payment).length,
+      mattCollectedToday: collected(dayStart),
+      mattCollectedWeek: collected(weekStart),
+      mattCollectedMonth: collected(monthStart),
+      uniquePayingWallets: uniquePayers
+    },
+    alerts
+  };
+}
+
+function endlessAlert(code, severity, message, observed, threshold) {
+  return { code, severity, message, observed: Number(observed), threshold: Number(threshold) };
+}
+
+function adminRunReview(run, details) {
+  const phases = Array.isArray(details.phases) ? details.phases : [];
+  const scoreBreakdown = {};
+  for (const phase of phases) {
+    for (const [key, value] of Object.entries(phase.scoreBreakdown || {})) {
+      scoreBreakdown[key] = Number(scoreBreakdown[key] || 0) + Number(value || 0);
+    }
+  }
+  const profile = run.minerProfile || {};
+  return {
+    runId: run.id,
+    wallet: run.address,
+    minerId: Number(run.minerId),
+    minerLevel: Number(profile.progression?.level ?? profile.traits?.level ?? 0),
+    minerCapability: structuredClone(run.manifest?.minerCapability || profile.gameplay || {}),
+    equipment: structuredClone(profile.equipped || {}),
+    attachedItems: structuredClone(profile.attached || profile.attachments || {}),
+    status: run.status,
+    finishReason: run.finishReason || '',
+    startTime: Number(run.startedAt || 0),
+    endTime: Number(run.finishedAt || 0),
+    durationMs: Math.max(0, Number(run.finishedAt || run.updatedAt || 0) - Number(run.startedAt || 0)),
+    highestPhase: Number(run.completedPhases || 0),
+    currentPhase: Number(run.currentPhase || 0),
+    score: Number(run.score || 0),
+    scoreBreakdown,
+    oreBreakdown: { broken: Number(run.oreBroken || 0) },
+    enemyBreakdown: { requiredDefeated: Number(run.requiredKills || 0), guardiansDefeated: Number(run.bossKills || 0) },
+    crystalsBreakdown: { carried: Number(run.crystalsCarried || 0), banked: Number(run.crystalsBanked || 0) },
+    maximumCarry: Number(profile.gameplay?.crystalCarryCapacity ?? profile.traits?.crystalCarryCapacity ?? 0),
+    minerXpBanked: Number(run.minerXpBanked || 0),
+    phaseHistory: structuredClone(phases),
+    verification: { digest: run.rollingDigest || '', checkpointSequence: Number(run.checkpointSequence || 0), status: details.leaderboardEntry?.verified ? 'verified' : run.status },
+    integrityScore: Number(run.integrityScore ?? 100),
+    integrityFlags: structuredClone(details.integrityEvents || []),
+    disconnectHistory: { reconnects: Number(run.reconnectCount || 0), currentPhaseReconnects: Number(run.phaseReconnectCount || 0) },
+    payment: publicEndlessPayment(details.payment),
+    rewardStatus: structuredClone(run.rewardSettlement || null),
+    leaderboardStatus: details.leaderboardEntry ? 'submitted' : 'not_submitted',
+    settlementTransactions: structuredClone(details.settlementTransactions || []),
+    configVersion: Number(run.configVersion || 0),
+    config: structuredClone(run.config || {}),
+    manifest: structuredClone(run.manifest || {}),
+    adminReview: structuredClone(run.adminReview || null)
+  };
+}
+
+function changedConfigPaths(previous, current, prefix = '') {
+  if (!previous) return flattenConfigPaths(current, prefix);
+  const keys = new Set([...Object.keys(previous || {}), ...Object.keys(current || {})]);
+  const changed = [];
+  for (const key of keys) {
+    const path = prefix ? `${prefix}.${key}` : key;
+    const left = previous?.[key];
+    const right = current?.[key];
+    if (left && right && typeof left === 'object' && typeof right === 'object' && !Array.isArray(left) && !Array.isArray(right)) {
+      changed.push(...changedConfigPaths(left, right, path));
+    } else if (JSON.stringify(left) !== JSON.stringify(right)) changed.push(path);
+  }
+  return changed;
+}
+
+function flattenConfigPaths(value, prefix = '') {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return prefix ? [prefix] : [];
+  return Object.entries(value).flatMap(([key, child]) => flattenConfigPaths(child, prefix ? `${prefix}.${key}` : key));
+}
+
+function endlessAdminReason(value) {
+  const reason = String(value || '').trim().slice(0, 500);
+  assertApi(reason.length >= 8, 422, 'admin_reason_required', 'Provide a meaningful reason for this Endless Admin action.');
+  return reason;
+}
+
+function endlessAdminInteger(value, minimum, maximum, label) {
+  const number = Number(value);
+  assertApi(Number.isSafeInteger(number) && number >= minimum && number <= maximum, 422, 'endless_operations_value_invalid', `${label} must be a whole number from ${minimum} to ${maximum}.`);
+  return number;
 }
 
 function cleanRunId(value) {

@@ -396,6 +396,21 @@ test('a temporary reward failure keeps the banked run idempotently retryable', a
     action: 'bank'
   });
   assert.equal(banked.rewardSettlement.pending, true);
+  await active.service.updateEndlessOperations('endless-admin-key', {
+    patch: { rewardsEnabled: false },
+    reason: 'Pause settlement while preserving the verified reward queue.'
+  });
+  await assert.rejects(
+    () => active.service.retryEndlessSettlement(token, {
+      runId: run.runId,
+      runToken: run.runToken
+    }),
+    (error) => error.code === 'endless_rewards_paused'
+  );
+  await active.service.updateEndlessOperations('endless-admin-key', {
+    patch: { rewardsEnabled: true },
+    reason: 'Restore settlement after verifying the reward queue pause.'
+  });
   const retried = await active.service.retryEndlessSettlement(token, {
     runId: run.runId,
     runToken: run.runToken
@@ -410,4 +425,110 @@ test('a temporary reward failure keeps the banked run idempotently retryable', a
   const state = await active.database.read();
   assert.equal(state.endlessCompetition.runs[run.runId].rewardSettlement.settled, true);
   assert.equal(state.endlessCompetition.leaderboardEntries[0].crystalsBanked, 3);
+});
+
+test('audited Endless operations immediately gate entries, banking, phase depth, and leaderboards', async () => {
+  const active = harness();
+  const token = await login(active.service);
+  const run = await active.service.startRun(token, 'endless', { minerId: 7 });
+  const paused = await active.service.updateEndlessOperations('endless-admin-key', {
+    patch: {
+      newEntriesEnabled: false,
+      bankingEnabled: false,
+      leaderboardSubmissionsEnabled: false,
+      temporaryMaximumPhase: 1,
+      monitoringWindowHours: 48,
+      alertThresholds: { unexpectedlyDeepPhase: 2, maximumFlaggedRuns: 0 }
+    },
+    reason: 'Exercise immediate audited operations controls.'
+  });
+  assert.equal(paused.newEntriesEnabled, false);
+  assert.equal(paused.monitoringWindowHours, 48);
+  assert.equal(paused.alertThresholds.unexpectedlyDeepPhase, 2);
+  await assert.rejects(
+    () => active.service.prepareEndlessEntry(token, { minerId: 7 }),
+    (error) => error.code === 'endless_entries_paused'
+  );
+  active.advance(20_000);
+  await assert.rejects(
+    () => active.service.checkpointEndlessPhase(token, {
+      runId: run.runId,
+      runToken: run.runToken,
+      previousCheckpoint: run.checkpoint,
+      action: 'bank'
+    }),
+    (error) => error.code === 'endless_banking_paused'
+  );
+  await assert.rejects(
+    () => active.service.checkpointEndlessPhase(token, {
+      runId: run.runId,
+      runToken: run.runToken,
+      previousCheckpoint: run.checkpoint,
+      action: 'descend'
+    }),
+    (error) => error.code === 'endless_temporary_phase_limit'
+  );
+  await active.service.updateEndlessOperations('endless-admin-key', {
+    patch: { bankingEnabled: true, temporaryMaximumPhase: 0 },
+    reason: 'Restore banking after the operations control test.'
+  });
+  const banked = await active.service.checkpointEndlessPhase(token, {
+    runId: run.runId,
+    runToken: run.runToken,
+    previousCheckpoint: run.checkpoint,
+    action: 'bank'
+  });
+  assert.equal(banked.summary.status, 'banked');
+  const state = await active.database.read();
+  assert.equal(state.endlessCompetition.leaderboardEntries.length, 0);
+  assert.equal(state.audit.at(-1).action, 'ENDLESS_OPERATIONS_UPDATED');
+});
+
+test('Endless Admin monitoring and run review expose adjustable alerts and authoritative detail', async () => {
+  const active = harness();
+  const token = await login(active.service);
+  const run = await active.service.startRun(token, 'endless', { minerId: 7 });
+  active.advance(20_000);
+  await active.service.checkpointEndlessPhase(token, {
+    runId: run.runId,
+    runToken: run.runToken,
+    previousCheckpoint: run.checkpoint,
+    action: 'bank'
+  });
+  await active.service.updateEndlessOperations('endless-admin-key', {
+    patch: { alertThresholds: { unexpectedlyDeepPhase: 1 } },
+    reason: 'Lower the depth alert for monitoring verification.'
+  });
+  const overview = await active.service.adminEndless('endless-admin-key');
+  assert.equal(overview.monitoring.counts.completedRuns, 1);
+  assert.equal(overview.monitoring.performance.deepestPhase, 1);
+  assert.ok(overview.monitoring.alerts.some((alert) => alert.code === 'unexpected_depth'));
+  assert.equal(overview.operations.alertThresholds.unexpectedlyDeepPhase, 1);
+  const review = await active.service.adminEndlessRun('endless-admin-key', run.runId);
+  assert.equal(review.wallet, ADDRESS);
+  assert.equal(review.minerId, 7);
+  assert.equal(review.highestPhase, 1);
+  assert.equal(review.phaseHistory.length, 1);
+  assert.equal(review.verification.status, 'verified');
+  assert.equal(review.configVersion, 1);
+});
+
+test('Admin termination preserves a suspicious Endless run as rejected and releases its active slot', async () => {
+  const active = harness();
+  const token = await login(active.service);
+  const run = await active.service.startRun(token, 'endless', { minerId: 7 });
+  const rejected = await active.service.terminateEndlessRun('endless-admin-key', run.runId, {
+    reason: 'Reject suspicious behavior during an operations review.'
+  });
+  assert.equal(rejected.status, 'rejected');
+  const state = await active.database.read();
+  assert.equal(state.endlessCompetition.runs[run.runId].status, 'rejected');
+  assert.equal(state.endlessCompetition.runs[run.runId].adminReview.decision, 'rejected');
+  assert.equal(state.audit.at(-1).action, 'ENDLESS_RUN_REJECTED');
+  await active.service.updateEndlessOperations('endless-admin-key', {
+    patch: { newEntriesEnabled: true },
+    reason: 'Confirm the rejected run released the active slot.'
+  });
+  const prepared = await active.service.prepareEndlessEntry(token, { minerId: 7 });
+  assert.equal(prepared.eligible, true);
 });

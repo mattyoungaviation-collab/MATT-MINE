@@ -498,9 +498,10 @@ test('Safe checksum matches the official Transaction Builder test vector', () =>
 });
 
 test('private command center is a separate noindex page with no embedded secrets', async () => {
-  const [html, script] = await Promise.all([
+  const [html, script, productionHttp] = await Promise.all([
     readFile(`${ROOT}admin.html`, 'utf8'),
-    readFile(`${ROOT}src/admin.js`, 'utf8')
+    readFile(`${ROOT}src/admin.js`, 'utf8'),
+    readFile(`${ROOT}server/production-http.js`, 'utf8')
   ]);
   assert.match(html, /noindex,nofollow/);
   assert.match(html, /MATT Mine Command Center/);
@@ -509,6 +510,15 @@ test('private command center is a separate noindex page with no embedded secrets
   assert.match(script, /Download Safe JSON/);
   assert.match(script, /new Blob/);
   assert.match(script, /link\.download/);
+  assert.match(html, /id="endless-operations-form"/);
+  assert.match(html, /id="endless-monitoring-alerts"/);
+  assert.match(html, /id="endless-run-review"/);
+  assert.match(script, /data-endless-operation/);
+  assert.match(script, /\/api\/admin\/endless\/operations/);
+  assert.match(script, /data-endless-terminate/);
+  assert.match(productionHttp, /adminEndlessRun/);
+  assert.match(productionHttp, /terminateEndlessRun/);
+  assert.match(productionHttp, /path\.startsWith\('\/api\/admin\/endless'\)/);
 });
 
 test('admin HTTP routes reject missing credentials and apply audited controls', async (context) => {

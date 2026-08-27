@@ -407,6 +407,20 @@
           <button id="refresh-endless-admin" type="button" class="ghost">Refresh live state</button>
         </div>
         <div id="endless-admin-status" class="notice">Loading the active generator and reward readiness…</div>
+        <div class="grid two">
+          <form id="endless-operations-form" class="panel">
+            <h2>Live operations</h2>
+            <p class="muted">These emergency controls apply immediately without rewriting an active run's frozen balance configuration.</p>
+            <div id="endless-operation-controls" class="tuning-grid"></div>
+            <label>Required operations reason<input id="endless-operations-reason" maxlength="500" placeholder="Why is live Endless operations changing?" required></label>
+            <button type="submit">Apply audited operations</button>
+          </form>
+          <article class="panel">
+            <h2>Live monitoring</h2>
+            <div id="endless-monitoring-metrics" class="metrics"></div>
+            <div id="endless-monitoring-alerts" class="timeline"></div>
+          </article>
+        </div>
         <form id="endless-config-form">
           <div id="endless-config-groups" class="tuning-groups"></div>
           <article class="panel">
@@ -418,6 +432,7 @@
           <article class="panel"><h2>Active and recent runs</h2><div id="endless-admin-runs" class="table-wrap"></div></article>
           <article class="panel"><h2>Config history and Smart Engine</h2><div id="endless-admin-history"></div></article>
         </div>
+        <article id="endless-run-review" class="panel" hidden></article>
       </section>
 
       <section id="tab-contracts" class="tab">

@@ -34,6 +34,7 @@ const PRODUCTION_PATHS = new Set([
   '/api/endless/settle',
   '/api/admin/endless',
   '/api/admin/endless/config',
+  '/api/admin/endless/operations',
   '/api/admin/endless/smart-engine/evaluate'
 ]);
 
@@ -44,7 +45,7 @@ export function createProductionMattMineHttpServer({ root, service, maxRequestBy
 
   return http.createServer(async (request, response) => {
     const requestUrl = new URL(request.url || '/', requestOrigin(request, service.publicOrigin));
-    if (!PRODUCTION_PATHS.has(requestUrl.pathname)) {
+    if (!PRODUCTION_PATHS.has(requestUrl.pathname) && !/^\/api\/admin\/endless\/runs\/run_[a-f0-9]{24}(?:\/terminate)?$/.test(requestUrl.pathname)) {
       baseHandler(request, response);
       return;
     }
@@ -64,7 +65,7 @@ export function createProductionMattMineHttpServer({ root, service, maxRequestBy
         else await service.authenticateAdminSession(adminCookie(request), {
             mutation,
             csrfToken: request.headers['x-matt-csrf'],
-            stepUp: mutation && /\/characters$/.test(path)
+            stepUp: mutation && (/\/characters$/.test(path) || path.startsWith('/api/admin/endless'))
           });
         request.headers['x-matt-admin-key'] = service.adminKey;
       }
@@ -193,8 +194,23 @@ export function createProductionMattMineHttpServer({ root, service, maxRequestBy
         sendJson(response, 200, { ok: true, configVersion: await service.publishEndlessConfig(request.headers['x-matt-admin-key'], body) });
         return;
       }
+      if (method === 'PUT' && path === '/api/admin/endless/operations') {
+        const body = await readJson(request, maxRequestBytes);
+        sendJson(response, 200, { ok: true, operations: await service.updateEndlessOperations(request.headers['x-matt-admin-key'], body) });
+        return;
+      }
       if (method === 'POST' && path === '/api/admin/endless/smart-engine/evaluate') {
         sendJson(response, 200, { ok: true, recommendation: await service.evaluateEndlessSmartEngine(request.headers['x-matt-admin-key']) });
+        return;
+      }
+      const endlessRunMatch = path.match(/^\/api\/admin\/endless\/runs\/(run_[a-f0-9]{24})(\/terminate)?$/);
+      if (method === 'GET' && endlessRunMatch && !endlessRunMatch[2]) {
+        sendJson(response, 200, { ok: true, run: await service.adminEndlessRun(request.headers['x-matt-admin-key'], endlessRunMatch[1]) });
+        return;
+      }
+      if (method === 'POST' && endlessRunMatch?.[2] === '/terminate') {
+        const body = await readJson(request, maxRequestBytes);
+        sendJson(response, 200, { ok: true, run: await service.terminateEndlessRun(request.headers['x-matt-admin-key'], endlessRunMatch[1], body) });
         return;
       }
       const competitionMatch = path.match(/^\/api\/competitions\/(weekly|endless)\/leaderboard$/);
