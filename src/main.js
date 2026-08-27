@@ -4122,7 +4122,13 @@ async function startApprovedNftServerRun(mode, minerId) {
   if (mode === RUN_MODES.ENDLESS) {
     const status = await apiClient.endlessStatus();
     const approval = status.runApprovalRequired ? await approveNftRun(mode, minerId) : null;
-    return apiClient.startRun(mode, minerId, approval);
+    if (status.paidEntryEnabled && (!status.paymentReady || !status.entryTransaction)) {
+      throw new Error('Paid Endless entry is temporarily closed while its MATT verifier is unavailable. No payment was requested.');
+    }
+    const entryTransactionHash = status.paidEntryEnabled
+      ? await wallet.purchaseEndlessEntry(status.entryTransaction)
+      : '';
+    return apiClient.startRun(mode, minerId, approval, entryTransactionHash ? { entryTransactionHash } : null);
   }
   if (mode !== RUN_MODES.PAID) return apiClient.startRun(mode, 0);
   const approval = await approveNftRun(mode, minerId);

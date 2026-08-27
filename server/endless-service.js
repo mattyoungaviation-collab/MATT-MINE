@@ -12,6 +12,8 @@ import {
 } from './endless-engine.js';
 import { normalizeEndlessConfig, validateEndlessConfig } from '../src/game/endlessMine.js';
 
+const TRANSACTION_HASH_PATTERN = /^0x[a-fA-F0-9]{64}$/;
+
 export const endlessServiceMethods = {
   async endlessStatus() {
     const state = await this.database.read();
@@ -19,14 +21,22 @@ export const endlessServiceMethods = {
     const version = store.activeConfigVersion;
     const published = store.configVersions[version];
     const activation = validateEndlessConfig(published.config, { forActivation: published.config.rewards.enabled });
+    const payment = this.endlessPaymentVerifier?.publicStatus?.() || null;
+    const paidEntryEnabled = published.config.entry.paidEnabled === true;
+    const paymentReady = !paidEntryEnabled || payment?.configured === true;
     return {
       mode: 'endless',
       permanent: true,
       tagline: 'Different map. Different experience. Same opportunity.',
       enabled: published.config.enabled === true,
       nftRequired: true,
-      paidEntryEnabled: published.config.entry.paidEnabled === true,
+      paidEntryEnabled,
       entryPriceMatt: published.config.entry.mattPrice,
+      paymentReady,
+      payment: paidEntryEnabled ? payment : null,
+      entryTransaction: paidEntryEnabled && paymentReady
+        ? this.endlessPaymentVerifier.transactionForPayment(published.config.entry.mattPrice)
+        : null,
       rewardsEnabled: published.config.rewards.enabled === true && activation.ok && Boolean(this.endlessRewardSettler),
       runApprovalRequired: published.config.rewards.enabled === true && activation.ok && Boolean(this.endlessRewardSettler),
       rewardReadiness: activation.ok ? (this.endlessRewardSettler ? 'ready' : 'settler-required') : 'configuration-required',
@@ -64,6 +74,25 @@ export const endlessServiceMethods = {
     assertApi(Number.isSafeInteger(minerId) && minerId >= 1 && minerId <= 1_000_000, 422, 'miner_selection_required', 'Select one of this wallet’s Miner NFTs before entering Endless.');
     const minerProfile = await this.nftGameplayService.playerMiner(session.address, minerId);
     assertApi(minerProfile, 403, 'miner_nft_required', 'Endless requires a Miner NFT owned by this wallet.');
+    const preflightState = await this.database.read();
+    const preflightStore = preflightState.endlessCompetition;
+    const preflightVersion = preflightStore.activeConfigVersion;
+    const preflightPublished = preflightStore.configVersions[preflightVersion];
+    assertApi(preflightPublished?.config?.enabled === true, 503, 'endless_mode_disabled', 'Endless is temporarily paused.');
+    const preflightConfig = normalizeEndlessConfig(preflightPublished.config);
+    let payment = null;
+    if (preflightConfig.entry.paidEnabled) {
+      assertApi(this.endlessPaymentVerifier, 503, 'endless_payment_verifier_required', 'Paid Endless entry remains closed until transaction verification is available.');
+      assertApi(TRANSACTION_HASH_PATTERN.test(String(input.entryTransactionHash || '')), 400, 'invalid_transaction_hash', 'Confirm the Endless MATT entry transaction in Ronin Wallet first.');
+      payment = await this.endlessPaymentVerifier.verifyPayment({
+        transactionHash: input.entryTransactionHash,
+        address: session.address,
+        mattPrice: preflightConfig.entry.mattPrice
+      });
+      assertApi(payment?.transactionHash === String(input.entryTransactionHash).toLowerCase(), 422, 'endless_payment_verification_mismatch', 'The verified MATT payment does not match the submitted transaction.');
+    } else {
+      assertApi(!input.entryTransactionHash, 422, 'endless_payment_not_required', 'This Endless configuration is free. Do not send a MATT entry payment.');
+    }
     const timestamp = this.now();
     const runId = `run_${this.randomHex(12)}`;
     const runToken = this.randomHex(24);
@@ -77,6 +106,7 @@ export const endlessServiceMethods = {
         assertApi(wallet && !wallet.suspended, 403, 'wallet_suspended', 'This wallet cannot enter ranked play.');
         const store = state.endlessCompetition;
         const version = store.activeConfigVersion;
+        assertApi(version === preflightVersion, 409, 'endless_config_changed', 'The Endless entry settings changed while the transaction confirmed. Refresh and try again.');
         const published = store.configVersions[version];
         assertApi(published?.config?.enabled === true, 503, 'endless_mode_disabled', 'Endless is temporarily paused.');
         const config = normalizeEndlessConfig(published.config);
@@ -88,7 +118,10 @@ export const endlessServiceMethods = {
         }
         if (config.entry.paidEnabled) {
           assertApi(this.endlessPaymentVerifier, 503, 'endless_payment_verifier_required', 'Paid Endless entry remains closed until transaction verification is available.');
-          throw new ApiError(409, 'endless_payment_confirmation_required', 'Confirm the one-time Endless entry transaction before starting.');
+          assertApi(payment?.transactionHash, 422, 'endless_payment_confirmation_required', 'Confirm the one-time Endless MATT entry transaction before starting.');
+          assertApi(Number(payment.amountMatt) === config.entry.mattPrice, 422, 'payment_amount_mismatch', 'The MATT entry payment amount must match the active Admin price exactly.');
+          assertApi(payment.payer === session.address, 403, 'payment_wallet_mismatch', 'This MATT payment was sent by another wallet.');
+          assertApi(!store.paymentTransactions[payment.transactionHash], 409, 'payment_already_consumed', 'This MATT entry payment has already started an Endless run.');
         }
         const active = Object.values(store.runs).find((run) =>
           run.address === session.address && run.status === 'active'
@@ -123,11 +156,20 @@ export const endlessServiceMethods = {
           config,
           startedAt: timestamp,
           expiresAt: timestamp + config.integrity.reconnectWindowSeconds * 1_000,
+          payment,
           chainRun: chainStart?.chainRun || null
         });
         if (chainStart?.transactionHash) record.chainTransactions.push({ type: 'start', hash: chainStart.transactionHash, recordedAt: timestamp });
         record.checkpointSignature = signEndlessCheckpoint(record, this.endlessCheckpointSecret);
         store.runs[runId] = record;
+        if (payment) {
+          store.paymentTransactions[payment.transactionHash] = {
+            ...structuredClone(payment),
+            runId,
+            configVersion: version,
+            consumedAt: timestamp
+          };
+        }
         state.runs[runId] = record;
         await transaction?.upsertRun(record);
         return structuredClone(record);
@@ -459,6 +501,7 @@ function publicEndlessRun(run, runToken = '') {
     checkpoint: publicEndlessCheckpoint(run),
     expiresAt: run.expiresAt,
     startedAt: run.startedAt,
+    payment: publicEndlessPayment(run.payment),
     minerProfile: structuredClone(run.minerProfile),
     nftRun: { minerId: run.minerId, profile: structuredClone(run.minerProfile) }
   };
@@ -497,9 +540,23 @@ function adminRunSummary(run) {
     updatedAt: run.updatedAt,
     lastHeartbeatAt: run.lastHeartbeatAt,
     expiresAt: run.expiresAt,
+    payment: publicEndlessPayment(run.payment),
     digest: run.rollingDigest,
     integrityScore: Number(run.integrityScore ?? 100),
     integrityFlags: structuredClone(run.integrityFlags || [])
+  };
+}
+
+function publicEndlessPayment(payment) {
+  if (!payment) return null;
+  return {
+    status: 'confirmed',
+    asset: 'MATT',
+    amountMatt: Number(payment.amountMatt || 0),
+    transactionHash: String(payment.transactionHash || ''),
+    blockNumber: String(payment.blockNumber || ''),
+    confirmations: Number(payment.confirmations || 0),
+    recipient: String(payment.recipient || '')
   };
 }
 

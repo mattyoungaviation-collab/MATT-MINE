@@ -315,11 +315,11 @@ export class MattMineApiClient {
     return response.authorization;
   }
 
-  async startRun(mode, minerId = 0, approval = null) {
+  async startRun(mode, minerId = 0, approval = null, extra = null) {
     const response = await this.request('/api/runs/start', {
       method: 'POST',
       authenticated: true,
-      body: { mode, ...(minerId ? { minerId } : {}), ...(approval ? approval : {}) }
+      body: { mode, ...(minerId ? { minerId } : {}), ...(approval ? approval : {}), ...(extra || {}) }
     });
     return response.run;
   }

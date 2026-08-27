@@ -496,7 +496,8 @@ async function handleApiRequest({
     const run = await service.startRun(bearerToken(request), body.mode, {
       minerId: body.minerId,
       authorization: body.authorization,
-      playerSignature: body.playerSignature
+      playerSignature: body.playerSignature,
+      entryTransactionHash: body.entryTransactionHash
     });
     sendJson(response, 201, { ok: true, run });
     return;

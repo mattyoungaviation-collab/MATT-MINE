@@ -30,6 +30,7 @@ import { createSaigonChestKeeperFromEnvironment } from '../server/saigon-chest-k
 import { createNftGameplayServiceFromEnvironment } from '../server/nft-gameplay-service.js';
 import { createNftV2AdminServiceFromEnvironment } from '../server/nft-v2-admin-service.js';
 import { createEndlessSettlementServiceFromEnvironment } from '../server/endless-settlement-service.js';
+import { EndlessMattPaymentVerifier } from '../server/endless-payment-verifier.js';
 import { nftRpcUrlFromEnvironment } from '../server/nft-rpc-url.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -219,6 +220,14 @@ const nftV2AdminService = createNftV2AdminServiceFromEnvironment(nftGameplayServ
 if (nftV2AdminService) await nftV2AdminService.init();
 const endlessSettlementService = createEndlessSettlementServiceFromEnvironment(process.env, { rpcUrl: nftRpcUrl });
 if (endlessSettlementService) await endlessSettlementService.init();
+const endlessPaymentsRequested = process.env.MATT_MINE_ENDLESS_PAYMENTS_ENABLED === 'true';
+const endlessPaymentVerifier = mainnetTransactionsEnabled && endlessPaymentsRequested
+  ? await new EndlessMattPaymentVerifier({
+      rpcUrls: roninRpcUrls,
+      rpcTimeoutMs: Number(process.env.MATT_MINE_RPC_TIMEOUT_MS || 10_000),
+      confirmations: Number(process.env.MATT_MINE_ENDLESS_PAYMENT_CONFIRMATIONS || process.env.MATT_MINE_PAYMENT_CONFIRMATIONS || 3)
+    }).init()
+  : null;
 const saigonChestKeeper = createSaigonChestKeeperFromEnvironment();
 if (saigonChestKeeper) await saigonChestKeeper.init();
 const service = new CompleteProductionMattMineService(database, {
@@ -245,6 +254,7 @@ const service = new CompleteProductionMattMineService(database, {
   nftMetadataService,
   nftGameplayService,
   nftV2AdminService,
+  endlessPaymentVerifier,
   endlessRewardSettler: endlessSettlementService,
   operationsStage: process.env.MATT_MINE_OPERATIONS_STAGE || 'public',
   operationsMonitorCacheMs: Number(process.env.MATT_MINE_OPERATIONS_CACHE_MS || 20_000),
@@ -272,6 +282,7 @@ server.listen(port, '0.0.0.0', () => {
   console.log(`NFT metadata: ${nftMetadataService ? `ENABLED (chain ${nftMetadataService.chainId})` : 'disabled'}`);
   console.log(`NFT gameplay: ${nftGameplayService ? 'ENABLED (Ronin V2)' : 'disabled'}`);
   console.log(`NFT V2 Admin controls: ${nftV2AdminService ? 'ENABLED' : 'disabled'}`);
+  console.log(`Endless MATT payments: ${endlessPaymentVerifier ? 'EXACT MATT TRANSFER ENABLED' : 'disabled'}`);
   console.log(`Saigon chest keeper: ${saigonChestKeeper ? 'ENABLED' : 'disabled'}`);
   console.log(`Server data: ${database.kind}${databaseUrl ? '' : ` (${dataFile})`}`);
 });

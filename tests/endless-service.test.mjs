@@ -8,7 +8,7 @@ import { defaultEndlessConfig } from '../src/game/endlessMine.js';
 const ADDRESS = '0x1111111111111111111111111111111111111111';
 const ORIGIN = 'http://localhost:4173';
 
-function harness({ ownsMiner = true, endlessRewardSettler = null } = {}) {
+function harness({ ownsMiner = true, endlessRewardSettler = null, endlessPaymentVerifier = null } = {}) {
   let timestamp = Date.UTC(2026, 7, 26, 12);
   let randomCounter = 0;
   const database = new MemoryDatabase();
@@ -32,6 +32,7 @@ function harness({ ownsMiner = true, endlessRewardSettler = null } = {}) {
     adminKey: 'endless-admin-key',
     verifySignature: async () => true,
     nftGameplayService,
+    endlessPaymentVerifier,
     endlessRewardSettler,
     randomHex(bytes) {
       randomCounter += 1;
@@ -95,6 +96,81 @@ test('Endless service enforces NFT ownership and starts with free fail-closed re
   assert.equal(bootstrap.rewards.enabled, false);
   assert.equal(run.currentPhase, 1);
   assert.equal(run.manifest.configVersion, run.configVersion);
+});
+
+test('paid Endless entry prepares, verifies, stores, and consumes one exact MATT transfer', async () => {
+  const paymentHash = `0x${'cd'.repeat(32)}`;
+  let verifiedInput;
+  const active = harness({
+    endlessPaymentVerifier: {
+      publicStatus() {
+        return {
+          configured: true,
+          chainId: 2020,
+          asset: 'MATT',
+          token: '0xa5450417bdca0bdfb058ffe41205400ffda1174d',
+          recipient: '0xbace355d23d378a6e1add986e53a18dd12e6eeac',
+          decimals: 18,
+          confirmations: 3
+        };
+      },
+      transactionForPayment(mattPrice) {
+        return { to: '0xa5450417BDCa0BDfB058ffE41205400FfDA1174d', value: '0x0', data: `0x${String(mattPrice).padStart(8, '0')}` };
+      },
+      async verifyPayment(input) {
+        verifiedInput = input;
+        return {
+          key: `${paymentHash}:2`,
+          transactionHash: paymentHash,
+          logIndex: 2,
+          blockNumber: '123',
+          transactionBlockAt: Date.UTC(2026, 7, 26, 11, 59),
+          chainId: 2020,
+          asset: 'MATT',
+          token: '0xa5450417bdca0bdfb058ffe41205400ffda1174d',
+          payer: ADDRESS,
+          recipient: '0xbace355d23d378a6e1add986e53a18dd12e6eeac',
+          decimals: 18,
+          amountMatt: 2_500_000,
+          amountRaw: '2500000000000000000000000',
+          confirmations: 3
+        };
+      }
+    }
+  });
+  const token = await login(active.service);
+  const state = await active.database.read();
+  const config = structuredClone(state.endlessCompetition.configVersions[1].config);
+  config.entry = { paidEnabled: true, mattPrice: 2_500_000 };
+  await active.service.publishEndlessConfig('endless-admin-key', {
+    config,
+    reason: 'Exercise exact paid Endless entry verification.'
+  });
+  const status = await active.service.endlessStatus();
+  assert.equal(status.paidEntryEnabled, true);
+  assert.equal(status.entryPriceMatt, 2_500_000);
+  assert.equal(status.paymentReady, true);
+  assert.equal(status.payment.recipient, '0xbace355d23d378a6e1add986e53a18dd12e6eeac');
+  assert.equal(status.entryTransaction.value, '0x0');
+  await assert.rejects(
+    () => active.service.startRun(token, 'endless', { minerId: 7 }),
+    (error) => error.code === 'endless_payment_confirmation_required' || error.code === 'invalid_transaction_hash'
+  );
+  const run = await active.service.startRun(token, 'endless', {
+    minerId: 7,
+    entryTransactionHash: paymentHash
+  });
+  assert.deepEqual(verifiedInput, { transactionHash: paymentHash, address: ADDRESS, mattPrice: 2_500_000 });
+  assert.equal(run.payment.status, 'confirmed');
+  assert.equal(run.payment.amountMatt, 2_500_000);
+  assert.equal(run.payment.transactionHash, paymentHash);
+  const stored = await active.database.read();
+  assert.equal(stored.endlessCompetition.paymentTransactions[paymentHash].runId, run.runId);
+  assert.equal(stored.endlessCompetition.runs[run.runId].payment.amountRaw, '2500000000000000000000000');
+  await assert.rejects(
+    () => active.service.startRun(token, 'endless', { minerId: 7, entryTransactionHash: paymentHash }),
+    (error) => error.code === 'payment_already_consumed'
+  );
 });
 
 test('heartbeats and bounded reconnects preserve a deep run checkpoint chain', async () => {
