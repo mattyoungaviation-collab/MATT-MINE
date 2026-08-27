@@ -102,10 +102,15 @@ export class MattMineApiClient {
     return response.settlement;
   }
 
-  async endlessLeaderboard(scope = 'all-time') {
-    const query = new URLSearchParams({ scope });
+  async endlessLeaderboard(scope = 'all-time', board = 'score') {
+    const query = new URLSearchParams({ scope, board });
     const response = await this.request(`/api/competitions/endless/leaderboard?${query}`, { authenticated: true });
     return response.leaderboard;
+  }
+
+  async endlessPlayer() {
+    const response = await this.request('/api/endless/player', { authenticated: true });
+    return response.player;
   }
 
   async createChallenge(address, chainId, origin = globalThis.location?.origin) {

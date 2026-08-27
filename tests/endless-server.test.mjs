@@ -114,6 +114,40 @@ test('daily, weekly, season, and all-time boards use deterministic tie breakers'
     const rows = endlessLeaderboard(entries, scope, now, 30);
     assert.deepEqual(rows.map((row) => row.runId), ['a', 'b']);
   }
+  const depthRows = endlessLeaderboard(entries, 'all-time', now, 30, 'deepest');
+  assert.deepEqual(depthRows.map((row) => row.runId), ['a', 'b']);
+});
+
+test('highest-score and deepest-descent boards use separate primary ranking rules', () => {
+  const now = Date.UTC(2026, 7, 26, 12);
+  const entries = [
+    { runId: 'score', address: '0x1', deepestPhase: 4, score: 50_000, maximumDifficulty: 10, survivalMs: 20_000, finishedAt: now, verified: true },
+    { runId: 'depth', address: '0x2', deepestPhase: 12, score: 12_000, maximumDifficulty: 20, survivalMs: 30_000, finishedAt: now, verified: true }
+  ];
+  assert.equal(endlessLeaderboard(entries, 'all-time', now, 30, 'score')[0].runId, 'score');
+  assert.equal(endlessLeaderboard(entries, 'all-time', now, 30, 'deepest')[0].runId, 'depth');
+});
+
+test('Endless ties use difficulty, shortest duration, enemies, then ore', () => {
+  const now = Date.UTC(2026, 7, 26, 12);
+  const base = { deepestPhase: 5, score: 50_000, crystalsBanked: 0, finishedAt: now, verified: true };
+  const winner = (left, right) => endlessLeaderboard([left, right], 'all-time', now, 30, 'score')[0].runId;
+  assert.equal(winner(
+    { ...base, runId: 'difficulty', address: '0x1', maximumDifficulty: 11, survivalMs: 50_000 },
+    { ...base, runId: 'other', address: '0x2', maximumDifficulty: 10, survivalMs: 1_000 }
+  ), 'difficulty');
+  assert.equal(winner(
+    { ...base, runId: 'duration', address: '0x1', maximumDifficulty: 10, survivalMs: 40_000 },
+    { ...base, runId: 'other', address: '0x2', maximumDifficulty: 10, survivalMs: 50_000, requiredKills: 999 }
+  ), 'duration');
+  assert.equal(winner(
+    { ...base, runId: 'enemies', address: '0x1', maximumDifficulty: 10, survivalMs: 40_000, requiredKills: 8, oreBroken: 1 },
+    { ...base, runId: 'other', address: '0x2', maximumDifficulty: 10, survivalMs: 40_000, requiredKills: 7, oreBroken: 99 }
+  ), 'enemies');
+  assert.equal(winner(
+    { ...base, runId: 'ore', address: '0x1', maximumDifficulty: 10, survivalMs: 40_000, requiredKills: 8, oreBroken: 9 },
+    { ...base, runId: 'other', address: '0x2', maximumDifficulty: 10, survivalMs: 40_000, requiredKills: 8, oreBroken: 8 }
+  ), 'ore');
 });
 
 test('Smart Engine produces recommendations but never mutates the live config', () => {

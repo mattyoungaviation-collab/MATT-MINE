@@ -495,17 +495,64 @@ export const endlessServiceMethods = {
     return { run: publicEndlessRun(run), summary: endlessBankSummary(run) };
   },
 
-  async endlessLeaderboard(token, scope = 'all-time') {
-    await this.authenticate(token);
+  async endlessLeaderboard(token, scope = 'all-time', board = 'score') {
+    const session = await this.authenticate(token);
     const state = await this.database.read();
     const config = state.endlessCompetition.configVersions[state.endlessCompetition.activeConfigVersion].config;
     assertApi(state.endlessCompetition.operations?.leaderboardSubmissionsEnabled !== false, 503, 'endless_leaderboards_paused', 'Endless leaderboards are temporarily paused by Admin. Verified run history remains stored.');
+    assertApi(['daily', 'weekly', 'season', 'all-time'].includes(scope), 400, 'endless_leaderboard_scope', 'Choose a daily, weekly, seasonal, or all-time Endless board.');
     const scopeKey = scope === 'all-time' ? 'allTime' : scope;
     assertApi(config.leaderboards?.[scopeKey] !== false, 404, 'endless_leaderboard_disabled', 'This Endless leaderboard scope is disabled in the active configuration.');
+    assertApi(board !== 'deepest' || scope === 'all-time', 422, 'endless_deepest_scope', 'Deepest descent is an all-time board.');
+    const rows = endlessLeaderboard(
+      state.endlessCompetition.leaderboardEntries,
+      scope,
+      this.now(),
+      config.leaderboards.seasonDays,
+      board
+    ).map((row) => ({
+      ...row,
+      isPlayer: row.address === session.address,
+      identity: publicEndlessLeaderboardIdentity(state.wallets?.[row.address])
+    }));
     return {
       mode: 'endless',
       scope,
-      rows: endlessLeaderboard(state.endlessCompetition.leaderboardEntries, scope, this.now(), config.leaderboards.seasonDays)
+      board,
+      player: rows.find((row) => row.address === session.address) || null,
+      rows
+    };
+  },
+
+  async endlessPlayer(token) {
+    const session = await this.authenticate(token);
+    const state = await this.database.read();
+    const [storedRuns, durableLifetime] = await Promise.all([
+      this.database.readEndlessPlayerRuns?.(session.address, 100),
+      this.database.readEndlessPlayerSummary?.(session.address)
+    ]);
+    const runs = (Array.isArray(storedRuns)
+      ? storedRuns
+      : Object.values(state.endlessCompetition.runs).filter((run) => run.address === session.address)
+    )
+      .filter((run) => run.status !== 'active')
+      .sort((left, right) => Number(right.finishedAt || right.updatedAt || 0) - Number(left.finishedAt || left.updatedAt || 0));
+    const entries = state.endlessCompetition.leaderboardEntries || [];
+    const scoreRanks = leaderboardRankMap(entries, 'score', this.now());
+    const depthRanks = leaderboardRankMap(entries, 'deepest', this.now());
+    const allHistory = runs.map((run) => publicEndlessHistoryRun(
+      run,
+      scoreRanks.get(run.id) || 0,
+      depthRanks.get(run.id) || 0
+    ));
+    const lifetime = durableLifetime || endlessLifetimeStats(allHistory);
+    const history = allHistory.slice(0, 100);
+    return {
+      mode: 'endless',
+      lifetime,
+      history,
+      historyLimit: 100,
+      hasMoreHistory: Number(lifetime.totalRuns || 0) > history.length
     };
   },
 
@@ -751,9 +798,21 @@ function finalizeLeaderboardEntry(store, run) {
     runId: run.id,
     address: run.address,
     minerId: run.minerId,
+    minerLevel: Number(run.minerProfile?.progression?.level ?? run.minerProfile?.traits?.level ?? 0),
+    minerCapability: Number(run.manifest?.capability?.rating || 0),
+    maximumDifficulty: Number(run.maximumDifficulty || 0),
     deepestPhase: run.completedPhases,
     score: run.score,
+    scoreBreakdown: structuredClone(run.scoreBreakdown || {}),
+    enemyBreakdown: structuredClone(run.enemyBreakdown || {}),
+    oreBreakdown: structuredClone(run.oreBreakdown || {}),
+    crystalsMined: Number(run.crystalsMined || 0),
     crystalsBanked: run.crystalsBanked,
+    minerXp: Number(run.minerXpBanked || 0),
+    requiredKills: Number(run.requiredKills || 0),
+    bossKills: Number(run.bossKills || 0),
+    oreBroken: Number(run.oreBroken || 0),
+    integrityScore: Number(run.integrityScore ?? 100),
     survivalMs: run.finishedAt - run.startedAt,
     finishedAt: run.finishedAt,
     configVersion: run.configVersion,
@@ -761,6 +820,84 @@ function finalizeLeaderboardEntry(store, run) {
     verified: true
   });
   store.leaderboardEntries = store.leaderboardEntries.slice(-100_000);
+}
+
+function leaderboardRankMap(entries, board, timestamp) {
+  return new Map(endlessLeaderboard(entries, 'all-time', timestamp, 30, board)
+    .map((row) => [row.runId, row.rank]));
+}
+
+function publicEndlessLeaderboardIdentity(wallet) {
+  return {
+    name: String(wallet?.identity?.name || ''),
+    avatarUrl: String(wallet?.identity?.avatarUrl || '')
+  };
+}
+
+function publicEndlessHistoryRun(run, scoreRank, depthRank) {
+  const finishedAt = Number(run.finishedAt || run.updatedAt || 0);
+  const status = String(run.status || 'unknown');
+  const verified = ['banked', 'knocked_out'].includes(status) && Number(run.completedPhases || 0) > 0;
+  return {
+    runId: run.id,
+    finishedAt,
+    minerId: Number(run.minerId || 0),
+    minerLevel: Number(run.minerProfile?.progression?.level ?? run.minerProfile?.traits?.level ?? 0),
+    minerCapability: Number(run.manifest?.capability?.rating || 0),
+    highestPhase: Number(run.completedPhases || 0),
+    maximumDifficulty: Number(run.maximumDifficulty || 0),
+    score: Number(run.score || 0),
+    scoreBreakdown: structuredClone(run.scoreBreakdown || {}),
+    crystalsMined: Number(run.crystalsMined || 0),
+    crystalsBanked: Number(run.crystalsBanked || 0),
+    crystalsLost: Number(run.crystalsLost || 0),
+    enemiesDefeated: Number(run.requiredKills || 0) + Number(run.bossKills || 0),
+    enemyBreakdown: structuredClone(run.enemyBreakdown || {}),
+    guardiansDefeated: Number(run.bossKills || 0),
+    oreBroken: Number(run.oreBroken || 0),
+    oreBreakdown: structuredClone(run.oreBreakdown || {}),
+    minerXp: Number(run.minerXpBanked || 0),
+    minerXpEarned: Number(run.minerXpEarned || 0),
+    minerXpBanked: Number(run.minerXpBanked || 0),
+    durationMs: Math.max(0, finishedAt - Number(run.startedAt || finishedAt)),
+    scoreRank: Number(scoreRank || 0),
+    depthRank: Number(depthRank || 0),
+    status,
+    result: run.finishReason || status,
+    verified,
+    verificationStatus: status === 'rejected' ? 'rejected' : verified ? 'verified' : 'not_ranked',
+    integrityScore: Number(run.integrityScore ?? 100),
+    configVersion: Number(run.configVersion || 0)
+  };
+}
+
+function endlessLifetimeStats(history) {
+  const totalRuns = history.length;
+  const sum = (key) => history.reduce((total, run) => total + Number(run[key] || 0), 0);
+  const maximum = (key) => history.reduce((best, run) => Math.max(best, Number(run[key] || 0)), 0);
+  const totalDurationMs = sum('durationMs');
+  return {
+    totalRuns,
+    verifiedRuns: history.filter((run) => run.verified).length,
+    bankedRuns: history.filter((run) => run.status === 'banked').length,
+    knockouts: history.filter((run) => run.status === 'knocked_out').length,
+    abandonedRuns: history.filter((run) => run.status === 'abandoned').length,
+    highestScore: maximum('score'),
+    deepestPhase: maximum('highestPhase'),
+    highestCapability: maximum('minerCapability'),
+    crystalsMined: sum('crystalsMined'),
+    crystalsBanked: sum('crystalsBanked'),
+    enemiesDefeated: sum('enemiesDefeated'),
+    guardiansDefeated: sum('guardiansDefeated'),
+    oreBroken: sum('oreBroken'),
+    minerXpEarned: sum('minerXpEarned'),
+    minerXpBanked: sum('minerXpBanked'),
+    totalDurationMs,
+    longestRunMs: maximum('durationMs'),
+    averageScore: totalRuns ? Math.round(sum('score') / totalRuns) : 0,
+    averagePhase: totalRuns ? Math.round(sum('highestPhase') / totalRuns * 100) / 100 : 0,
+    averageCrystalsBanked: totalRuns ? Math.round(sum('crystalsBanked') / totalRuns * 100) / 100 : 0
+  };
 }
 
 function publicEndlessRun(run, runToken = '', inputCheckpoint = null) {

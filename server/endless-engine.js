@@ -50,12 +50,19 @@ export function createEndlessRunRecord({
     currentPhase: 1,
     completedPhases: 0,
     score: 0,
+    scoreBreakdown: { naturalEnemies: 0, ore: 0, guardian: 0, completion: 0 },
     crystalsCarried: 0,
     crystalsBanked: 0,
+    crystalsMined: 0,
+    crystalsLost: 0,
     minerXpBanked: 0,
+    minerXpEarned: 0,
     requiredKills: 0,
     bossKills: 0,
     oreBroken: 0,
+    enemyBreakdown: {},
+    oreBreakdown: {},
+    maximumDifficulty: Number(manifest.difficulty?.budget || 0),
     phaseHistory: [],
     phaseStartedAt: startedAt,
     heartbeatCount: 0,
@@ -181,6 +188,8 @@ export function verifyEndlessPhaseEvents(run, rawEvents, now = Date.now()) {
   const conversionNumerator = Math.max(0, Number(run.config?.rewards?.crystalConversionNumerator || 0));
   const conversionDenominator = Math.max(1, Number(run.config?.rewards?.crystalConversionDenominator || 1));
   const grossCrystalsEarned = Math.floor(collectedCrystals.size * conversionNumerator / conversionDenominator);
+  const enemyBreakdown = countObjectTypes([...killedEnemies], byId);
+  const oreBreakdown = countObjectTypes([...brokenOres], byId);
   const digest = hashEndlessCheckpoint(run.rollingDigest, manifest, events);
   return {
     phase: run.currentPhase,
@@ -188,6 +197,10 @@ export function verifyEndlessPhaseEvents(run, rawEvents, now = Date.now()) {
     score,
     maximumScore: manifest.pointBudget,
     scoreBreakdown,
+    enemyBreakdown,
+    oreBreakdown,
+    difficulty: structuredClone(manifest.difficulty),
+    minerCapability: structuredClone(manifest.capability),
     requiredEnemyIds: [...required],
     killedEnemyIds: [...killedEnemies],
     generatedOreIds: manifest.map.objects.filter((object) => object.classification === 'ore').map((object) => object.id),
@@ -215,10 +228,20 @@ export function applyEndlessPhaseCheckpoint(run, verification, action, now = Dat
   assertApi(verification.phase === run.currentPhase, 409, 'endless_phase_sequence', 'Use the current server phase checkpoint.');
   run.completedPhases += 1;
   run.score += verification.score;
+  for (const [key, value] of Object.entries(verification.scoreBreakdown || {})) {
+    run.scoreBreakdown ||= {};
+    run.scoreBreakdown[key] = Number(run.scoreBreakdown[key] || 0) + Number(value || 0);
+  }
   run.crystalsCarried += verification.crystalsAdded;
+  run.crystalsMined = Number(run.crystalsMined || 0) + Number(verification.grossCrystalsEarned || 0);
+  run.crystalsLost = Number(run.crystalsLost || 0) + Number(verification.crystalsUnableToCarry || 0);
+  run.minerXpEarned = Number(run.minerXpEarned || 0) + Number(verification.minerXp || 0);
   run.requiredKills += verification.requiredKills;
   run.bossKills += verification.bossKills;
   run.oreBroken += verification.oreBroken;
+  mergeCountBreakdown(run, 'enemyBreakdown', verification.enemyBreakdown);
+  mergeCountBreakdown(run, 'oreBreakdown', verification.oreBreakdown);
+  run.maximumDifficulty = Math.max(Number(run.maximumDifficulty || 0), Number(verification.difficulty?.budget || 0));
   run.phaseHistory.push({ ...verification, action });
   // PostgreSQL stores every verified phase durably. Keep only a small hot tail
   // in the legacy compatibility row so a deep run never rewrites hours of
@@ -293,7 +316,8 @@ export function publicEndlessCheckpoint(run) {
   };
 }
 
-export function endlessLeaderboard(entries, scope = 'all-time', timestamp = Date.now(), seasonDays = 30) {
+export function endlessLeaderboard(entries, scope = 'all-time', timestamp = Date.now(), seasonDays = 30, board = 'score') {
+  assertApi(['score', 'deepest'].includes(board), 400, 'endless_leaderboard_board', 'Choose highest score or deepest descent.');
   const bounds = leaderboardBounds(scope, timestamp, seasonDays);
   const eligible = (Array.isArray(entries) ? entries : []).filter((entry) =>
     entry?.verified === true && entry.finishedAt >= bounds.from && entry.finishedAt < bounds.to
@@ -301,15 +325,30 @@ export function endlessLeaderboard(entries, scope = 'all-time', timestamp = Date
   const best = new Map();
   for (const entry of eligible) {
     const current = best.get(entry.address);
-    if (!current || compareLeaderboard(entry, current) < 0) best.set(entry.address, entry);
+    if (!current || compareLeaderboard(entry, current, board) < 0) best.set(entry.address, entry);
   }
-  return [...best.values()].sort(compareLeaderboard).slice(0, 100).map((entry, index) => ({
+  return [...best.values()].sort((left, right) => compareLeaderboard(left, right, board)).slice(0, 100).map((entry, index) => ({
     rank: index + 1,
     address: entry.address,
     runId: entry.runId,
     deepestPhase: entry.deepestPhase,
     score: entry.score,
     crystalsBanked: entry.crystalsBanked,
+    minerId: entry.minerId,
+    minerLevel: entry.minerLevel,
+    minerCapability: Number(entry.minerCapability || 0),
+    maximumDifficulty: Number(entry.maximumDifficulty || 0),
+    scoreBreakdown: structuredClone(entry.scoreBreakdown || {}),
+    enemyBreakdown: structuredClone(entry.enemyBreakdown || {}),
+    oreBreakdown: structuredClone(entry.oreBreakdown || {}),
+    crystalsMined: Number(entry.crystalsMined || 0),
+    minerXp: Number(entry.minerXp || 0),
+    requiredKills: Number(entry.requiredKills || 0),
+    bossKills: Number(entry.bossKills || 0),
+    oreBroken: Number(entry.oreBroken || 0),
+    verificationStatus: entry.verified === true ? 'verified' : 'rejected',
+    integrityScore: Number(entry.integrityScore ?? 100),
+    configVersion: Number(entry.configVersion || 0),
     survivalMs: entry.survivalMs,
     finishedAt: entry.finishedAt
   }));
@@ -376,13 +415,38 @@ function leaderboardBounds(scope, timestamp, seasonDays) {
   return { from: 0, to: Number.MAX_SAFE_INTEGER };
 }
 
-function compareLeaderboard(left, right) {
-  return Number(right.deepestPhase || 0) - Number(left.deepestPhase || 0) ||
-    Number(right.score || 0) - Number(left.score || 0) ||
+function compareLeaderboard(left, right, board) {
+  const primary = board === 'deepest'
+    ? Number(right.deepestPhase || 0) - Number(left.deepestPhase || 0) || Number(right.score || 0) - Number(left.score || 0)
+    : Number(right.score || 0) - Number(left.score || 0) || Number(right.deepestPhase || 0) - Number(left.deepestPhase || 0);
+  return primary ||
+    Number(right.maximumDifficulty || 0) - Number(left.maximumDifficulty || 0) ||
+    Number(left.survivalMs || 0) - Number(right.survivalMs || 0) ||
+    leaderboardEnemies(right) - leaderboardEnemies(left) ||
+    Number(right.oreBroken || 0) - Number(left.oreBroken || 0) ||
     Number(right.crystalsBanked || 0) - Number(left.crystalsBanked || 0) ||
-    Number(right.survivalMs || 0) - Number(left.survivalMs || 0) ||
     Number(left.finishedAt || 0) - Number(right.finishedAt || 0) ||
     String(left.runId || '').localeCompare(String(right.runId || ''));
+}
+
+function leaderboardEnemies(entry) {
+  return Number(entry.requiredKills || 0) + Number(entry.bossKills || 0);
+}
+
+function countObjectTypes(ids, byId) {
+  const counts = {};
+  for (const id of ids) {
+    const type = String(byId.get(id)?.type || 'unknown');
+    counts[type] = Number(counts[type] || 0) + 1;
+  }
+  return counts;
+}
+
+function mergeCountBreakdown(run, key, additions) {
+  run[key] ||= {};
+  for (const [type, count] of Object.entries(additions || {})) {
+    run[key][type] = Number(run[key][type] || 0) + Number(count || 0);
+  }
 }
 
 function canonical(value) {

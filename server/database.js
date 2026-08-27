@@ -56,6 +56,14 @@ export class MemoryDatabase {
     return null;
   }
 
+  async readEndlessPlayerRuns() {
+    return null;
+  }
+
+  async readEndlessPlayerSummary() {
+    return null;
+  }
+
   async transact(mutator) {
     const operation = this.queue.then(async () => {
       const draft = structuredClone(this.state);
@@ -345,6 +353,71 @@ export class PostgresDatabase {
         type: row.transaction_type,
         recordedAt: safeIntegerValue(row.recorded_at_ms)
       }))
+    };
+  }
+
+  async readEndlessPlayerRuns(address, limit = 100) {
+    await this.init();
+    if (!this.normalizedMigrationsEnabled) return null;
+    const boundedLimit = Math.max(1, Math.min(500, Number(limit) || 100));
+    const result = await this.query(
+      `SELECT run_payload FROM matt_mine_endless.runs
+       WHERE address=$1 AND status <> 'active'
+       ORDER BY COALESCE(finished_at_ms,updated_at_ms) DESC
+       LIMIT $2`,
+      [String(address || '').toLowerCase(), boundedLimit]
+    );
+    return result.rows.map((row) => parseJsonValue(row.run_payload)).filter(Boolean);
+  }
+
+  async readEndlessPlayerSummary(address) {
+    await this.init();
+    if (!this.normalizedMigrationsEnabled) return null;
+    const result = await this.query(
+      `SELECT COUNT(*) AS total_runs,
+              COUNT(*) FILTER (WHERE status IN ('banked','knocked_out')) AS verified_runs,
+              COUNT(*) FILTER (WHERE status='banked') AS banked_runs,
+              COUNT(*) FILTER (WHERE status='knocked_out') AS knockouts,
+              COUNT(*) FILTER (WHERE status='abandoned') AS abandoned_runs,
+              MAX(score) AS highest_score,MAX(completed_phases) AS deepest_phase,
+              MAX(COALESCE((run_payload #>> '{manifest,capability,rating}')::numeric,0)) AS highest_capability,
+              SUM(COALESCE((run_payload->>'crystalsMined')::numeric,0)) AS crystals_mined,
+              SUM(crystals_banked) AS crystals_banked,
+              SUM(COALESCE((run_payload->>'requiredKills')::numeric,0) + COALESCE((run_payload->>'bossKills')::numeric,0)) AS enemies_defeated,
+              SUM(COALESCE((run_payload->>'bossKills')::numeric,0)) AS guardians_defeated,
+              SUM(COALESCE((run_payload->>'oreBroken')::numeric,0)) AS ore_broken,
+              SUM(COALESCE((run_payload->>'minerXpEarned')::numeric,0)) AS miner_xp_earned,
+              SUM(miner_xp_banked) AS miner_xp_banked,
+              SUM(GREATEST(0,COALESCE(finished_at_ms,updated_at_ms)-started_at_ms)) AS total_duration_ms,
+              MAX(GREATEST(0,COALESCE(finished_at_ms,updated_at_ms)-started_at_ms)) AS longest_run_ms,
+              SUM(score) AS total_score,SUM(completed_phases) AS total_phases
+       FROM matt_mine_endless.runs WHERE address=$1 AND status <> 'active'`,
+      [String(address || '').toLowerCase()]
+    );
+    const row = result.rows[0] || {};
+    const totalRuns = Number(row.total_runs || 0);
+    const number = (key) => Number(row[key] || 0);
+    return {
+      totalRuns,
+      verifiedRuns: number('verified_runs'),
+      bankedRuns: number('banked_runs'),
+      knockouts: number('knockouts'),
+      abandonedRuns: number('abandoned_runs'),
+      highestScore: number('highest_score'),
+      deepestPhase: number('deepest_phase'),
+      highestCapability: number('highest_capability'),
+      crystalsMined: number('crystals_mined'),
+      crystalsBanked: number('crystals_banked'),
+      enemiesDefeated: number('enemies_defeated'),
+      guardiansDefeated: number('guardians_defeated'),
+      oreBroken: number('ore_broken'),
+      minerXpEarned: number('miner_xp_earned'),
+      minerXpBanked: number('miner_xp_banked'),
+      totalDurationMs: number('total_duration_ms'),
+      longestRunMs: number('longest_run_ms'),
+      averageScore: totalRuns ? Math.round(number('total_score') / totalRuns) : 0,
+      averagePhase: totalRuns ? Math.round(number('total_phases') / totalRuns * 100) / 100 : 0,
+      averageCrystalsBanked: totalRuns ? Math.round(number('crystals_banked') / totalRuns * 100) / 100 : 0
     };
   }
 

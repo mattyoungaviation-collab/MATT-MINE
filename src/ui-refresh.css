@@ -899,6 +899,93 @@ button:disabled {
   border-bottom: 1px solid rgba(196, 159, 68, 0.26);
 }
 
+.endless-leaderboard-filter {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ui-cyan);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+}
+
+.endless-leaderboard-filter[hidden] {
+  display: none;
+}
+
+#reward-claim-card[hidden] {
+  display: none;
+}
+
+.endless-leaderboard-filter select {
+  min-width: 220px;
+  padding: 10px 12px;
+  border: 1px solid rgba(89, 228, 255, 0.45);
+  color: var(--ui-white);
+  background: #0c1117;
+}
+
+.endless-history-metrics {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.endless-history-table-wrap {
+  overflow-x: auto;
+}
+
+.endless-history-table-wrap .leaderboard-table {
+  min-width: 980px;
+}
+
+.endless-run-details {
+  min-width: 135px;
+  margin-top: 6px;
+  color: #b9c0c8;
+}
+
+.endless-run-details summary {
+  color: var(--ui-cyan);
+  cursor: pointer;
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.endless-run-details > div {
+  display: grid;
+  gap: 5px;
+  min-width: 270px;
+  padding: 8px 0;
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+
+.endless-run-details span,
+.endless-run-details b {
+  display: block;
+}
+
+.endless-run-details b {
+  color: var(--ui-white);
+}
+
+@media (max-width: 760px) {
+  .endless-history-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .endless-leaderboard-filter {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .endless-leaderboard-filter select {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
 .leaderboard-tab {
   border-radius: 0;
   clip-path: var(--ui-cut);

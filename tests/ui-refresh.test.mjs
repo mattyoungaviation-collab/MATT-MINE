@@ -21,6 +21,8 @@ test('approved UI refresh exposes every player dashboard and unique control id',
     'mines-how-to-button', 'mines-miner-button',
     'pass-mine', 'paid-run-button', 'start-pass-mine-button', 'buy-pass-credit-button',
     'miner-profile', 'profile-manage-loadout-button', 'profile-recent-runs', 'profile-full-run-history',
+    'profile-endless-run-history', 'profile-endless-depth', 'profile-endless-xp',
+    'endless-leaderboard-filter',
     'leaderboard-podium'
   ]) {
     assert.match(html, new RegExp(`id="${id}"`));
@@ -36,6 +38,7 @@ test('approved UI refresh exposes every player dashboard and unique control id',
   assert.doesNotMatch(html, /id="select-loadout-button"[^>]*href="\.\/nft-lab\.html"/);
   assert.match(html, /id="miner-number-input"[^>]*min="1"[^>]*max="1000"/);
   assert.match(html, /class="leaderboard-tab arena-leaderboard-tab active" data-board="arena"/);
+  assert.match(html, /class="leaderboard-tab" data-board="endless"/);
   assert.doesNotMatch(html, /FREE DAILY MINE|SEVEN-DAY MINE|PVP MINE/i);
   assert.match(html, /src\/ui-refresh\.css/);
   assert.match(html, /src\/player-journey\.css/);
@@ -56,6 +59,10 @@ test('UI controls are wired to existing run, Pass, leaderboard, and loadout flow
   assert.match(source, /openMinerCommandCenter\(\)/);
   assert.match(source, /nftGarage\.withdrawCrystals\(snapshot, amountRaw, \{/);
   assert.match(source, /renderLeaderboardPodium\(rows\)/);
+  assert.match(source, /apiClient\.endlessLeaderboard\(selection\.scope, selection\.board\)/);
+  assert.match(source, /apiClient\.endlessPlayer\(\)/);
+  assert.match(source, /endless-run-details[\s\S]*Score[\s\S]*Enemies[\s\S]*Ore[\s\S]*Crystals[\s\S]*Integrity/);
+  assert.match(source, /if \(!status \|\| !\$\('#endless-menu-copy'\)\) return/);
   assert.match(source, /mode === ARENA_LEADERBOARD_MODE/);
   assert.match(source, /await refreshArena\(true\)/);
   assert.doesNotMatch(source, /nugget|permanent.?upgrade/i);

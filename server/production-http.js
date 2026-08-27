@@ -25,6 +25,7 @@ const PRODUCTION_PATHS = new Set([
   '/api/competitions/endless/leaderboard',
   '/api/runs/competitive/events',
   '/api/endless/status',
+  '/api/endless/player',
   '/api/endless/entry/prepare',
   '/api/endless/inputs',
   '/api/endless/checkpoint',
@@ -76,6 +77,10 @@ export function createProductionMattMineHttpServer({ root, service, maxRequestBy
       }
       if (method === 'GET' && path === '/api/endless/status') {
         sendJson(response, 200, { ok: true, endless: await service.endlessStatus() });
+        return;
+      }
+      if (method === 'GET' && path === '/api/endless/player') {
+        sendJson(response, 200, { ok: true, player: await service.endlessPlayer(bearerToken(request)) });
         return;
       }
       if (method === 'POST' && path === '/api/endless/entry/prepare') {
@@ -218,7 +223,11 @@ export function createProductionMattMineHttpServer({ root, service, maxRequestBy
         sendJson(response, 200, {
           ok: true,
           leaderboard: competitionMatch[1] === 'endless'
-            ? await service.endlessLeaderboard(bearerToken(request), requestUrl.searchParams.get('scope') || 'all-time')
+            ? await service.endlessLeaderboard(
+                bearerToken(request),
+                requestUrl.searchParams.get('scope') || 'all-time',
+                requestUrl.searchParams.get('board') || 'score'
+              )
             : await service.competitionLeaderboard(
                 bearerToken(request),
                 competitionMatch[1],

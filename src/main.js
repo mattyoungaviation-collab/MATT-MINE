@@ -94,6 +94,7 @@ const isLocalPreview = ['localhost', '127.0.0.1', '[::1]'].includes(globalThis.l
 const economy = new LocalEconomyStore();
 const PRACTICE_CLAIM_PLACEHOLDER_PRICE = 5000;
 const ARENA_LEADERBOARD_MODE = 'arena';
+const ENDLESS_LEADERBOARD_MODE = 'endless';
 const CONTROLLER_ACTION_LABELS = Object.freeze({
   attack: 'Attack', dash: 'Dash', pickaxe: 'Pickaxe', dynamite: 'Dynamite',
   blaster: 'Blaster', interact: 'Interact', pause: 'Pause', confirm: 'Confirm',
@@ -112,6 +113,7 @@ let toastTimer;
 let activeBoard = ARENA_LEADERBOARD_MODE;
 let serverConfig = null;
 let serverPlayer = null;
+let endlessPlayerStats = null;
 let pendingKeybindings = defaultKeybindings();
 let activeServerRun = null;
 let pendingRunFinalization = null;
@@ -163,6 +165,7 @@ const wallet = new RoninWalletAdapter({
   api: apiClient,
   onInvalidated(reason) {
     serverPlayer = null;
+    endlessPlayerStats = null;
     activeServerRun = null;
     activeArenaRun = null;
     activeArenaTranscript = null;
@@ -582,6 +585,39 @@ function renderProfileDashboard() {
     <td>${run.result?.extracted ? 'EXTRACTED' : 'VERIFIED'}</td>
   </tr>`).join('') || '<tr><td colspan="5">No completed server runs yet.</td></tr>');
 
+  const endlessLifetime = endlessPlayerStats?.lifetime || {};
+  if ($('#profile-endless-depth')) {
+    $('#profile-endless-depth').textContent = formatNumber(endlessLifetime.deepestPhase || 0);
+    $('#profile-endless-score').textContent = formatNumber(endlessLifetime.highestScore || 0);
+    $('#profile-endless-runs').textContent = formatNumber(endlessLifetime.totalRuns || 0);
+    $('#profile-endless-crystals').textContent = formatNumber(endlessLifetime.crystalsBanked || 0);
+    $('#profile-endless-enemies').textContent = formatNumber(endlessLifetime.enemiesDefeated || 0);
+    $('#profile-endless-ore').textContent = formatNumber(endlessLifetime.oreBroken || 0);
+    $('#profile-endless-xp').textContent = formatNumber(endlessLifetime.minerXpBanked || 0);
+    $('#profile-endless-time').textContent = formatEndlessDuration(endlessLifetime.totalDurationMs || 0);
+  }
+  const endlessHistory = Array.isArray(endlessPlayerStats?.history) ? endlessPlayerStats.history : [];
+  replaceProfileMarkup($('#profile-endless-run-history'), endlessHistory.map((run) => `<tr>
+    <td>${escapeHtml(formatProfileRunDate(run.finishedAt))}</td>
+    <td>#${formatNumber(run.minerId)} · L${formatNumber(run.minerLevel)}</td>
+    <td>${formatNumber(run.highestPhase)}</td>
+    <td>${formatNumber(run.score)}</td>
+    <td>${formatNumber(run.crystalsBanked)}</td>
+    <td>${formatNumber(run.oreBroken)}</td>
+    <td>${formatNumber(run.enemiesDefeated)}</td>
+    <td>${escapeHtml(formatEndlessDuration(run.durationMs))}</td>
+    <td>${formatNumber(run.minerXpEarned)} / ${formatNumber(run.minerXpBanked)}</td>
+    <td>${run.scoreRank ? `S #${formatNumber(run.scoreRank)}` : '—'}${run.depthRank ? ` · D #${formatNumber(run.depthRank)}` : ''}
+      <details class="endless-run-details"><summary>EXACT STATS</summary><div>
+        <span><b>Score</b>${escapeHtml(formatEndlessBreakdown(run.scoreBreakdown))}</span>
+        <span><b>Enemies</b>${escapeHtml(formatEndlessBreakdown(run.enemyBreakdown))}</span>
+        <span><b>Ore</b>${escapeHtml(formatEndlessBreakdown(run.oreBreakdown))}</span>
+        <span><b>Crystals</b>${formatNumber(run.crystalsMined)} mined · ${formatNumber(run.crystalsBanked)} banked · ${formatNumber(run.crystalsLost)} lost</span>
+        <span><b>Run</b>Capability ${formatNumber(run.minerCapability)} · Difficulty ${formatNumber(run.maximumDifficulty)} · Integrity ${formatNumber(run.integrityScore)} · Config v${formatNumber(run.configVersion)}</span>
+      </div></details>
+    </td>
+  </tr>`).join('') || '<tr><td colspan="10">No completed Endless runs yet.</td></tr>');
+
   const equipped = serverPlayer?.passInventory?.equipped || {};
   const weapon = cosmeticById(equipped.weapon);
   const frame = cosmeticById(equipped.frame);
@@ -900,6 +936,7 @@ function closeMobileWalletConnect() {
 async function refreshServerPlayer() {
   if (!apiClient.hasSession()) {
     serverPlayer = null;
+    endlessPlayerStats = null;
     updateMenu();
     return null;
   }
@@ -912,13 +949,33 @@ async function refreshServerPlayer() {
     if (serverPlayer.expansion?.controller) game.input.setControllerProfile(serverPlayer.expansion.controller);
     await refreshPaymentStatus(true);
     await refreshArena(true);
+    await refreshEndlessPlayer(true);
     updateMenu();
     if (serverPlayer.identity?.requiresSetup) openMinerProfile(true);
     return serverPlayer;
   } catch (error) {
     serverPlayer = null;
+    endlessPlayerStats = null;
     updateMenu();
     if (error?.code !== 'session_missing') toast(error.message);
+    return null;
+  }
+}
+
+async function refreshEndlessPlayer(silent = false) {
+  if (!serverPlayer || !apiClient.hasSession()) {
+    endlessPlayerStats = null;
+    renderProfileDashboard();
+    return null;
+  }
+  try {
+    endlessPlayerStats = await apiClient.endlessPlayer();
+    renderProfileDashboard();
+    return endlessPlayerStats;
+  } catch (error) {
+    endlessPlayerStats = null;
+    renderProfileDashboard();
+    if (!silent) toast(error.message);
     return null;
   }
 }
@@ -2066,9 +2123,27 @@ function renderGarageChests(snapshot) {
   }
 }
 
+function formatEndlessDuration(durationMs) {
+  const totalSeconds = Math.max(0, Math.floor(Number(durationMs || 0) / 1_000));
+  const hours = Math.floor(totalSeconds / 3_600);
+  const minutes = Math.floor(totalSeconds % 3_600 / 60);
+  const seconds = totalSeconds % 60;
+  return hours > 0 ? `${hours}h ${minutes}m` : minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+}
+
+function formatEndlessBreakdown(breakdown) {
+  const entries = Object.entries(breakdown || {}).filter(([, value]) => Number(value) !== 0);
+  return entries.length
+    ? entries.map(([key, value]) => `${String(key).replaceAll(/([a-z])([A-Z])/g, '$1 $2')}: ${formatNumber(value)}`).join(' · ')
+    : 'None';
+}
+
 function renderEndlessMenuStatus() {
   const status = endlessPublicStatus;
-  if (!status) return;
+  // Competition Studio replaces the legacy mine cards after startup. The
+  // Endless status remains available to the new hub, but its old labels are
+  // intentionally absent once that replacement has mounted.
+  if (!status || !$('#endless-menu-copy')) return;
   const rules = status.entryRules || {};
   const paid = status.paidEntryEnabled === true;
   const walletLimit = Number(rules.entriesPerWallet || 0);
@@ -3007,6 +3082,10 @@ for (const tab of document.querySelectorAll('.leaderboard-tab')) {
   tab.addEventListener('click', () => openLeaderboards(tab.dataset.board));
 }
 
+$('#endless-leaderboard-filter')?.addEventListener('change', () => {
+  if (activeBoard === ENDLESS_LEADERBOARD_MODE) void renderServerLeaderboard(activeBoard);
+});
+
 $('#publish-rewards').addEventListener('click', () => {
   const result = economy.apply(publishRewardEpoch(economy.state, ADMIN_ROLES.REWARD));
   toast(result.ok ? `Reward epoch published · ${formatNumber(result.epoch.totalRewardMatt)} MATT` : result.error);
@@ -3844,6 +3923,18 @@ function openLeaderboards(mode) {
   for (const tab of document.querySelectorAll('.leaderboard-tab')) {
     tab.classList.toggle('active', tab.dataset.board === mode);
   }
+  const endless = mode === ENDLESS_LEADERBOARD_MODE;
+  $('#endless-leaderboard-filter-wrap').hidden = !endless;
+  $('#reward-claim-card').hidden = endless;
+  if (endless) {
+    applyEndlessLeaderboardLabels();
+    replaceProfileMarkup($('#leaderboard-body'), '<tr><td colspan="4">Loading verified Endless rankings…</td></tr>');
+    renderLeaderboardPodium([]);
+    activeServerClaim = null;
+    showScreen('leaderboards');
+    void renderServerLeaderboard(mode);
+    return;
+  }
   if (mode === ARENA_LEADERBOARD_MODE) {
     $('#board-pool-label').textContent = 'Current Daily Pool';
     $('#board-score-label').textContent = 'Your Daily Score';
@@ -3901,6 +3992,10 @@ function openLeaderboards(mode) {
 }
 
 async function renderServerLeaderboard(mode) {
+  if (mode === ENDLESS_LEADERBOARD_MODE) {
+    await renderEndlessLeaderboardPanel();
+    return;
+  }
   if (mode === ARENA_LEADERBOARD_MODE) {
     await renderArenaLeaderboardPanel();
     return;
@@ -3999,7 +4094,7 @@ function renderLeaderboardPodium(rows = []) {
     const row = rows.find((entry) => Number(entry.rank) === place);
     const fallback = `<span class="podium-avatar" aria-hidden="true">${place}</span><strong>OPEN POSITION</strong><small>NO VERIFIED SCORE</small>`;
     return `<article class="podium-place place-${place}"><b>#${place}</b>${row
-      ? `${renderMinerIdentity(row)}<small>${formatNumber(row.score)}</small>`
+      ? `${renderMinerIdentity(row)}<small>${escapeHtml(row.displayValue || formatNumber(row.score))}</small>`
       : fallback}</article>`;
   }).join(''));
 }
@@ -4165,6 +4260,61 @@ async function startApprovedNftServerRun(mode, minerId) {
   if (mode !== RUN_MODES.PAID) return apiClient.startRun(mode, 0);
   const approval = await approveNftRun(mode, minerId);
   return apiClient.startRun(mode, minerId, approval);
+}
+
+function selectedEndlessLeaderboard() {
+  const [board = 'score', scope = 'all-time'] = String($('#endless-leaderboard-filter')?.value || 'score:all-time').split(':');
+  return { board, scope };
+}
+
+function applyEndlessLeaderboardLabels() {
+  const { board, scope } = selectedEndlessLeaderboard();
+  const scopeLabel = scope === 'all-time' ? 'All-Time' : scope[0].toUpperCase() + scope.slice(1);
+  const boardLabel = board === 'deepest' ? 'Deepest Descent' : 'Highest Score';
+  $('#board-pool-label').textContent = 'Verified Board';
+  $('#board-score-label').textContent = `Your ${boardLabel}`;
+  $('#board-reward-label').textContent = 'Board Window';
+  $('#board-score-column-label').textContent = `${boardLabel} / Phase`;
+  $('#board-pool').textContent = boardLabel.toUpperCase();
+  $('#board-reward').textContent = scopeLabel.toUpperCase();
+  return { board, scope, scopeLabel, boardLabel };
+}
+
+async function renderEndlessLeaderboardPanel() {
+  const selection = applyEndlessLeaderboardLabels();
+  const note = $('#leaderboard-note');
+  if (note) note.textContent = `Loading ${selection.scopeLabel.toLowerCase()} ${selection.boardLabel.toLowerCase()} rankings…`;
+  try {
+    const leaderboard = await apiClient.endlessLeaderboard(selection.scope, selection.board);
+    const rows = leaderboard.rows || [];
+    const player = leaderboard.player || rows.find((row) => row.isPlayer);
+    $('#board-score').textContent = player
+      ? selection.board === 'deepest'
+        ? `PHASE ${formatNumber(player.deepestPhase)}`
+        : formatNumber(player.score)
+      : '—';
+    const displayRows = rows.map((row) => ({
+      ...row,
+      displayValue: selection.board === 'deepest'
+        ? `PHASE ${formatNumber(row.deepestPhase)} · ${formatNumber(row.score)} PTS`
+        : `${formatNumber(row.score)} PTS · PHASE ${formatNumber(row.deepestPhase)}`
+    }));
+    renderLeaderboardPodium(displayRows);
+    replaceProfileMarkup($('#leaderboard-body'), rows.length > 3
+      ? rows.slice(3).map((row) => `<tr class="${row.isPlayer ? 'player-row' : ''}">
+          <td>#${row.rank}</td>
+          <td>${renderMinerIdentity(row)}${row.isPlayer ? ' · YOU' : ''}</td>
+          <td>${selection.board === 'deepest' ? `PHASE ${formatNumber(row.deepestPhase)} · ${formatNumber(row.score)}` : `${formatNumber(row.score)} · PHASE ${formatNumber(row.deepestPhase)}`}</td>
+          <td>MINER #${formatNumber(row.minerId)} · L${formatNumber(row.minerLevel)} · CAP ${formatNumber(row.minerCapability)}</td>
+        </tr>`).join('')
+      : `<tr><td colspan="4">${rows.length ? 'More verified Endless miners will appear here.' : 'No verified Endless runs yet.'}</td></tr>`);
+    if (note) note.textContent = `${selection.scopeLabel} ${selection.boardLabel} · one best verified run per wallet · score, phase, difficulty, duration, enemies, then ore break ties.`;
+  } catch (error) {
+    renderLeaderboardPodium([]);
+    replaceProfileMarkup($('#leaderboard-body'), '<tr><td colspan="4">Endless rankings are temporarily unavailable.</td></tr>');
+    $('#board-score').textContent = '—';
+    if (note) note.textContent = `Endless leaderboard unavailable: ${error.message}`;
+  }
 }
 
 async function checkpointEndlessChoice(action) {

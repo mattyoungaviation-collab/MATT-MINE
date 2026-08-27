@@ -714,6 +714,20 @@
               </section>
 
               <section class="profile-tab-panel" data-profile-panel="history">
+                <article class="profile-section-card endless-profile-overview">
+                  <div class="section-heading-row"><h3>ENDLESS LIFETIME</h3><span>EXACT VERIFIED TOTALS</span></div>
+                  <div class="dashboard-metrics endless-history-metrics">
+                    <div><span>DEEPEST PHASE</span><strong id="profile-endless-depth">0</strong></div>
+                    <div><span>HIGHEST SCORE</span><strong id="profile-endless-score">0</strong></div>
+                    <div><span>RUNS</span><strong id="profile-endless-runs">0</strong></div>
+                    <div><span>CRYSTALS BANKED</span><strong id="profile-endless-crystals">0</strong></div>
+                    <div><span>ENEMIES</span><strong id="profile-endless-enemies">0</strong></div>
+                    <div><span>ORE BROKEN</span><strong id="profile-endless-ore">0</strong></div>
+                    <div><span>XP BANKED</span><strong id="profile-endless-xp">0</strong></div>
+                    <div><span>TIME PLAYED</span><strong id="profile-endless-time">0m</strong></div>
+                  </div>
+                </article>
+                <article class="profile-section-card"><div class="section-heading-row"><h3>ENDLESS RUN HISTORY</h3><span>SCORE + DEPTH RANKS</span></div><div class="leaderboard-table-wrap endless-history-table-wrap"><table class="leaderboard-table"><thead><tr><th>UTC Date</th><th>Miner</th><th>Phase</th><th>Score</th><th>Crystals</th><th>Ore</th><th>Enemies</th><th>Time</th><th>XP Earned / Banked</th><th>Rank</th></tr></thead><tbody id="profile-endless-run-history"><tr><td colspan="10">No completed Endless runs yet.</td></tr></tbody></table></div></article>
                 <article class="profile-section-card"><div class="section-heading-row"><h3>RUN HISTORY</h3><span>LIVE SERVER DATA</span></div><div class="leaderboard-table-wrap"><table class="leaderboard-table"><thead><tr><th>Mine</th><th>UTC Date</th><th>Score</th><th>Depth</th><th>Result</th></tr></thead><tbody id="profile-full-run-history"><tr><td colspan="5">No completed runs yet.</td></tr></tbody></table></div></article>
               </section>
 
@@ -874,6 +888,16 @@
           <div class="leaderboard-tabs">
             <button class="leaderboard-tab arena-leaderboard-tab active" data-board="arena">MATT ARENA <span>· CURRENT POOL</span></button>
             <button class="leaderboard-tab" data-board="paid">PASS LEADERBOARD</button>
+            <button class="leaderboard-tab" data-board="endless">ENDLESS</button>
+            <label id="endless-leaderboard-filter-wrap" class="endless-leaderboard-filter" hidden>BOARD
+              <select id="endless-leaderboard-filter">
+                <option value="score:daily">Daily Highest Score</option>
+                <option value="score:weekly">Weekly Highest Score</option>
+                <option value="score:season">Seasonal Highest Score</option>
+                <option value="score:all-time" selected>All-Time Highest Score</option>
+                <option value="deepest:all-time">All-Time Deepest Descent</option>
+              </select>
+            </label>
           </div>
           <div id="leaderboard-podium" class="leaderboard-podium" aria-label="Top three miners"></div>
           <div class="leaderboard-summary">

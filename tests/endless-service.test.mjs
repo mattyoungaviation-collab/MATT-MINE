@@ -513,6 +513,48 @@ test('Endless Admin monitoring and run review expose adjustable alerts and autho
   assert.equal(review.configVersion, 1);
 });
 
+test('Endless player history and both boards expose exact verified run totals', async () => {
+  const active = harness();
+  const token = await login(active.service);
+  const run = await active.service.startRun(token, 'endless', { minerId: 7 });
+  active.advance(20_000);
+  await active.service.checkpointEndlessPhase(token, {
+    runId: run.runId,
+    runToken: run.runToken,
+    previousCheckpoint: run.checkpoint,
+    action: 'bank'
+  });
+
+  const player = await active.service.endlessPlayer(token);
+  assert.equal(player.lifetime.totalRuns, 1);
+  assert.equal(player.lifetime.verifiedRuns, 1);
+  assert.equal(player.lifetime.deepestPhase, 1);
+  assert.equal(player.lifetime.highestScore, player.history[0].score);
+  assert.equal(player.history[0].minerId, 7);
+  assert.equal(player.history[0].minerLevel, 6);
+  assert.equal(player.history[0].verificationStatus, 'verified');
+  assert.equal(player.history[0].scoreRank, 1);
+  assert.equal(player.history[0].depthRank, 1);
+  assert.ok(Object.keys(player.history[0].scoreBreakdown).length > 0);
+  assert.ok(Object.keys(player.history[0].enemyBreakdown).length > 0);
+  assert.ok(Object.keys(player.history[0].oreBreakdown).length > 0);
+
+  const score = await active.service.endlessLeaderboard(token, 'all-time', 'score');
+  const deepest = await active.service.endlessLeaderboard(token, 'all-time', 'deepest');
+  assert.equal(score.player.rank, 1);
+  assert.equal(score.rows[0].minerLevel, 6);
+  assert.equal(score.rows[0].verificationStatus, 'verified');
+  assert.equal(deepest.player.runId, run.runId);
+  await assert.rejects(
+    () => active.service.endlessLeaderboard(token, 'weekly', 'deepest'),
+    (error) => error.code === 'endless_deepest_scope'
+  );
+  await assert.rejects(
+    () => active.service.endlessLeaderboard(token, 'unknown', 'score'),
+    (error) => error.code === 'endless_leaderboard_scope'
+  );
+});
+
 test('Admin termination preserves a suspicious Endless run as rejected and releases its active slot', async () => {
   const active = harness();
   const token = await login(active.service);
