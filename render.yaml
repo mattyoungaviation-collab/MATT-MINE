@@ -99,6 +99,8 @@ services:
         value: "6"
       - key: MATT_MINE_ENDLESS_RECONCILIATION_DELAY_MS
         value: "1500"
+      - key: MATT_MINE_ENDLESS_LOG_QUERY_BLOCK_SPAN
+        value: "90"
       - key: MATT_MINE_ENDLESS_SETTLEMENT_GAS_LIMIT
         value: "1200000"
       - key: MATT_MINE_NFT_ADMIN_CONTROLS_ENABLED

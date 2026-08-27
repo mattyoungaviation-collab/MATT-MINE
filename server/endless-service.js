@@ -3,6 +3,7 @@ import { ApiError, assertApi } from './errors.js';
 import {
   applyEndlessPhaseCheckpoint,
   createEndlessRunRecord,
+  endlessMinerCarryCapacity,
   endlessLeaderboard,
   endlessSmartEngineRecommendation,
   publicEndlessCheckpoint,
@@ -14,6 +15,18 @@ import {
 import { normalizeEndlessConfig, validateEndlessConfig } from '../src/game/endlessMine.js';
 
 const TRANSACTION_HASH_PATTERN = /^0x[a-fA-F0-9]{64}$/;
+
+function latestEndlessCheckpointTransaction(run = {}) {
+  const transactions = Array.isArray(run.chainTransactions) ? run.chainTransactions : [];
+  const checkpoint = [...transactions].reverse().find((entry) =>
+    entry?.type === 'checkpoint' && TRANSACTION_HASH_PATTERN.test(String(entry.hash || ''))
+  );
+  if (checkpoint) return checkpoint.hash;
+  const start = [...transactions].reverse().find((entry) =>
+    entry?.type === 'start' && TRANSACTION_HASH_PATTERN.test(String(entry.hash || ''))
+  );
+  return start?.hash || '';
+}
 
 export const endlessServiceMethods = {
   async endlessStatus() {
@@ -367,10 +380,9 @@ export const endlessServiceMethods = {
   async retryEndlessSettlement(token, input = {}) {
     const session = await this.authenticate(token);
     const runId = cleanRunId(input.runId);
-    const runToken = cleanRunToken(input.runToken);
     const state = await this.database.read();
     const run = state.endlessCompetition.runs[runId];
-    assertEndlessRunOwner(run, session.address, runToken);
+    assertApi(run && run.address === session.address, 404, 'endless_run_missing', 'The Endless run was not found.');
     assertApi(run.status === 'banked' && run.config.rewards.enabled, 409, 'endless_settlement_unavailable', 'This run has no pending Endless reward settlement.');
     assertApi(state.endlessCompetition.operations?.rewardsEnabled !== false, 503, 'endless_rewards_paused', 'Endless reward settlement is temporarily paused by Admin. The verified reward remains queued.');
     if (run.rewardSettlement?.settled === true) {
@@ -811,6 +823,7 @@ export const endlessServiceMethods = {
       crystalsEnabled: run.config.rewards.crystalsEnabled,
       minerXpEnabled: run.config.rewards.minerXpEnabled,
       chainRun: structuredClone(run.chainRun),
+      fromTransactionHash: latestEndlessCheckpointTransaction(run),
       outcome: 'extraction'
     });
     await this.database.transact(async (state, transaction) => {
@@ -819,6 +832,12 @@ export const endlessServiceMethods = {
       stored.rewardSettlement = { settled: true, ...structuredClone(receipt), settledAt: this.now() };
       stored.crystalsBanked = Math.max(0, Number(receipt.crystalsBanked || 0));
       stored.minerXpBanked = Math.max(0, Number(receipt.minerXpBanked || 0));
+      if (TRANSACTION_HASH_PATTERN.test(String(receipt.transactionHash || '')) &&
+          !stored.chainTransactions?.some((entry) => entry.hash === receipt.transactionHash)) {
+        stored.chainTransactions ||= [];
+        stored.chainTransactions.push({ type: 'settlement', hash: receipt.transactionHash, recordedAt: this.now() });
+        stored.chainTransactions = stored.chainTransactions.slice(-50);
+      }
       const leaderboard = state.endlessCompetition.leaderboardEntries.find((entry) => entry.runId === run.id);
       if (leaderboard) leaderboard.crystalsBanked = stored.crystalsBanked;
       state.runs[run.id] = stored;
@@ -901,6 +920,8 @@ function publicEndlessHistoryRun(run, scoreRank, depthRank) {
     minerXp: Number(run.minerXpBanked || 0),
     minerXpEarned: Number(run.minerXpEarned || 0),
     minerXpBanked: Number(run.minerXpBanked || 0),
+    rewardPending: run.rewardSettlement?.pending === true && run.rewardSettlement?.settled !== true,
+    rewardSettled: run.rewardSettlement?.settled === true,
     durationMs: Math.max(0, finishedAt - Number(run.startedAt || finishedAt)),
     scoreRank: Number(scoreRank || 0),
     depthRank: Number(depthRank || 0),
@@ -1307,7 +1328,7 @@ function adminRunReview(run, details) {
     oreBreakdown: { broken: Number(run.oreBroken || 0) },
     enemyBreakdown: { requiredDefeated: Number(run.requiredKills || 0), guardiansDefeated: Number(run.bossKills || 0) },
     crystalsBreakdown: { carried: Number(run.crystalsCarried || 0), banked: Number(run.crystalsBanked || 0) },
-    maximumCarry: Number(profile.gameplay?.crystalCarryCapacity ?? profile.traits?.crystalCarryCapacity ?? 0),
+    maximumCarry: endlessMinerCarryCapacity(profile),
     minerXpBanked: Number(run.minerXpBanked || 0),
     phaseHistory: structuredClone(phases),
     verification: { digest: run.rollingDigest || '', checkpointSequence: Number(run.checkpointSequence || 0), status: details.leaderboardEntry?.verified ? 'verified' : run.status },

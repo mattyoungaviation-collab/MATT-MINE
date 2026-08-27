@@ -1,6 +1,7 @@
 import {
   createPublicClient,
   createWalletClient,
+  decodeEventLog,
   defineChain,
   formatUnits,
   getAddress,
@@ -18,6 +19,7 @@ const DEFAULT_OPERATOR_MINIMUM_BALANCE_WEI = 20_000_000_000_000_000n;
 const DEFAULT_SETTLEMENT_RECONCILIATION_ATTEMPTS = 6;
 const DEFAULT_SETTLEMENT_RECONCILIATION_DELAY_MS = 1_500;
 const DEFAULT_SETTLEMENT_GAS_LIMIT = 1_200_000n;
+const DEFAULT_SETTLEMENT_LOG_QUERY_BLOCK_SPAN = 90;
 
 const ENDLESS_ABI = parseAbi([
   'function OPERATOR_ROLE() view returns (bytes32)',
@@ -118,6 +120,11 @@ export class EndlessSettlementService {
     this.settlementGasLimit = positiveBigInt(
       options.settlementGasLimit ?? DEFAULT_SETTLEMENT_GAS_LIMIT,
       'Endless settlement gas limit'
+    );
+    this.settlementLogQueryBlockSpan = boundedPositiveInteger(
+      options.settlementLogQueryBlockSpan ?? DEFAULT_SETTLEMENT_LOG_QUERY_BLOCK_SPAN,
+      'Endless settlement log query block span',
+      100
     );
     this.wait = options.wait || ((delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)));
     if (!isAddressEqual(this.operatorAccount.address, this.operatorAddress)) {
@@ -325,11 +332,20 @@ export class EndlessSettlementService {
     });
   }
 
-  async settle({ address, minerId, chainRun, completedPhases, minedCrystalUnits, rollingDigest, outcome = 'extraction' }) {
+  async settle({
+    address,
+    minerId,
+    chainRun,
+    completedPhases,
+    minedCrystalUnits,
+    rollingDigest,
+    outcome = 'extraction',
+    fromTransactionHash = ''
+  }) {
     return this.#serialize(async () => {
       const active = await this.#activeRun(minerId);
       if (active.runId === ZERO_BYTES32) {
-        const recovered = await this.#settledEvent(chainRun?.runId);
+        const recovered = await this.#settledEvent(chainRun?.runId, { fromTransactionHash });
         assertApi(recovered, 409, 'endless_chain_run_missing', 'The Endless Miner has no active or previously settled chain run.');
         return this.#settlementReceipt(recovered, '', true);
       }
@@ -346,7 +362,7 @@ export class EndlessSettlementService {
         nonce: BigInt(active.nonce),
         deadline: BigInt(Math.floor(Date.now() / 1_000) + 10 * 60)
       };
-      return this.#submitSettlement(active, result, 'Endless settlement');
+      return this.#submitSettlement(active, result, 'Endless settlement', { fromTransactionHash });
     });
   }
 
@@ -437,10 +453,67 @@ export class EndlessSettlementService {
     return normalizeStruct(raw, ['runId', 'versionId', 'loadoutHash', 'checkpointDigest', 'player', 'conversionRate', 'maximumPayout', 'maximumDailyPayout', 'startedAt', 'lastCheckpointAt', 'mineableCrystalUnits', 'maximumPhases', 'phaseXp', 'maximumRunXp', 'maximumWalletXpPerDay', 'maximumMinerXpPerDay', 'checkpointTimeout', 'completedPhases', 'minedCrystalUnits', 'carryCapacity', 'deathRetentionBps', 'failedRunsRetainXp', 'nonce']);
   }
 
-  async #settledEvent(runId) {
+  #settledEventFromReceipt(receipt, runId) {
+    if (!receipt || !runId) return null;
+    const targetRunId = bytes32(runId, 'Endless chain run ID');
+    for (const log of receipt.logs || []) {
+      if (String(log.address || '').toLowerCase() !== this.settlementAddress.toLowerCase()) continue;
+      if (String(log.args?.runId || '').toLowerCase() === targetRunId) return log;
+      try {
+        const decoded = decodeEventLog({ abi: [SETTLED_EVENT], data: log.data, topics: log.topics });
+        if (decoded.eventName === 'EndlessRunSettled' && String(decoded.args?.runId || '').toLowerCase() === targetRunId) {
+          return { ...log, eventName: decoded.eventName, args: decoded.args };
+        }
+      } catch {}
+    }
+    return null;
+  }
+
+  async #settledEvent(runId, options = {}) {
     if (!runId) return null;
-    const logs = await this.publicClient.getLogs({ address: this.settlementAddress, event: SETTLED_EVENT, args: { runId: bytes32(runId, 'Endless chain run ID') }, fromBlock: this.deploymentBlock, toBlock: 'latest' });
-    return logs.at(-1) || null;
+    const targetRunId = bytes32(runId, 'Endless chain run ID');
+    let fromBlock = options.fromBlock == null ? null : BigInt(options.fromBlock);
+    for (const transactionHash of [options.transactionHash, options.fromTransactionHash]) {
+      if (!/^0x[0-9a-f]{64}$/i.test(String(transactionHash || ''))) continue;
+      try {
+        const receipt = await this.publicClient.getTransactionReceipt({ hash: transactionHash });
+        const event = this.#settledEventFromReceipt(receipt, targetRunId);
+        if (event) return event;
+        if (fromBlock == null && receipt.blockNumber != null) fromBlock = BigInt(receipt.blockNumber);
+      } catch {}
+    }
+    if (fromBlock == null) {
+      try {
+        const logs = await this.publicClient.getLogs({
+          address: this.settlementAddress,
+          event: SETTLED_EVENT,
+          args: { runId: targetRunId },
+          fromBlock: this.deploymentBlock,
+          toBlock: 'latest'
+        });
+        return logs.at(-1) || null;
+      } catch {}
+      fromBlock = this.deploymentBlock;
+    }
+    const latestBlock = await this.publicClient.getBlockNumber();
+    if (fromBlock > latestBlock) return null;
+    const span = BigInt(this.settlementLogQueryBlockSpan);
+    let toBlock = latestBlock;
+    while (toBlock >= fromBlock) {
+      const candidate = toBlock >= span - 1n ? toBlock - span + 1n : 0n;
+      const windowFrom = candidate > fromBlock ? candidate : fromBlock;
+      const logs = await this.publicClient.getLogs({
+        address: this.settlementAddress,
+        event: SETTLED_EVENT,
+        args: { runId: targetRunId },
+        fromBlock: windowFrom,
+        toBlock
+      });
+      if (logs.length) return logs.at(-1);
+      if (windowFrom === fromBlock) break;
+      toBlock = windowFrom - 1n;
+    }
+    return null;
   }
 
   async #processedRun(runId) {
@@ -454,7 +527,10 @@ export class EndlessSettlementService {
 
   async #reconcileSettlement(active, transactionHash, options = {}) {
     for (let attempt = 0; attempt < this.settlementReconciliationAttempts; attempt += 1) {
-      const event = await this.#settledEvent(active.runId).catch(() => null);
+      const event = await this.#settledEvent(active.runId, {
+        transactionHash,
+        fromTransactionHash: options.fromTransactionHash
+      }).catch(() => null);
       if (event) return this.#settlementReceipt(event, transactionHash, true);
       if (attempt + 1 < this.settlementReconciliationAttempts) {
         await this.wait(this.settlementReconciliationDelayMs);
@@ -516,16 +592,23 @@ export class EndlessSettlementService {
       stage = 'broadcasting';
       transactionHash = await this.operatorClient.writeContract(request);
       stage = 'confirming';
-      await this.#confirmed(transactionHash, label);
+      const confirmed = await this.#confirmed(transactionHash, label);
       stage = 'reading-event';
-      const event = await this.#settledEvent(active.runId);
+      const event = this.#settledEventFromReceipt(confirmed, active.runId)
+        || await this.#settledEvent(active.runId, {
+          transactionHash,
+          fromTransactionHash: options.fromTransactionHash,
+          fromBlock: confirmed.blockNumber
+        });
       assertApi(event, 502, 'endless_chain_settlement_event_missing', 'The confirmed Endless settlement event was not found.');
       return this.#settlementReceipt(event, transactionHash, false);
     } catch (error) {
       const couldHaveBroadcast = transactionHash || ['broadcasting', 'confirming', 'reading-event'].includes(stage);
       const recovered = couldHaveBroadcast
         ? await this.#reconcileSettlement(active, transactionHash, options)
-        : await this.#settledEvent(active.runId).catch(() => null);
+        : await this.#settledEvent(active.runId, {
+          fromTransactionHash: options.fromTransactionHash
+        }).catch(() => null);
       if (recovered) {
         return recovered.settled === true
           ? recovered
@@ -597,6 +680,7 @@ export function createEndlessSettlementServiceFromEnvironment(environment = proc
     settlementReconciliationAttempts: environment.MATT_MINE_ENDLESS_RECONCILIATION_ATTEMPTS || DEFAULT_SETTLEMENT_RECONCILIATION_ATTEMPTS,
     settlementReconciliationDelayMs: environment.MATT_MINE_ENDLESS_RECONCILIATION_DELAY_MS || DEFAULT_SETTLEMENT_RECONCILIATION_DELAY_MS,
     settlementGasLimit: environment.MATT_MINE_ENDLESS_SETTLEMENT_GAS_LIMIT || DEFAULT_SETTLEMENT_GAS_LIMIT,
+    settlementLogQueryBlockSpan: environment.MATT_MINE_ENDLESS_LOG_QUERY_BLOCK_SPAN || DEFAULT_SETTLEMENT_LOG_QUERY_BLOCK_SPAN,
     ...options
   });
 }

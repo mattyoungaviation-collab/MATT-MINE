@@ -20,8 +20,9 @@ function harness({ ownsMiner = true, endlessRewardSettler = null, endlessPayment
         minerId,
         owner: address,
         progression: { bankedXp: 1_250, level: 6 },
-        gameplay: { crystalCarryCapacity: 12, runLocked: false },
-        traits: { level: 6, health: 150, damage: 20, armor: 4, speed: 1, luck: 1, crystalCarryCapacity: 12 },
+        gameplay: { carryCapacity: 12, runLocked: false },
+        traits: { level: 6, health: 150, damage: 20, armor: 4, speed: 1, luck: 1, baseCarryCapacity: 12 },
+        effectiveTraits: { carryCapacity: 12 },
         equipped: {}
       };
     }
@@ -462,14 +463,16 @@ test('a temporary reward failure keeps the banked run idempotently retryable', a
     action: 'bank'
   });
   assert.equal(banked.rewardSettlement.pending, true);
+  const pendingPlayer = await active.service.endlessPlayer(token);
+  assert.equal(pendingPlayer.history[0].rewardPending, true);
+  assert.equal(pendingPlayer.history[0].rewardSettled, false);
   await active.service.updateEndlessOperations('endless-admin-key', {
     patch: { rewardsEnabled: false },
     reason: 'Pause settlement while preserving the verified reward queue.'
   });
   await assert.rejects(
     () => active.service.retryEndlessSettlement(token, {
-      runId: run.runId,
-      runToken: run.runToken
+      runId: run.runId
     }),
     (error) => error.code === 'endless_rewards_paused'
   );
@@ -478,8 +481,7 @@ test('a temporary reward failure keeps the banked run idempotently retryable', a
     reason: 'Restore settlement after verifying the reward queue pause.'
   });
   const retried = await active.service.retryEndlessSettlement(token, {
-    runId: run.runId,
-    runToken: run.runToken
+    runId: run.runId
   });
   assert.equal(retried.settled, true);
   assert.equal(attempts, 2);
@@ -488,9 +490,14 @@ test('a temporary reward failure keeps the banked run idempotently retryable', a
   assert.equal(settlementPayload.maximumRunXp, 500);
   assert.equal(settlementPayload.failedRunsRetainXp, false);
   assert.equal(settlementPayload.chainRun.completedPhases, 1);
+  assert.equal(settlementPayload.fromTransactionHash, `0x${'71'.repeat(32)}`);
   const state = await active.database.read();
   assert.equal(state.endlessCompetition.runs[run.runId].rewardSettlement.settled, true);
   assert.equal(state.endlessCompetition.leaderboardEntries[0].crystalsBanked, 3);
+  const settledPlayer = await active.service.endlessPlayer(token);
+  assert.equal(settledPlayer.history[0].rewardPending, false);
+  assert.equal(settledPlayer.history[0].rewardSettled, true);
+  assert.equal(settledPlayer.history[0].minerXpBanked, 10);
 });
 
 test('audited Endless operations immediately gate entries, banking, phase depth, and leaderboards', async () => {

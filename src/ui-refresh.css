@@ -970,6 +970,25 @@ button:disabled {
   color: var(--ui-white);
 }
 
+.endless-reward-retry {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--ui-cyan);
+  color: #051015;
+  background: var(--ui-cyan);
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.endless-reward-retry:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
 @media (max-width: 760px) {
   .endless-history-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));

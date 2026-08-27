@@ -113,11 +113,11 @@ export class MattMineApiClient {
     });
   }
 
-  async retryEndlessSettlement(runId, runToken) {
+  async retryEndlessSettlement(runId) {
     const response = await this.request('/api/endless/settle', {
       method: 'POST',
       authenticated: true,
-      body: { runId, runToken }
+      body: { runId }
     });
     return response.settlement;
   }

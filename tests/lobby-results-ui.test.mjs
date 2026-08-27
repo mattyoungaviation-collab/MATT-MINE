@@ -112,6 +112,20 @@ test('a failed Endless death close remains readable and retryable without cleari
   assert.doesNotMatch(finalizer.slice(finalizer.indexOf('} catch (error)')), /clearPersistedEndlessRun\(\)/);
 });
 
+test('pending Endless rewards have an authenticated history recovery action with fractional Crystal display', async () => {
+  const source = await readFile(`${root}src/main.js`, 'utf8');
+  const apiSource = await readFile(`${root}src/game/apiClient.js`, 'utf8');
+
+  assert.match(source, /run\.rewardPending \? `<button[^`]+RETRY REWARDS/);
+  assert.match(source, /retryPendingEndlessRewards/);
+  assert.match(source, /apiClient\.retryEndlessSettlement\(runId\)/);
+  assert.match(source, /ENDLESS_CRYSTAL_DISPLAY_DECIMALS/);
+  assert.match(source, /formatEndlessCrystals\(run\.crystalsBanked\)/);
+  const retryMethod = apiSource.match(/async retryEndlessSettlement\(runId\) \{[\s\S]*?\n  \}/)?.[0] || '';
+  assert.match(retryMethod, /body: \{ runId \}/);
+  assert.doesNotMatch(retryMethod, /runToken/);
+});
+
 test('Miner selection, loadout, balances, repair, chests, and mine entry share one player flow', async () => {
   const html = await readFile(`${root}index.html`, 'utf8');
   const source = await readFile(`${root}src/main.js`, 'utf8');

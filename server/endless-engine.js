@@ -13,6 +13,21 @@ const EVENT_TYPES = new Set([
   'phase_completed', 'damage_taken', 'extract'
 ]);
 
+export function endlessMinerCarryCapacity(profile = {}) {
+  const capacity = Number(
+    profile.gameplay?.crystalCarryCapacity ??
+    profile.gameplay?.carryCapacity ??
+    profile.effectiveTraits?.carryCapacity ??
+    profile.traits?.crystalCarryCapacity ??
+    profile.traits?.carryCapacity ??
+    profile.traits?.baseCarryCapacity ??
+    profile.crystalCarryCapacity ??
+    profile.carryCapacity ??
+    0
+  );
+  return Number.isSafeInteger(capacity) && capacity >= 0 ? capacity : 0;
+}
+
 export function createEndlessRunRecord({
   id,
   tokenHash,
@@ -183,18 +198,14 @@ export function verifyEndlessPhaseEvents(run, rawEvents, now = Date.now()) {
   assertApi(completed, 422, 'endless_phase_marker_required', 'The server needs the phase-complete marker before banking or descending.');
   assertApi(previousTick <= serverElapsedMs + 10_000, 422, 'endless_event_clock_ahead', 'The phase event clock is ahead of server elapsed time.');
   assertApi(score <= manifest.pointBudget, 422, 'endless_score_over_budget', 'The submitted score exceeds the exact phase budget.');
-  const capacity = Math.max(0, Number(
-    run.minerProfile?.gameplay?.crystalCarryCapacity ??
-    run.minerProfile?.traits?.crystalCarryCapacity ??
-    run.minerProfile?.crystalCarryCapacity ?? 0
-  ) || 0);
+  const capacity = endlessMinerCarryCapacity(run.minerProfile);
   const configuredUnitCeiling = Math.max(0, Number(run.config?.rewards?.mineableCrystalUnits || 0));
   const rewardUnitCapacity = configuredUnitCeiling > 0 ? Math.min(capacity, configuredUnitCeiling) : capacity;
   const remainingCapacity = Math.max(0, rewardUnitCapacity - Number(run.crystalsCarried || 0));
   const crystalsAdded = Math.min(remainingCapacity, collectedCrystals.size);
   const conversionNumerator = Math.max(0, Number(run.config?.rewards?.crystalConversionNumerator || 0));
   const conversionDenominator = Math.max(1, Number(run.config?.rewards?.crystalConversionDenominator || 1));
-  const grossCrystalsEarned = Math.floor(collectedCrystals.size * conversionNumerator / conversionDenominator);
+  const grossCrystalsEarned = collectedCrystals.size * conversionNumerator / conversionDenominator;
   const enemyBreakdown = countObjectTypes([...killedEnemies], byId);
   const oreBreakdown = countObjectTypes([...brokenOres], byId);
   const digest = hashEndlessCheckpoint(run.rollingDigest, manifest, events);

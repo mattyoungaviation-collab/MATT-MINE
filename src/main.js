@@ -95,6 +95,7 @@ const economy = new LocalEconomyStore();
 const PRACTICE_CLAIM_PLACEHOLDER_PRICE = 5000;
 const ARENA_LEADERBOARD_MODE = 'arena';
 const ENDLESS_LEADERBOARD_MODE = 'endless';
+const ENDLESS_CRYSTAL_DISPLAY_DECIMALS = 6;
 const CONTROLLER_ACTION_LABELS = Object.freeze({
   attack: 'Attack', dash: 'Dash', pickaxe: 'Pickaxe', dynamite: 'Dynamite',
   blaster: 'Blaster', interact: 'Interact', pause: 'Pause', confirm: 'Confirm',
@@ -591,7 +592,7 @@ function renderProfileDashboard() {
     $('#profile-endless-depth').textContent = formatNumber(endlessLifetime.deepestPhase || 0);
     $('#profile-endless-score').textContent = formatNumber(endlessLifetime.highestScore || 0);
     $('#profile-endless-runs').textContent = formatNumber(endlessLifetime.totalRuns || 0);
-    $('#profile-endless-crystals').textContent = formatNumber(endlessLifetime.crystalsBanked || 0);
+    $('#profile-endless-crystals').textContent = formatEndlessCrystals(endlessLifetime.crystalsBanked || 0);
     $('#profile-endless-enemies').textContent = formatNumber(endlessLifetime.enemiesDefeated || 0);
     $('#profile-endless-ore').textContent = formatNumber(endlessLifetime.oreBroken || 0);
     $('#profile-endless-xp').textContent = formatNumber(endlessLifetime.minerXpBanked || 0);
@@ -603,17 +604,18 @@ function renderProfileDashboard() {
     <td>#${formatNumber(run.minerId)} · L${formatNumber(run.minerLevel)}</td>
     <td>${formatNumber(run.highestPhase)}</td>
     <td>${formatNumber(run.score)}</td>
-    <td>${formatNumber(run.crystalsBanked)}</td>
+    <td>${formatEndlessCrystals(run.crystalsBanked)}</td>
     <td>${formatNumber(run.oreBroken)}</td>
     <td>${formatNumber(run.enemiesDefeated)}</td>
     <td>${escapeHtml(formatEndlessDuration(run.durationMs))}</td>
     <td>${formatNumber(run.minerXpEarned)} / ${formatNumber(run.minerXpBanked)}</td>
     <td>${run.scoreRank ? `S #${formatNumber(run.scoreRank)}` : '—'}${run.depthRank ? ` · D #${formatNumber(run.depthRank)}` : ''}
+      ${run.rewardPending ? `<button type="button" class="endless-reward-retry" data-endless-reward-run="${escapeHtml(run.runId)}">RETRY REWARDS</button>` : ''}
       <details class="endless-run-details"><summary>EXACT STATS</summary><div>
         <span><b>Score</b>${escapeHtml(formatEndlessBreakdown(run.scoreBreakdown))}</span>
         <span><b>Enemies</b>${escapeHtml(formatEndlessBreakdown(run.enemyBreakdown))}</span>
         <span><b>Ore</b>${escapeHtml(formatEndlessBreakdown(run.oreBreakdown))}</span>
-        <span><b>Crystals</b>${formatNumber(run.crystalsMined)} mined · ${formatNumber(run.crystalsBanked)} banked · ${formatNumber(run.crystalsLost)} lost</span>
+        <span><b>Crystals</b>${formatEndlessCrystals(run.crystalsMined)} earned · ${formatEndlessCrystals(run.crystalsBanked)} banked · ${formatNumber(run.crystalsLost)} units unable to carry</span>
         <span><b>Run</b>Capability ${formatNumber(run.minerCapability)} · Difficulty ${formatNumber(run.maximumDifficulty)} · Integrity ${formatNumber(run.integrityScore)} · Config v${formatNumber(run.configVersion)}</span>
       </div></details>
     </td>
@@ -960,6 +962,26 @@ async function refreshServerPlayer() {
     updateMenu();
     if (error?.code !== 'session_missing') toast(error.message);
     return null;
+  }
+}
+
+async function retryPendingEndlessRewards(runId, button) {
+  if (!runId || button?.disabled) return;
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'CHECKING RONIN…';
+  }
+  try {
+    const result = await apiClient.retryEndlessSettlement(runId);
+    const receipt = result?.receipt || result || {};
+    await refreshServerPlayer();
+    toast(`Rewards saved: ${formatNumber(receipt.minerXpBanked || 0)} XP · ${formatEndlessCrystals(receipt.crystalsBanked || 0)} Crystals`);
+  } catch (error) {
+    if (button?.isConnected) {
+      button.disabled = false;
+      button.textContent = 'RETRY REWARDS';
+    }
+    toast(error.message);
   }
 }
 
@@ -2964,6 +2986,10 @@ $('#profile-back-button').addEventListener('click', () => { showScreen('menu'); 
 $('#profile-manage-loadout-button').addEventListener('click', () => void openCosmetics());
 $('#profile-loadout-button').addEventListener('click', () => void openCosmetics());
 $('#profile-pass-button').addEventListener('click', openPass);
+$('#profile-endless-run-history').addEventListener('click', (event) => {
+  const button = event.target.closest('[data-endless-reward-run]');
+  if (button) void retryPendingEndlessRewards(button.dataset.endlessRewardRun, button);
+});
 for (const tab of document.querySelectorAll('[data-profile-tab]')) {
   tab.addEventListener('click', () => activateProfileTab(tab.dataset.profileTab));
 }
@@ -4867,6 +4893,13 @@ function formatCrystalReset(timestamp) {
 
 function trimNumber(value) {
   return Number(value).toLocaleString('en-US', { maximumFractionDigits: 2 });
+}
+
+function formatEndlessCrystals(value) {
+  const amount = Number(value || 0);
+  return Number.isFinite(amount)
+    ? amount.toLocaleString('en-US', { maximumFractionDigits: ENDLESS_CRYSTAL_DISPLAY_DECIMALS })
+    : '0';
 }
 
 function weiToRon(value) {

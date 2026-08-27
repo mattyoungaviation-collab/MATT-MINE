@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { encodeAbiParameters, encodeEventTopics, parseAbiItem } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { EndlessSettlementService } from '../server/endless-settlement-service.js';
 
@@ -13,6 +14,7 @@ const LOADOUT = '0x3333333333333333333333333333333333333333';
 const VERSION = `0x${'44'.repeat(32)}`;
 const LOADOUT_HASH = `0x${'55'.repeat(32)}`;
 const ZERO = `0x${'00'.repeat(32)}`;
+const SETTLED_EVENT = parseAbiItem('event EndlessRunSettled(bytes32 indexed runId,address indexed player,uint256 indexed minerId,uint8 outcome,uint32 completedPhases,uint32 minedCrystalUnits,uint256 xpBanked,uint256 crystalsBanked,bytes32 checkpointDigest)');
 const ECONOMY = Object.freeze({
   crystalConversionNumerator: 1,
   crystalConversionDenominator: 400,
@@ -34,19 +36,34 @@ function harness(options = {}) {
   let transaction = 0;
   let active = emptyActive();
   let settledEvent = null;
+  let settledReceiptLog = null;
   let processedRunId = '';
   let settlementEventReads = 0;
+  const settlementLogRequests = [];
   let settlementSimulation = null;
   let settlementBroadcast = null;
   const publicClient = {
     async getChainId() { return 2020; },
     async getBalance() { return 10n ** 18n; },
-    async waitForTransactionReceipt() {
+    async waitForTransactionReceipt({ hash }) {
       if (options.confirmationError) throw options.confirmationError;
-      return { status: 'success', logs: [] };
+      return {
+        status: 'success',
+        transactionHash: hash,
+        blockNumber: 100n,
+        logs: options.receiptSettlementLog && settledReceiptLog ? [settledReceiptLog] : []
+      };
     },
-    async getLogs() {
+    async getTransactionReceipt({ hash }) {
+      return { status: 'success', transactionHash: hash, blockNumber: 100n, logs: [] };
+    },
+    async getBlockNumber() { return 100n; },
+    async getLogs(request) {
+      settlementLogRequests.push(request);
       settlementEventReads += 1;
+      if (options.rejectWideLogRange && request.toBlock === 'latest') {
+        throw new Error('Invalid params: block range is too large');
+      }
       if (settlementEventReads <= Number(options.settlementEventDelayReads || 0)) return [];
       return settledEvent ? [settledEvent] : [];
     },
@@ -113,14 +130,32 @@ function harness(options = {}) {
         const result = args[0];
         processedRunId = result.runId;
         settledEvent = {
+          address: SETTLEMENT,
           transactionHash: `0x${transaction.toString(16).padStart(64, '0')}`,
           args: {
             runId: result.runId,
+            player: result.player,
+            minerId: result.minerId,
+            outcome: result.outcome,
             completedPhases: result.completedPhases,
             minedCrystalUnits: result.minedCrystalUnits,
             xpBanked: 10n,
-            crystalsBanked: 10n ** 18n
+            crystalsBanked: 10n ** 18n,
+            checkpointDigest: result.checkpointDigest
           }
+        };
+        settledReceiptLog = {
+          address: SETTLEMENT,
+          transactionHash: settledEvent.transactionHash,
+          topics: encodeEventTopics({
+            abi: [SETTLED_EVENT],
+            eventName: 'EndlessRunSettled',
+            args: { runId: result.runId, player: result.player, minerId: result.minerId }
+          }),
+          data: encodeAbiParameters(
+            SETTLED_EVENT.inputs.filter((input) => !input.indexed),
+            [result.outcome, result.completedPhases, result.minedCrystalUnits, 10n, 10n ** 18n, result.checkpointDigest]
+          )
         };
         active = emptyActive();
       }
@@ -148,6 +183,7 @@ function harness(options = {}) {
     service,
     activeRun: () => active,
     settlementEventReads: () => settlementEventReads,
+    settlementLogRequests: () => settlementLogRequests,
     settlementBroadcast: () => settlementBroadcast,
     settlementSimulation: () => settlementSimulation
   };
@@ -197,6 +233,103 @@ test('Endless chain adapter authorizes, checkpoints, and settles one immutable v
   });
   assert.equal(settled.crystalsBanked, 1);
   assert.equal(settled.minerXpBanked, 10);
+});
+
+test('Endless settlement reads the confirmed receipt without a deployment-wide log query', async () => {
+  const { service, settlementEventReads } = harness({
+    receiptSettlementLog: true,
+    rejectWideLogRange: true
+  });
+  await service.init();
+  const prepared = await service.prepareRunAuthorization({
+    address: PLAYER,
+    minerId: 7,
+    economyVersion: 'endless-conservative-v1',
+    economyConfig: ECONOMY
+  });
+  const started = await service.beginRun({
+    address: PLAYER,
+    minerId: 7,
+    economyVersion: 'endless-conservative-v1',
+    economyConfig: ECONOMY,
+    authorization: prepared.authorization,
+    playerSignature: `0x${'12'.repeat(65)}`
+  });
+  const checkpointed = await service.checkpoint({
+    address: PLAYER,
+    minerId: 7,
+    chainRun: started.chainRun,
+    completedPhases: 1,
+    minedCrystalUnits: 3,
+    rollingDigest: 'ab'.repeat(32)
+  });
+
+  const settled = await service.settle({
+    address: PLAYER,
+    minerId: 7,
+    chainRun: checkpointed.chainRun,
+    completedPhases: 1,
+    minedCrystalUnits: 3,
+    rollingDigest: 'ab'.repeat(32),
+    outcome: 'extraction'
+  });
+
+  assert.equal(settled.crystalsBanked, 1);
+  assert.equal(settled.minerXpBanked, 10);
+  assert.equal(settlementEventReads(), 0, 'the successful receipt is authoritative');
+});
+
+test('Endless reward retry recovers a settled run in small adjustable log windows', async () => {
+  const { service, settlementLogRequests } = harness({ rejectWideLogRange: true });
+  await service.init();
+  const prepared = await service.prepareRunAuthorization({
+    address: PLAYER,
+    minerId: 7,
+    economyVersion: 'endless-conservative-v1',
+    economyConfig: ECONOMY
+  });
+  const started = await service.beginRun({
+    address: PLAYER,
+    minerId: 7,
+    economyVersion: 'endless-conservative-v1',
+    economyConfig: ECONOMY,
+    authorization: prepared.authorization,
+    playerSignature: `0x${'12'.repeat(65)}`
+  });
+  const checkpointed = await service.checkpoint({
+    address: PLAYER,
+    minerId: 7,
+    chainRun: started.chainRun,
+    completedPhases: 1,
+    minedCrystalUnits: 3,
+    rollingDigest: 'ab'.repeat(32)
+  });
+  await service.settle({
+    address: PLAYER,
+    minerId: 7,
+    chainRun: checkpointed.chainRun,
+    completedPhases: 1,
+    minedCrystalUnits: 3,
+    rollingDigest: 'ab'.repeat(32),
+    outcome: 'extraction'
+  });
+
+  const recovered = await service.settle({
+    address: PLAYER,
+    minerId: 7,
+    chainRun: checkpointed.chainRun,
+    completedPhases: 1,
+    minedCrystalUnits: 3,
+    rollingDigest: 'ab'.repeat(32),
+    fromTransactionHash: checkpointed.transactionHash,
+    outcome: 'extraction'
+  });
+
+  assert.equal(recovered.recovered, true);
+  assert.equal(recovered.minerXpBanked, 10);
+  assert.ok(settlementLogRequests().length > 0);
+  assert.ok(settlementLogRequests().every((request) => request.toBlock !== 'latest'));
+  assert.ok(settlementLogRequests().every((request) => BigInt(request.toBlock) - BigInt(request.fromBlock) < 100n));
 });
 
 test('Endless chain adapter releases a failed start through signed zero-phase settlement', async () => {

@@ -14,7 +14,15 @@ import { defaultEndlessConfig } from '../src/game/endlessMine.js';
 
 function configured() {
   const config = defaultEndlessConfig();
-  config.rewards = { ...config.rewards, enabled: false, crystalsEnabled: false, minerXpEnabled: false };
+  config.rewards = {
+    ...config.rewards,
+    enabled: false,
+    crystalsEnabled: false,
+    minerXpEnabled: false,
+    crystalConversionNumerator: 1,
+    crystalConversionDenominator: 400,
+    mineableCrystalUnits: 3_750
+  };
   return config;
 }
 
@@ -24,7 +32,11 @@ function run() {
     tokenHash: 'hash',
     address: '0x0000000000000000000000000000000000000001',
     minerId: 7,
-    minerProfile: { traits: { level: 3, crystalCarryCapacity: 2 } },
+    minerProfile: {
+      traits: { level: 3, baseCarryCapacity: 2 },
+      effectiveTraits: { carryCapacity: 2 },
+      gameplay: { carryCapacity: 2 }
+    },
     runSeed: 'server-random-run-seed',
     configVersion: 2,
     config: configured(),
@@ -54,7 +66,14 @@ test('server phase checkpoint reconstructs the manifest and credits its exact ma
   const verification = verifyEndlessPhaseEvents(active, completeEvents(active.manifest), 20_000);
   assert.equal(verification.score, active.manifest.pointBudget);
   assert.equal(verification.requiredKills, active.manifest.gate.requiredCount);
-  assert.equal(verification.crystalsAdded, 2, 'real Miner carry capacity clips crystals');
+  assert.equal(verification.crystalsAdded, 2, 'production V2 Miner carry capacity clips crystals');
+  assert.equal(
+    verification.grossCrystalsEarned,
+    verification.minedCrystalIds.length * active.config.rewards.crystalConversionNumerator /
+      active.config.rewards.crystalConversionDenominator,
+    'fractional MATT Crystal rewards are not rounded down to zero'
+  );
+  assert.ok(verification.grossCrystalsEarned > 0 && verification.grossCrystalsEarned < 1);
   const firstFingerprint = active.manifest.fingerprint;
   const next = applyEndlessPhaseCheckpoint(active, verification, 'descend', 20_000);
   assert.equal(active.completedPhases, 1);
