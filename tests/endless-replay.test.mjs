@@ -163,6 +163,65 @@ test('a complete legitimate phase reaches an authoritative verified descent from
   assert.ok(replayed.outcomeEvents.some((event) => event.type === 'phase_completed'));
 });
 
+test('a verified Endless extract command banks without an impossible second finish marker', () => {
+  const run = endlessRun();
+  run.minerProfile = {
+    progression: { level: 50, bankedXp: 90_000 },
+    gameplay: {
+      maximumHealth: 10_000, armorShield: 2_000, pickaxeAttack: 1_500,
+      blasterAttack: 1_500, dynamiteAttack: 2_000, healAmount: 500,
+      carryCapacity: 100, deathRetentionBps: 8_000, level: 50
+    },
+    traits: { level: 50, health: 10_000, damage: 1_500, armor: 2_000, speed: 1, luck: 1, crystalCarryCapacity: 100 },
+    equipped: {}
+  };
+  run.manifest = generateEndlessPhase({
+    runId: run.id,
+    runSeed: run.runSeed,
+    phase: 1,
+    configVersion: run.configVersion,
+    config: run.config,
+    minerProfile: run.minerProfile
+  });
+  const inputEvents = [];
+  const game = new MattMineGame(null, defaultProfile(), {
+    headless: true,
+    audio: NOOP_AUDIO,
+    onArenaInput(event) { inputEvents.push({ ...event }); }
+  });
+  game.startRun({
+    mode: 'endless', seed: run.runSeed, currentPhase: 1,
+    endlessRunId: run.id, endlessConfigVersion: run.configVersion,
+    endlessSnapshot: { config: run.config }, endlessManifest: run.manifest,
+    nftRun: { minerId: run.minerId, profile: run.minerProfile }
+  });
+  driveEndlessPhaseWithControls(game);
+  assert.equal(game.state, 'depthchoice');
+  inputEvents.push({ type: 'command', tick: Math.round(game.run.elapsed * 1_000), command: 'extract' });
+  const events = inputEvents.map((event, index) => ({ seq: index + 1, ...event }));
+  const replayed = replayArenaTranscript({
+    version: ARENA_TRANSCRIPT_VERSION,
+    dailySeed: run.runSeed,
+    tickMs: 20,
+    maxTicks: run.config.integrity.maximumPhaseSeconds * 1_000,
+    maxEvents: run.config.integrity.maximumInputEventsPerPhase,
+    maxDepth: 2,
+    verificationMode: 'deterministic-input-replay',
+    tuning: {}
+  }, events, {
+    mode: 'endless', requireTerminal: false, maxDepth: 2, currentPhase: 1,
+    endlessRunId: run.id, endlessConfigVersion: run.configVersion,
+    endlessSnapshot: { config: run.config }, endlessManifest: run.manifest,
+    nftRun: { minerId: run.minerId, profile: run.minerProfile }
+  });
+
+  assert.equal(events.at(-1).type, 'command');
+  assert.equal(events.at(-1).command, 'extract');
+  assert.equal(replayed.terminal, false);
+  assert.equal(replayed.state, 'ended');
+  assert.equal(replayed.extracted, true);
+});
+
 test('a verified descent carries exact health, inventory, upgrades, and phase-specific RNG into phase two', () => {
   const run = endlessRun();
   const browser = createHeadlessEndlessGame(run, run.manifest);

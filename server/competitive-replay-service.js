@@ -197,7 +197,10 @@ export class CompetitiveReplayService {
     assertApi(snapshot?.manifest?.fingerprint === run.manifest?.fingerprint, 409, 'endless_replay_manifest_mismatch', 'The replay manifest does not match the current server phase.');
     const replayed = replayArenaTranscript(snapshot.challenge, events, {
       mode: 'endless',
-      requireTerminal: action === 'bank',
+      // The authenticated extract command is the Endless phase's terminal
+      // barrier. It must remain the last event, so requiring a second finish
+      // marker here would make a valid bank transcript impossible.
+      requireTerminal: false,
       maxDepth: run.currentPhase + 1,
       currentPhase: run.currentPhase,
       endlessRunId: run.id,
@@ -208,7 +211,7 @@ export class CompetitiveReplayService {
       endlessContinuation: snapshot.initialState || null
     });
     if (action === 'bank') {
-      assertApi(replayed.terminal && replayed.extracted, 422, 'endless_replay_not_banked', 'The authoritative replay did not reach a valid banked state.');
+      assertApi(replayed.state === 'ended' && replayed.extracted, 422, 'endless_replay_not_banked', 'The authoritative replay did not reach a valid banked state.');
     } else {
       assertApi(replayed.state === 'playing' && replayed.depth === run.currentPhase + 1, 422, 'endless_replay_not_descended', 'The authoritative replay did not complete and descend from the current phase.');
     }
