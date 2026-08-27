@@ -11,6 +11,7 @@ import {
 const examplePath = resolve("config", "ronin-nft-v2-endless.example.json");
 const preflightPath = resolve("scripts", "check-nft-v2-endless-deployer.js");
 const verifierPath = resolve("scripts", "verify-nft-v2-endless-mainnet.js");
+const verificationExporterPath = resolve("scripts", "export-nft-v2-endless-verification-inputs.js");
 const packagePath = resolve("package.json");
 const hardhatConfigPath = resolve("hardhat.config.js");
 const example = () => JSON.parse(readFileSync(examplePath, "utf8"));
@@ -67,16 +68,23 @@ describe("NFT V2 Endless deployment configuration", () => {
     assert.doesNotMatch(source, /ethers\.artifacts/);
   });
 
-  it("provides a repeatable read-only Sourcify verifier without changing activation state", () => {
+  it("requires exact Ronin Explorer matches and provides repeatable manual inputs", () => {
     const source = readFileSync(verifierPath, "utf8");
+    const exporter = readFileSync(verificationExporterPath, "utf8");
     const packageJson = JSON.parse(readFileSync(packagePath, "utf8"));
     const hardhatConfig = readFileSync(hardhatConfigPath, "utf8");
     assert.match(packageJson.scripts["verify-nft-v2-endless:ronin"], /verify-nft-v2-endless-mainnet\.js/);
+    assert.match(packageJson.scripts["export-nft-v2-endless-verification-inputs"], /export-nft-v2-endless-verification-inputs\.js/);
+    assert.match(source, /explorer\.roninchain\.com\/api\/v2\/smart-contracts/);
+    assert.match(source, /is_fully_verified === true/);
+    assert.match(source, /is_partially_verified === false/);
+    assert.match(source, /creation_status === "success"/);
+    assert.match(source, /record\.roninExplorerVerification/);
     assert.match(source, /provider: "sourcify"/);
     assert.match(source, /creationTxHash: record\.transactionHash/);
-    assert.match(source, /record\.sourcifyVerifiedAt/);
-    assert.match(hardhatConfig, /apiUrl: "https:\/\/sourcify\.roninchain\.com\/server"/);
-    assert.doesNotMatch(hardhatConfig, /sourcify\.roninchain\.com\/server\//);
+    assert.match(exporter, /buildInfo\.input/);
+    assert.match(exporter, /matt-mine-endless-\$\{item\.label\}-standard-input\.json/);
+    assert.match(hardhatConfig, /apiUrl: "https:\/\/sourcify\.dev\/server"/);
     assert.doesNotMatch(source, /manifest\.status\s*=/);
     assert.doesNotMatch(source, /writeContract|\.unpause\(/);
   });

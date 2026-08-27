@@ -19,7 +19,7 @@ for (const path of files) {
 const config = readFileSync(resolve(contractsRoot, "..", "hardhat.config.js"), "utf8");
 for (const required of [
   'version: "0.8.28"', 'evmVersion: "london"', 'viaIR: true',
-  'optimizer:', 'enabled: true', 'apiUrl: "https://sourcify.roninchain.com/server"'
+  'optimizer:', 'enabled: true', 'apiUrl: "https://sourcify.dev/server"'
 ]) if (!config.includes(required)) violations.push(`hardhat.config.js: missing ${required}`);
 if (violations.length) throw new Error(`NFT V2 source audit failed:\n${violations.join("\n")}`);
 console.log(`NFT V2 source audit passed for ${files.length} Solidity files.`);

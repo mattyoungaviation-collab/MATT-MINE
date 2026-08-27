@@ -99,7 +99,7 @@ export default defineConfig({
   verify: {
     sourcify: {
       enabled: true,
-      apiUrl: "https://sourcify.roninchain.com/server"
+      apiUrl: "https://sourcify.dev/server"
     }
   }
 });
