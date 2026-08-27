@@ -429,6 +429,35 @@ test('production admin separates Treasury Safe packages from direct emergency-pa
   assert.match(source, /\/api\/admin\/arena\/days\/\$\{encodeURIComponent\(day\)\}\/cancel/);
 });
 
+test('Arena transcript close drains a terminal command queued at a settling flush boundary', async () => {
+  const accepted = [];
+  const transcript = new ArenaTranscript({}, {
+    runId: 'arena_run_close_boundary',
+    runToken: 'token',
+    checkpoint: { throughSeq: 1, transcriptHash: 'hash-1', signature: 'sig-1' }
+  }, {
+    flushSize: 256,
+    async appendEvents(runId, runToken, checkpoint, events) {
+      accepted.push(...events);
+      return {
+        throughSeq: events.at(-1).seq,
+        transcriptHash: `hash-${events.at(-1).seq}`,
+        signature: `sig-${events.at(-1).seq}`
+      };
+    }
+  });
+  const settling = Promise.resolve(transcript.checkpoint).finally(() => {
+    transcript.drainPromise = null;
+  });
+  transcript.drainPromise = settling;
+  transcript.record({ type: 'command', tick: 20, command: 'extract' });
+
+  const checkpoint = await transcript.close();
+
+  assert.equal(checkpoint.throughSeq, 2);
+  assert.deepEqual(accepted.map((event) => [event.seq, event.command]), [[2, 'extract']]);
+});
+
 test('Arena UI closes cleanly for review while already-purchased attempts survive an entry pause', () => {
   const source = fs.readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
   const startRunSource = source.slice(

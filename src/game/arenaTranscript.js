@@ -80,13 +80,13 @@ export class ArenaTranscript {
   async close() {
     this.closed = true;
     try {
-      return await this.flush();
+      return await this.#flushUntilEmpty();
     } catch (error) {
       // A background batch may have exhausted its short retry window just as
       // the run ended. Give retryable transport/server failures one final
       // ordered drain; validation failures remain immediate and final.
       if (!isRetryableAppendError(error)) throw error;
-      return this.flush();
+      return this.#flushUntilEmpty();
     }
   }
 
@@ -113,6 +113,13 @@ export class ArenaTranscript {
       }
       this.batches.shift();
     }
+    return this.checkpoint;
+  }
+
+  async #flushUntilEmpty() {
+    do {
+      await this.flush();
+    } while (this.pending.length || this.batches.length);
     return this.checkpoint;
   }
 
