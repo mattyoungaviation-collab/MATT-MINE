@@ -17,6 +17,7 @@ const ZERO_BYTES32 = `0x${'00'.repeat(32)}`;
 const DEFAULT_OPERATOR_MINIMUM_BALANCE_WEI = 20_000_000_000_000_000n;
 const DEFAULT_SETTLEMENT_RECONCILIATION_ATTEMPTS = 6;
 const DEFAULT_SETTLEMENT_RECONCILIATION_DELAY_MS = 1_500;
+const DEFAULT_SETTLEMENT_GAS_LIMIT = 1_200_000n;
 
 const ENDLESS_ABI = parseAbi([
   'function OPERATOR_ROLE() view returns (bytes32)',
@@ -113,6 +114,10 @@ export class EndlessSettlementService {
       options.settlementReconciliationDelayMs ?? DEFAULT_SETTLEMENT_RECONCILIATION_DELAY_MS,
       'Endless settlement reconciliation delay',
       10_000
+    );
+    this.settlementGasLimit = positiveBigInt(
+      options.settlementGasLimit ?? DEFAULT_SETTLEMENT_GAS_LIMIT,
+      'Endless settlement gas limit'
     );
     this.wait = options.wait || ((delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)));
     if (!isAddressEqual(this.operatorAccount.address, this.operatorAddress)) {
@@ -479,17 +484,47 @@ export class EndlessSettlementService {
 
   async #submitSettlement(active, result, label, options = {}) {
     let transactionHash = '';
+    let stage = 'signing';
+    let simulationBypassed = false;
     try {
       const rewardSignature = await this.signerAccount.signTypedData({ domain: this.#domain(), types: RESULT_TYPES, primaryType: 'EndlessResult', message: result });
-      const request = { account: this.operatorAddress, address: this.settlementAddress, abi: ENDLESS_ABI, functionName: 'settle', args: [result, rewardSignature] };
-      await this.publicClient.simulateContract(request);
+      const request = {
+        account: this.operatorAddress,
+        address: this.settlementAddress,
+        abi: ENDLESS_ABI,
+        functionName: 'settle',
+        args: [result, rewardSignature],
+        gas: this.settlementGasLimit
+      };
+      stage = 'simulating';
+      try {
+        await this.publicClient.simulateContract(request);
+      } catch (error) {
+        // A decoded contract rejection is authoritative and must not be sent.
+        // An undecoded RPC/preflight outage is not: the signed contract call is
+        // still fully validated on-chain, and the explicit gas limit avoids a
+        // second eth_estimateGas dependency before broadcast.
+        if (endlessContractErrorName(error)) throw error;
+        simulationBypassed = true;
+        console.warn(JSON.stringify({
+          timestamp: new Date().toISOString(),
+          level: 'warn',
+          event: 'endless_settlement_simulation_bypassed',
+          runId: active.runId,
+          minerId: Number(result.minerId)
+        }));
+      }
+      stage = 'broadcasting';
       transactionHash = await this.operatorClient.writeContract(request);
+      stage = 'confirming';
       await this.#confirmed(transactionHash, label);
+      stage = 'reading-event';
       const event = await this.#settledEvent(active.runId);
       assertApi(event, 502, 'endless_chain_settlement_event_missing', 'The confirmed Endless settlement event was not found.');
       return this.#settlementReceipt(event, transactionHash, false);
     } catch (error) {
-      const recovered = transactionHash
+      const couldHaveBroadcast = transactionHash || ['broadcasting', 'confirming', 'reading-event'].includes(stage);
+      const recovered = couldHaveBroadcast
         ? await this.#reconcileSettlement(active, transactionHash, options)
         : await this.#settledEvent(active.runId).catch(() => null);
       if (recovered) {
@@ -503,7 +538,7 @@ export class EndlessSettlementService {
         502,
         'endless_chain_settlement_failed',
         `${label} was not confirmed on Ronin${reason ? ` (${reason})` : ''}. The locked run remains saved and can be retried.`,
-        { reason: reason || 'UNAVAILABLE', retryable: true, transactionHash }
+        { reason: reason || 'UNAVAILABLE', retryable: true, transactionHash, stage, simulationBypassed }
       );
     }
   }
@@ -562,6 +597,7 @@ export function createEndlessSettlementServiceFromEnvironment(environment = proc
     operatorMinimumBalanceWei: environment.MATT_MINE_NFT_OPERATOR_MINIMUM_BALANCE_WEI || DEFAULT_OPERATOR_MINIMUM_BALANCE_WEI,
     settlementReconciliationAttempts: environment.MATT_MINE_ENDLESS_RECONCILIATION_ATTEMPTS || DEFAULT_SETTLEMENT_RECONCILIATION_ATTEMPTS,
     settlementReconciliationDelayMs: environment.MATT_MINE_ENDLESS_RECONCILIATION_DELAY_MS || DEFAULT_SETTLEMENT_RECONCILIATION_DELAY_MS,
+    settlementGasLimit: environment.MATT_MINE_ENDLESS_SETTLEMENT_GAS_LIMIT || DEFAULT_SETTLEMENT_GAS_LIMIT,
     ...options
   });
 }
@@ -730,6 +766,12 @@ function nonnegativeBigInt(value, label) {
     if (result < 0n) throw new Error();
     return result;
   } catch { throw new Error(`${label} is invalid.`); }
+}
+
+function positiveBigInt(value, label) {
+  const result = nonnegativeBigInt(value, label);
+  if (result === 0n) throw new Error(`${label} is invalid.`);
+  return result;
 }
 
 function jsonSafe(value) {

@@ -368,6 +368,35 @@ test('Endless chain adapter exposes a safe exact Ronin reason before broadcastin
   );
 });
 
+test('Endless chain adapter broadcasts a signed close when only RPC simulation is unavailable', async () => {
+  const { service, activeRun, settlementSimulation } = harness({
+    settlementSimulationError: new Error('RPC preflight is temporarily unavailable')
+  });
+  await service.init();
+  const prepared = await service.prepareRunAuthorization({
+    address: PLAYER,
+    minerId: 7,
+    economyVersion: 'endless-conservative-v1',
+    economyConfig: ECONOMY
+  });
+  await service.beginRun({
+    address: PLAYER,
+    minerId: 7,
+    economyVersion: 'endless-conservative-v1',
+    economyConfig: ECONOMY,
+    authorization: prepared.authorization,
+    playerSignature: `0x${'12'.repeat(65)}`
+  });
+
+  const cancelled = await service.cancelRun({ address: PLAYER, minerId: 7 });
+
+  assert.equal(cancelled.cancelled, true);
+  assert.equal(cancelled.settlement.recovered, false);
+  assert.equal(settlementSimulation().gas, 1_200_000n);
+  assert.notEqual(cancelled.transactionHash, '');
+  assert.equal(activeRun().runId, ZERO);
+});
+
 test('Endless chain adapter fails closed when Admin economy values do not match the mapped version', async () => {
   const { service } = harness();
   await service.init();
