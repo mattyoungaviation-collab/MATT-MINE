@@ -6,6 +6,7 @@ import {
   endlessLeaderboard,
   endlessSmartEngineRecommendation,
   publicEndlessCheckpoint,
+  sealEndlessPhaseVerification,
   signEndlessCheckpoint,
   validEndlessCheckpoint,
   verifyEndlessPhaseEvents
@@ -80,6 +81,26 @@ test('server phase checkpoint reconstructs the manifest and credits its exact ma
   assert.equal(active.currentPhase, 2);
   assert.notEqual(next.fingerprint, firstFingerprint);
   assert.equal(active.phaseHistory.length, 1);
+});
+
+test('economic checkpoint digest is stable across retry timing and monitoring changes', () => {
+  const active = run();
+  const verification = verifyEndlessPhaseEvents(active, completeEvents(active.manifest), 20_000);
+  const first = {
+    ...structuredClone(verification),
+    phaseCompletedAt: 20_000,
+    integrityState: { score: 100, flags: [], phaseAttempt: 1 }
+  };
+  const retry = {
+    ...structuredClone(verification),
+    verifiedAt: 45_000,
+    phaseCompletedAt: 45_000,
+    integrityState: { score: 95, flags: ['late-heartbeat'], phaseAttempt: 1 }
+  };
+
+  assert.equal(sealEndlessPhaseVerification(active, first), sealEndlessPhaseVerification(active, retry));
+  retry.score += 1;
+  assert.notEqual(sealEndlessPhaseVerification(active, first), sealEndlessPhaseVerification(active, retry));
 });
 
 test('server rejects Guardian bypasses, duplicate targets, fabricated crystals, and replayed checkpoints', () => {

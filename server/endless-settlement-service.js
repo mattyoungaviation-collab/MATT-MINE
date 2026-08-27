@@ -307,10 +307,22 @@ export class EndlessSettlementService {
       const checkpointDigest = digestBytes32(rollingDigest);
       const targetPhase = boundedUint32(completedPhases, 'completed phases');
       const targetUnits = boundedUint32(minedCrystalUnits, 'mined Crystal units');
-      if (Number(active.completedPhases) === targetPhase && active.checkpointDigest === checkpointDigest && Number(active.minedCrystalUnits) === targetUnits) {
-        return { recovered: true, transactionHash: '', chainRun: publicChainRun(active) };
+      const activePhase = Number(active.completedPhases);
+      if (activePhase === targetPhase) {
+        // Ronin may confirm a checkpoint before the surrounding database
+        // transaction is saved. The next request then legitimately repeats the
+        // same phase, sometimes with different volatile server metadata in its
+        // locally rebuilt digest. The signed on-chain checkpoint is the
+        // authoritative result for that phase, so return it for server resync
+        // instead of permanently trapping the Miner behind a sequence error.
+        const resynced = active.checkpointDigest !== checkpointDigest || Number(active.minedCrystalUnits) !== targetUnits;
+        return { recovered: true, resynced, transactionHash: '', chainRun: publicChainRun(active) };
       }
-      assertApi(Number(active.completedPhases) + 1 === targetPhase, 409, 'endless_chain_checkpoint_sequence', 'The on-chain Endless checkpoint is not at the expected phase.');
+      assertApi(activePhase + 1 === targetPhase, 409, 'endless_chain_checkpoint_sequence', 'The on-chain Endless checkpoint cannot be advanced safely from the current phase.', {
+        chainPhase: activePhase,
+        requestedPhase: targetPhase,
+        expectedPhase: activePhase + 1
+      });
       const receipt = {
         player: getAddress(address),
         minerId: BigInt(minerId),

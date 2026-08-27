@@ -305,8 +305,14 @@ export function sealEndlessPhaseVerification(run, verification) {
   );
   const payload = structuredClone(verification);
   delete payload.digest;
+  // These values are useful monitoring metadata, but they are not part of the
+  // gameplay result. Excluding them makes an identical verified transcript
+  // produce the same checkpoint after a database/RPC retry.
+  delete payload.verifiedAt;
+  delete payload.phaseCompletedAt;
+  delete payload.integrityState;
   return createHash('sha256')
-    .update(`MATT-ENDLESS-CHECKPOINT-V2|${run.rollingDigest}|${run.manifest.fingerprint}|${canonical(payload)}`)
+    .update(`MATT-ENDLESS-CHECKPOINT-V3|${run.rollingDigest}|${run.manifest.fingerprint}|${canonical(payload)}`)
     .digest('hex');
 }
 

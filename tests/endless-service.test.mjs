@@ -371,6 +371,96 @@ test('a lost bank response can retry the same signed checkpoint and recover the 
   assert.equal(recovered.alreadyAccepted, true);
 });
 
+test('a confirmed Ronin checkpoint resyncs the bank before reward settlement', async () => {
+  const authoritativeDigest = 'ef'.repeat(32);
+  let settlementPayload = null;
+  const chainRun = {
+    runId: `0x${'31'.repeat(32)}`,
+    versionId: `0x${'41'.repeat(32)}`,
+    loadoutHash: `0x${'51'.repeat(32)}`,
+    checkpointDigest: `0x${'00'.repeat(32)}`,
+    nonce: '0',
+    completedPhases: 0,
+    minedCrystalUnits: 0
+  };
+  const active = harness({
+    endlessRewardSettler: {
+      async beginRun() {
+        return { transactionHash: `0x${'61'.repeat(32)}`, chainRun };
+      },
+      async checkpoint() {
+        return {
+          recovered: true,
+          resynced: true,
+          transactionHash: '',
+          chainRun: {
+            ...chainRun,
+            checkpointDigest: `0x${authoritativeDigest}`,
+            completedPhases: 1,
+            minedCrystalUnits: 3
+          }
+        };
+      },
+      async settle(input) {
+        settlementPayload = structuredClone(input);
+        return { transactionHash: `0x${'ab'.repeat(32)}`, crystalsBanked: 3, minerXpBanked: 10 };
+      }
+    }
+  });
+  const token = await login(active.service);
+  const config = defaultEndlessConfig();
+  config.rewards = {
+    ...config.rewards,
+    enabled: true,
+    crystalsEnabled: true,
+    minerXpEnabled: true,
+    economyVersion: 'endless-test-v1',
+    crystalConversionNumerator: 1,
+    crystalConversionDenominator: 1,
+    mineableCrystalUnits: 3_750,
+    maximumPayoutNumerator: 10,
+    maximumPayoutDenominator: 1,
+    maximumDailyPayoutNumerator: 500,
+    maximumDailyPayoutDenominator: 1,
+    maximumPhases: 1_000_000,
+    phaseXp: 10,
+    maximumRunXp: 500,
+    maximumWalletXpPerDay: 2_500,
+    maximumMinerXpPerDay: 2_500,
+    checkpointTimeoutSeconds: 86_400,
+    failedRunsRetainXp: false
+  };
+  await active.service.publishEndlessConfig('endless-admin-key', {
+    config,
+    reason: 'Exercise authoritative Ronin checkpoint recovery.'
+  });
+  const started = await active.service.startRun(token, 'endless', {
+    minerId: 7,
+    authorization: { player: ADDRESS },
+    playerSignature: `0x${'11'.repeat(65)}`
+  });
+  active.advance(20_000);
+
+  const banked = await active.service.checkpointEndlessPhase(token, {
+    runId: started.runId,
+    runToken: started.runToken,
+    previousCheckpoint: started.checkpoint,
+    action: 'bank'
+  });
+
+  assert.equal(banked.summary.status, 'banked');
+  assert.equal(banked.summary.crystalsCarried, 3);
+  assert.equal(banked.checkpoint.digest, authoritativeDigest);
+  assert.equal(settlementPayload.completedPhases, 1);
+  assert.equal(settlementPayload.minedCrystalUnits, 3);
+  assert.equal(settlementPayload.rollingDigest, authoritativeDigest);
+  assert.equal(settlementPayload.chainRun.checkpointDigest, `0x${authoritativeDigest}`);
+  const state = await active.database.read();
+  const stored = state.endlessCompetition.runs[started.runId];
+  assert.equal(stored.rollingDigest, authoritativeDigest);
+  assert.equal(stored.phaseHistory.at(-1).digest, authoritativeDigest);
+});
+
 test('Endless cannot reuse a Miner or wallet already active in another ranked run', async () => {
   const active = harness();
   const token = await login(active.service);

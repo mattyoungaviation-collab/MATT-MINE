@@ -324,6 +324,9 @@ export const endlessServiceMethods = {
           rollingDigest: run.rollingDigest
         });
         run.chainRun = chainCheckpoint.chainRun;
+        if (chainCheckpoint.recovered === true) {
+          reconcileRecoveredChainCheckpoint(run, verification, chainCheckpoint.chainRun);
+        }
         if (chainCheckpoint.transactionHash) {
           run.chainTransactions.push({ type: 'checkpoint', phase: run.completedPhases, hash: chainCheckpoint.transactionHash, recordedAt: timestamp });
           run.chainTransactions = run.chainTransactions.slice(-50);
@@ -1025,6 +1028,39 @@ function recoveredEndlessBankResponse(run, operations = {}) {
       : null,
     alreadyAccepted: true
   };
+}
+
+function reconcileRecoveredChainCheckpoint(run, verification, chainRun) {
+  const completedPhases = Number(chainRun?.completedPhases);
+  const minedCrystalUnits = Number(chainRun?.minedCrystalUnits);
+  const prefixedDigest = String(chainRun?.checkpointDigest || '').toLowerCase();
+  assertApi(
+    Number.isSafeInteger(completedPhases) && completedPhases === Number(run.completedPhases),
+    502,
+    'endless_chain_checkpoint_recovery_phase',
+    'Ronin returned an unrelated Endless checkpoint phase during recovery.'
+  );
+  assertApi(
+    Number.isSafeInteger(minedCrystalUnits) && minedCrystalUnits >= 0 && /^0x[0-9a-f]{64}$/.test(prefixedDigest),
+    502,
+    'endless_chain_checkpoint_recovery_invalid',
+    'Ronin returned an invalid Endless checkpoint during recovery.'
+  );
+
+  const digest = prefixedDigest.slice(2);
+  const previousCarried = Math.max(0, Number(run.crystalsCarried || 0) - Number(verification.crystalsAdded || 0));
+  verification.crystalsAdded = Math.max(0, minedCrystalUnits - previousCarried);
+  verification.crystalsCarried = minedCrystalUnits;
+  verification.digest = digest;
+  run.crystalsCarried = minedCrystalUnits;
+  run.rollingDigest = digest;
+
+  const storedVerification = Array.isArray(run.phaseHistory) ? run.phaseHistory.at(-1) : null;
+  if (storedVerification?.phase === verification.phase) {
+    storedVerification.crystalsAdded = verification.crystalsAdded;
+    storedVerification.crystalsCarried = minedCrystalUnits;
+    storedVerification.digest = digest;
+  }
 }
 
 function publicEndlessPhaseVerification(verification) {

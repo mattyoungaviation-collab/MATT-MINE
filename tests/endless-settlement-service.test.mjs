@@ -235,6 +235,50 @@ test('Endless chain adapter authorizes, checkpoints, and settles one immutable v
   assert.equal(settled.minerXpBanked, 10);
 });
 
+test('Endless chain adapter recovers an already-confirmed phase as authoritative state', async () => {
+  const { service, activeRun } = harness();
+  await service.init();
+  const prepared = await service.prepareRunAuthorization({
+    address: PLAYER,
+    minerId: 7,
+    economyVersion: 'endless-conservative-v1',
+    economyConfig: ECONOMY
+  });
+  const started = await service.beginRun({
+    address: PLAYER,
+    minerId: 7,
+    economyVersion: 'endless-conservative-v1',
+    economyConfig: ECONOMY,
+    authorization: prepared.authorization,
+    playerSignature: `0x${'12'.repeat(65)}`
+  });
+  await service.checkpoint({
+    address: PLAYER,
+    minerId: 7,
+    chainRun: started.chainRun,
+    completedPhases: 1,
+    minedCrystalUnits: 3,
+    rollingDigest: 'ab'.repeat(32)
+  });
+
+  const recovered = await service.checkpoint({
+    address: PLAYER,
+    minerId: 7,
+    chainRun: started.chainRun,
+    completedPhases: 1,
+    minedCrystalUnits: 4,
+    rollingDigest: 'cd'.repeat(32)
+  });
+
+  assert.equal(recovered.recovered, true);
+  assert.equal(recovered.resynced, true);
+  assert.equal(recovered.transactionHash, '');
+  assert.equal(recovered.chainRun.completedPhases, 1);
+  assert.equal(recovered.chainRun.minedCrystalUnits, 3);
+  assert.equal(recovered.chainRun.checkpointDigest, `0x${'ab'.repeat(32)}`);
+  assert.equal(activeRun().completedPhases, 1);
+});
+
 test('Endless settlement reads the confirmed receipt without a deployment-wide log query', async () => {
   const { service, settlementEventReads } = harness({
     receiptSettlementLog: true,
