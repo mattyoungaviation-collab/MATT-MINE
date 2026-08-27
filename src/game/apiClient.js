@@ -1,4 +1,15 @@
 const SESSION_STORAGE_KEY = 'matt-mine-server-session-v1';
+const WALLET_SESSION_ERROR_CODES = new Set([
+  'authorization_required',
+  'player_session_required',
+  'session_expired',
+  'session_invalid',
+  'session_missing'
+]);
+
+export function walletSessionReauthenticationRequired(error) {
+  return Number(error?.status || 0) === 401 && WALLET_SESSION_ERROR_CODES.has(String(error?.code || ''));
+}
 
 export class MattMineApiError extends Error {
   constructor(message, status = 0, code = 'request_failed', details = null) {
@@ -537,13 +548,16 @@ export class MattMineApiClient {
       payload = await response.json();
     } catch {}
     if (!response.ok || !payload?.ok) {
-      if (response.status === 401) this.clearSession();
-      throw new MattMineApiError(
+      const error = new MattMineApiError(
         payload?.error?.message || `Server request failed (${response.status}).`,
         response.status,
         payload?.error?.code || 'request_failed',
         payload?.error?.details || null
       );
+      // Run tokens and signed checkpoints also use HTTP 401. They must not
+      // silently sign out an otherwise-valid wallet session.
+      if (walletSessionReauthenticationRequired(error)) this.clearSession();
+      throw error;
     }
     return payload;
   }

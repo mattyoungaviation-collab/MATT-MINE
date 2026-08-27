@@ -1331,6 +1331,33 @@ test('the browser API client stores sessions only in session storage and clears 
   assert.equal(values.has(SESSION_STORAGE_KEY), false);
 });
 
+test('the browser API client preserves wallet login when a run credential returns 401', async () => {
+  const values = new Map();
+  const storage = {
+    getItem: (key) => values.get(key) || null,
+    setItem: (key, value) => values.set(key, value),
+    removeItem: (key) => values.delete(key)
+  };
+  const client = new MattMineApiClient({
+    storage,
+    fetch: async () => new Response(JSON.stringify({
+      ok: false,
+      error: { code: 'competitive_checkpoint_invalid', message: 'Stale run checkpoint' }
+    }), {
+      status: 401,
+      headers: { 'content-type': 'application/json' }
+    })
+  });
+  client.setToken('b'.repeat(64));
+
+  await assert.rejects(
+    () => client.checkpointEndlessPhase('run', 'token', {}, {}, 'bank'),
+    (error) => error.code === 'competitive_checkpoint_invalid'
+  );
+  assert.equal(client.hasSession(), true);
+  assert.equal(values.get(SESSION_STORAGE_KEY), 'b'.repeat(64));
+});
+
 test('the browser API client reaches every authenticated Pass collection action', async () => {
   const requests = [];
   const client = new MattMineApiClient({

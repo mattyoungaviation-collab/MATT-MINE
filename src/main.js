@@ -1,5 +1,5 @@
 import { MattMineGame } from './game/GameV4.js';
-import { apiClient } from './game/apiClient.js';
+import { apiClient, walletSessionReauthenticationRequired } from './game/apiClient.js';
 import { prepareProfileImage } from './game/profileImage.js';
 import { KEYBIND_ACTIONS, defaultKeybindings, normalizeKeybindings } from './game/keybindings.js';
 import { CONTROLLER_ACTIONS, defaultControllerProfile, normalizeControllerProfile } from './game/expansionConfig.js';
@@ -4345,13 +4345,23 @@ async function checkpointEndlessChoice(action) {
       inputCheckpoint = await activeEndlessTranscript.close();
       run.pendingEndlessCheckpoint = { action, inputCheckpoint };
     }
-    const accepted = await retryRunFinalization(() => apiClient.checkpointEndlessPhase(
+    const submitCheckpoint = () => retryRunFinalization(() => apiClient.checkpointEndlessPhase(
       run.runId,
       run.runToken,
       run.checkpoint,
       inputCheckpoint,
       action
     ), { onRetry: showDatabaseReconnect });
+    let accepted;
+    try {
+      accepted = await submitCheckpoint();
+    } catch (error) {
+      if (!walletSessionReauthenticationRequired(error)) throw error;
+      toast('Ronin server session expired. Sign the one-time message to finish this saved extraction.');
+      const connected = await connectWallet();
+      if (!connected) throw new Error('Ronin sign-in is required to finish this saved extraction.');
+      accepted = await submitCheckpoint();
+    }
     run.pendingEndlessCheckpoint = null;
     run.checkpoint = accepted.checkpoint;
     run.currentPhase = accepted.run.currentPhase;
