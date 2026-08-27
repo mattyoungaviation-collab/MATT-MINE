@@ -51,11 +51,20 @@ export class MattMineApiClient {
     return response.entry;
   }
 
-  async checkpointEndlessPhase(runId, runToken, previousCheckpoint, events, action) {
+  async appendEndlessInputs(runId, runToken, previousCheckpoint, events) {
+    const response = await this.request('/api/endless/inputs', {
+      method: 'POST',
+      authenticated: true,
+      body: { runId, runToken, previousCheckpoint, events }
+    });
+    return response.inputCheckpoint;
+  }
+
+  async checkpointEndlessPhase(runId, runToken, previousCheckpoint, inputCheckpoint, action) {
     return this.request('/api/endless/checkpoint', {
       method: 'POST',
       authenticated: true,
-      body: { runId, runToken, previousCheckpoint, events, action }
+      body: { runId, runToken, previousCheckpoint, inputCheckpoint, action }
     });
   }
 

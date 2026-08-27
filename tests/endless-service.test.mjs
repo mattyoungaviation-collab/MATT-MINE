@@ -8,7 +8,7 @@ import { defaultEndlessConfig } from '../src/game/endlessMine.js';
 const ADDRESS = '0x1111111111111111111111111111111111111111';
 const ORIGIN = 'http://localhost:4173';
 
-function harness({ ownsMiner = true, endlessRewardSettler = null, endlessPaymentVerifier = null } = {}) {
+function harness({ ownsMiner = true, endlessRewardSettler = null, endlessPaymentVerifier = null, competitiveReplayValidator = null } = {}) {
   let timestamp = Date.UTC(2026, 7, 26, 12);
   let randomCounter = 0;
   const database = new MemoryDatabase();
@@ -26,6 +26,21 @@ function harness({ ownsMiner = true, endlessRewardSettler = null, endlessPayment
       };
     }
   };
+  const replayValidator = competitiveReplayValidator || {
+    async registerEndlessPhase(run) {
+      return { throughSeq: 0, throughTick: 0, transcriptHash: `phase-${run.currentPhase}-${run.phaseAttempt}`, signature: 'test-input-signature' };
+    },
+    async appendEndlessPhase() {
+      return { throughSeq: 1, throughTick: 1_000, transcriptHash: 'test-inputs', signature: 'test-input-signature' };
+    },
+    async verifyEndlessPhase({ run }) {
+      return {
+        outcomeEvents: completeEvents(run.manifest),
+        evidence: { schemaVersion: 'test-replay-v1', eventCount: 1, transcriptHash: 'test-inputs', runtime: {}, rawScore: 0, state: 'verified' }
+      };
+    },
+    async finalizeEndlessPhase() {}
+  };
   const service = new CompleteProductionMattMineService(database, {
     now: () => timestamp,
     publicOrigin: ORIGIN,
@@ -34,6 +49,7 @@ function harness({ ownsMiner = true, endlessRewardSettler = null, endlessPayment
     nftGameplayService,
     endlessPaymentVerifier,
     endlessRewardSettler,
+    competitiveReplayValidator: replayValidator,
     randomHex(bytes) {
       randomCounter += 1;
       return randomCounter.toString(16).padStart(bytes * 2, '0').slice(-bytes * 2);

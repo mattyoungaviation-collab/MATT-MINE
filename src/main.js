@@ -144,7 +144,7 @@ let arenaBusy = false;
 let arenaCountdownTimer = null;
 let activeArenaRun = null;
 let activeArenaTranscript = null;
-let activeEndlessEvents = [];
+let activeEndlessTranscript = null;
 let endlessCheckpointBusy = false;
 let activePracticeClaim = null;
 let resultScreenMode = null;
@@ -166,7 +166,7 @@ const wallet = new RoninWalletAdapter({
     activeServerRun = null;
     activeArenaRun = null;
     activeArenaTranscript = null;
-    activeEndlessEvents = [];
+    activeEndlessTranscript = null;
     nftGarageSnapshot = null;
     nftWalletSnapshot = null;
     nftCrystalTransactionHash = '';
@@ -1391,7 +1391,7 @@ async function startRunMode(mode, options = {}) {
         : await startApprovedNftServerRun(mode, selectedNftMinerId);
       issuedRun = run;
       activeServerRun = run;
-      activeEndlessEvents = mode === RUN_MODES.ENDLESS ? [] : activeEndlessEvents;
+      activeEndlessTranscript = mode === RUN_MODES.ENDLESS ? createEndlessTranscript(run) : null;
       if (mode === RUN_MODES.ENDLESS) persistEndlessRun(run);
       if (serverPlayer && options.restartInterruptedNftPractice === true) {
         serverPlayer.interruptedNftPractice = null;
@@ -1401,7 +1401,7 @@ async function startRunMode(mode, options = {}) {
             appendEvents: (...args) => apiClient.appendCompetitiveEvents(...args)
           })
         : null;
-      issuedTranscript = activeArenaTranscript;
+      issuedTranscript = activeArenaTranscript || activeEndlessTranscript;
       if (mode === RUN_MODES.FREE) serverPlayer.entitlements.freeRunAvailable = false;
       if (mode === RUN_MODES.PAID && paymentStatus) {
         paymentStatus.confirmedCredits = Math.max(0, paymentStatus.confirmedCredits - 1);
@@ -1427,6 +1427,7 @@ async function startRunMode(mode, options = {}) {
         endlessRunId: run.runId,
         endlessConfigVersion: run.configVersion,
         endlessManifest: run.manifest,
+        endlessContinuation: run.phaseInitialState,
         currentPhase: run.currentPhase,
         competitionSnapshot: run.competitionSnapshot,
         allowPaidRevive: run.paidReviveEligible === true,
@@ -2084,9 +2085,11 @@ function renderEndlessMenuStatus() {
     `Reset ${Number(rules.resetPeriodHours || 24)}h @ ${String(Number(rules.resetUtcHour || 0)).padStart(2, '0')}:00 UTC`
   ].join(' · ');
   $('#endless-menu-action').textContent = status.enabled
-    ? paid && status.paymentReady !== true ? 'ENTRY VERIFIER OFFLINE' : 'ENTER ENDLESS'
+    ? status.inputReplayReady !== true
+      ? 'VERIFICATION OFFLINE'
+      : paid && status.paymentReady !== true ? 'ENTRY VERIFIER OFFLINE' : 'ENTER ENDLESS'
     : 'ENDLESS PAUSED';
-  $('#endless-run-button').disabled = status.enabled !== true;
+  $('#endless-run-button').disabled = status.enabled !== true || status.inputReplayReady !== true;
 }
 
 function showGarageChestPreview(product) {
@@ -2522,7 +2525,6 @@ const game = new MattMineGame(canvas, profile, {
       if (serverRun.endlessBankSummary) {
         renderEndlessBankSummary(serverRun.endlessBankSummary);
         activeServerRun = null;
-        activeEndlessEvents = [];
         clearPersistedEndlessRun();
       } else void finalizeEndlessKnockout(serverRun);
     } else if (serverRun) void submitServerRun(serverRun, result);
@@ -2601,10 +2603,9 @@ const game = new MattMineGame(canvas, profile, {
   },
   onArenaInput(event) {
     activeArenaTranscript?.record(event);
+    activeEndlessTranscript?.record(event);
   },
-  onArenaEvent(event) {
-    if (activeServerRun?.mode === RUN_MODES.ENDLESS) activeEndlessEvents.push(structuredClone(event));
-  },
+  onArenaEvent() {},
   onToast: toast
 });
 game.setScreenShakeEnabled(gameplayPreferences.screenShake);
@@ -4179,11 +4180,18 @@ async function checkpointEndlessChoice(action) {
   if (action === 'bank') extractButton.textContent = 'SERVER BANKING...';
   else descendButton.textContent = 'VERIFYING PHASE...';
   try {
+    if (!activeEndlessTranscript) throw new Error('The authoritative Endless input transcript is unavailable. Reconnect to restart this phase safely.');
+    activeEndlessTranscript.record({
+      type: 'command',
+      tick: Math.round(Number(game.run?.elapsed || 0) * 1_000),
+      command: action === 'bank' ? 'extract' : 'descend'
+    });
+    const inputCheckpoint = await activeEndlessTranscript.close();
     const accepted = await retryRunFinalization(() => apiClient.checkpointEndlessPhase(
       run.runId,
       run.runToken,
       run.checkpoint,
-      activeEndlessEvents,
+      inputCheckpoint,
       action
     ), { onRetry: showDatabaseReconnect });
     run.checkpoint = accepted.checkpoint;
@@ -4192,12 +4200,16 @@ async function checkpointEndlessChoice(action) {
     run.score = accepted.run.score;
     run.crystalsCarried = accepted.run.crystalsCarried;
     run.manifest = accepted.nextManifest || accepted.run.manifest;
-    activeEndlessEvents = [];
     if (action === 'descend') {
+      run.inputCheckpoint = accepted.nextInputCheckpoint;
+      run.phaseInitialState = accepted.run.phaseInitialState;
+      activeEndlessTranscript = null;
       game.runContext.endlessManifest = accepted.nextManifest;
       toast(`Phase ${accepted.phase.phase} verified · ${formatNumber(accepted.phase.score)} points · descending`);
       game.descend();
+      activeEndlessTranscript = createEndlessTranscript(run);
     } else {
+      activeEndlessTranscript = null;
       run.endlessBankSummary = accepted.summary;
       if (accepted.rewardSettlement?.pending) {
         toast('Run verified. Reward settlement is queued and can be retried safely.');
@@ -4243,7 +4255,7 @@ async function reconnectPersistedEndlessRun() {
   try {
     const run = await apiClient.reconnectEndlessRun(saved.runId, saved.runToken);
     activeServerRun = run;
-    activeEndlessEvents = [];
+    activeEndlessTranscript = createEndlessTranscript(run);
     rememberSelectedMiner(run.minerId);
     await showMineLoadingScreen({ id: 'endless', name: 'MATT Mine Endless', snapshot: { map: run.manifest?.map } });
     game.startRun({
@@ -4254,6 +4266,7 @@ async function reconnectPersistedEndlessRun() {
       endlessConfigVersion: run.configVersion,
       endlessSnapshot: run.endlessSnapshot,
       endlessManifest: run.manifest,
+      endlessContinuation: run.phaseInitialState,
       currentPhase: run.currentPhase,
       nftRun: run.nftRun,
       tuning: {}
@@ -4270,6 +4283,8 @@ async function reconnectPersistedEndlessRun() {
 async function finalizeEndlessKnockout(run) {
   showFinalizationBusy('CLOSING ENDLESS RUN');
   try {
+    await activeEndlessTranscript?.discard?.();
+    activeEndlessTranscript = null;
     const accepted = await apiClient.abandonEndlessRun(run.runId, run.runToken, 'knockout');
     renderEndlessBankSummary(accepted.summary);
   } catch (error) {
@@ -4277,7 +4292,7 @@ async function finalizeEndlessKnockout(run) {
     toast(error.message);
   } finally {
     if (activeServerRun === run) activeServerRun = null;
-    activeEndlessEvents = [];
+    activeEndlessTranscript = null;
     clearPersistedEndlessRun();
     runFinalizationBusy = false;
   }
@@ -4532,12 +4547,16 @@ function abandonIssuedRun(context = {}) {
   const serverRun = activeServerRun;
   const arenaRun = activeArenaRun;
   const transcript = activeArenaTranscript;
+  const endlessTranscript = activeEndlessTranscript;
   activeServerRun = null;
   activeArenaRun = null;
   activeArenaTranscript = null;
-  activeEndlessEvents = [];
+  activeEndlessTranscript = null;
   if (serverRun?.mode === RUN_MODES.ENDLESS) clearPersistedEndlessRun();
-  const transcriptDiscard = transcript?.discard() || Promise.resolve();
+  const transcriptDiscard = Promise.all([
+    transcript?.discard?.(),
+    endlessTranscript?.discard?.()
+  ]);
   toast('Run abandoned - no score was submitted');
 
   void (async () => {
@@ -4584,7 +4603,19 @@ async function releaseIssuedServerRun(serverRun, transcript = null) {
   } finally {
     if (activeServerRun === serverRun) activeServerRun = null;
     if (activeArenaTranscript === transcript) activeArenaTranscript = null;
+    if (activeEndlessTranscript === transcript) activeEndlessTranscript = null;
   }
+}
+
+function createEndlessTranscript(run) {
+  if (!run?.runId || !run?.runToken || !run?.inputCheckpoint) return null;
+  return new ArenaTranscript(apiClient, {
+    runId: run.runId,
+    runToken: run.runToken,
+    checkpoint: run.inputCheckpoint
+  }, {
+    appendEvents: (...args) => apiClient.appendEndlessInputs(...args)
+  });
 }
 
 function formatTime(seconds) {

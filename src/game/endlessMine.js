@@ -163,6 +163,8 @@ export function defaultEndlessConfig() {
       maximumReconnectsPerRun: 100,
       maximumReconnectsPerPhase: 8,
       maximumEventsPerPhase: 20_000,
+      maximumInputEventsPerPhase: 750_000,
+      inputClockToleranceSeconds: 10,
       maximumPhaseSeconds: 14_400
     },
     leaderboards: {
@@ -261,6 +263,8 @@ export function normalizeEndlessConfig(input = {}) {
       maximumReconnectsPerRun: integer(source.integrity?.maximumReconnectsPerRun, 0, 10_000, defaults.integrity.maximumReconnectsPerRun),
       maximumReconnectsPerPhase: integer(source.integrity?.maximumReconnectsPerPhase, 0, 1_000, defaults.integrity.maximumReconnectsPerPhase),
       maximumEventsPerPhase: integer(source.integrity?.maximumEventsPerPhase, 100, 100_000, defaults.integrity.maximumEventsPerPhase),
+      maximumInputEventsPerPhase: integer(source.integrity?.maximumInputEventsPerPhase, 100, 1_000_000, defaults.integrity.maximumInputEventsPerPhase),
+      inputClockToleranceSeconds: integer(source.integrity?.inputClockToleranceSeconds, 1, 60, defaults.integrity.inputClockToleranceSeconds),
       maximumPhaseSeconds: integer(source.integrity?.maximumPhaseSeconds, 60, 86_400, defaults.integrity.maximumPhaseSeconds)
     },
     leaderboards: {
@@ -303,6 +307,15 @@ export function validateEndlessConfig(input, { forActivation = false } = {}) {
   validateRequestedInteger(errors, input?.entry, 'cooldownSeconds', 0, 604_800, 'Entry cooldown seconds');
   validateRequestedInteger(errors, input?.entry, 'maximumActiveRunsPerWallet', 1, 100, 'Maximum active runs per wallet');
   validateRequestedInteger(errors, input?.entry, 'minimumMinerLevel', 1, 1_000, 'Minimum Miner level');
+  validateRequestedInteger(errors, input?.integrity, 'heartbeatSeconds', 10, 300, 'Heartbeat seconds');
+  validateRequestedInteger(errors, input?.integrity, 'missedHeartbeatTolerance', 0, 1_000, 'Missed heartbeat tolerance');
+  validateRequestedInteger(errors, input?.integrity, 'reconnectWindowSeconds', 60, 604_800, 'Reconnect window seconds');
+  validateRequestedInteger(errors, input?.integrity, 'maximumReconnectsPerRun', 0, 10_000, 'Maximum reconnects per run');
+  validateRequestedInteger(errors, input?.integrity, 'maximumReconnectsPerPhase', 0, 1_000, 'Maximum reconnects per phase');
+  validateRequestedInteger(errors, input?.integrity, 'maximumEventsPerPhase', 100, 100_000, 'Maximum outcome events per phase');
+  validateRequestedInteger(errors, input?.integrity, 'maximumInputEventsPerPhase', 100, 1_000_000, 'Maximum input events per phase');
+  validateRequestedInteger(errors, input?.integrity, 'inputClockToleranceSeconds', 1, 60, 'Input clock tolerance seconds');
+  validateRequestedInteger(errors, input?.integrity, 'maximumPhaseSeconds', 60, 86_400, 'Maximum phase seconds');
   if (config.scoring.completionShareBps + config.scoring.bossShareBps > 9_000) {
     errors.push('Completion and Guardian point shares must leave at least 10% for the natural map.');
   }

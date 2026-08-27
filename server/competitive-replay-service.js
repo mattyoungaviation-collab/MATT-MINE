@@ -2,6 +2,8 @@ import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import {
   ARENA_MAX_BATCH_EVENTS,
   ARENA_MAX_EVENTS,
+  ARENA_TICK_MS,
+  ARENA_TRANSCRIPT_VERSION,
   arenaBatchRequiresReplay,
   assertArenaTickOrder,
   buildCompetitiveChallenge,
@@ -72,6 +74,169 @@ export class CompetitiveReplayService {
     record.checkpointSignature = this.#sign(record);
     await this.store.createRun(record);
     return this.#checkpoint(record);
+  }
+
+  async registerEndlessPhase(run, runToken) {
+    assertApi(run?.mode === 'endless' && run.status === 'active', 500, 'endless_replay_run_invalid', 'An active Endless run is required for phase replay.');
+    const replayId = endlessPhaseReplayId(run);
+    const maximumPhaseMs = Math.max(60_000, Number(run.config?.integrity?.maximumPhaseSeconds || 1_200) * 1_000);
+    const configuredMaximumInputs = Math.max(100, Number(run.config?.integrity?.maximumInputEventsPerPhase || 750_000));
+    const challenge = {
+      version: ARENA_TRANSCRIPT_VERSION,
+      dailySeed: run.runSeed,
+      tickMs: ARENA_TICK_MS,
+      maxTicks: maximumPhaseMs,
+      maxEvents: Math.min(1_000_000, configuredMaximumInputs, Math.ceil(maximumPhaseMs / ARENA_TICK_MS) + 1_024),
+      maxDepth: run.currentPhase + 1,
+      verificationMode: 'deterministic-input-replay',
+      tuning: {}
+    };
+    const transcriptHash = createHash('sha256')
+      .update(`MATT-ENDLESS-PHASE-V1|${replayId}|${run.runSeed}|${run.manifest?.fingerprint || ''}|${hashObject(run.phaseInitialState || {})}`)
+      .digest('hex');
+    const snapshot = {
+      id: replayId,
+      parentRunId: run.id,
+      mode: 'endless',
+      seed: run.runSeed,
+      currentPhase: run.currentPhase,
+      phaseAttempt: Number(run.phaseAttempt || 1),
+      configVersion: run.configVersion,
+      config: structuredClone(run.config),
+      manifest: structuredClone(run.manifest),
+      minerId: run.minerId,
+      minerProfile: structuredClone(run.minerProfile),
+      initialState: run.phaseInitialState ? structuredClone(run.phaseInitialState) : null,
+      challenge
+    };
+    const record = {
+      runId: replayId,
+      address: run.address,
+      mode: 'endless-phase',
+      tokenHash: hashToken(runToken),
+      status: 'active',
+      startedAt: run.phaseStartedAt,
+      expiresAt: run.expiresAt,
+      throughSeq: 0,
+      throughTick: 0,
+      transcriptHash,
+      checkpointSignature: '',
+      runSnapshot: snapshot,
+      authoritativeState: {},
+      buildCommit: run.buildCommit || process.env.RENDER_GIT_COMMIT || 'unknown',
+      engineVersion: run.engineVersion || 'game-v4',
+      replaySchemaVersion: 'matt-endless-phase-input-v1',
+      mapSnapshotId: run.manifest?.fingerprint || '',
+      mapHash: hashObject(run.manifest || {}),
+      tuningHash: hashObject(run.config || {})
+    };
+    record.checkpointSignature = this.#sign(record);
+    const stored = await this.store.createRun(record);
+    assertApi(
+      stored.mapHash === record.mapHash && stored.address === record.address,
+      409,
+      'endless_replay_snapshot_conflict',
+      'The stored Endless phase replay does not match this authorized manifest.'
+    );
+    return this.#checkpoint(stored);
+  }
+
+  async appendEndlessPhase(address, payload = {}) {
+    assertApi(this.resolveRun, 503, 'endless_replay_run_resolver_missing', 'The Endless replay run resolver is unavailable.');
+    const parent = await this.resolveRun(String(payload.runId || ''));
+    assertApi(parent?.mode === 'endless' && parent.address === address, 404, 'endless_run_missing', 'The Endless run was not found.');
+    assertApi(parent.status === 'active', 409, 'endless_run_closed', 'This Endless run is no longer active.');
+    assertApi(Number(payload.phase) === parent.currentPhase, 409, 'endless_phase_sequence', 'Submit inputs for the current Endless phase.');
+    const replayId = endlessPhaseReplayId(parent);
+    const run = await this.#authenticatedRun(address, replayId, payload.runToken);
+    assertApi(run.status === 'active', 409, 'competitive_transcript_closed', 'The Endless phase input transcript is closed.');
+    assertApi(run.expiresAt > this.now(), 410, 'run_expired', 'The run expired before this input batch arrived.');
+    const checkpoint = normalizeCheckpoint(payload.previousCheckpoint);
+    assertApi(this.#validCheckpoint(run, checkpoint), 401, 'competitive_checkpoint_invalid', 'Use the latest server-signed Endless input checkpoint.');
+    assertApi(
+      Array.isArray(payload.events) && payload.events.length > 0 && payload.events.length <= ARENA_MAX_BATCH_EVENTS,
+      400,
+      'competitive_event_batch_invalid',
+      `Submit from 1 to ${ARENA_MAX_BATCH_EVENTS} Endless inputs per batch.`
+    );
+    let transcriptHash = run.transcriptHash;
+    const timestamp = this.now();
+    const limits = run.runSnapshot?.challenge || {};
+    const events = payload.events.map((raw, index) => {
+      const event = normalizeArenaEvent(raw, run.throughSeq + index + 1, limits);
+      transcriptHash = hashArenaEvent(transcriptHash, event);
+      return { ...event, eventHash: transcriptHash, receivedAt: timestamp };
+    });
+    const maximumEvents = Number(run.runSnapshot?.challenge?.maxEvents || ARENA_MAX_EVENTS);
+    assertApi(run.throughSeq + events.length <= maximumEvents, 422, 'competitive_transcript_too_large', 'The Endless phase input transcript exceeded its configured limit.');
+    assertArenaTickOrder(events, run.throughTick);
+    const throughTick = events.at(-1).tick;
+    const clockToleranceMs = Math.max(1_000, Number(run.runSnapshot?.config?.integrity?.inputClockToleranceSeconds || 10) * 1_000);
+    assertApi(throughTick <= timestamp - run.startedAt + clockToleranceMs, 422, 'competitive_event_clock_ahead', 'The Endless phase input transcript is ahead of server time.');
+    const next = {
+      ...run,
+      throughSeq: run.throughSeq + events.length,
+      throughTick,
+      transcriptHash
+    };
+    next.checkpointSignature = this.#sign(next);
+    await this.store.appendEvents(replayId, run.throughSeq, events, next);
+    return this.#checkpoint(next);
+  }
+
+  async verifyEndlessPhase({ run, checkpoint, action }) {
+    const replayId = endlessPhaseReplayId(run);
+    const transcript = await this.store.getRun(replayId);
+    assertApi(transcript?.address === run.address && transcript.mode === 'endless-phase', 404, 'endless_replay_missing', 'The authoritative Endless phase input transcript was not found.');
+    assertApi(this.#validCheckpoint(transcript, normalizeCheckpoint(checkpoint)), 401, 'competitive_checkpoint_invalid', 'Finish with the latest server-signed Endless input checkpoint.');
+    const events = (await this.store.getEvents(replayId)).map(publicEvent);
+    const expectedCommand = action === 'bank' ? 'extract' : 'descend';
+    const last = events.at(-1);
+    assertApi(last?.type === 'command' && last.command === expectedCommand, 422, 'endless_replay_action_missing', 'The authoritative input transcript is missing the selected bank or descend action.');
+    const snapshot = transcript.runSnapshot;
+    assertApi(snapshot?.manifest?.fingerprint === run.manifest?.fingerprint, 409, 'endless_replay_manifest_mismatch', 'The replay manifest does not match the current server phase.');
+    const replayed = replayArenaTranscript(snapshot.challenge, events, {
+      mode: 'endless',
+      requireTerminal: action === 'bank',
+      maxDepth: run.currentPhase + 1,
+      currentPhase: run.currentPhase,
+      endlessRunId: run.id,
+      endlessConfigVersion: run.configVersion,
+      endlessSnapshot: { config: run.config },
+      endlessManifest: run.manifest,
+      nftRun: { minerId: run.minerId, profile: run.minerProfile },
+      endlessContinuation: snapshot.initialState || null
+    });
+    if (action === 'bank') {
+      assertApi(replayed.terminal && replayed.extracted, 422, 'endless_replay_not_banked', 'The authoritative replay did not reach a valid banked state.');
+    } else {
+      assertApi(replayed.state === 'playing' && replayed.depth === run.currentPhase + 1, 422, 'endless_replay_not_descended', 'The authoritative replay did not complete and descend from the current phase.');
+    }
+    return {
+      replayId,
+      outcomeEvents: replayed.outcomeEvents,
+      evidence: {
+        schemaVersion: transcript.replaySchemaVersion,
+        eventCount: replayed.eventCount,
+        transcriptHash: transcript.transcriptHash,
+        runtime: replayed.runtime,
+        rawScore: replayed.rawScore,
+        state: replayed.state,
+        playerState: structuredClone(replayed.phaseState?.player || {}),
+        inventoryState: {
+          weapon: replayed.phaseState?.player?.weapon || 'pickaxe',
+          unlockedWeapons: structuredClone(replayed.phaseState?.player?.unlockedWeapons || {}),
+          dynamiteAmmo: Number(replayed.phaseState?.player?.dynamiteAmmo || 0),
+          blasterEnergy: Number(replayed.phaseState?.player?.blasterEnergy || 0),
+          runUpgradeCounts: structuredClone(replayed.phaseState?.player?.runUpgradeCounts || {})
+        },
+        continuation: structuredClone(replayed.continuation)
+      }
+    };
+  }
+
+  async finalizeEndlessPhase(run, status = 'verified') {
+    return this.store.closeRun(endlessPhaseReplayId(run), status);
   }
 
   async append(address, payload = {}) {
@@ -244,6 +409,14 @@ export class CompetitiveReplayService {
       checkpoint.transcriptHash === run.transcriptHash &&
       safeEqual(checkpoint.signature, this.#sign(run));
   }
+}
+
+function endlessPhaseReplayId(run) {
+  const runId = String(run?.id || run?.runId || '');
+  const phase = Number(run?.currentPhase || 0);
+  const attempt = Number(run?.phaseAttempt || 1);
+  assertApi(/^run_[a-f0-9]{24}$/.test(runId) && Number.isSafeInteger(phase) && phase > 0 && Number.isSafeInteger(attempt) && attempt > 0, 500, 'endless_replay_identity_invalid', 'The Endless phase replay identity is invalid.');
+  return `${runId}:phase:${phase}:attempt:${attempt}`;
 }
 
 function normalizeCheckpoint(input) {

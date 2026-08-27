@@ -6,6 +6,7 @@ import {
   endlessLeaderboard,
   endlessSmartEngineRecommendation,
   publicEndlessCheckpoint,
+  sealEndlessPhaseVerification,
   signEndlessCheckpoint,
   validEndlessCheckpoint,
   verifyEndlessPhaseEvents
@@ -42,6 +43,7 @@ export const endlessServiceMethods = {
       runApprovalRequired: published.config.rewards.enabled === true && activation.ok && Boolean(this.endlessRewardSettler),
       rewardReadiness: activation.ok ? (this.endlessRewardSettler ? 'ready' : 'settler-required') : 'configuration-required',
       rewardErrors: activation.errors,
+      inputReplayReady: Boolean(this.competitiveReplayValidator?.registerEndlessPhase && this.competitiveReplayValidator?.verifyEndlessPhase),
       configVersion: version,
       generatorVersion: published.config.generatorVersion,
       leaderboardScopes: ['daily', 'weekly', 'season', 'all-time']
@@ -63,6 +65,7 @@ export const endlessServiceMethods = {
     const config = normalizeEndlessConfig(published.config);
     const activation = validateEndlessConfig(config, { forActivation: config.rewards.enabled });
     assertApi(activation.ok, 503, 'endless_economy_not_ready', activation.errors.join(' '));
+    assertApi(this.competitiveReplayValidator?.registerEndlessPhase, 503, 'endless_input_replay_required', 'Endless entry remains closed until authoritative phase replay is available.');
     const eligibility = assertEndlessEntryEligible(state, session.address, minerId, minerProfile, config, this.now());
     const payment = this.endlessPaymentVerifier?.publicStatus?.() || null;
     if (config.entry.paidEnabled) {
@@ -116,6 +119,7 @@ export const endlessServiceMethods = {
     const preflightPublished = preflightStore.configVersions[preflightVersion];
     assertApi(preflightPublished?.config?.enabled === true, 503, 'endless_mode_disabled', 'Endless is temporarily paused.');
     const preflightConfig = normalizeEndlessConfig(preflightPublished.config);
+    assertApi(this.competitiveReplayValidator?.registerEndlessPhase, 503, 'endless_input_replay_required', 'Endless entry remains closed until authoritative phase replay is available. No payment was requested.');
     const submittedPaymentHash = String(input.entryTransactionHash || '').toLowerCase();
     if (TRANSACTION_HASH_PATTERN.test(submittedPaymentHash)) {
       assertApi(!preflightStore.paymentTransactions[submittedPaymentHash], 409, 'payment_already_consumed', 'This MATT entry payment has already started an Endless run.');
@@ -139,6 +143,7 @@ export const endlessServiceMethods = {
     const runToken = this.randomHex(24);
     const runSeed = `MATT-ENDLESS-${this.randomHex(24)}`;
     let chainStart = null;
+    let inputCheckpoint = null;
     let created;
     try {
       created = await this.database.transact(async (state, transaction) => {
@@ -153,6 +158,7 @@ export const endlessServiceMethods = {
         const config = normalizeEndlessConfig(published.config);
         const activation = validateEndlessConfig(config, { forActivation: config.rewards.enabled });
         assertApi(activation.ok, 503, 'endless_economy_not_ready', activation.errors.join(' '));
+        assertApi(this.competitiveReplayValidator?.registerEndlessPhase, 503, 'endless_input_replay_required', 'Endless entry remains closed until authoritative phase replay is available.');
         if (config.rewards.enabled) {
           assertApi(this.endlessRewardSettler, 503, 'endless_reward_settler_required', 'Endless rewards remain closed until checkpoint settlement is available.');
           assertApi(input.authorization && input.playerSignature, 422, 'endless_run_approval_required', 'Approve this Endless Miner lock in Ronin Wallet.');
@@ -191,6 +197,7 @@ export const endlessServiceMethods = {
         });
         if (chainStart?.transactionHash) record.chainTransactions.push({ type: 'start', hash: chainStart.transactionHash, recordedAt: timestamp });
         record.checkpointSignature = signEndlessCheckpoint(record, this.endlessCheckpointSecret);
+        inputCheckpoint = await this.competitiveReplayValidator.registerEndlessPhase(record, runToken);
         store.runs[runId] = record;
         if (payment) {
           store.paymentTransactions[payment.transactionHash] = {
@@ -216,7 +223,7 @@ export const endlessServiceMethods = {
       }
       throw error;
     }
-    return publicEndlessRun(created, runToken);
+    return publicEndlessRun(created, runToken, inputCheckpoint);
   },
 
   async checkpointEndlessPhase(token, input = {}) {
@@ -224,13 +231,49 @@ export const endlessServiceMethods = {
     const runId = cleanRunId(input.runId);
     const runToken = cleanRunToken(input.runToken);
     const timestamp = this.now();
+    const before = await this.database.read();
+    const replayRun = before.endlessCompetition.runs[runId];
+    assertEndlessRunOwner(replayRun, session.address, runToken);
+    assertApi(replayRun.expiresAt > timestamp, 410, 'endless_run_expired', 'The reconnect window for this Endless run expired.');
+    assertApi(validEndlessCheckpoint(replayRun, input.previousCheckpoint, this.endlessCheckpointSecret), 401, 'endless_checkpoint_invalid', 'Use the latest server-signed Endless checkpoint.');
+    assertApi(this.competitiveReplayValidator?.verifyEndlessPhase, 503, 'endless_input_replay_required', 'Authoritative Endless phase replay is unavailable.');
+    const replay = await this.competitiveReplayValidator.verifyEndlessPhase({
+      run: replayRun,
+      checkpoint: input.inputCheckpoint,
+      action: String(input.action || '')
+    });
+    const replayIdentity = {
+      id: replayRun.id,
+      currentPhase: replayRun.currentPhase,
+      phaseAttempt: replayRun.phaseAttempt
+    };
+    let nextInputCheckpoint = null;
     const result = await this.database.transact(async (state, transaction) => {
       const run = state.endlessCompetition.runs[runId];
       assertEndlessRunOwner(run, session.address, runToken);
       assertApi(run.expiresAt > timestamp, 410, 'endless_run_expired', 'The reconnect window for this Endless run expired.');
       assertApi(validEndlessCheckpoint(run, input.previousCheckpoint, this.endlessCheckpointSecret), 401, 'endless_checkpoint_invalid', 'Use the latest server-signed Endless checkpoint.');
       recordHeartbeatIntegrity(run, timestamp);
-      const verification = verifyEndlessPhaseEvents(run, input.events, timestamp);
+      const verification = verifyEndlessPhaseEvents(run, replay.outcomeEvents, timestamp);
+      verification.inputReplay = structuredClone(replay.evidence);
+      verification.runId = run.id;
+      verification.phaseSeed = run.manifest.seed;
+      verification.configVersion = run.configVersion;
+      verification.phaseStartedAt = run.phaseStartedAt;
+      verification.phaseCompletedAt = timestamp;
+      verification.previousCheckpoint = run.rollingDigest;
+      verification.crystalsCarried = Number(run.crystalsCarried || 0) + verification.crystalsAdded;
+      verification.minerXp = Math.max(0, Math.min(
+        Number(run.config.rewards.phaseXp || 0),
+        Number(run.config.rewards.maximumRunXp || 0) -
+          Number(run.completedPhases || 0) * Number(run.config.rewards.phaseXp || 0)
+      ));
+      verification.integrityState = {
+        score: run.integrityScore,
+        flags: [...run.integrityFlags],
+        phaseAttempt: run.phaseAttempt
+      };
+      verification.digest = sealEndlessPhaseVerification(run, verification);
       const nextManifest = applyEndlessPhaseCheckpoint(run, verification, String(input.action || ''), timestamp);
       if (run.config.rewards.enabled) {
         const chainCheckpoint = await this.endlessRewardSettler.checkpoint({
@@ -248,6 +291,9 @@ export const endlessServiceMethods = {
         }
       }
       run.checkpointSignature = signEndlessCheckpoint(run, this.endlessCheckpointSecret);
+      if (run.status === 'active') {
+        nextInputCheckpoint = await this.competitiveReplayValidator.registerEndlessPhase(run, runToken);
+      }
       state.runs[runId] = run;
       await transaction?.upsertRun(run);
       if (run.status === 'banked') {
@@ -259,6 +305,7 @@ export const endlessServiceMethods = {
         nextManifest: nextManifest ? structuredClone(nextManifest) : null
       };
     });
+    await this.competitiveReplayValidator.finalizeEndlessPhase(replayIdentity, 'verified').catch(() => undefined);
     let rewardSettlement = null;
     if (result.run.status === 'banked' && result.run.config.rewards.enabled) {
       try {
@@ -270,9 +317,10 @@ export const endlessServiceMethods = {
     }
     return {
       checkpoint: publicEndlessCheckpoint(result.run),
-      phase: result.verification,
+      phase: publicEndlessPhaseVerification(result.verification),
       run: publicEndlessRun(result.run),
       nextManifest: result.nextManifest,
+      nextInputCheckpoint,
       summary: result.run.status === 'banked' ? endlessBankSummary(result.run) : null,
       rewardSettlement
     };
@@ -313,27 +361,52 @@ export const endlessServiceMethods = {
     });
   },
 
+  async appendEndlessInputs(token, input = {}) {
+    const session = await this.authenticate(token);
+    const runId = cleanRunId(input.runId);
+    const state = await this.database.read();
+    const run = state.endlessCompetition.runs[runId];
+    assertApi(run && run.address === session.address, 404, 'endless_run_missing', 'The Endless run was not found.');
+    assertApi(!run.adminTerminationPending, 409, 'run_admin_termination_pending', 'An administrator is ending this run, so no more inputs were accepted.');
+    assertApi(this.competitiveReplayValidator?.appendEndlessPhase, 503, 'endless_input_replay_required', 'Authoritative Endless phase replay is unavailable.');
+    return {
+      inputCheckpoint: await this.competitiveReplayValidator.appendEndlessPhase(session.address, {
+        ...input,
+        runId,
+        phase: run.currentPhase
+      })
+    };
+  },
+
   async reconnectEndlessRun(token, input = {}) {
     const session = await this.authenticate(token);
     const runId = cleanRunId(input.runId);
     const runToken = cleanRunToken(input.runToken);
     const timestamp = this.now();
-    return this.database.transact(async (state, transaction) => {
+    let inputCheckpoint = null;
+    let previousReplayIdentity = null;
+    const run = await this.database.transact(async (state, transaction) => {
       const run = state.endlessCompetition.runs[runId];
       assertEndlessRunOwner(run, session.address, runToken);
       assertApi(run.status === 'active' && run.expiresAt > timestamp, 410, 'endless_reconnect_expired', 'This Endless run can no longer be reconnected.');
       const integrity = run.config.integrity;
       assertApi(Number(run.reconnectCount || 0) < integrity.maximumReconnectsPerRun, 429, 'endless_reconnect_limit', 'This run reached its reconnect limit.');
       assertApi(Number(run.phaseReconnectCount || 0) < integrity.maximumReconnectsPerPhase, 429, 'endless_phase_reconnect_limit', 'This phase reached its reconnect limit.');
+      previousReplayIdentity = { id: run.id, currentPhase: run.currentPhase, phaseAttempt: run.phaseAttempt };
       run.reconnectCount = Number(run.reconnectCount || 0) + 1;
       run.phaseReconnectCount = Number(run.phaseReconnectCount || 0) + 1;
+      run.phaseAttempt = Number(run.phaseAttempt || 1) + 1;
       run.lastHeartbeatAt = timestamp;
       run.updatedAt = timestamp;
       run.expiresAt = timestamp + integrity.reconnectWindowSeconds * 1_000;
+      assertApi(this.competitiveReplayValidator?.registerEndlessPhase, 503, 'endless_input_replay_required', 'Authoritative Endless phase replay is unavailable.');
+      inputCheckpoint = await this.competitiveReplayValidator.registerEndlessPhase(run, runToken);
       state.runs[runId] = run;
       await transaction?.upsertRun(run);
-      return publicEndlessRun(run, runToken);
+      return structuredClone(run);
     });
+    await this.competitiveReplayValidator?.finalizeEndlessPhase?.(previousReplayIdentity, 'disconnected').catch(() => undefined);
+    return publicEndlessRun(run, runToken, inputCheckpoint);
   },
 
   async abandonEndlessRun(token, input = {}) {
@@ -373,6 +446,7 @@ export const endlessServiceMethods = {
       if (knockout && current.completedPhases > 0) finalizeLeaderboardEntry(state.endlessCompetition, current);
       return structuredClone(current);
     });
+    await this.competitiveReplayValidator?.finalizeEndlessPhase?.(run, 'abandoned').catch(() => undefined);
     return { run: publicEndlessRun(run), summary: endlessBankSummary(run) };
   },
 
@@ -512,10 +586,11 @@ function finalizeLeaderboardEntry(store, run) {
   store.leaderboardEntries = store.leaderboardEntries.slice(-100_000);
 }
 
-function publicEndlessRun(run, runToken = '') {
+function publicEndlessRun(run, runToken = '', inputCheckpoint = null) {
   return {
     runId: run.id,
     ...(runToken ? { runToken } : {}),
+    ...(inputCheckpoint ? { inputCheckpoint: structuredClone(inputCheckpoint), inputVerification: 'fixed-step-phase-replay' } : {}),
     mode: 'endless',
     status: run.status,
     minerId: run.minerId,
@@ -527,6 +602,7 @@ function publicEndlessRun(run, runToken = '') {
     completedPhases: run.completedPhases,
     score: run.score,
     crystalsCarried: run.crystalsCarried,
+    phaseInitialState: run.phaseInitialState ? structuredClone(run.phaseInitialState) : null,
     manifest: structuredClone(run.manifest),
     checkpoint: publicEndlessCheckpoint(run),
     expiresAt: run.expiresAt,
@@ -534,6 +610,25 @@ function publicEndlessRun(run, runToken = '') {
     payment: publicEndlessPayment(run.payment),
     minerProfile: structuredClone(run.minerProfile),
     nftRun: { minerId: run.minerId, profile: structuredClone(run.minerProfile) }
+  };
+}
+
+function publicEndlessPhaseVerification(verification) {
+  return {
+    phase: verification.phase,
+    score: verification.score,
+    maximumScore: verification.maximumScore,
+    scoreBreakdown: structuredClone(verification.scoreBreakdown),
+    requiredKills: verification.requiredKills,
+    bossKills: verification.bossKills,
+    oreBroken: verification.oreBroken,
+    crystalsAdded: verification.crystalsAdded,
+    crystalsUnableToCarry: verification.crystalsUnableToCarry,
+    damageTaken: verification.damageTaken,
+    elapsedMs: verification.elapsedMs,
+    eventCount: verification.eventCount,
+    verifiedAt: verification.verifiedAt,
+    integrity: 'verified'
   };
 }
 

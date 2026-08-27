@@ -8,6 +8,7 @@ import {
 } from './arenaControls.js';
 import { seededRandom, withRandomSource } from './utils.js';
 import { generateEndlessPhase, normalizeEndlessConfig } from './endlessMine.js';
+import { applyEndlessContinuation } from './endlessContinuation.js';
 import { nftMinerAtlasSourcesForLevel } from './v3/nftMinerAnimation.js';
 
 const DETERMINISTIC_SERVER_MODES = new Set(['arena', 'practice', 'free', 'paid', 'weekly', 'endless']);
@@ -126,11 +127,17 @@ export class MattMineGame extends V3MattMineGame {
         )
       : null;
     super.startRun();
+    if (this.runContext.mode === 'endless') {
+      applyEndlessContinuation(this, context.endlessContinuation);
+    }
   }
 
   generateDepth() {
     if (this.runContext?.mode === 'endless' && this.runContext.endlessSnapshot) {
       const depth = this.run?.depth || 1;
+      this.arenaRandom = seededRandom(
+        `${this.runContext.seed}:ENDLESS:PHASE:${depth}:RUNTIME-V1`
+      );
       const config = normalizeEndlessConfig(this.runContext.endlessSnapshot.config || this.runContext.endlessSnapshot);
       const supplied = this.runContext.endlessManifest;
       const manifest = supplied?.phase === depth
@@ -322,6 +329,7 @@ export class MattMineGame extends V3MattMineGame {
     if (this.runContext?.mode === 'endless' && this.state === 'depthchoice') {
       this.recordArenaCommand('descend');
       this.run.depth += 1;
+      this.run.elapsed = 0;
       this.state = 'playing';
       this.generateDepth();
       this.hooks.onDepthStarted?.(this.run.depth);

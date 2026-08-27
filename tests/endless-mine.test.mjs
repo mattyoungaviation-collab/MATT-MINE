@@ -142,6 +142,27 @@ test('entry limits normalize as explicit adjustable Admin rules', () => {
   });
 });
 
+test('authoritative replay limits are explicit adjustable Admin rules with permanent bounds', () => {
+  const draft = defaultEndlessConfig();
+  draft.integrity = {
+    ...draft.integrity,
+    maximumInputEventsPerPhase: 123_456,
+    inputClockToleranceSeconds: 17,
+    maximumPhaseSeconds: 7_200
+  };
+  const config = normalizeEndlessConfig(draft);
+  assert.equal(config.integrity.maximumInputEventsPerPhase, 123_456);
+  assert.equal(config.integrity.inputClockToleranceSeconds, 17);
+  assert.equal(config.integrity.maximumPhaseSeconds, 7_200);
+  const invalid = structuredClone(draft);
+  invalid.integrity.maximumInputEventsPerPhase = 1_000_001;
+  invalid.integrity.inputClockToleranceSeconds = 61;
+  assert.match(
+    validateEndlessConfig(invalid).errors.join(' '),
+    /Maximum input events.*between 100 and 1000000.*Input clock tolerance.*between 1 and 60/i
+  );
+});
+
 test('the conservative economy preset is exact, bounded, and remains Admin-adjustable', () => {
   const draft = defaultEndlessConfig();
   draft.rewards = { ...draft.rewards, ...ENDLESS_CONSERVATIVE_ECONOMY_PRESET };

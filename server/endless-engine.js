@@ -61,6 +61,8 @@ export function createEndlessRunRecord({
     heartbeatCount: 0,
     reconnectCount: 0,
     phaseReconnectCount: 0,
+    phaseAttempt: 1,
+    phaseInitialState: null,
     integrityScore: 100,
     integrityFlags: [],
     manifest,
@@ -235,6 +237,10 @@ export function applyEndlessPhaseCheckpoint(run, verification, action, now = Dat
   run.currentPhase += 1;
   run.phaseStartedAt = now;
   run.phaseReconnectCount = 0;
+  run.phaseAttempt = 1;
+  run.phaseInitialState = verification.inputReplay?.continuation
+    ? structuredClone(verification.inputReplay.continuation)
+    : null;
   run.manifest = generateEndlessPhase({
     runId: run.id,
     runSeed: run.runSeed,
@@ -244,6 +250,20 @@ export function applyEndlessPhaseCheckpoint(run, verification, action, now = Dat
     minerProfile: run.minerProfile
   });
   return run.manifest;
+}
+
+export function sealEndlessPhaseVerification(run, verification) {
+  assertApi(
+    run?.manifest?.fingerprint && verification?.phase === run.currentPhase,
+    500,
+    'endless_verification_seal_invalid',
+    'A current authoritative phase verification is required.'
+  );
+  const payload = structuredClone(verification);
+  delete payload.digest;
+  return createHash('sha256')
+    .update(`MATT-ENDLESS-CHECKPOINT-V2|${run.rollingDigest}|${run.manifest.fingerprint}|${canonical(payload)}`)
+    .digest('hex');
 }
 
 export function signEndlessCheckpoint(run, secret) {

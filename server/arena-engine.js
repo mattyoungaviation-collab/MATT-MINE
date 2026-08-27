@@ -6,6 +6,7 @@ import {
 } from '../src/game/arenaControls.js';
 import { MattMineGame } from '../src/game/GameV4.js';
 import { gameplayRuntimeSnapshot } from '../src/game/nftTraits.js';
+import { captureEndlessContinuation } from '../src/game/endlessContinuation.js';
 import { defaultProfile, normalizeProfile } from '../src/game/storage.js';
 import { assertApi } from './errors.js';
 
@@ -100,7 +101,7 @@ export function replayArenaTranscript(challenge, inputEvents, options = {}) {
     'The Daily Arena challenge is invalid.'
   );
   assertApi(
-    Array.isArray(inputEvents) && inputEvents.length <= ARENA_MAX_EVENTS,
+    Array.isArray(inputEvents) && inputEvents.length <= Math.max(1, Number(challenge.maxEvents || ARENA_MAX_EVENTS)),
     422,
     'arena_transcript_too_large',
     'The Daily Arena input transcript is too large.'
@@ -110,6 +111,8 @@ export function replayArenaTranscript(challenge, inputEvents, options = {}) {
   let damageTaken = 0;
   let guardianTimeMs = Number.MAX_SAFE_INTEGER;
   let finishSeen = false;
+  const outcomeEvents = [];
+  let phaseState = null;
   const game = new MattMineGame(
     null,
     options.profile ? normalizeProfile(options.profile) : defaultProfile(),
@@ -117,6 +120,7 @@ export function replayArenaTranscript(challenge, inputEvents, options = {}) {
       headless: true,
       audio: NOOP_AUDIO,
       onArenaEvent(event) {
+        if (event && typeof event === 'object') outcomeEvents.push(structuredClone(event));
         if (event?.type === 'damage_taken') damageTaken += Math.max(0, Number(event.amount) || 0);
         if (event?.type === 'guardian_defeated') guardianTimeMs = Math.min(guardianTimeMs, Number(event.tick) || 0);
       },
@@ -148,6 +152,11 @@ export function replayArenaTranscript(challenge, inputEvents, options = {}) {
       {},
     weeklyStage: options.weeklyStage || null,
     endlessSnapshot: options.endlessSnapshot || null,
+    currentPhase: options.currentPhase,
+    endlessRunId: options.endlessRunId,
+    endlessConfigVersion: options.endlessConfigVersion,
+    endlessManifest: options.endlessManifest || null,
+    endlessContinuation: options.endlessContinuation || null,
     nftRun: options.nftRun || null,
     roundDurationMs: replayMode === 'arena' ? challenge.maxTicks : 0,
     allowPaidRevive: options.allowPaidRevive === true,
@@ -170,7 +179,7 @@ export function replayArenaTranscript(challenge, inputEvents, options = {}) {
   let reviveCommands = 0;
 
   for (let index = 0; index < inputEvents.length; index += 1) {
-    const event = normalizeArenaEvent(inputEvents[index], index + 1);
+    const event = normalizeArenaEvent(inputEvents[index], index + 1, challenge);
     assertApi(!finishSeen, 422, 'arena_event_after_terminal', 'The input transcript continues after its finish marker.');
     assertApi(event.tick >= lastTick, 422, 'arena_tick_regressed', 'Arena input ticks must be monotonic.');
     assertApi(
@@ -185,6 +194,12 @@ export function replayArenaTranscript(challenge, inputEvents, options = {}) {
       control = decodeArenaControlState(event);
     } else if (event.type === 'command') {
       if (event.command === 'revive') reviveCommands += 1;
+      if (
+        replayMode === 'endless' &&
+        (event.command === 'descend' || event.command === 'extract')
+      ) {
+        phaseState = captureEndlessContinuation(game);
+      }
       applyReplayCommand(game, event, {
         mode: replayMode,
         allowPaidRevive: options.allowPaidRevive === true,
@@ -224,8 +239,8 @@ export function replayArenaTranscript(challenge, inputEvents, options = {}) {
     depth: Math.max(1, Math.floor(finalResult?.depth || game.run?.depth || 1)),
     guardianTimeMs,
     damageTaken: Math.max(0, Math.round(damageTaken)),
-    elapsedMs: Math.max(0, Math.round((game.run?.elapsed || 0) * 1_000)),
-    elapsed: Math.max(0, Number(finalResult?.elapsed || game.run?.elapsed || 0)),
+    elapsedMs: Math.max(0, lastTick),
+    elapsed: Math.max(0, lastTick) / 1_000,
     kills: Math.max(0, Math.floor(finalResult?.kills || game.run?.kills || 0)),
     oreBroken: Math.max(0, Math.floor(finalResult?.oreBroken || game.run?.oreBroken || 0)),
     bossTelemetry: finalResult?.bossTelemetry || null,
@@ -235,19 +250,26 @@ export function replayArenaTranscript(challenge, inputEvents, options = {}) {
     runtime: gameplayRuntimeSnapshot(game),
     eventCount: inputEvents.length,
     timeLimitReached: finalResult?.timeLimitReached === true,
-    awaitingRevive: game.state === 'awaitingrevive'
+    awaitingRevive: game.state === 'awaitingrevive',
+    state: game.state,
+    rawScore: Math.max(0, Math.floor(Number(game.run?.rawScore || 0))),
+    outcomeEvents,
+    phaseState,
+    continuation: replayMode === 'endless' ? captureEndlessContinuation(game) : null
   };
 }
 
-export function normalizeArenaEvent(input, expectedSequence) {
+export function normalizeArenaEvent(input, expectedSequence, limits = {}) {
   assertApi(
     input && typeof input === 'object' && !Array.isArray(input),
     400,
     'arena_event_invalid',
     'Each Daily Arena input must be an object.'
   );
-  const seq = strictInteger(input.seq, 1, ARENA_MAX_EVENTS, 'seq');
-  const tick = strictInteger(input.tick, 0, ARENA_MAX_TICKS, 'tick');
+  const maximumEvents = Math.max(1, Math.min(1_000_000, Number(limits.maxEvents || ARENA_MAX_EVENTS)));
+  const maximumTick = Math.max(ARENA_TICK_MS, Number(limits.maxTicks || ARENA_MAX_TICKS));
+  const seq = strictInteger(input.seq, 1, maximumEvents, 'seq');
+  const tick = strictInteger(input.tick, 0, maximumTick, 'tick');
   assertApi(
     tick % ARENA_TICK_MS === 0,
     400,
