@@ -85,10 +85,10 @@ services:
         sync: false
       - key: MATT_MINE_NFT_REWARD_SIGNER_PRIVATE_KEY
         sync: false
-      # Endless settlement stays disabled until the verified contract is
-      # explicitly activated. The remaining values are public deployment data.
+      # Enabled only after exact source verification, green release checks,
+      # and explicit Ronin activation. The remaining values are public.
       - key: MATT_MINE_ENDLESS_SETTLEMENT_ENABLED
-        value: "false"
+        value: "true"
       - key: MATT_MINE_ENDLESS_SETTLEMENT_ADDRESS
         value: "0x5025AA32077569c38a2380E4d14DB024f6e55ECf"
       - key: MATT_MINE_ENDLESS_DEPLOYMENT_BLOCK
