@@ -7,7 +7,8 @@
  * before a generated manifest is accepted for rewards.
  */
 
-export const ENDLESS_GENERATOR_VERSION = 'endless-map-v1';
+export const ENDLESS_GENERATOR_VERSION = 'endless-map-v2';
+export const ENDLESS_SUPPORTED_GENERATOR_VERSIONS = Object.freeze(['endless-map-v1', ENDLESS_GENERATOR_VERSION]);
 export const ENDLESS_CONFIG_VERSION = 1;
 export const ENDLESS_ENTRY_PRICE_MIN = 0;
 export const ENDLESS_ENTRY_PRICE_MAX = 10_000_000;
@@ -37,7 +38,7 @@ export const ENDLESS_ENEMY_TYPES = Object.freeze([
 export const ENDLESS_ORE_TYPES = Object.freeze(['stone', 'copper', 'gold', 'crystal']);
 export const ENDLESS_HAZARD_TYPES = Object.freeze(['rockfall', 'crystal_field']);
 
-const ROOM_TEMPLATES = Object.freeze([
+const LEGACY_ROOM_TEMPLATES_V1 = Object.freeze([
   Object.freeze([
     ['lift', 0.7, 3.2, 1.45, 1.45, 'start', 'Lift Station'],
     ['vein-a', 2.55, 3.2, 1.65, 1.55, 'mining', 'Shimmering Vein'],
@@ -76,11 +77,57 @@ const ROOM_TEMPLATES = Object.freeze([
   ])
 ]);
 
-const TEMPLATE_LINKS = Object.freeze([
+const ROOM_TEMPLATES_V2 = Object.freeze([
+  Object.freeze([
+    ['lift', 0.9, 3.5, 1.45, 1.45, 'start', 'Lift Station'],
+    ['vein-a', 2.8, 3.5, 1.65, 1.55, 'mining', 'Shimmering Vein'],
+    ['crossing', 4.85, 3.5, 1.7, 1.65, 'mixed', 'Broken Crossing'],
+    ['cache', 4.85, 1.2, 1.55, 1.3, 'treasure', 'Prospector Cache'],
+    ['works', 6.95, 3.5, 1.7, 1.65, 'combat', 'Old Workings'],
+    ['deep-vein', 6.95, 5.8, 1.6, 1.35, 'mining', 'Deep Vein'],
+    ['vault', 9.8, 3.5, 2.8, 2.6, 'guardian', 'Guardian Vault']
+  ]),
+  Object.freeze([
+    ['lift', 0.9, 3.5, 1.45, 1.45, 'start', 'Lift Station'],
+    ['fork', 2.8, 3.5, 1.65, 1.55, 'mixed', 'Collapsed Fork'],
+    ['upper', 2.8, 1.1, 1.55, 1.35, 'combat', 'Bat Gallery'],
+    ['lower', 2.8, 5.9, 1.55, 1.35, 'mining', 'Copper Shelf'],
+    ['relay', 5.2, 3.5, 1.7, 1.65, 'combat', 'Dust Relay'],
+    ['cache', 5.2, 5.9, 1.55, 1.35, 'treasure', 'Lost Cache'],
+    ['vault', 8.2, 3.5, 2.8, 2.6, 'guardian', 'Guardian Vault']
+  ]),
+  Object.freeze([
+    ['lift', 0.9, 3.5, 1.45, 1.45, 'start', 'Lift Station'],
+    ['gallery', 2.8, 3.5, 1.55, 1.55, 'mining', 'Crystal Gallery'],
+    ['rise', 2.8, 1.1, 1.45, 1.3, 'combat', 'Exploder Rise'],
+    ['sump', 2.8, 5.9, 1.55, 1.35, 'mixed', 'Flooded Sump'],
+    ['bridge', 5.2, 3.5, 1.6, 1.55, 'combat', 'Timber Bridge'],
+    ['cache', 5.2, 1.1, 1.45, 1.3, 'treasure', 'Survey Cache'],
+    ['vault', 8.2, 3.5, 2.8, 2.6, 'guardian', 'Guardian Vault']
+  ]),
+  Object.freeze([
+    ['lift', 0.9, 3.5, 1.45, 1.45, 'start', 'Lift Station'],
+    ['shaft', 2.8, 3.5, 1.6, 1.55, 'combat', 'Split Shaft'],
+    ['vein', 4.9, 3.5, 1.6, 1.55, 'mining', 'Golden Vein'],
+    ['cache', 4.9, 5.9, 1.45, 1.3, 'treasure', 'Foreman Cache'],
+    ['nest', 7.0, 1.1, 1.55, 1.35, 'combat', 'Crawler Nest'],
+    ['works', 7.0, 3.5, 1.65, 1.55, 'mixed', 'Crystal Works'],
+    ['vault', 9.8, 3.5, 2.8, 2.6, 'guardian', 'Guardian Vault']
+  ])
+]);
+
+const LEGACY_TEMPLATE_LINKS_V1 = Object.freeze([
   Object.freeze([['lift', 'vein-a'], ['vein-a', 'crossing'], ['crossing', 'cache'], ['crossing', 'works'], ['works', 'deep-vein'], ['works', 'vault']]),
   Object.freeze([['lift', 'fork'], ['fork', 'upper'], ['fork', 'lower'], ['upper', 'relay'], ['lower', 'relay'], ['relay', 'cache'], ['relay', 'vault']]),
   Object.freeze([['lift', 'gallery'], ['gallery', 'rise'], ['gallery', 'sump'], ['rise', 'bridge'], ['sump', 'bridge'], ['bridge', 'cache'], ['bridge', 'vault']]),
   Object.freeze([['lift', 'shaft'], ['shaft', 'vein'], ['vein', 'cache'], ['vein', 'nest'], ['vein', 'works'], ['nest', 'vault'], ['works', 'vault']])
+]);
+
+const TEMPLATE_LINKS_V2 = Object.freeze([
+  Object.freeze([['lift', 'vein-a'], ['vein-a', 'crossing'], ['crossing', 'cache'], ['crossing', 'works'], ['works', 'deep-vein'], ['works', 'vault']]),
+  Object.freeze([['lift', 'fork'], ['fork', 'upper'], ['fork', 'lower'], ['fork', 'relay'], ['relay', 'cache'], ['relay', 'vault']]),
+  Object.freeze([['lift', 'gallery'], ['gallery', 'rise'], ['gallery', 'sump'], ['gallery', 'bridge'], ['rise', 'cache'], ['bridge', 'vault']]),
+  Object.freeze([['lift', 'shaft'], ['shaft', 'vein'], ['vein', 'cache'], ['vein', 'works'], ['works', 'nest'], ['works', 'vault']])
 ]);
 
 export function defaultEndlessConfig() {
@@ -131,6 +178,10 @@ export function defaultEndlessConfig() {
       maximumHazards: 10,
       maximumObjects: 180,
       crystalObjectsPerPhase: 3,
+      guardianRoomWidth: 2.8,
+      guardianRoomHeight: 2.6,
+      corridorWidthMinimum: 0.66,
+      corridorWidthMaximum: 0.83,
       safeStartSeconds: 4
     },
     rewards: {
@@ -233,6 +284,10 @@ export function normalizeEndlessConfig(input = {}) {
       maximumHazards: integer(source.generation?.maximumHazards, 0, 24, defaults.generation.maximumHazards),
       maximumObjects: integer(source.generation?.maximumObjects, 32, 300, defaults.generation.maximumObjects),
       crystalObjectsPerPhase: integer(source.generation?.crystalObjectsPerPhase, 1, 20, defaults.generation.crystalObjectsPerPhase),
+      guardianRoomWidth: number(source.generation?.guardianRoomWidth, 2.2, 3.5, defaults.generation.guardianRoomWidth),
+      guardianRoomHeight: number(source.generation?.guardianRoomHeight, 2, 3, defaults.generation.guardianRoomHeight),
+      corridorWidthMinimum: number(source.generation?.corridorWidthMinimum, 0.3, 2, defaults.generation.corridorWidthMinimum),
+      corridorWidthMaximum: number(source.generation?.corridorWidthMaximum, 0.3, 2, defaults.generation.corridorWidthMaximum),
       safeStartSeconds: number(source.generation?.safeStartSeconds, 0, 30, defaults.generation.safeStartSeconds)
     },
     rewards: {
@@ -290,6 +345,9 @@ export function normalizeEndlessConfig(input = {}) {
   if (config.generation.maximumOreObjects < config.generation.baseOreObjects) {
     config.generation.maximumOreObjects = config.generation.baseOreObjects;
   }
+  if (config.generation.corridorWidthMaximum < config.generation.corridorWidthMinimum) {
+    config.generation.corridorWidthMaximum = config.generation.corridorWidthMinimum;
+  }
   return config;
 }
 
@@ -297,6 +355,9 @@ export function validateEndlessConfig(input, { forActivation = false } = {}) {
   const config = normalizeEndlessConfig(input);
   const errors = [];
   const requestedMattPrice = Number(input?.entry?.mattPrice);
+  if (!ENDLESS_SUPPORTED_GENERATOR_VERSIONS.includes(config.generatorVersion)) {
+    errors.push(`Generator version must be one of: ${ENDLESS_SUPPORTED_GENERATOR_VERSIONS.join(', ')}.`);
+  }
   if (input?.entry?.mattPrice !== undefined && (!Number.isFinite(requestedMattPrice) || requestedMattPrice < ENDLESS_ENTRY_PRICE_MIN || requestedMattPrice > ENDLESS_ENTRY_PRICE_MAX)) {
     errors.push(`MATT entry price must be between ${ENDLESS_ENTRY_PRICE_MIN} and ${ENDLESS_ENTRY_PRICE_MAX}.`);
   }
@@ -321,6 +382,12 @@ export function validateEndlessConfig(input, { forActivation = false } = {}) {
   }
   if (config.generation.maximumObjects < config.generation.maximumNaturalEnemies + config.generation.crystalObjectsPerPhase + 4) {
     errors.push('Maximum objects cannot contain the configured enemy and crystal limits.');
+  }
+  if (
+    input?.generation?.corridorWidthMaximum !== undefined &&
+    Number(input.generation.corridorWidthMaximum) < Number(input.generation.corridorWidthMinimum)
+  ) {
+    errors.push('Maximum corridor width must be greater than or equal to minimum corridor width.');
   }
   if (config.entry.paidEnabled && config.entry.mattPrice <= 0) {
     errors.push('Paid entry requires a positive published MATT price.');
@@ -405,9 +472,9 @@ function rationalGreaterThan(leftNumerator, leftDenominator, rightNumerator, rig
   return BigInt(leftNumerator) * BigInt(rightDenominator) > BigInt(rightNumerator) * BigInt(leftDenominator);
 }
 
-export function endlessPhaseSeed({ runId, runSeed, phase, configVersion }) {
+export function endlessPhaseSeed({ runId, runSeed, phase, configVersion, generatorVersion = ENDLESS_GENERATOR_VERSION }) {
   const normalizedPhase = integer(phase, 1, ENDLESS_MAX_PHASE, 1);
-  return `${ENDLESS_GENERATOR_VERSION}:${cleanSeed(runId)}:${cleanSeed(runSeed)}:${integer(configVersion, 1, 1_000_000_000, 1)}:${normalizedPhase}`;
+  return `${cleanVersion(generatorVersion)}:${cleanSeed(runId)}:${cleanSeed(runSeed)}:${integer(configVersion, 1, 1_000_000_000, 1)}:${normalizedPhase}`;
 }
 
 export function endlessPhasePointBudget(phase, configInput = {}) {
@@ -480,15 +547,29 @@ export function generateEndlessPhase(options = {}) {
     runId: options.runId,
     runSeed: options.runSeed,
     phase,
-    configVersion
+    configVersion,
+    generatorVersion: config.generatorVersion
   });
   const random = createSeededRandom(seed);
-  const templateIndex = Math.floor(random() * ROOM_TEMPLATES.length);
-  const rooms = ROOM_TEMPLATES[templateIndex].map((entry) => ({
+  const templates = endlessTemplateSet(config.generatorVersion);
+  const templateIndex = Math.floor(random() * templates.rooms.length);
+  const rooms = templates.rooms[templateIndex].map((entry) => ({
     id: entry[0], x: entry[1], y: entry[2], width: entry[3], height: entry[4], type: entry[5], name: entry[6]
   }));
-  const corridors = TEMPLATE_LINKS[templateIndex].map(([from, to], index) => ({
-    id: `path-${index + 1}`, from, to, width: round(0.66 + random() * 0.17, 3)
+  if (config.generatorVersion === ENDLESS_GENERATOR_VERSION) {
+    const guardianRoom = rooms.find((room) => room.type === 'guardian');
+    guardianRoom.width = config.generation.guardianRoomWidth;
+    guardianRoom.height = config.generation.guardianRoomHeight;
+  }
+  const corridors = templates.links[templateIndex].map(([from, to], index) => ({
+    id: `path-${index + 1}`,
+    from,
+    to,
+    width: round(
+      config.generation.corridorWidthMinimum +
+      random() * (config.generation.corridorWidthMaximum - config.generation.corridorWidthMinimum),
+      3
+    )
   }));
   const combatRooms = rooms.filter((room) => !['start', 'guardian'].includes(room.type));
   const oreRooms = rooms.filter((room) => ['mining', 'mixed', 'treasure'].includes(room.type));
@@ -641,6 +722,7 @@ export function validateEndlessManifest(input, configInput = {}) {
   const objects = Array.isArray(map.objects) ? map.objects : [];
   const roomIds = new Set(rooms.map((room) => room.id));
   const objectIds = new Set();
+  if (manifest.generatorVersion !== config.generatorVersion) errors.push('Manifest generator version does not match its frozen configuration.');
   if (rooms.length < config.generation.minimumRooms || rooms.length > config.generation.maximumRooms) errors.push('Room count is outside configured bounds.');
   if (objects.length > config.generation.maximumObjects) errors.push('Object count exceeds the configured limit.');
   if (rooms.filter((room) => room.type === 'start').length !== 1) errors.push('Exactly one start room is required.');
@@ -659,6 +741,11 @@ export function validateEndlessManifest(input, configInput = {}) {
   }
   for (const corridor of corridors) {
     if (!roomIds.has(corridor.from) || !roomIds.has(corridor.to) || corridor.from === corridor.to) errors.push(`Corridor ${corridor.id || '?'} has invalid endpoints.`);
+    const from = rooms.find((room) => room.id === corridor.from);
+    const to = rooms.find((room) => room.id === corridor.to);
+    if (manifest.generatorVersion === ENDLESS_GENERATOR_VERSION && from && to && from.x !== to.x && from.y !== to.y) {
+      errors.push(`Corridor ${corridor.id || '?'} must connect rooms on one exact shared X or Y doorway axis.`);
+    }
   }
   if (!allRoomsReachable(rooms, corridors)) errors.push('Every room must be reachable from the Lift Station.');
   for (const object of objects) {
@@ -745,6 +832,16 @@ function createSeededRandom(seed) {
     value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
     return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
   };
+}
+
+function endlessTemplateSet(generatorVersion) {
+  if (generatorVersion === 'endless-map-v1') {
+    return { rooms: LEGACY_ROOM_TEMPLATES_V1, links: LEGACY_TEMPLATE_LINKS_V1 };
+  }
+  if (generatorVersion === ENDLESS_GENERATOR_VERSION) {
+    return { rooms: ROOM_TEMPLATES_V2, links: TEMPLATE_LINKS_V2 };
+  }
+  throw new TypeError(`Unsupported Endless generator version: ${generatorVersion}`);
 }
 
 function hashSeed(value) {

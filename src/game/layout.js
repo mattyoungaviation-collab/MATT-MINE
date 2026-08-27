@@ -2,8 +2,12 @@ import { CONFIG } from './config.js';
 import { random, randomInt } from './utils.js';
 
 const GRID = Object.freeze({
-  columns: [300, 900, 1500, 2100],
-  rows: [280, 800, 1320]
+  columns: 4,
+  rows: 3,
+  left: 95,
+  top: 130,
+  horizontalGap: 190,
+  verticalGap: 220
 });
 
 const DIRECTIONS = Object.freeze([
@@ -53,14 +57,16 @@ export function createMineLayout(roomCount = CONFIG.roomsPerDepth, options = {})
     seen.add(cellKey(picked.next));
   }
 
+  const standardWidth = positiveNumber(options.roomWidth, CONFIG.roomWidth);
+  const standardHeight = positiveNumber(options.roomHeight, CONFIG.roomHeight);
   const rooms = cells.map((cell, index) => ({
     id: index + 1,
     cellX: cell.x,
     cellY: cell.y,
-    x: GRID.columns[cell.x],
-    y: GRID.rows[cell.y],
-    width: Number(options.roomWidth || CONFIG.roomWidth),
-    height: Number(options.roomHeight || CONFIG.roomHeight),
+    x: 0,
+    y: 0,
+    width: standardWidth,
+    height: standardHeight,
     parent: cell.parent,
     type: 'mixed',
     name: 'Old Workings'
@@ -75,6 +81,10 @@ export function createMineLayout(roomCount = CONFIG.roomsPerDepth, options = {})
   startRoom.name = 'Lift Station';
   guardianRoom.type = 'guardian';
   guardianRoom.name = 'Guardian Vault';
+  if (options.applyGuardianRoomTuning === true) {
+    guardianRoom.width = Math.max(standardWidth, positiveNumber(options.bossRoomWidth, 520));
+    guardianRoom.height = Math.max(standardHeight, positiveNumber(options.bossRoomHeight, 390));
+  }
   if (treasureRoom) {
     treasureRoom.type = 'treasure';
     treasureRoom.name = 'Prospector Cache';
@@ -95,6 +105,8 @@ export function createMineLayout(roomCount = CONFIG.roomsPerDepth, options = {})
     }
   });
 
+  positionRooms(rooms, options);
+
   const corridors = [];
   for (const room of rooms) {
     if (!room.parent) continue;
@@ -103,7 +115,7 @@ export function createMineLayout(roomCount = CONFIG.roomsPerDepth, options = {})
     corridors.push(makeCorridor(parent, room, Number(options.corridorWidth || CONFIG.corridorWidth)));
   }
 
-  return { rooms, corridors, startRoom, guardianRoom, treasureRoom };
+  return { rooms, corridors, startRoom, guardianRoom, treasureRoom, bounds: layoutBounds(rooms, corridors) };
 }
 
 export function pointInLayout(layout, x, y, padding = 0) {
@@ -126,6 +138,16 @@ export function segmentInLayout(layout, startX, startY, endX, endY, padding = 0,
   return true;
 }
 
+export function movementBounds(layout, radius = 0) {
+  const bounds = layout?.bounds || layoutBounds(layout?.rooms || [], layout?.corridors || []);
+  return {
+    minX: Math.min(radius, bounds.left + radius),
+    maxX: Math.max(CONFIG.worldWidth - radius, bounds.right - radius),
+    minY: Math.min(radius, bounds.top + radius),
+    maxY: Math.max(CONFIG.worldHeight - radius, bounds.bottom - radius)
+  };
+}
+
 export function roomAt(layout, x, y) {
   return layout.rooms.find((room) => pointInRect(room, x, y, 0)) || null;
 }
@@ -141,21 +163,76 @@ export function randomPointInRoom(room, margin = 45) {
 
 function makeCorridor(a, b, corridorWidth) {
   if (a.cellY === b.cellY) {
+    const left = a.x <= b.x ? a : b;
+    const right = left === a ? b : a;
+    const start = left.x + left.width / 2 - corridorWidth / 2;
+    const end = right.x - right.width / 2 + corridorWidth / 2;
     return {
-      x: (a.x + b.x) / 2,
+      x: (start + end) / 2,
       y: a.y,
-      width: Math.abs(a.x - b.x),
+      width: Math.max(corridorWidth, end - start),
       height: corridorWidth,
       orientation: 'horizontal'
     };
   }
+  const top = a.y <= b.y ? a : b;
+  const bottom = top === a ? b : a;
+  const start = top.y + top.height / 2 - corridorWidth / 2;
+  const end = bottom.y - bottom.height / 2 + corridorWidth / 2;
   return {
     x: a.x,
-    y: (a.y + b.y) / 2,
+    y: (start + end) / 2,
     width: corridorWidth,
-    height: Math.abs(a.y - b.y),
+    height: Math.max(corridorWidth, end - start),
     orientation: 'vertical'
   };
+}
+
+function positionRooms(rooms, options) {
+  const fallbackWidth = positiveNumber(options.roomWidth, CONFIG.roomWidth);
+  const fallbackHeight = positiveNumber(options.roomHeight, CONFIG.roomHeight);
+  const columnWidths = Array.from({ length: GRID.columns }, (_, column) => Math.max(
+    fallbackWidth,
+    ...rooms.filter((room) => room.cellX === column).map((room) => room.width)
+  ));
+  const rowHeights = Array.from({ length: GRID.rows }, (_, row) => Math.max(
+    fallbackHeight,
+    ...rooms.filter((room) => room.cellY === row).map((room) => room.height)
+  ));
+  const horizontalGap = positiveNumber(options.roomHorizontalGap, GRID.horizontalGap);
+  const verticalGap = positiveNumber(options.roomVerticalGap, GRID.verticalGap);
+  const columns = centersForSizes(columnWidths, GRID.left, horizontalGap);
+  const rows = centersForSizes(rowHeights, GRID.top, verticalGap);
+  for (const room of rooms) {
+    room.x = columns[room.cellX];
+    room.y = rows[room.cellY];
+  }
+}
+
+function centersForSizes(sizes, leadingPadding, gap) {
+  const centers = [];
+  let edge = leadingPadding;
+  for (const size of sizes) {
+    centers.push(edge + size / 2);
+    edge += size + gap;
+  }
+  return centers;
+}
+
+function layoutBounds(rooms, corridors) {
+  const areas = [...rooms, ...corridors];
+  if (!areas.length) return { left: 0, right: CONFIG.worldWidth, top: 0, bottom: CONFIG.worldHeight };
+  return {
+    left: Math.min(...areas.map((area) => area.x - area.width / 2)),
+    right: Math.max(...areas.map((area) => area.x + area.width / 2)),
+    top: Math.min(...areas.map((area) => area.y - area.height / 2)),
+    bottom: Math.max(...areas.map((area) => area.y + area.height / 2))
+  };
+}
+
+function positiveNumber(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 function pointInRect(rect, x, y, padding) {
@@ -166,7 +243,7 @@ function pointInRect(rect, x, y, padding) {
 }
 
 function validCell(cell) {
-  return cell.x >= 0 && cell.x < GRID.columns.length && cell.y >= 0 && cell.y < GRID.rows.length;
+  return cell.x >= 0 && cell.x < GRID.columns && cell.y >= 0 && cell.y < GRID.rows;
 }
 
 function gridDistance(a, b) {

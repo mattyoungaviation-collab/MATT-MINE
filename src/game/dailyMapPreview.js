@@ -25,13 +25,11 @@ export function createDailyMinePreviewModel(day = DEFAULT_DAY(), tuning = {}) {
   const seed = freeDailyMineSeed(normalizedDay);
   const layout = withRandomSource(
     seededRandom(`${seed}:DEPTH:1`),
-    () => createMineLayout(Number(tuning.roomsPerDepth || CONFIG.roomsPerDepth), tuning)
+    () => createMineLayout(Number(tuning.roomsPerDepth || CONFIG.roomsPerDepth), {
+      ...tuning,
+      applyGuardianRoomTuning: true
+    })
   );
-
-  if (layout.guardianRoom) {
-    layout.guardianRoom.width = Math.max(layout.guardianRoom.width, Number(tuning.bossRoomWidth || 520));
-    layout.guardianRoom.height = Math.max(layout.guardianRoom.height, Number(tuning.bossRoomHeight || 390));
-  }
 
   const left = Math.min(...[...layout.rooms, ...layout.corridors].map((area) => area.x - area.width / 2));
   const right = Math.max(...[...layout.rooms, ...layout.corridors].map((area) => area.x + area.width / 2));

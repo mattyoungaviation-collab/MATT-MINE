@@ -145,11 +145,10 @@ export const stateMethods = {
       : null;
     this.layout = authoredMap
       ? materializeCompetitionMap(authoredMap)
-      : createMineLayout(tuning.roomsPerDepth || CONFIG.roomsPerDepth, tuning);
-    if (!authoredMap && !arenaMode && this.layout.guardianRoom) {
-      this.layout.guardianRoom.width = Math.max(this.layout.guardianRoom.width, tuning.bossRoomWidth || 520);
-      this.layout.guardianRoom.height = Math.max(this.layout.guardianRoom.height, tuning.bossRoomHeight || 390);
-    }
+      : createMineLayout(tuning.roomsPerDepth || CONFIG.roomsPerDepth, {
+          ...tuning,
+          applyGuardianRoomTuning: !arenaMode
+        });
     this.decor = this.makeDepthDecor();
     this.enemies = [];
     this.ores = [];

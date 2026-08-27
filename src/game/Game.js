@@ -1,6 +1,6 @@
 import { BLASTER_RUN_UPGRADES, CONFIG, ORE_TYPES, RUN_UPGRADES } from './config.js';
 import { InputController } from './input.js';
-import { createMineLayout, pointInLayout, randomPointInRoom, roomAt, segmentInLayout } from './layout.js';
+import { createMineLayout, movementBounds, pointInLayout, randomPointInRoom, roomAt, segmentInLayout } from './layout.js';
 import {
   canvasRenderSize,
   gameplayViewportSize,
@@ -478,10 +478,11 @@ export class MattMineGame {
 
   moveEntity(entity, dx, dy) {
     const padding = Math.max(8, entity.radius * 0.68);
-    const nextX = clamp(entity.x + dx, entity.radius, CONFIG.worldWidth - entity.radius);
+    const world = movementBounds(this.layout, entity.radius);
+    const nextX = clamp(entity.x + dx, world.minX, world.maxX);
     if (pointInLayout(this.layout, nextX, entity.y, padding)) entity.x = nextX;
     else if ('vx' in entity) entity.vx = 0;
-    const nextY = clamp(entity.y + dy, entity.radius, CONFIG.worldHeight - entity.radius);
+    const nextY = clamp(entity.y + dy, world.minY, world.maxY);
     if (pointInLayout(this.layout, entity.x, nextY, padding)) entity.y = nextY;
     else if ('vy' in entity) entity.vy = 0;
   }
@@ -970,18 +971,20 @@ export class MattMineGame {
 
   cameraBounds() {
     const rooms = this.layout?.rooms || [];
-    const centersX = rooms.map((room) => room.x);
-    const centersY = rooms.map((room) => room.y);
     const edgePadding = 72;
-    const minCenterX = centersX.length ? Math.min(...centersX) : this.viewportWidth / 2;
-    const maxCenterX = centersX.length ? Math.max(...centersX) : CONFIG.worldWidth - this.viewportWidth / 2;
-    const minCenterY = centersY.length ? Math.min(...centersY) : this.viewportHeight / 2;
-    const maxCenterY = centersY.length ? Math.max(...centersY) : CONFIG.worldHeight - this.viewportHeight / 2;
+    const left = rooms.length ? Math.min(...rooms.map((room) => room.x - Number(room.width || 0) / 2)) : 0;
+    const right = rooms.length ? Math.max(...rooms.map((room) => room.x + Number(room.width || 0) / 2)) : CONFIG.worldWidth;
+    const top = rooms.length ? Math.min(...rooms.map((room) => room.y - Number(room.height || 0) / 2)) : 0;
+    const bottom = rooms.length ? Math.max(...rooms.map((room) => room.y + Number(room.height || 0) / 2)) : CONFIG.worldHeight;
+    const minCenterX = rooms.length ? Math.min(...rooms.map((room) => room.x)) : this.viewportWidth / 2;
+    const maxCenterX = rooms.length ? Math.max(...rooms.map((room) => room.x)) : CONFIG.worldWidth - this.viewportWidth / 2;
+    const minCenterY = rooms.length ? Math.min(...rooms.map((room) => room.y)) : this.viewportHeight / 2;
+    const maxCenterY = rooms.length ? Math.max(...rooms.map((room) => room.y)) : CONFIG.worldHeight - this.viewportHeight / 2;
     return {
-      minX: Math.min(0, minCenterX - this.viewportWidth / 2 - edgePadding),
-      maxX: Math.max(CONFIG.worldWidth - this.viewportWidth, maxCenterX - this.viewportWidth / 2 + edgePadding),
-      minY: Math.min(0, minCenterY - this.viewportHeight / 2 - edgePadding),
-      maxY: Math.max(CONFIG.worldHeight - this.viewportHeight, maxCenterY - this.viewportHeight / 2 + edgePadding)
+      minX: Math.min(0, left - edgePadding, minCenterX - this.viewportWidth / 2 - edgePadding),
+      maxX: Math.max(CONFIG.worldWidth - this.viewportWidth, right - this.viewportWidth + edgePadding, maxCenterX - this.viewportWidth / 2 + edgePadding),
+      minY: Math.min(0, top - edgePadding, minCenterY - this.viewportHeight / 2 - edgePadding),
+      maxY: Math.max(CONFIG.worldHeight - this.viewportHeight, bottom - this.viewportHeight + edgePadding, maxCenterY - this.viewportHeight / 2 + edgePadding)
     };
   }
 

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { MattMineGame } from '../src/game/GameV4.js';
 import { defaultProfile } from '../src/game/storage.js';
 import { materializeCompetitionMap, validateCompetitionMap } from '../src/game/competitionStudio.js';
+import { segmentInLayout } from '../src/game/layout.js';
 import {
   calculateDangerRating,
   calculateMinerCapability,
@@ -34,17 +35,62 @@ test('Endless phase generation is deterministic, unique by run, and reconstructa
   assert.equal(validateEndlessManifest(first, config).ok, true);
 });
 
-test('Endless manifests use the same validated map schema and renderer path as Pass Mine', () => {
-  const manifest = generateEndlessPhase({
-    runId: 'run-pass-style', runSeed: 'server-pass-style', phase: 12,
+test('Endless map v1 remains replayable while corrected runs use map v2', () => {
+  const legacyConfig = defaultEndlessConfig();
+  legacyConfig.generatorVersion = 'endless-map-v1';
+  const legacy = generateEndlessPhase({
+    runId: 'legacy-run', runSeed: 'legacy-seed', phase: 12, configVersion: 2, config: legacyConfig
+  });
+  const repeated = generateEndlessPhase({
+    runId: 'legacy-run', runSeed: 'legacy-seed', phase: 12, configVersion: 2, config: legacyConfig
+  });
+  assert.deepEqual(legacy, repeated);
+  assert.equal(legacy.generatorVersion, 'endless-map-v1');
+  assert.equal(validateEndlessManifest(legacy, legacyConfig).ok, true);
+
+  const corrected = generateEndlessPhase({
+    runId: 'corrected-run', runSeed: 'corrected-seed', phase: 12,
     configVersion: 3, config: defaultEndlessConfig()
   });
-  const validation = validateCompetitionMap(manifest.map);
-  assert.equal(validation.valid, true, validation.errors.join('\n'));
-  const materialized = materializeCompetitionMap(manifest.map);
-  assert.ok(materialized.startRoom);
-  assert.ok(materialized.guardianRoom);
-  assert.equal(materialized.objects.length, manifest.map.objects.length);
+  assert.equal(corrected.generatorVersion, 'endless-map-v2');
+  assert.equal(corrected.map.corridors.every((corridor) => {
+    const a = corrected.map.rooms.find((room) => room.id === corridor.from);
+    const b = corrected.map.rooms.find((room) => room.id === corridor.to);
+    return a.x === b.x || a.y === b.y;
+  }), true);
+});
+
+test('Endless manifests use the same validated map schema and renderer path as Pass Mine', () => {
+  for (let phase = 1; phase <= 100; phase += 1) {
+    const manifest = generateEndlessPhase({
+      runId: `run-pass-style-${phase}`, runSeed: 'server-pass-style', phase,
+      configVersion: 3, config: defaultEndlessConfig()
+    });
+    const validation = validateCompetitionMap(manifest.map);
+    assert.equal(validation.valid, true, validation.errors.join('\n'));
+    const materialized = materializeCompetitionMap(manifest.map);
+    assert.ok(materialized.startRoom);
+    assert.ok(materialized.guardianRoom);
+    assert.equal(materialized.objects.length, manifest.map.objects.length);
+    assert.ok(materialized.guardianRoom.width >= 2.8 * 170);
+    assert.ok(materialized.guardianRoom.height >= 2.6 * 155);
+
+    const sourceRooms = new Map(manifest.map.rooms.map((room) => [room.id, room]));
+    const runtimeRooms = new Map(materialized.rooms.map((room) => [room.sourceId, room]));
+    for (const corridor of manifest.map.corridors) {
+      const sourceA = sourceRooms.get(corridor.from);
+      const sourceB = sourceRooms.get(corridor.to);
+      assert.ok(sourceA.x === sourceB.x || sourceA.y === sourceB.y, `${corridor.id} is diagonal`);
+      const a = runtimeRooms.get(corridor.from);
+      const b = runtimeRooms.get(corridor.to);
+      assert.equal(
+        segmentInLayout(materialized, a.x, a.y, b.x, b.y, 18),
+        true,
+        `${corridor.id} is not continuously traversable`
+      );
+      assert.equal(materialized.corridors.filter((entry) => entry.sourceId === corridor.id).length, 1);
+    }
+  }
 });
 
 test('the exact point solver and every sampled phase have no score drift', () => {
@@ -156,6 +202,27 @@ test('entry limits normalize as explicit adjustable Admin rules', () => {
   });
 });
 
+test('Endless v2 Guardian and corridor geometry stays exactly Admin-adjustable', () => {
+  const config = defaultEndlessConfig();
+  config.generation.guardianRoomWidth = 3.5;
+  config.generation.guardianRoomHeight = 3;
+  config.generation.corridorWidthMinimum = 1.25;
+  config.generation.corridorWidthMaximum = 1.25;
+  const manifest = generateEndlessPhase({
+    runId: 'geometry-adjustment', runSeed: 'geometry-seed', phase: 1, configVersion: 4, config
+  });
+  const guardian = manifest.map.rooms.find((room) => room.type === 'guardian');
+  assert.equal(guardian.width, 3.5);
+  assert.equal(guardian.height, 3);
+  assert.equal(manifest.map.corridors.every((corridor) => corridor.width === 1.25), true);
+  assert.equal(validateEndlessManifest(manifest, config).ok, true);
+
+  const invalid = structuredClone(config);
+  invalid.generation.corridorWidthMinimum = 1.5;
+  invalid.generation.corridorWidthMaximum = 1;
+  assert.match(validateEndlessConfig(invalid).errors.join(' '), /Maximum corridor width/i);
+});
+
 test('authoritative replay limits are explicit adjustable Admin rules with permanent bounds', () => {
   const draft = defaultEndlessConfig();
   draft.integrity = {
@@ -195,6 +262,12 @@ test('map validator rejects unreachable rooms, point drift, and a forged boss ga
   unreachable.fingerprint = '';
   unreachable.map.corridors = [];
   assert.match(validateEndlessManifest(unreachable, config).errors.join(' '), /reachable/i);
+
+  const diagonal = structuredClone(manifest);
+  diagonal.fingerprint = '';
+  const linkedRoom = diagonal.map.rooms.find((room) => room.id === diagonal.map.corridors[0].to);
+  linkedRoom.y += 0.01;
+  assert.match(validateEndlessManifest(diagonal, config).errors.join(' '), /shared X or Y doorway axis/i);
 
   const drift = structuredClone(manifest);
   drift.fingerprint = '';

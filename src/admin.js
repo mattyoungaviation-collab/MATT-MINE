@@ -1631,6 +1631,7 @@ function objectDiff(original = {}, next = {}) {
 
 const ENDLESS_ADMIN_FIELDS = Object.freeze([
   ['Launch', 'enabled', 'Endless enabled', 'boolean', 0, 1],
+  ['Launch', 'generatorVersion', 'Map generator version', 'text', 0, 80],
   ['Entry', 'entry.paidEnabled', 'Paid MATT entry enabled', 'boolean', 0, 1],
   ['Entry', 'entry.mattPrice', 'MATT entry price', 'integer', 0, 10_000_000],
   ['Entry limits', 'entry.entriesPerWallet', 'Entries per wallet (0 = unlimited)', 'integer', 0, 1_000_000],
@@ -1664,6 +1665,10 @@ const ENDLESS_ADMIN_FIELDS = Object.freeze([
   ['Generation', 'generation.maximumHazards', 'Maximum hazards', 'integer', 0, 24],
   ['Generation', 'generation.maximumObjects', 'Maximum map objects', 'integer', 32, 300],
   ['Generation', 'generation.crystalObjectsPerPhase', 'MATT crystal objects per phase', 'integer', 1, 20],
+  ['Generation', 'generation.guardianRoomWidth', 'Guardian room width', 'number', 2.2, 3.5],
+  ['Generation', 'generation.guardianRoomHeight', 'Guardian room height', 'number', 2, 3],
+  ['Generation', 'generation.corridorWidthMinimum', 'Minimum corridor width', 'number', .3, 2],
+  ['Generation', 'generation.corridorWidthMaximum', 'Maximum corridor width', 'number', .3, 2],
   ['Generation', 'generation.safeStartSeconds', 'Safe start seconds', 'number', 0, 30],
   ['Rewards', 'rewards.enabled', 'Rewards enabled', 'boolean', 0, 1],
   ['Rewards', 'rewards.crystalsEnabled', 'CRYSTALS enabled', 'boolean', 0, 1],

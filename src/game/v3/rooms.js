@@ -1,5 +1,4 @@
-import { CONFIG } from '../config.js';
-import { pointInLayout, roomAt } from '../layout.js';
+import { movementBounds, pointInLayout, roomAt } from '../layout.js';
 import { clamp } from '../utils.js';
 import { roomRequiresLock } from '../combat.js';
 import { nftGameplayTraits } from '../nftTraits.js';
@@ -32,10 +31,11 @@ export const roomsMethods = {
       return;
     }
 
-    const nextX = clamp(entity.x + dx, entity.radius, CONFIG.worldWidth - entity.radius);
+    const world = movementBounds(this.layout, entity.radius);
+    const nextX = clamp(entity.x + dx, world.minX, world.maxX);
     if (pointInLayout(this.layout, nextX, entity.y, padding)) entity.x = nextX;
     else if ('vx' in entity) entity.vx = 0;
-    const nextY = clamp(entity.y + dy, entity.radius, CONFIG.worldHeight - entity.radius);
+    const nextY = clamp(entity.y + dy, world.minY, world.maxY);
     if (pointInLayout(this.layout, entity.x, nextY, padding)) entity.y = nextY;
     else if ('vy' in entity) entity.vy = 0;
   },

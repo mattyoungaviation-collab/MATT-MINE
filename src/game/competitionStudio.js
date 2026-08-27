@@ -394,14 +394,11 @@ export function materializeCompetitionMap(input) {
     name: room.name
   }));
   const bySource = new Map(rooms.map((room) => [room.sourceId, room]));
-  const corridors = map.corridors.map((corridor) => {
+  const corridors = map.corridors.flatMap((corridor) => {
     const a = bySource.get(corridor.from);
     const b = bySource.get(corridor.to);
     const width = Math.max(70, corridor.width * 120);
-    if (Math.abs(a.x - b.x) >= Math.abs(a.y - b.y)) {
-      return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, width: Math.abs(a.x - b.x) + width, height: width, orientation: 'horizontal' };
-    }
-    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, width, height: Math.abs(a.y - b.y) + width, orientation: 'vertical' };
+    return materializeCorridor(corridor, a, b, width);
   });
   const positionedObjects = map.objects.map((object) => {
     const room = bySource.get(object.roomId);
@@ -419,7 +416,71 @@ export function materializeCompetitionMap(input) {
     guardianRoom: rooms.find((room) => room.type === 'guardian') || rooms.at(-1),
     treasureRoom: rooms.find((room) => room.type === 'treasure') || null,
     objects: positionedObjects,
+    bounds: materializedBounds(rooms, corridors),
     source: map
+  };
+}
+
+function materializeCorridor(source, a, b, width) {
+  const metadata = { sourceId: source.id, from: a.id, to: b.id };
+  if (a.y === b.y) return [horizontalCorridor(a, b, width, metadata)];
+  if (a.x === b.x) return [verticalCorridor(a, b, width, metadata)];
+
+  // Historical authored maps allowed diagonal links. Preserve those maps as a
+  // traversable pair of straight segments; new generated maps are validated to
+  // use one exact shared X or Y doorway axis.
+  const horizontalFirst = [
+    horizontalCorridor(a, { x: b.x, y: a.y, width: 0, height: 0 }, width, { ...metadata, segment: 1 }),
+    verticalCorridor({ x: b.x, y: a.y, width: 0, height: 0 }, b, width, { ...metadata, segment: 2 })
+  ];
+  const verticalFirst = [
+    verticalCorridor(a, { x: a.x, y: b.y, width: 0, height: 0 }, width, { ...metadata, segment: 1 }),
+    horizontalCorridor({ x: a.x, y: b.y, width: 0, height: 0 }, b, width, { ...metadata, segment: 2 })
+  ];
+  return corridorLength(horizontalFirst) <= corridorLength(verticalFirst) ? horizontalFirst : verticalFirst;
+}
+
+function horizontalCorridor(a, b, width, metadata) {
+  const left = a.x <= b.x ? a : b;
+  const right = left === a ? b : a;
+  const start = left.x + (left.width || 0) / 2 - width / 2;
+  const end = right.x - (right.width || 0) / 2 + width / 2;
+  return {
+    ...metadata,
+    x: (start + end) / 2,
+    y: a.y,
+    width: Math.max(width, end - start),
+    height: width,
+    orientation: 'horizontal'
+  };
+}
+
+function verticalCorridor(a, b, width, metadata) {
+  const top = a.y <= b.y ? a : b;
+  const bottom = top === a ? b : a;
+  const start = top.y + (top.height || 0) / 2 - width / 2;
+  const end = bottom.y - (bottom.height || 0) / 2 + width / 2;
+  return {
+    ...metadata,
+    x: a.x,
+    y: (start + end) / 2,
+    width,
+    height: Math.max(width, end - start),
+    orientation: 'vertical'
+  };
+}
+
+function corridorLength(corridors) {
+  return corridors.reduce((sum, corridor) => sum + Math.max(corridor.width, corridor.height), 0);
+}
+
+function materializedBounds(rooms, corridors) {
+  const areas = [...rooms, ...corridors];
+  return {
+    left: Math.min(...areas.map((area) => area.x - area.width / 2)),
+    right: Math.max(...areas.map((area) => area.x + area.width / 2)),
+    top: Math.min(...areas.map((area) => area.y - area.height / 2)),
+    bottom: Math.max(...areas.map((area) => area.y + area.height / 2))
   };
 }
 

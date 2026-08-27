@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { clamp, weightedChoice } from '../src/game/utils.js';
 import { ORE_TYPES } from '../src/game/config.js';
-import { createMineLayout, pointInLayout, randomPointInRoom, roomAt } from '../src/game/layout.js';
+import { createMineLayout, movementBounds, pointInLayout, randomPointInRoom, roomAt, segmentInLayout } from '../src/game/layout.js';
 
 test('clamp keeps values inside the requested range', () => {
   assert.equal(clamp(-2, 0, 10), 0);
@@ -38,6 +38,49 @@ test('room points are walkable and resolve back to their room', () => {
     const point = randomPointInRoom(room, 60);
     assert.equal(pointInLayout(layout, point.x, point.y, 10), true);
     assert.equal(roomAt(layout, point.x, point.y)?.id, room.id);
+  }
+});
+
+test('procedural corridors stay centered and traversable with the largest adjustable Guardian Vault', () => {
+  for (let index = 0; index < 100; index += 1) {
+    const layout = createMineLayout(12, {
+      roomWidth: 900,
+      roomHeight: 700,
+      bossRoomWidth: 1_600,
+      bossRoomHeight: 1_200,
+      corridorWidth: 300,
+      applyGuardianRoomTuning: true
+    });
+    assert.equal(layout.guardianRoom.width, 1_600);
+    assert.equal(layout.guardianRoom.height, 1_200);
+
+    for (let left = 0; left < layout.rooms.length; left += 1) {
+      for (let right = left + 1; right < layout.rooms.length; right += 1) {
+        const a = layout.rooms[left];
+        const b = layout.rooms[right];
+        assert.ok(
+          Math.abs(a.x - b.x) >= (a.width + b.width) / 2 ||
+          Math.abs(a.y - b.y) >= (a.height + b.height) / 2,
+          `rooms ${a.id} and ${b.id} overlap`
+        );
+      }
+    }
+
+    for (const room of layout.rooms.filter((entry) => entry.parent)) {
+      const parent = layout.rooms.find((entry) =>
+        entry.cellX === room.parent.x && entry.cellY === room.parent.y
+      );
+      assert.ok(parent.x === room.x || parent.y === room.y, `room ${room.id} is not axis-aligned`);
+      assert.equal(
+        segmentInLayout(layout, parent.x, parent.y, room.x, room.y, 20),
+        true,
+        `room ${room.id} has no continuous centered route`
+      );
+    }
+
+    const bounds = movementBounds(layout, 22);
+    assert.ok(bounds.maxX >= layout.bounds.right - 22);
+    assert.ok(bounds.maxY >= layout.bounds.bottom - 22);
   }
 });
 

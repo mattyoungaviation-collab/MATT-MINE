@@ -64,11 +64,10 @@ export const spawnTuningMethods = {
     }
 
     const arenaMode = this.runContext?.mode === 'arena';
-    this.layout = createMineLayout(tuning.roomsPerDepth || CONFIG.roomsPerDepth, tuning);
-    if (!arenaMode && this.layout.guardianRoom) {
-      this.layout.guardianRoom.width = Math.max(this.layout.guardianRoom.width, tuning.bossRoomWidth || 520);
-      this.layout.guardianRoom.height = Math.max(this.layout.guardianRoom.height, tuning.bossRoomHeight || 390);
-    }
+    this.layout = createMineLayout(tuning.roomsPerDepth || CONFIG.roomsPerDepth, {
+      ...tuning,
+      applyGuardianRoomTuning: !arenaMode
+    });
     this.decor = this.makeDepthDecor();
     this.enemies = [];
     this.ores = [];
