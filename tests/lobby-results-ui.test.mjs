@@ -85,6 +85,19 @@ test('the Miner selector exposes an explicit on-chain orphan forfeit action', as
   assert.match(httpSource, /service\.recoverLockedMinerRun\(bearerToken\(request\), body\)/);
 });
 
+test('a failed Endless death close remains readable and retryable without clearing the saved run', async () => {
+  const source = await readFile(`${root}src/main.js`, 'utf8');
+  const finalizer = source.match(/async function finalizeEndlessKnockout\(run\) \{[\s\S]*?\n\}/)?.[0] || '';
+
+  assert.match(finalizer, /ENDLESS CLOSE FAILED/);
+  assert.match(finalizer, /ERROR \$\{escapeHtml\(errorCode\)\}/);
+  assert.match(finalizer, /RONIN \$\{escapeHtml\(roninReason\)\}/);
+  assert.match(finalizer, /RETRY ENDLESS CLOSE/);
+  assert.match(finalizer, /queueFinalizationRetry\(\(\) => finalizeEndlessKnockout\(run\)/);
+  assert.ok(finalizer.indexOf('clearPersistedEndlessRun();') < finalizer.indexOf('} catch (error)'));
+  assert.doesNotMatch(finalizer.slice(finalizer.indexOf('} catch (error)')), /clearPersistedEndlessRun\(\)/);
+});
+
 test('Miner selection, loadout, balances, repair, chests, and mine entry share one player flow', async () => {
   const html = await readFile(`${root}index.html`, 'utf8');
   const source = await readFile(`${root}src/main.js`, 'utf8');

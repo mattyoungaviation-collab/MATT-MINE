@@ -30,15 +30,21 @@ const ECONOMY = Object.freeze({
   failedRunsRetainXp: false
 });
 
-function harness() {
+function harness(options = {}) {
   let transaction = 0;
   let active = emptyActive();
   let settledEvent = null;
+  let settlementSimulation = null;
   const publicClient = {
     async getChainId() { return 2020; },
     async getBalance() { return 10n ** 18n; },
     async waitForTransactionReceipt() { return { status: 'success', logs: [] }; },
     async getLogs() { return settledEvent ? [settledEvent] : []; },
+    async simulateContract(request) {
+      settlementSimulation = request;
+      if (options.settlementSimulationError) throw options.settlementSimulationError;
+      return { request };
+    },
     async readContract({ functionName }) {
       if (functionName === 'OPERATOR_ROLE') return `0x${'66'.repeat(32)}`;
       if (functionName === 'paused') return false;
@@ -121,7 +127,7 @@ function harness() {
     publicClient,
     operatorClient
   });
-  return { service, activeRun: () => active };
+  return { service, activeRun: () => active, settlementSimulation: () => settlementSimulation };
 }
 
 test('Endless chain adapter authorizes, checkpoints, and settles one immutable version', async () => {
@@ -226,6 +232,33 @@ test('Endless chain adapter death-settles a progressed orphan from live chain st
   assert.equal(cancelled.settlement.minedCrystalUnits, 3);
   assert.notEqual(cancelled.transactionHash, '');
   assert.equal(activeRun().runId, ZERO);
+});
+
+test('Endless chain adapter exposes a safe exact Ronin reason before broadcasting a failed close', async () => {
+  const simulationError = new Error("Execution reverted with custom error 'MinerNotInRun(7)'.");
+  const { service } = harness({ settlementSimulationError: simulationError });
+  await service.init();
+  const prepared = await service.prepareRunAuthorization({
+    address: PLAYER,
+    minerId: 7,
+    economyVersion: 'endless-conservative-v1',
+    economyConfig: ECONOMY
+  });
+  await service.beginRun({
+    address: PLAYER,
+    minerId: 7,
+    economyVersion: 'endless-conservative-v1',
+    economyConfig: ECONOMY,
+    authorization: prepared.authorization,
+    playerSignature: `0x${'12'.repeat(65)}`
+  });
+
+  await assert.rejects(
+    service.cancelRun({ address: PLAYER, minerId: 7 }),
+    (error) => error.code === 'endless_chain_settlement_failed' &&
+      error.details?.reason === 'MinerNotInRun' &&
+      /remains saved and can be retried/i.test(error.message)
+  );
 });
 
 test('Endless chain adapter fails closed when Admin economy values do not match the mapped version', async () => {

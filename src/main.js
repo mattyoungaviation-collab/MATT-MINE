@@ -1251,12 +1251,12 @@ function showDatabaseReconnect(_error, retry) {
   `;
 }
 
-function queueFinalizationRetry(retry) {
+function queueFinalizationRetry(retry, label = 'RETRY SCORE SAVE') {
   pendingRunFinalization = retry;
   const retryButton = $('#play-again-button');
   retryButton.hidden = false;
   retryButton.disabled = false;
-  retryButton.textContent = 'RETRY SCORE SAVE';
+  retryButton.textContent = label;
   const menuButton = $('#menu-button');
   menuButton.hidden = false;
   menuButton.disabled = true;
@@ -4441,13 +4441,22 @@ async function finalizeEndlessKnockout(run) {
     activeEndlessTranscript = null;
     const accepted = await apiClient.abandonEndlessRun(run.runId, run.runToken, 'knockout');
     renderEndlessBankSummary(accepted.summary);
+    if (activeServerRun === run) activeServerRun = null;
+    clearPersistedEndlessRun();
+    clearPendingFinalization();
+    await refreshServerPlayer();
   } catch (error) {
-    $('#economy-result').innerHTML = `<strong>ENDLESS CLOSE PENDING</strong><span>${escapeHtml(error.message)}</span><small>Previously signed phase checkpoints remain on the server.</small>`;
+    const errorCode = String(error?.code || 'request_failed').toUpperCase();
+    const roninReason = String(error?.details?.reason || '').trim();
+    $('#economy-result').innerHTML = `
+      <strong>ENDLESS CLOSE FAILED</strong>
+      <span>${escapeHtml(error.message || 'The Endless run could not be closed.')}</span>
+      <small>ERROR ${escapeHtml(errorCode)}${roninReason ? ` · RONIN ${escapeHtml(roninReason)}` : ''} · This exact message will remain here. Your run and signed checkpoints are still saved. Press RETRY ENDLESS CLOSE; do not start another run.</small>
+    `;
+    queueFinalizationRetry(() => finalizeEndlessKnockout(run), 'RETRY ENDLESS CLOSE');
     toast(error.message);
   } finally {
-    if (activeServerRun === run) activeServerRun = null;
     activeEndlessTranscript = null;
-    clearPersistedEndlessRun();
     runFinalizationBusy = false;
   }
 }

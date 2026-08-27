@@ -29,7 +29,19 @@ const ENDLESS_ABI = parseAbi([
   'function activeRun(uint256 minerId) view returns ((bytes32 runId,bytes32 versionId,bytes32 loadoutHash,bytes32 checkpointDigest,address player,uint128 conversionRate,uint128 maximumPayout,uint128 maximumDailyPayout,uint40 startedAt,uint40 lastCheckpointAt,uint32 mineableCrystalUnits,uint32 maximumPhases,uint32 phaseXp,uint32 maximumRunXp,uint32 maximumWalletXpPerDay,uint32 maximumMinerXpPerDay,uint32 checkpointTimeout,uint32 completedPhases,uint32 minedCrystalUnits,uint16 carryCapacity,uint16 deathRetentionBps,bool failedRunsRetainXp,uint256 nonce))',
   'function beginRun((address player,uint256 minerId,bytes32 versionId,bytes32 loadoutHash,uint256 nonce,uint256 deadline) authorization,bytes playerSignature) returns (bytes32 runId)',
   'function checkpoint((address player,uint256 minerId,bytes32 runId,bytes32 versionId,bytes32 previousDigest,bytes32 checkpointDigest,uint32 completedPhases,uint32 minedCrystalUnits,uint256 nonce,uint256 deadline) receipt,bytes rewardSignature)',
-  'function settle((address player,uint256 minerId,bytes32 runId,bytes32 versionId,bytes32 checkpointDigest,uint8 outcome,uint32 completedPhases,uint32 minedCrystalUnits,uint256 nonce,uint256 deadline) result,bytes rewardSignature)'
+  'function settle((address player,uint256 minerId,bytes32 runId,bytes32 versionId,bytes32 checkpointDigest,uint8 outcome,uint32 completedPhases,uint32 minedCrystalUnits,uint256 nonce,uint256 deadline) result,bytes rewardSignature)',
+  'error AuthorizationExpired()',
+  'error InvalidSignature()',
+  'error NotMinerOwner()',
+  'error RunNotActive()',
+  'error RunMismatch()',
+  'error RunAlreadyProcessed()',
+  'error InvalidRunResult()',
+  'error UnsafeRoleOverlap()',
+  'error MinerNotInRun(uint256 minerId)',
+  'error AccessControlUnauthorizedAccount(address account,bytes32 neededRole)',
+  'error EnforcedPause()',
+  'error ReentrancyGuardReentrantCall()'
 ]);
 const LOADOUT_ABI = parseAbi(['function loadoutHash(uint256 minerId) view returns (bytes32)']);
 const SETTLED_EVENT = parseAbiItem('event EndlessRunSettled(bytes32 indexed runId,address indexed player,uint256 indexed minerId,uint8 outcome,uint32 completedPhases,uint32 minedCrystalUnits,uint256 xpBanked,uint256 crystalsBanked,bytes32 checkpointDigest)');
@@ -394,12 +406,25 @@ export class EndlessSettlementService {
   }
 
   async #submitSettlement(active, result, label) {
-    const rewardSignature = await this.signerAccount.signTypedData({ domain: this.#domain(), types: RESULT_TYPES, primaryType: 'EndlessResult', message: result });
-    const transactionHash = await this.operatorClient.writeContract({ address: this.settlementAddress, abi: ENDLESS_ABI, functionName: 'settle', args: [result, rewardSignature] });
-    await this.#confirmed(transactionHash, label);
-    const event = await this.#settledEvent(active.runId);
-    assertApi(event, 502, 'endless_chain_settlement_event_missing', 'The confirmed Endless settlement event was not found.');
-    return this.#settlementReceipt(event, transactionHash, false);
+    try {
+      const rewardSignature = await this.signerAccount.signTypedData({ domain: this.#domain(), types: RESULT_TYPES, primaryType: 'EndlessResult', message: result });
+      const request = { account: this.operatorAddress, address: this.settlementAddress, abi: ENDLESS_ABI, functionName: 'settle', args: [result, rewardSignature] };
+      await this.publicClient.simulateContract(request);
+      const transactionHash = await this.operatorClient.writeContract(request);
+      await this.#confirmed(transactionHash, label);
+      const event = await this.#settledEvent(active.runId);
+      assertApi(event, 502, 'endless_chain_settlement_event_missing', 'The confirmed Endless settlement event was not found.');
+      return this.#settlementReceipt(event, transactionHash, false);
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      const reason = endlessContractErrorName(error);
+      throw new ApiError(
+        502,
+        'endless_chain_settlement_failed',
+        `${label} was not confirmed on Ronin${reason ? ` (${reason})` : ''}. The locked run remains saved and can be retried.`,
+        { reason: reason || 'UNAVAILABLE', retryable: true }
+      );
+    }
   }
 
   #settlementReceipt(event, transactionHash, recovered) {
@@ -509,6 +534,30 @@ function parseVersionIds(value) {
 
 function normalizeStruct(value, names) {
   return Object.fromEntries(names.map((name, index) => [name, value?.[name] ?? value?.[index]]));
+}
+
+function endlessContractErrorName(error) {
+  const pending = [error];
+  const visited = new Set();
+  while (pending.length) {
+    const current = pending.shift();
+    if (!current || (typeof current !== 'object' && typeof current !== 'function') || visited.has(current)) continue;
+    visited.add(current);
+    const direct = String(current?.data?.errorName || '').trim();
+    if (/^[A-Za-z][A-Za-z0-9_]{0,79}$/.test(direct)) return direct;
+    for (const value of [current.shortMessage, current.details, current.message]) {
+      const message = String(value || '');
+      const custom = message.match(/custom error\s+["']?([A-Za-z][A-Za-z0-9_]{0,79})/i);
+      if (custom) return custom[1];
+      const reverted = message.match(/reverted with\s+["']?([A-Za-z][A-Za-z0-9_]{0,79})/i);
+      if (reverted) return reverted[1];
+      const named = message.match(/\berror\s+["']?([A-Za-z][A-Za-z0-9_]{0,79})/i);
+      if (named) return named[1];
+    }
+    if (current.cause) pending.push(current.cause);
+    if (current.data && typeof current.data === 'object') pending.push(current.data);
+  }
+  return '';
 }
 
 function digestBytes32(value) {
