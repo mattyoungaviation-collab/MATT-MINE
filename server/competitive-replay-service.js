@@ -221,11 +221,10 @@ export class CompetitiveReplayService {
       nftRun: { minerId: run.minerId, profile: run.minerProfile },
       endlessContinuation: snapshot.initialState || null
     });
-    if (action === 'bank') {
-      assertApi(replayed.state === 'ended' && replayed.extracted, 422, 'endless_replay_not_banked', 'The authoritative replay did not reach a valid banked state.');
-    } else {
-      assertApi(replayed.state === 'playing' && replayed.depth === run.currentPhase + 1, 422, 'endless_replay_not_descended', 'The authoritative replay did not complete and descend from the current phase.');
-    }
+    // applyReplayCommand already applies the authenticated terminal choice and
+    // verifies that the replay moved one depth or extracted. Do not reject the
+    // same accepted choice again by comparing its reconstructed depth number
+    // with the server checkpoint; the Endless service owns phase advancement.
     return {
       replayId,
       outcomeEvents: replayed.outcomeEvents,

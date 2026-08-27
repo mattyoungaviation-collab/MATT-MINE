@@ -122,6 +122,14 @@ test('a rejected Endless checkpoint clears its pending choice and allows either 
   assert.match(checkpointChoice, /activeEndlessTranscript = createEndlessTranscript\(run\);/);
 });
 
+test('Endless terminal choices are not rejected by a second replay-state assertion', async () => {
+  const source = await readFile(`${root}server/competitive-replay-service.js`, 'utf8');
+
+  assert.doesNotMatch(source, /endless_replay_not_descended/);
+  assert.doesNotMatch(source, /endless_replay_not_banked/);
+  assert.doesNotMatch(source, /authoritative replay did not complete and descend/);
+});
+
 test('pending Endless rewards have an authenticated history recovery action with fractional Crystal display', async () => {
   const source = await readFile(`${root}src/main.js`, 'utf8');
   const apiSource = await readFile(`${root}src/game/apiClient.js`, 'utf8');

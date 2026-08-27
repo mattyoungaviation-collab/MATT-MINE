@@ -370,6 +370,15 @@ test('a verified descent carries exact health, inventory, upgrades, and phase-sp
 
 test('Endless phase replay treats the authenticated terminal choice as the completion boundary', async () => {
   const run = endlessRun();
+  run.currentPhase = 3;
+  run.manifest = generateEndlessPhase({
+    runId: run.id,
+    runSeed: run.runSeed,
+    phase: run.currentPhase,
+    configVersion: run.configVersion,
+    config: run.config,
+    minerProfile: run.minerProfile
+  });
   const service = await new CompetitiveReplayService({
     store: new MemoryCompetitiveReplayStore(),
     secret: 'endless-authoritative-replay-test-secret',
@@ -380,7 +389,7 @@ test('Endless phase replay treats the authenticated terminal choice as the compl
   const afterInput = await service.appendEndlessPhase(ADDRESS, {
     runId: run.id,
     runToken: RUN_TOKEN,
-    phase: 1,
+    phase: 3,
     previousCheckpoint: initial,
     events: [{ seq: 1, tick: 0, type: 'input', moveX: 0, moveY: 0, aim: null, attack: false, dash: false, weapon: '' }]
   });
@@ -388,7 +397,7 @@ test('Endless phase replay treats the authenticated terminal choice as the compl
     () => service.appendEndlessPhase(ADDRESS, {
       runId: run.id,
       runToken: RUN_TOKEN,
-      phase: 1,
+      phase: 3,
       previousCheckpoint: initial,
       events: [{ seq: 2, tick: 0, type: 'command', command: 'descend' }]
     }),
@@ -397,7 +406,7 @@ test('Endless phase replay treats the authenticated terminal choice as the compl
   const finalCheckpoint = await service.appendEndlessPhase(ADDRESS, {
     runId: run.id,
     runToken: RUN_TOKEN,
-    phase: 1,
+    phase: 3,
     previousCheckpoint: afterInput,
     events: [{ seq: 2, tick: 0, type: 'command', command: 'descend' }]
   });
@@ -407,6 +416,7 @@ test('Endless phase replay treats the authenticated terminal choice as the compl
     action: 'descend'
   });
   assert.equal(verified.evidence.state, 'playing');
+  assert.equal(verified.evidence.continuation.version, 1);
   assert.equal(verified.outcomeEvents.at(-1)?.type, 'phase_completed');
   assert.ok(verified.outcomeEvents.some((event) => event.type === 'guardian_defeated'));
   const phase = verifyEndlessPhaseEvents(run, verified.outcomeEvents, 1_010_000);
