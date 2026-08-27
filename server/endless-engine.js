@@ -127,6 +127,7 @@ export function verifyEndlessPhaseEvents(run, rawEvents, now = Date.now()) {
   const required = new Set(manifest.gate.requiredEnemyIds);
   const killedRequired = new Set();
   const killedEnemies = new Set();
+  const killedReinforcements = new Set();
   const brokenOres = new Set();
   const collectedCrystals = new Set();
   let guardianKilled = false;
@@ -148,6 +149,14 @@ export function verifyEndlessPhaseEvents(run, rawEvents, now = Date.now()) {
     }
     if (event.type === 'enemy_killed') {
       const object = byId.get(event.targetId);
+      if (!object && event.classification === 'reinforcement' && event.points === 0) {
+        // Guardian summons are deterministic replay entities, not authored map
+        // objects. They are legitimate combat events but never award score or
+        // satisfy the natural-enemy gate.
+        assertApi(!killedReinforcements.has(event.targetId), 409, 'endless_event_duplicate', 'A Guardian reinforcement cannot be defeated twice.');
+        killedReinforcements.add(event.targetId);
+        continue;
+      }
       assertApi(object?.classification === 'natural', 422, 'endless_enemy_unknown', 'An enemy kill is not part of the authorized natural map.');
       assertApi(!killedEnemies.has(event.targetId), 409, 'endless_event_duplicate', 'An enemy cannot be credited twice.');
       killedEnemies.add(event.targetId);
@@ -229,6 +238,7 @@ export function verifyEndlessPhaseEvents(run, rawEvents, now = Date.now()) {
     bossAuthorized: killedRequired.size === required.size,
     requiredKills: killedRequired.size,
     bossKills: 1,
+    reinforcementKills: killedReinforcements.size,
     oreBroken: brokenOres.size,
     crystalsAdded,
     grossCrystalsEarned,
@@ -407,7 +417,21 @@ function normalizeEvent(raw, sequence) {
   assertApi(Number.isSafeInteger(tick) && tick >= 0, 400, 'endless_event_tick', 'Endless event ticks must be non-negative integers.');
   const targetId = String(source.targetId || '').replace(/[^a-zA-Z0-9:_-]/g, '').slice(0, 100);
   const amount = type === 'damage_taken' ? Math.max(0, Math.min(1_000_000, Number(source.amount) || 0)) : 0;
-  return { sequence, type, tick, ...(targetId ? { targetId } : {}), ...(amount ? { amount } : {}) };
+  const classification = type === 'enemy_killed'
+    ? String(source.classification || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 30)
+    : '';
+  const points = type === 'enemy_killed' && Number.isSafeInteger(Number(source.points))
+    ? Math.max(0, Math.min(1_000_000_000, Number(source.points)))
+    : 0;
+  return {
+    sequence,
+    type,
+    tick,
+    ...(targetId ? { targetId } : {}),
+    ...(amount ? { amount } : {}),
+    ...(classification ? { classification } : {}),
+    ...(type === 'enemy_killed' ? { points } : {})
+  };
 }
 
 function initialEndlessDigest(id, address, seed, configVersion) {

@@ -131,6 +131,39 @@ test('server rejects Guardian bypasses, duplicate targets, fabricated crystals, 
   assert.equal(validEndlessCheckpoint(active, checkpoint, 'secret'), false);
 });
 
+test('Guardian reinforcements are accepted without score or gate credit', () => {
+  const active = run();
+  const events = completeEvents(active.manifest);
+  const guardianIndex = events.findIndex((event) => event.type === 'guardian_defeated');
+  const reinforcement = {
+    type: 'enemy_killed',
+    targetId: 'runtime-guardian-reinforcement-1',
+    tick: events[guardianIndex].tick - 1,
+    classification: 'reinforcement',
+    points: 0
+  };
+  events.splice(guardianIndex, 0, reinforcement);
+
+  const verification = verifyEndlessPhaseEvents(active, events, 20_000);
+  assert.equal(verification.reinforcementKills, 1);
+  assert.equal(verification.requiredKills, active.manifest.gate.requiredCount);
+  assert.equal(verification.score, active.manifest.pointBudget);
+
+  const scoringReinforcement = structuredClone(events);
+  scoringReinforcement.find((event) => event.targetId === reinforcement.targetId).points = 1;
+  assert.throws(
+    () => verifyEndlessPhaseEvents(active, scoringReinforcement, 20_000),
+    (error) => error.code === 'endless_enemy_unknown'
+  );
+
+  const unknownRuntimeEnemy = structuredClone(events);
+  unknownRuntimeEnemy.find((event) => event.targetId === reinforcement.targetId).classification = 'runtime';
+  assert.throws(
+    () => verifyEndlessPhaseEvents(active, unknownRuntimeEnemy, 20_000),
+    (error) => error.code === 'endless_enemy_unknown'
+  );
+});
+
 test('server accepts extraction only as the final event after a completed phase', () => {
   const active = run();
   const events = completeEvents(active.manifest);
