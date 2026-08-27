@@ -331,6 +331,18 @@ test('public mine cards expose authoritative entry pauses without hiding leaderb
   assert.deepEqual(overview.slots.map((slot) => slot.id), ['practice', 'arena', 'pass', 'endless']);
   assert.equal(overview.slots.find((slot) => slot.id === 'pass').entriesPaused, true);
   assert.equal(overview.slots.find((slot) => slot.id === 'practice').entriesPaused, false);
+  const endless = overview.slots.find((slot) => slot.id === 'endless');
+  assert.equal(endless.freeEntry, true);
+  assert.equal(endless.entryPriceMatt, 0);
+  assert.equal(endless.entriesPaused, false);
+  assert.deepEqual(endless.entryRules, {
+    entriesPerWallet: 0,
+    entriesPerMiner: 0,
+    resetPeriodHours: 24,
+    resetUtcHour: 0,
+    cooldownSeconds: 0,
+    minimumMinerLevel: 1
+  });
 
   const detail = await service.publicMineSlot('pass');
   assert.equal(detail.slot.entriesPaused, true);
@@ -585,6 +597,9 @@ test('production surfaces include the four-mine hub, loading screen, and visual 
   assert.match(hub, /MATT Arena/);
   assert.match(hub, /Pass Mine/);
   assert.match(hub, /Endless/i);
+  assert.match(hub, /endlessEntryLabel\(slot\)/);
+  assert.match(hub, /endlessEntryLimitLabel\(slot\)/);
+  assert.doesNotMatch(hub, /ENTER ENDLESS - FREE/);
   assert.doesNotMatch(hub, /Daily Mine|Seven-Day Mine|PvP Mine/i);
   assert.match(hub, /MINER NFT REQUIRED · OPEN MINE/);
   assert.match(hub, /VIEW BOARD · ENTRY PAUSED/);

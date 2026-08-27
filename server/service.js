@@ -1376,11 +1376,14 @@ export class MattMineService {
       );
     } else if (definition.id === 'endless') {
       const config = state.endlessCompetition.configVersions[state.endlessCompetition.activeConfigVersion].config;
-      leaderboard = {
-        mode: 'endless',
-        scope: ['daily', 'weekly', 'season', 'all-time'].includes(requestedPeriod) ? requestedPeriod : 'all-time',
-        rows: endlessPhaseLeaderboard(state.endlessCompetition.leaderboardEntries || [], ['daily', 'weekly', 'season', 'all-time'].includes(requestedPeriod) ? requestedPeriod : 'all-time', timestamp, config.leaderboards.seasonDays)
-      };
+      const scope = ['daily', 'weekly', 'season', 'all-time'].includes(requestedPeriod) ? requestedPeriod : 'all-time';
+      leaderboard = state.endlessCompetition.operations?.leaderboardSubmissionsEnabled === false
+        ? { mode: 'endless', scope, paused: true, rows: [], message: 'Endless leaderboards are temporarily paused by Admin.' }
+        : {
+            mode: 'endless',
+            scope,
+            rows: endlessPhaseLeaderboard(state.endlessCompetition.leaderboardEntries || [], scope, timestamp, config.leaderboards.seasonDays)
+          };
     }
     return {
       slot: definition.id === 'endless'
@@ -2972,6 +2975,9 @@ function publicEndlessSnapshot(state) {
   const store = state.endlessCompetition;
   const version = store.activeConfigVersion;
   const config = store.configVersions[version].config;
+  const paidEntry = config.entry.paidEnabled === true;
+  const entryPriceMatt = Number(config.entry.mattPrice || 0);
+  const entryLimit = effectiveEndlessEntryLimit(config.entry);
   const manifest = generateEndlessPhase({
     runId: 'public-endless-preview',
     runSeed: 'MATT-ENDLESS-PUBLIC-PREVIEW',
@@ -2983,8 +2989,10 @@ function publicEndlessSnapshot(state) {
   return {
     id: `endless-preview-v${version}`,
     name: 'MATT Mine Endless',
-    subtitle: ENDLESS_PUBLIC_SLOT.subtitle,
-    status: config.enabled ? 'live' : 'paused',
+    subtitle: paidEntry
+      ? `Miner NFT required. Exact ${entryPriceMatt.toLocaleString('en-US')} MATT entry. A unique server-authorized map every phase.`
+      : ENDLESS_PUBLIC_SLOT.subtitle,
+    status: config.enabled && store.operations?.newEntriesEnabled !== false ? 'live' : 'paused',
     effectiveAt: store.configVersions[version].publishedAt,
     expiresAt: 0,
     fingerprint: manifest.fingerprint,
@@ -2995,10 +3003,12 @@ function publicEndlessSnapshot(state) {
       startingHealth: 100, startingDynamite: 0, blasterEnergy: 115, runUpgrades: true, maximumDrones: 4, paidRevive: false
     },
     rules: {
-      attemptLimit: 0,
+      attemptLimit: entryLimit,
       safeStartSeconds: config.generation.safeStartSeconds,
       leaderboardTitle: 'MATT Mine Endless Leaderboard',
-      rewardLabel: config.rewards.enabled ? 'Miner NFT · Server Verified Rewards' : 'Miner NFT · Free Entry · Rewards Await Published Economy',
+      rewardLabel: config.rewards.enabled
+        ? 'Miner NFT · Server Verified Rewards'
+        : `Miner NFT · ${paidEntry ? 'MATT Entry' : 'Free Entry'} · Rewards Await Published Economy`,
       instructions: 'Defeat every required natural enemy, beat the Guardian, then bank or descend into a new map.'
     }
   };
@@ -3007,14 +3017,32 @@ function publicEndlessSnapshot(state) {
 function publicEndlessCompetitionSlot(state, timestamp) {
   const snapshot = publicEndlessSnapshot(state);
   const config = state.endlessCompetition.configVersions[state.endlessCompetition.activeConfigVersion].config;
+  const operations = state.endlessCompetition.operations || {};
+  const acceptingEntries = config.enabled === true && operations.newEntriesEnabled !== false;
   return {
     ...publicCompetitionSlot(ENDLESS_PUBLIC_SLOT, snapshot, state.operations),
-    state: config.enabled ? 'live' : 'paused',
-    entriesPaused: state.operations.maintenanceMode === true || config.enabled !== true,
+    subtitle: snapshot.subtitle,
+    state: acceptingEntries ? 'live' : 'paused',
+    entriesPaused: state.operations.maintenanceMode === true || !acceptingEntries,
     freeEntry: config.entry.paidEnabled !== true,
     entryPriceMatt: config.entry.mattPrice,
+    entryRules: {
+      entriesPerWallet: Number(config.entry.entriesPerWallet || 0),
+      entriesPerMiner: Number(config.entry.entriesPerMiner || 0),
+      resetPeriodHours: Number(config.entry.resetPeriodHours || 24),
+      resetUtcHour: Number(config.entry.resetUtcHour || 0),
+      cooldownSeconds: Number(config.entry.cooldownSeconds || 0),
+      minimumMinerLevel: Number(config.entry.minimumMinerLevel || 1)
+    },
     generatedAt: timestamp
   };
+}
+
+function effectiveEndlessEntryLimit(entry = {}) {
+  const limits = [entry.entriesPerWallet, entry.entriesPerMiner]
+    .map(Number)
+    .filter((value) => Number.isSafeInteger(value) && value > 0);
+  return limits.length ? Math.min(...limits) : 0;
 }
 
 function publicIdentity(wallet) {

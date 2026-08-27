@@ -78,6 +78,36 @@ test('Arena authentication reads only its session, wallet, and operations from P
   await database.close();
 });
 
+test('public mine projection includes live Endless entry configuration and operations', async () => {
+  const source = defaultServerState();
+  source.endlessCompetition.operations.newEntriesEnabled = false;
+  source.endlessCompetition.configVersions[1].config.entry = {
+    ...source.endlessCompetition.configVersions[1].config.entry,
+    paidEnabled: true,
+    mattPrice: 2_500_000
+  };
+  const queries = [];
+  const pool = {
+    async query(sql) {
+      queries.push(sql);
+      return { rows: [{
+        competition_studio: source.competitionStudio,
+        operations: source.operations,
+        endless_competition: source.endlessCompetition,
+        wallets: source.wallets
+      }] };
+    },
+    async end() {}
+  };
+  const database = new PostgresDatabase(null, { pool, normalizedMigrationsEnabled: false });
+  database.initialized = true;
+  const state = await database.readPublicMineState();
+  assert.equal(state.endlessCompetition.operations.newEntriesEnabled, false);
+  assert.equal(state.endlessCompetition.configVersions[1].config.entry.mattPrice, 2_500_000);
+  assert.match(queries[0], /data->'endlessCompetition'/);
+  await database.close();
+});
+
 test('concurrent Arena leaderboard requests share one database and chain snapshot', async () => {
   let stateReads = 0;
   let leaderboardReads = 0;

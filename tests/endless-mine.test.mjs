@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { MattMineGame } from '../src/game/GameV4.js';
 import { defaultProfile } from '../src/game/storage.js';
+import { materializeCompetitionMap, validateCompetitionMap } from '../src/game/competitionStudio.js';
 import {
   calculateDangerRating,
   calculateMinerCapability,
@@ -31,6 +32,19 @@ test('Endless phase generation is deterministic, unique by run, and reconstructa
   assert.notEqual(first.fingerprint, otherRun.fingerprint);
   assert.notEqual(first.fingerprint, otherPhase.fingerprint);
   assert.equal(validateEndlessManifest(first, config).ok, true);
+});
+
+test('Endless manifests use the same validated map schema and renderer path as Pass Mine', () => {
+  const manifest = generateEndlessPhase({
+    runId: 'run-pass-style', runSeed: 'server-pass-style', phase: 12,
+    configVersion: 3, config: defaultEndlessConfig()
+  });
+  const validation = validateCompetitionMap(manifest.map);
+  assert.equal(validation.valid, true, validation.errors.join('\n'));
+  const materialized = materializeCompetitionMap(manifest.map);
+  assert.ok(materialized.startRoom);
+  assert.ok(materialized.guardianRoom);
+  assert.equal(materialized.objects.length, manifest.map.objects.length);
 });
 
 test('the exact point solver and every sampled phase have no score drift', () => {

@@ -103,7 +103,7 @@ function renderCards(container, slots) {
         : slot.id === 'practice'
           ? 'OPEN PRACTICE →'
           : slot.id === 'endless'
-            ? 'FREE ENTRY · MINER NFT REQUIRED · OPEN ENDLESS →'
+            ? `${endlessEntryLabel(slot)} · MINER NFT REQUIRED · OPEN ENDLESS →`
             : 'MINER NFT REQUIRED · OPEN MINE →';
     const accessibleLabel = slot.comingSoon
       ? `${escapeHtml(slot.name)} coming soon`
@@ -186,7 +186,7 @@ function renderDetail(modal, slot, leaderboard) {
   modal.querySelector('[data-mine-loadout]').innerHTML = `
     <span><small>CHARACTER</small><b>${characterName(snapshot.loadout?.characterId || 'matt')}</b></span>
     <span><small>START</small><b>${title(snapshot.loadout?.startingWeapon || 'pickaxe')}</b></span>
-    <span><small>ATTEMPTS</small><b>${snapshot.rules?.attemptLimit ? snapshot.rules.attemptLimit : 'UNLIMITED'}</b></span>`;
+    <span><small>${slot.id === 'endless' ? 'ENTRY LIMIT' : 'ATTEMPTS'}</small><b>${slot.id === 'endless' ? endlessEntryLimitLabel(slot) : snapshot.rules?.attemptLimit ? snapshot.rules.attemptLimit : 'UNLIMITED'}</b></span>`;
   modal.querySelector('[data-mine-rules]').innerHTML = `
     <span>${escapeHtml(snapshot.rules?.instructions || 'Beat the Guardian and return to the lift.')}</span>
     <b>${escapeHtml(snapshot.rules?.rewardLabel || '')}</b>`;
@@ -204,7 +204,7 @@ function renderDetail(modal, slot, leaderboard) {
       : slot.id === 'arena'
         ? 'ENTER ARENA'
         : slot.id === 'endless'
-          ? 'ENTER ENDLESS - FREE'
+          ? `ENTER ENDLESS · ${endlessEntryLabel(slot)}`
           : 'ENTER THIS MINE';
   enterButton.disabled = slot.entriesPaused === true;
   modal.dataset.depth = '1';
@@ -238,6 +238,26 @@ function fallbackSlots() {
     ['pass', 3, 'Pass Mine', true, '#bd74ff'],
     ['endless', 4, 'MATT Mine Endless', true, '#59e4ff']
   ].map(([id, number, name, leaderboard, color, comingSoon = false]) => ({ id, number, name, leaderboard, color, comingSoon }));
+}
+
+function endlessEntryLabel(slot = {}) {
+  if (slot.freeEntry === true) return 'FREE ENTRY';
+  const price = Number(slot.entryPriceMatt);
+  return Number.isFinite(price) && price > 0
+    ? `${format(price)} MATT ENTRY`
+    : 'ENTRY TERMS FROM SERVER';
+}
+
+function endlessEntryLimitLabel(slot = {}) {
+  const rules = slot.entryRules || {};
+  const wallet = Number(rules.entriesPerWallet || 0);
+  const miner = Number(rules.entriesPerMiner || 0);
+  if (!wallet && !miner) return 'UNLIMITED';
+  const limits = [
+    wallet > 0 ? `${format(wallet)}/WALLET` : '',
+    miner > 0 ? `${format(miner)}/MINER` : ''
+  ].filter(Boolean).join(' · ');
+  return `${limits} / ${format(rules.resetPeriodHours || 24)}H`;
 }
 
 function shortAddress(address) {

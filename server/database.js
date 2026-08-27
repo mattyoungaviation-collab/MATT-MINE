@@ -289,6 +289,7 @@ export class PostgresDatabase {
     const result = await this.query(
       `SELECT data->'competitionStudio' AS competition_studio,
               data->'operations' AS operations,
+              data->'endlessCompetition' AS endless_competition,
               data->'wallets' AS wallets
        FROM matt_mine_state WHERE id = 1`
     );
@@ -296,6 +297,7 @@ export class PostgresDatabase {
     return normalizeServerState({
       competitionStudio: parseJsonValue(row.competition_studio),
       operations: parseJsonValue(row.operations),
+      endlessCompetition: parseJsonValue(row.endless_competition),
       wallets: parseJsonValue(row.wallets)
     });
   }

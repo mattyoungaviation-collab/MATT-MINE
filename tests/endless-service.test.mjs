@@ -168,6 +168,19 @@ test('paid Endless entry prepares, verifies, stores, and consumes one exact MATT
   assert.equal(status.paymentReady, true);
   assert.equal(status.payment.recipient, '0xbace355d23d378a6e1add986e53a18dd12e6eeac');
   assert.equal(status.entryTransaction.value, '0x0');
+  const publicOverview = await active.service.publicMineSlots();
+  const publicSlot = publicOverview.slots.find((slot) => slot.id === 'endless');
+  assert.equal(publicSlot.freeEntry, false);
+  assert.equal(publicSlot.entryPriceMatt, 2_500_000);
+  assert.match(publicSlot.subtitle, /Exact 2,500,000 MATT entry/);
+  assert.deepEqual(publicSlot.entryRules, {
+    entriesPerWallet: 0,
+    entriesPerMiner: 0,
+    resetPeriodHours: 24,
+    resetUtcHour: 0,
+    cooldownSeconds: 0,
+    minimumMinerLevel: 1
+  });
   await assert.rejects(
     () => active.service.startRun(token, 'endless', { minerId: 7 }),
     (error) => error.code === 'endless_payment_confirmation_required' || error.code === 'invalid_transaction_hash'
@@ -445,6 +458,11 @@ test('audited Endless operations immediately gate entries, banking, phase depth,
   assert.equal(paused.newEntriesEnabled, false);
   assert.equal(paused.monitoringWindowHours, 48);
   assert.equal(paused.alertThresholds.unexpectedlyDeepPhase, 2);
+  const publicDetail = await active.service.publicMineSlot('endless');
+  assert.equal(publicDetail.slot.state, 'paused');
+  assert.equal(publicDetail.slot.entriesPaused, true);
+  assert.equal(publicDetail.leaderboard.paused, true);
+  assert.deepEqual(publicDetail.leaderboard.rows, []);
   await assert.rejects(
     () => active.service.prepareEndlessEntry(token, { minerId: 7 }),
     (error) => error.code === 'endless_entries_paused'
