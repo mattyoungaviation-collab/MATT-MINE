@@ -34,6 +34,8 @@ function harness(options = {}) {
   let transaction = 0;
   let active = emptyActive();
   let settledEvent = null;
+  let processedRunId = '';
+  let settlementEventReads = 0;
   let settlementSimulation = null;
   const publicClient = {
     async getChainId() { return 2020; },
@@ -42,7 +44,11 @@ function harness(options = {}) {
       if (options.confirmationError) throw options.confirmationError;
       return { status: 'success', logs: [] };
     },
-    async getLogs() { return settledEvent ? [settledEvent] : []; },
+    async getLogs() {
+      settlementEventReads += 1;
+      if (settlementEventReads <= Number(options.settlementEventDelayReads || 0)) return [];
+      return settledEvent ? [settledEvent] : [];
+    },
     async simulateContract(request) {
       settlementSimulation = request;
       if (options.settlementSimulationError) throw options.settlementSimulationError;
@@ -75,6 +81,7 @@ function harness(options = {}) {
       if (functionName === 'playerNonces') return 0n;
       if (functionName === 'loadoutHash') return LOADOUT_HASH;
       if (functionName === 'activeRun') return active;
+      if (functionName === 'processedRuns') return processedRunId !== '';
       throw new Error(`Unexpected read ${functionName}`);
     }
   };
@@ -101,6 +108,7 @@ function harness(options = {}) {
         };
       } else if (functionName === 'settle') {
         const result = args[0];
+        processedRunId = result.runId;
         settledEvent = {
           transactionHash: `0x${transaction.toString(16).padStart(64, '0')}`,
           args: {
@@ -127,10 +135,18 @@ function harness(options = {}) {
     operatorPrivateKey: OPERATOR_KEY,
     signerPrivateKey: SIGNER_KEY,
     versionIds: { 'endless-conservative-v1': VERSION },
+    settlementReconciliationAttempts: options.settlementReconciliationAttempts || 6,
+    settlementReconciliationDelayMs: 0,
+    wait: async () => undefined,
     publicClient,
     operatorClient
   });
-  return { service, activeRun: () => active, settlementSimulation: () => settlementSimulation };
+  return {
+    service,
+    activeRun: () => active,
+    settlementEventReads: () => settlementEventReads,
+    settlementSimulation: () => settlementSimulation
+  };
 }
 
 test('Endless chain adapter authorizes, checkpoints, and settles one immutable version', async () => {
@@ -259,6 +275,68 @@ test('Endless chain adapter recovers a mined forfeit when Ronin receipt confirma
 
   assert.equal(cancelled.cancelled, true);
   assert.equal(cancelled.settlement.recovered, true);
+  assert.notEqual(cancelled.transactionHash, '');
+  assert.equal(activeRun().runId, ZERO);
+});
+
+test('Endless chain adapter waits through delayed Ronin event indexing before completing a forfeit', async () => {
+  const { service, activeRun, settlementEventReads } = harness({
+    confirmationError: new Error('receipt polling timed out'),
+    settlementEventDelayReads: 3,
+    settlementReconciliationAttempts: 5
+  });
+  await service.init();
+  const prepared = await service.prepareRunAuthorization({
+    address: PLAYER,
+    minerId: 7,
+    economyVersion: 'endless-conservative-v1',
+    economyConfig: ECONOMY
+  });
+  await service.beginRun({
+    address: PLAYER,
+    minerId: 7,
+    economyVersion: 'endless-conservative-v1',
+    economyConfig: ECONOMY,
+    authorization: prepared.authorization,
+    playerSignature: `0x${'12'.repeat(65)}`
+  });
+
+  const cancelled = await service.cancelRun({ address: PLAYER, minerId: 7 });
+
+  assert.equal(cancelled.cancelled, true);
+  assert.equal(cancelled.settlement.recovered, true);
+  assert.equal(cancelled.settlement.eventPending, undefined);
+  assert.ok(settlementEventReads() >= 4);
+  assert.equal(activeRun().runId, ZERO);
+});
+
+test('Endless chain adapter proves a processed forfeit when Ronin event indexing remains delayed', async () => {
+  const { service, activeRun } = harness({
+    confirmationError: new Error('receipt polling timed out'),
+    settlementEventDelayReads: 99,
+    settlementReconciliationAttempts: 3
+  });
+  await service.init();
+  const prepared = await service.prepareRunAuthorization({
+    address: PLAYER,
+    minerId: 7,
+    economyVersion: 'endless-conservative-v1',
+    economyConfig: ECONOMY
+  });
+  await service.beginRun({
+    address: PLAYER,
+    minerId: 7,
+    economyVersion: 'endless-conservative-v1',
+    economyConfig: ECONOMY,
+    authorization: prepared.authorization,
+    playerSignature: `0x${'12'.repeat(65)}`
+  });
+
+  const cancelled = await service.cancelRun({ address: PLAYER, minerId: 7 });
+
+  assert.equal(cancelled.cancelled, true);
+  assert.equal(cancelled.settlement.recovered, true);
+  assert.equal(cancelled.settlement.eventPending, true);
   assert.notEqual(cancelled.transactionHash, '');
   assert.equal(activeRun().runId, ZERO);
 });

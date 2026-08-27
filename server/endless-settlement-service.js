@@ -15,6 +15,8 @@ import { nftRpcUrlFromEnvironment } from './nft-rpc-url.js';
 
 const ZERO_BYTES32 = `0x${'00'.repeat(32)}`;
 const DEFAULT_OPERATOR_MINIMUM_BALANCE_WEI = 20_000_000_000_000_000n;
+const DEFAULT_SETTLEMENT_RECONCILIATION_ATTEMPTS = 6;
+const DEFAULT_SETTLEMENT_RECONCILIATION_DELAY_MS = 1_500;
 
 const ENDLESS_ABI = parseAbi([
   'function OPERATOR_ROLE() view returns (bytes32)',
@@ -102,6 +104,17 @@ export class EndlessSettlementService {
       options.operatorMinimumBalanceWei ?? DEFAULT_OPERATOR_MINIMUM_BALANCE_WEI,
       'Endless operator minimum RON balance'
     );
+    this.settlementReconciliationAttempts = boundedPositiveInteger(
+      options.settlementReconciliationAttempts ?? DEFAULT_SETTLEMENT_RECONCILIATION_ATTEMPTS,
+      'Endless settlement reconciliation attempts',
+      20
+    );
+    this.settlementReconciliationDelayMs = boundedNonnegativeInteger(
+      options.settlementReconciliationDelayMs ?? DEFAULT_SETTLEMENT_RECONCILIATION_DELAY_MS,
+      'Endless settlement reconciliation delay',
+      10_000
+    );
+    this.wait = options.wait || ((delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)));
     if (!isAddressEqual(this.operatorAccount.address, this.operatorAddress)) {
       throw new Error(`Endless operator key resolves to ${this.operatorAccount.address}, expected ${this.operatorAddress}.`);
     }
@@ -354,7 +367,10 @@ export class EndlessSettlementService {
         nonce: BigInt(active.nonce),
         deadline: BigInt(Math.floor(Date.now() / 1_000) + 10 * 60)
       };
-      const settlement = await this.#submitSettlement(active, result, 'Endless run cancellation');
+      const settlement = await this.#submitSettlement(active, result, 'Endless run cancellation', {
+        allowProcessedRecovery: true,
+        minerId
+      });
       return {
         cancelled: true,
         minerId,
@@ -389,8 +405,11 @@ export class EndlessSettlementService {
         await this.#confirmed(transactionHash, 'Endless start cancellation');
         return { recovered: false, transactionHash };
       } catch (error) {
-        const event = await this.#settledEvent(active.runId).catch(() => null);
-        if (event) return { recovered: true, transactionHash: transactionHash || event.transactionHash || '' };
+        const recovered = await this.#reconcileSettlement(active, transactionHash, {
+          allowProcessedRecovery: true,
+          minerId
+        });
+        if (recovered) return { recovered: true, transactionHash: recovered.transactionHash };
         if (error instanceof ApiError) throw error;
         const reason = endlessContractErrorName(error);
         throw new ApiError(
@@ -419,7 +438,46 @@ export class EndlessSettlementService {
     return logs.at(-1) || null;
   }
 
-  async #submitSettlement(active, result, label) {
+  async #processedRun(runId) {
+    return this.publicClient.readContract({
+      address: this.settlementAddress,
+      abi: ENDLESS_ABI,
+      functionName: 'processedRuns',
+      args: [bytes32(runId, 'Endless chain run ID')]
+    });
+  }
+
+  async #reconcileSettlement(active, transactionHash, options = {}) {
+    for (let attempt = 0; attempt < this.settlementReconciliationAttempts; attempt += 1) {
+      const event = await this.#settledEvent(active.runId).catch(() => null);
+      if (event) return this.#settlementReceipt(event, transactionHash, true);
+      if (attempt + 1 < this.settlementReconciliationAttempts) {
+        await this.wait(this.settlementReconciliationDelayMs);
+      }
+    }
+    if (options.allowProcessedRecovery === true && Number(options.minerId) > 0) {
+      const [processed, current] = await Promise.all([
+        this.#processedRun(active.runId).catch(() => false),
+        this.#activeRun(options.minerId).catch(() => null)
+      ]);
+      if (processed === true && current?.runId === ZERO_BYTES32) {
+        return {
+          settled: true,
+          recovered: true,
+          eventPending: true,
+          transactionHash: transactionHash || '',
+          crystalsBankedRaw: '',
+          crystalsBanked: null,
+          minerXpBanked: null,
+          completedPhases: Number(active.completedPhases || 0),
+          minedCrystalUnits: Number(active.minedCrystalUnits || 0)
+        };
+      }
+    }
+    return null;
+  }
+
+  async #submitSettlement(active, result, label, options = {}) {
     let transactionHash = '';
     try {
       const rewardSignature = await this.signerAccount.signTypedData({ domain: this.#domain(), types: RESULT_TYPES, primaryType: 'EndlessResult', message: result });
@@ -431,8 +489,14 @@ export class EndlessSettlementService {
       assertApi(event, 502, 'endless_chain_settlement_event_missing', 'The confirmed Endless settlement event was not found.');
       return this.#settlementReceipt(event, transactionHash, false);
     } catch (error) {
-      const recovered = await this.#settledEvent(active.runId).catch(() => null);
-      if (recovered) return this.#settlementReceipt(recovered, transactionHash, true);
+      const recovered = transactionHash
+        ? await this.#reconcileSettlement(active, transactionHash, options)
+        : await this.#settledEvent(active.runId).catch(() => null);
+      if (recovered) {
+        return recovered.settled === true
+          ? recovered
+          : this.#settlementReceipt(recovered, transactionHash, true);
+      }
       if (error instanceof ApiError) throw error;
       const reason = endlessContractErrorName(error);
       throw new ApiError(
@@ -496,6 +560,8 @@ export function createEndlessSettlementServiceFromEnvironment(environment = proc
     versionIds: parseVersionIds(environment.MATT_MINE_ENDLESS_VERSION_IDS_JSON),
     deploymentBlock: environment.MATT_MINE_ENDLESS_DEPLOYMENT_BLOCK || 0,
     operatorMinimumBalanceWei: environment.MATT_MINE_NFT_OPERATOR_MINIMUM_BALANCE_WEI || DEFAULT_OPERATOR_MINIMUM_BALANCE_WEI,
+    settlementReconciliationAttempts: environment.MATT_MINE_ENDLESS_RECONCILIATION_ATTEMPTS || DEFAULT_SETTLEMENT_RECONCILIATION_ATTEMPTS,
+    settlementReconciliationDelayMs: environment.MATT_MINE_ENDLESS_RECONCILIATION_DELAY_MS || DEFAULT_SETTLEMENT_RECONCILIATION_DELAY_MS,
     ...options
   });
 }
@@ -643,6 +709,18 @@ function requiredUrl(value, label) {
 function positiveInteger(value, label) {
   const number = Number(value);
   if (!Number.isSafeInteger(number) || number <= 0) throw new Error(`${label} is invalid.`);
+  return number;
+}
+
+function boundedPositiveInteger(value, label, maximum) {
+  const number = positiveInteger(value, label);
+  if (number > maximum) throw new Error(`${label} cannot exceed ${maximum}.`);
+  return number;
+}
+
+function boundedNonnegativeInteger(value, label, maximum) {
+  const number = Number(value);
+  if (!Number.isSafeInteger(number) || number < 0 || number > maximum) throw new Error(`${label} is invalid.`);
   return number;
 }
 

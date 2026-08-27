@@ -95,6 +95,10 @@ services:
         value: "60167705"
       - key: MATT_MINE_ENDLESS_VERSION_IDS_JSON
         value: '{"endless-conservative-v1":"0xc4cb8bea0ac168b3bb27c5e1b21fa1e17e58b1ba152cc02cba82206a3bb8336f"}'
+      - key: MATT_MINE_ENDLESS_RECONCILIATION_ATTEMPTS
+        value: "6"
+      - key: MATT_MINE_ENDLESS_RECONCILIATION_DELAY_MS
+        value: "1500"
       - key: MATT_MINE_NFT_ADMIN_CONTROLS_ENABLED
         value: "true"
       - key: MATT_MINE_NFT_CONFIG_OPERATOR_ADDRESS
