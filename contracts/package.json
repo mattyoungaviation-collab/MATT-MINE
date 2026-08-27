@@ -44,6 +44,7 @@
     "check-nft-v2-endless-deployer:ronin": "hardhat run --build-profile production scripts/check-nft-v2-endless-deployer.js --network roninReadOnly",
     "deploy-nft-v2-endless:ronin": "hardhat run --build-profile production scripts/deploy-nft-v2-endless-mainnet.js --network roninNftV2",
     "check-nft-v2-endless:ronin": "hardhat run --build-profile production scripts/check-nft-v2-endless-mainnet.js --network roninReadOnly",
+    "verify-nft-v2-endless:ronin": "hardhat run --build-profile production scripts/verify-nft-v2-endless-mainnet.js --network roninReadOnly",
     "activate-nft-v2-endless:ronin": "hardhat run --build-profile production scripts/activate-nft-v2-endless-mainnet.js --network roninNftV2",
     "schedule-nft-v2-settlement-upgrade:ronin": "hardhat run --build-profile production scripts/schedule-nft-v2-settlement-upgrade.js --network roninNftV2",
     "execute-nft-v2-settlement-upgrade:ronin": "hardhat run --build-profile production scripts/execute-nft-v2-settlement-upgrade.js --network roninNftV2"

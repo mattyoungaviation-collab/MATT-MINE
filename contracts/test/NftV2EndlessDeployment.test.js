@@ -10,6 +10,8 @@ import {
 
 const examplePath = resolve("config", "ronin-nft-v2-endless.example.json");
 const preflightPath = resolve("scripts", "check-nft-v2-endless-deployer.js");
+const verifierPath = resolve("scripts", "verify-nft-v2-endless-mainnet.js");
+const packagePath = resolve("package.json");
 const example = () => JSON.parse(readFileSync(examplePath, "utf8"));
 
 describe("NFT V2 Endless deployment configuration", () => {
@@ -62,5 +64,16 @@ describe("NFT V2 Endless deployment configuration", () => {
     assert.match(source, /import hre, \{ network \} from "hardhat"/);
     assert.match(source, /hre\.artifacts\.readArtifact\("MattV2EndlessSettlement"\)/);
     assert.doesNotMatch(source, /ethers\.artifacts/);
+  });
+
+  it("provides a repeatable read-only Sourcify verifier without changing activation state", () => {
+    const source = readFileSync(verifierPath, "utf8");
+    const packageJson = JSON.parse(readFileSync(packagePath, "utf8"));
+    assert.match(packageJson.scripts["verify-nft-v2-endless:ronin"], /verify-nft-v2-endless-mainnet\.js/);
+    assert.match(source, /provider: "sourcify"/);
+    assert.match(source, /creationTxHash: record\.transactionHash/);
+    assert.match(source, /record\.sourcifyVerifiedAt/);
+    assert.doesNotMatch(source, /manifest\.status\s*=/);
+    assert.doesNotMatch(source, /writeContract|\.unpause\(/);
   });
 });
