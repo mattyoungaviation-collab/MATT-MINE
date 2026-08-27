@@ -317,6 +317,31 @@ test('heartbeats and bounded reconnects preserve a deep run checkpoint chain', a
   assert.equal(accepted.phase.score, run.manifest.pointBudget);
 });
 
+test('the signed-in wallet can rotate a lost token and resume its active Endless run', async () => {
+  const active = harness();
+  const token = await login(active.service);
+  const started = await active.service.startRun(token, 'endless', { minerId: 7 });
+
+  const resumed = await active.service.resumeEndlessRun(token, { minerId: 7 });
+
+  assert.equal(resumed.runId, started.runId);
+  assert.equal(resumed.currentPhase, 1);
+  assert.notEqual(resumed.runToken, started.runToken);
+  await assert.rejects(
+    () => active.service.reconnectEndlessRun(token, {
+      runId: started.runId,
+      runToken: started.runToken
+    }),
+    (error) => error.code === 'run_token_rejected'
+  );
+  const heartbeat = await active.service.heartbeatEndlessRun(token, {
+    runId: resumed.runId,
+    runToken: resumed.runToken,
+    checkpoint: resumed.checkpoint
+  });
+  assert.ok(heartbeat.expiresAt >= resumed.expiresAt);
+});
+
 test('Endless cannot reuse a Miner or wallet already active in another ranked run', async () => {
   const active = harness();
   const token = await login(active.service);

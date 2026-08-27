@@ -31,6 +31,7 @@ const PRODUCTION_PATHS = new Set([
   '/api/endless/checkpoint',
   '/api/endless/heartbeat',
   '/api/endless/reconnect',
+  '/api/endless/resume',
   '/api/endless/abandon',
   '/api/endless/settle',
   '/api/admin/endless',
@@ -106,6 +107,11 @@ export function createProductionMattMineHttpServer({ root, service, maxRequestBy
       if (method === 'POST' && path === '/api/endless/reconnect') {
         const body = await readJson(request, maxRequestBytes);
         sendJson(response, 200, { ok: true, run: await service.reconnectEndlessRun(bearerToken(request), body) });
+        return;
+      }
+      if (method === 'POST' && path === '/api/endless/resume') {
+        const body = await readJson(request, maxRequestBytes);
+        sendJson(response, 200, { ok: true, run: await service.resumeEndlessRun(bearerToken(request), body) });
         return;
       }
       if (method === 'POST' && path === '/api/endless/abandon') {

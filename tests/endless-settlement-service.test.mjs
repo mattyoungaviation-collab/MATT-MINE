@@ -38,7 +38,10 @@ function harness(options = {}) {
   const publicClient = {
     async getChainId() { return 2020; },
     async getBalance() { return 10n ** 18n; },
-    async waitForTransactionReceipt() { return { status: 'success', logs: [] }; },
+    async waitForTransactionReceipt() {
+      if (options.confirmationError) throw options.confirmationError;
+      return { status: 'success', logs: [] };
+    },
     async getLogs() { return settledEvent ? [settledEvent] : []; },
     async simulateContract(request) {
       settlementSimulation = request;
@@ -230,6 +233,32 @@ test('Endless chain adapter death-settles a progressed orphan from live chain st
   assert.equal(cancelled.cancelled, true);
   assert.equal(cancelled.settlement.completedPhases, 1);
   assert.equal(cancelled.settlement.minedCrystalUnits, 3);
+  assert.notEqual(cancelled.transactionHash, '');
+  assert.equal(activeRun().runId, ZERO);
+});
+
+test('Endless chain adapter recovers a mined forfeit when Ronin receipt confirmation times out', async () => {
+  const { service, activeRun } = harness({ confirmationError: new Error('receipt polling timed out') });
+  await service.init();
+  const prepared = await service.prepareRunAuthorization({
+    address: PLAYER,
+    minerId: 7,
+    economyVersion: 'endless-conservative-v1',
+    economyConfig: ECONOMY
+  });
+  await service.beginRun({
+    address: PLAYER,
+    minerId: 7,
+    economyVersion: 'endless-conservative-v1',
+    economyConfig: ECONOMY,
+    authorization: prepared.authorization,
+    playerSignature: `0x${'12'.repeat(65)}`
+  });
+
+  const cancelled = await service.cancelRun({ address: PLAYER, minerId: 7 });
+
+  assert.equal(cancelled.cancelled, true);
+  assert.equal(cancelled.settlement.recovered, true);
   assert.notEqual(cancelled.transactionHash, '');
   assert.equal(activeRun().runId, ZERO);
 });

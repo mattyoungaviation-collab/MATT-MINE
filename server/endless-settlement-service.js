@@ -382,10 +382,24 @@ export class EndlessSettlementService {
         nonce: BigInt(active.nonce),
         deadline: BigInt(Math.floor(Date.now() / 1_000) + 10 * 60)
       };
-      const rewardSignature = await this.signerAccount.signTypedData({ domain: this.#domain(), types: RESULT_TYPES, primaryType: 'EndlessResult', message: result });
-      const transactionHash = await this.operatorClient.writeContract({ address: this.settlementAddress, abi: ENDLESS_ABI, functionName: 'settle', args: [result, rewardSignature] });
-      await this.#confirmed(transactionHash, 'Endless start cancellation');
-      return { recovered: false, transactionHash };
+      let transactionHash = '';
+      try {
+        const rewardSignature = await this.signerAccount.signTypedData({ domain: this.#domain(), types: RESULT_TYPES, primaryType: 'EndlessResult', message: result });
+        transactionHash = await this.operatorClient.writeContract({ address: this.settlementAddress, abi: ENDLESS_ABI, functionName: 'settle', args: [result, rewardSignature] });
+        await this.#confirmed(transactionHash, 'Endless start cancellation');
+        return { recovered: false, transactionHash };
+      } catch (error) {
+        const event = await this.#settledEvent(active.runId).catch(() => null);
+        if (event) return { recovered: true, transactionHash: transactionHash || event.transactionHash || '' };
+        if (error instanceof ApiError) throw error;
+        const reason = endlessContractErrorName(error);
+        throw new ApiError(
+          502,
+          'endless_chain_settlement_failed',
+          `Endless start cancellation was not confirmed on Ronin${reason ? ` (${reason})` : ''}. The locked run remains saved and can be retried.`,
+          { reason: reason || 'UNAVAILABLE', retryable: true, transactionHash }
+        );
+      }
     });
   }
 
@@ -406,23 +420,26 @@ export class EndlessSettlementService {
   }
 
   async #submitSettlement(active, result, label) {
+    let transactionHash = '';
     try {
       const rewardSignature = await this.signerAccount.signTypedData({ domain: this.#domain(), types: RESULT_TYPES, primaryType: 'EndlessResult', message: result });
       const request = { account: this.operatorAddress, address: this.settlementAddress, abi: ENDLESS_ABI, functionName: 'settle', args: [result, rewardSignature] };
       await this.publicClient.simulateContract(request);
-      const transactionHash = await this.operatorClient.writeContract(request);
+      transactionHash = await this.operatorClient.writeContract(request);
       await this.#confirmed(transactionHash, label);
       const event = await this.#settledEvent(active.runId);
       assertApi(event, 502, 'endless_chain_settlement_event_missing', 'The confirmed Endless settlement event was not found.');
       return this.#settlementReceipt(event, transactionHash, false);
     } catch (error) {
+      const recovered = await this.#settledEvent(active.runId).catch(() => null);
+      if (recovered) return this.#settlementReceipt(recovered, transactionHash, true);
       if (error instanceof ApiError) throw error;
       const reason = endlessContractErrorName(error);
       throw new ApiError(
         502,
         'endless_chain_settlement_failed',
         `${label} was not confirmed on Ronin${reason ? ` (${reason})` : ''}. The locked run remains saved and can be retried.`,
-        { reason: reason || 'UNAVAILABLE', retryable: true }
+        { reason: reason || 'UNAVAILABLE', retryable: true, transactionHash }
       );
     }
   }

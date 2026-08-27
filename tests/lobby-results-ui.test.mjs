@@ -85,6 +85,20 @@ test('the Miner selector exposes an explicit on-chain orphan forfeit action', as
   assert.match(httpSource, /service\.recoverLockedMinerRun\(bearerToken\(request\), body\)/);
 });
 
+test('the Endless mine detail exposes a locked-run-only resume action', async () => {
+  const source = await readFile(`${root}src/main.js`, 'utf8');
+  const hubSource = await readFile(`${root}src/game/mineHub.js`, 'utf8');
+  const apiSource = await readFile(`${root}src/game/apiClient.js`, 'utf8');
+  const httpSource = await readFile(`${root}server/production-http.js`, 'utf8');
+
+  assert.match(hubSource, /data-mine-resume hidden>RESUME LOCKED RUN/);
+  assert.match(hubSource, /mattmine:endless-resume/);
+  assert.match(source, /selected\?\.gameplay\?\.runLocked === true/);
+  assert.match(source, /resumeLockedEndlessRun/);
+  assert.match(apiSource, /\/api\/endless\/resume/);
+  assert.match(httpSource, /resumeEndlessRun/);
+});
+
 test('a failed Endless death close remains readable and retryable without clearing the saved run', async () => {
   const source = await readFile(`${root}src/main.js`, 'utf8');
   const finalizer = source.match(/async function finalizeEndlessKnockout\(run\) \{[\s\S]*?\n\}/)?.[0] || '';

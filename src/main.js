@@ -148,6 +148,7 @@ let activeArenaRun = null;
 let activeArenaTranscript = null;
 let activeEndlessTranscript = null;
 let endlessCheckpointBusy = false;
+let endlessResumeBusy = false;
 let activePracticeClaim = null;
 let resultScreenMode = null;
 let returnToMinerAfterRun = false;
@@ -4420,36 +4421,83 @@ function clearPersistedEndlessRun() {
   try { sessionStorage.removeItem(ENDLESS_RUN_STORAGE_KEY); } catch {}
 }
 
+function persistedEndlessRun() {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(ENDLESS_RUN_STORAGE_KEY) || 'null');
+    return saved?.runId && saved?.runToken ? saved : null;
+  } catch {
+    return null;
+  }
+}
+
+function renderEndlessResumeButton(slot = null) {
+  const button = document.querySelector('[data-mine-resume]');
+  if (!button) return;
+  const selected = selectedOwnedMiner();
+  const resumable = slot?.id === 'endless' && selected?.gameplay?.runLocked === true;
+  button.hidden = !resumable;
+  button.disabled = !resumable || endlessResumeBusy;
+  button.textContent = endlessResumeBusy ? 'RESUMING LOCKED RUN…' : 'RESUME LOCKED RUN';
+}
+
+async function activateReconnectedEndlessRun(run) {
+  activeServerRun = run;
+  activeEndlessTranscript = createEndlessTranscript(run);
+  rememberSelectedMiner(run.minerId);
+  persistEndlessRun(run);
+  await showMineLoadingScreen({ id: 'endless', name: 'MATT Mine Endless', snapshot: { map: run.manifest?.map } });
+  game.startRun({
+    mode: RUN_MODES.ENDLESS,
+    runId: run.runId,
+    seed: run.seed,
+    endlessRunId: run.runId,
+    endlessConfigVersion: run.configVersion,
+    endlessSnapshot: run.endlessSnapshot,
+    endlessManifest: run.manifest,
+    endlessContinuation: run.phaseInitialState,
+    currentPhase: run.currentPhase,
+    nftRun: run.nftRun,
+    tuning: {}
+  });
+  toast(`Reconnected to Endless Phase ${run.currentPhase}`);
+}
+
 async function reconnectPersistedEndlessRun() {
   if (!serverPlayer || activeServerRun || activeArenaRun) return false;
-  let saved = null;
-  try { saved = JSON.parse(sessionStorage.getItem(ENDLESS_RUN_STORAGE_KEY) || 'null'); } catch {}
-  if (!saved?.runId || !saved?.runToken) return false;
+  const saved = persistedEndlessRun();
+  if (!saved) return false;
   try {
     const run = await apiClient.reconnectEndlessRun(saved.runId, saved.runToken);
-    activeServerRun = run;
-    activeEndlessTranscript = createEndlessTranscript(run);
-    rememberSelectedMiner(run.minerId);
-    await showMineLoadingScreen({ id: 'endless', name: 'MATT Mine Endless', snapshot: { map: run.manifest?.map } });
-    game.startRun({
-      mode: RUN_MODES.ENDLESS,
-      runId: run.runId,
-      seed: run.seed,
-      endlessRunId: run.runId,
-      endlessConfigVersion: run.configVersion,
-      endlessSnapshot: run.endlessSnapshot,
-      endlessManifest: run.manifest,
-      endlessContinuation: run.phaseInitialState,
-      currentPhase: run.currentPhase,
-      nftRun: run.nftRun,
-      tuning: {}
-    });
-    toast(`Reconnected to Endless Phase ${run.currentPhase}`);
+    await activateReconnectedEndlessRun(run);
     return true;
   } catch (error) {
-    clearPersistedEndlessRun();
+    if (['endless_run_closed', 'endless_run_missing', 'endless_reconnect_expired', 'run_token_rejected'].includes(String(error?.code || ''))) {
+      clearPersistedEndlessRun();
+    }
     console.warn('[MATT Mine] Endless reconnect unavailable.', error);
     return false;
+  }
+}
+
+async function resumeLockedEndlessRun() {
+  if (endlessResumeBusy || activeServerRun || activeArenaRun) return;
+  const selected = selectedOwnedMiner();
+  if (!selected || selected.gameplay?.runLocked !== true) return;
+  endlessResumeBusy = true;
+  renderEndlessResumeButton({ id: 'endless' });
+  try {
+    if (await reconnectPersistedEndlessRun()) return;
+    if (!apiClient.hasSession()) {
+      const connected = await connectWallet();
+      if (!connected) throw new Error('Sign in with the Ronin Wallet that owns this locked Miner.');
+    }
+    const run = await apiClient.resumeEndlessRun(selected.minerId);
+    await activateReconnectedEndlessRun(run);
+  } catch (error) {
+    toast(error?.message || `Miner #${selected.minerId}'s Endless run could not be resumed.`);
+  } finally {
+    endlessResumeBusy = false;
+    renderEndlessResumeButton({ id: 'endless' });
   }
 }
 
@@ -4919,6 +4967,12 @@ window.addEventListener('mattmine:slot-enter', (event) => {
   }
   const mode = { practice: RUN_MODES.PRACTICE }[slot.id];
   if (mode) void startRunMode(mode);
+});
+window.addEventListener('mattmine:slot-open', (event) => {
+  renderEndlessResumeButton(event.detail?.slot || null);
+});
+window.addEventListener('mattmine:endless-resume', () => {
+  void resumeLockedEndlessRun();
 });
 
 window.addEventListener('beforeunload', (event) => {

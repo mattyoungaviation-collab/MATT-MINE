@@ -445,6 +445,45 @@ export const endlessServiceMethods = {
     return publicEndlessRun(run, runToken, inputCheckpoint);
   },
 
+  async resumeEndlessRun(token, input = {}) {
+    const session = await this.authenticate(token);
+    const minerId = Number(input.minerId);
+    assertApi(Number.isSafeInteger(minerId) && minerId >= 1 && minerId <= 1_000_000, 422, 'miner_selection_required', 'Select the locked Miner whose Endless run you want to resume.');
+    const timestamp = this.now();
+    const runToken = this.randomHex(24);
+    let inputCheckpoint = null;
+    let previousReplayIdentity = null;
+    const run = await this.database.transact(async (state, transaction) => {
+      const matches = Object.values(state.endlessCompetition.runs).filter((candidate) =>
+        candidate.address === session.address &&
+        Number(candidate.minerId) === minerId &&
+        candidate.status === 'active'
+      );
+      assertApi(matches.length === 1, 404, 'endless_active_run_missing', `Miner #${minerId} does not have one active Endless run to resume.`);
+      const current = matches[0];
+      assertApi(!current.adminTerminationPending, 409, 'run_admin_termination_pending', 'An administrator is ending this run. Wait for that operation to finish.');
+      assertApi(current.expiresAt > timestamp, 410, 'endless_reconnect_expired', 'This Endless run is outside its published reconnect window and must be forfeited.');
+      const integrity = current.config.integrity;
+      assertApi(Number(current.reconnectCount || 0) < integrity.maximumReconnectsPerRun, 429, 'endless_reconnect_limit', 'This run reached its reconnect limit and must be forfeited.');
+      assertApi(Number(current.phaseReconnectCount || 0) < integrity.maximumReconnectsPerPhase, 429, 'endless_phase_reconnect_limit', 'This phase reached its reconnect limit and must be forfeited.');
+      previousReplayIdentity = { id: current.id, currentPhase: current.currentPhase, phaseAttempt: current.phaseAttempt };
+      current.tokenHash = endlessTokenHash(runToken);
+      current.reconnectCount = Number(current.reconnectCount || 0) + 1;
+      current.phaseReconnectCount = Number(current.phaseReconnectCount || 0) + 1;
+      current.phaseAttempt = Number(current.phaseAttempt || 1) + 1;
+      current.lastHeartbeatAt = timestamp;
+      current.updatedAt = timestamp;
+      current.expiresAt = timestamp + integrity.reconnectWindowSeconds * 1_000;
+      assertApi(this.competitiveReplayValidator?.registerEndlessPhase, 503, 'endless_input_replay_required', 'Authoritative Endless phase replay is unavailable.');
+      inputCheckpoint = await this.competitiveReplayValidator.registerEndlessPhase(current, runToken);
+      state.runs[current.id] = current;
+      await transaction?.upsertEndlessRun?.(current);
+      return structuredClone(current);
+    });
+    await this.competitiveReplayValidator?.finalizeEndlessPhase?.(previousReplayIdentity, 'disconnected').catch(() => undefined);
+    return publicEndlessRun(run, runToken, inputCheckpoint);
+  },
+
   async abandonEndlessRun(token, input = {}) {
     const session = await this.authenticate(token);
     const runId = cleanRunId(input.runId);

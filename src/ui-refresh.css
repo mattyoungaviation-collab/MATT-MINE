@@ -1137,6 +1137,10 @@ dialog#arena-eligibility-dialog {
   box-shadow: inset 0 1px rgba(255, 255, 255, 0.35);
 }
 
+.mine-detail.slot-endless .mine-detail-board > [data-mine-resume] {
+  background: var(--ui-gold);
+}
+
 @media (max-width: 1180px) {
   .profile-dashboard-layout {
     grid-template-columns: 240px minmax(0, 1fr);

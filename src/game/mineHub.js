@@ -40,6 +40,7 @@ export async function mountMineHub(apiClient) {
           <div class="mine-board-top"><span data-board-title>LEADERBOARD</span><small data-board-period></small></div>
           <div data-mine-rules class="mine-rule-strip"></div>
           <div class="mine-board-scroll"><table><thead><tr><th>#</th><th>MINER</th><th>SCORE</th><th>DEPTH</th></tr></thead><tbody data-mine-board></tbody></table></div>
+          <button type="button" data-mine-resume hidden>RESUME LOCKED RUN</button>
           <button type="button" data-mine-enter>ENTER THIS MINE</button>
         </div>
       </div>
@@ -53,6 +54,10 @@ export async function mountMineHub(apiClient) {
     if (!state.selected || state.selected.comingSoon || state.selected.entriesPaused) return;
     closeModal(modal);
     window.dispatchEvent(new CustomEvent('mattmine:slot-enter', { detail: { slot: state.selected } }));
+  });
+  modal.querySelector('[data-mine-resume]').addEventListener('click', () => {
+    if (state.selected?.id !== 'endless') return;
+    window.dispatchEvent(new CustomEvent('mattmine:endless-resume', { detail: { slot: state.selected } }));
   });
   modal.querySelector('[data-mine-depth-tabs]').addEventListener('click', (event) => {
     const button = event.target.closest('[data-mine-depth]');
@@ -78,6 +83,7 @@ export async function mountMineHub(apiClient) {
       state.selected = detail.slot || slot;
       renderDetail(modal, state.selected, detail.leaderboard);
       modal.hidden = false;
+      window.dispatchEvent(new CustomEvent('mattmine:slot-open', { detail: { slot: state.selected } }));
       requestAnimationFrame(() => modal.classList.add('active'));
     } finally {
       card.classList.remove('loading');

@@ -96,6 +96,15 @@ export class MattMineApiClient {
     return response.run;
   }
 
+  async resumeEndlessRun(minerId) {
+    const response = await this.request('/api/endless/resume', {
+      method: 'POST',
+      authenticated: true,
+      body: { minerId }
+    });
+    return response.run;
+  }
+
   async abandonEndlessRun(runId, runToken, reason = 'abandoned') {
     return this.request('/api/endless/abandon', {
       method: 'POST',

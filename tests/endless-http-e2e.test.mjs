@@ -128,14 +128,23 @@ test('Endless production HTTP routes complete one player run and enforce an Admi
   assert.equal(started.body.run.mode, 'endless');
   assert.equal(started.body.run.currentPhase, 1);
 
+  const resumed = await jsonRequest(baseUrl, '/api/endless/resume', {
+    method: 'POST',
+    headers: playerHeaders,
+    body: { minerId: 7 }
+  });
+  assert.equal(resumed.status, 200);
+  assert.equal(resumed.body.run.runId, started.body.run.runId);
+  assert.notEqual(resumed.body.run.runToken, started.body.run.runToken);
+
   timestamp += 20_000;
   const banked = await jsonRequest(baseUrl, '/api/endless/checkpoint', {
     method: 'POST',
     headers: playerHeaders,
     body: {
       runId: started.body.run.runId,
-      runToken: started.body.run.runToken,
-      previousCheckpoint: started.body.run.checkpoint,
+      runToken: resumed.body.run.runToken,
+      previousCheckpoint: resumed.body.run.checkpoint,
       action: 'bank'
     }
   });
