@@ -173,6 +173,89 @@ test('paid Endless entry prepares, verifies, stores, and consumes one exact MATT
   );
 });
 
+test('entry preflight enforces adjustable wallet, Miner, reset, cooldown, active-run, level, and abandon rules before payment', async () => {
+  const active = harness();
+  const token = await login(active.service);
+  const state = await active.database.read();
+  const config = structuredClone(state.endlessCompetition.configVersions[1].config);
+  config.entry = {
+    ...config.entry,
+    entriesPerWallet: 1,
+    entriesPerMiner: 1,
+    resetPeriodHours: 24,
+    resetUtcHour: 0,
+    cooldownSeconds: 3_600,
+    maximumActiveRunsPerWallet: 1,
+    minimumMinerLevel: 6,
+    abandonedRunsConsumeEntry: false
+  };
+  await active.service.publishEndlessConfig('endless-admin-key', {
+    config,
+    reason: 'Exercise adjustable Endless entry participation controls.'
+  });
+  const prepared = await active.service.prepareEndlessEntry(token, { minerId: 7 });
+  assert.equal(prepared.eligible, true);
+  assert.equal(prepared.entryRules.entriesPerWallet, 1);
+  assert.equal(prepared.entryRules.entriesPerMiner, 1);
+  assert.equal(prepared.entryRules.maximumActiveRunsPerMiner, 1);
+  assert.equal(prepared.usage.walletEntriesUsed, 0);
+  assert.equal(prepared.usage.walletEntriesRemaining, 1);
+  assert.equal(prepared.entryTransaction, null);
+
+  const first = await active.service.startRun(token, 'endless', { minerId: 7 });
+  await assert.rejects(
+    () => active.service.prepareEndlessEntry(token, { minerId: 7 }),
+    (error) => error.code === 'endless_wallet_active_limit'
+  );
+  await active.service.abandonEndlessRun(token, {
+    runId: first.runId,
+    runToken: first.runToken,
+    reason: 'abandoned'
+  });
+  const afterAbandon = await active.service.prepareEndlessEntry(token, { minerId: 7 });
+  assert.equal(afterAbandon.usage.walletEntriesUsed, 0);
+  assert.equal(afterAbandon.usage.cooldownEndsAt, 0);
+
+  const second = await active.service.startRun(token, 'endless', { minerId: 7 });
+  await active.database.transact((current) => {
+    current.endlessCompetition.runs[second.runId].status = 'banked';
+    current.runs[second.runId].status = 'banked';
+  });
+  await assert.rejects(
+    () => active.service.prepareEndlessEntry(token, { minerId: 7 }),
+    (error) => error.code === 'endless_wallet_entry_limit'
+  );
+  const cooldownOnly = structuredClone(config);
+  cooldownOnly.entry.entriesPerWallet = 0;
+  cooldownOnly.entry.entriesPerMiner = 0;
+  await active.service.publishEndlessConfig('endless-admin-key', {
+    config: cooldownOnly,
+    reason: 'Exercise the independent Endless entry cooldown control.'
+  });
+  await assert.rejects(
+    () => active.service.prepareEndlessEntry(token, { minerId: 7 }),
+    (error) => error.code === 'endless_entry_cooldown'
+  );
+  active.advance(60 * 60 * 1_000);
+  const cooledDown = await active.service.prepareEndlessEntry(token, { minerId: 7 });
+  assert.equal(cooledDown.usage.cooldownEndsAt, second.startedAt + 3_600_000);
+  active.advance(11 * 60 * 60 * 1_000);
+  const reset = await active.service.prepareEndlessEntry(token, { minerId: 7 });
+  assert.equal(reset.usage.walletEntriesUsed, 0);
+  assert.equal(reset.usage.walletEntriesRemaining, null);
+
+  const stricter = structuredClone(config);
+  stricter.entry.minimumMinerLevel = 7;
+  await active.service.publishEndlessConfig('endless-admin-key', {
+    config: stricter,
+    reason: 'Raise the tested minimum Miner level requirement.'
+  });
+  await assert.rejects(
+    () => active.service.prepareEndlessEntry(token, { minerId: 7 }),
+    (error) => error.code === 'endless_miner_level_required'
+  );
+});
+
 test('heartbeats and bounded reconnects preserve a deep run checkpoint chain', async () => {
   const active = harness();
   const token = await login(active.service);

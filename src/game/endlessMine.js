@@ -91,7 +91,15 @@ export function defaultEndlessConfig() {
     nftRequired: true,
     entry: {
       paidEnabled: false,
-      mattPrice: 0
+      mattPrice: 0,
+      entriesPerWallet: 0,
+      entriesPerMiner: 0,
+      resetPeriodHours: 24,
+      resetUtcHour: 0,
+      cooldownSeconds: 0,
+      maximumActiveRunsPerWallet: 1,
+      minimumMinerLevel: 1,
+      abandonedRunsConsumeEntry: true
     },
     scoring: {
       basePhasePoints: 5_000,
@@ -183,7 +191,15 @@ export function normalizeEndlessConfig(input = {}) {
     nftRequired: true,
     entry: {
       paidEnabled: source.entry?.paidEnabled === true,
-      mattPrice: integer(source.entry?.mattPrice, ENDLESS_ENTRY_PRICE_MIN, ENDLESS_ENTRY_PRICE_MAX, 0)
+      mattPrice: integer(source.entry?.mattPrice, ENDLESS_ENTRY_PRICE_MIN, ENDLESS_ENTRY_PRICE_MAX, 0),
+      entriesPerWallet: integer(source.entry?.entriesPerWallet, 0, 1_000_000, defaults.entry.entriesPerWallet),
+      entriesPerMiner: integer(source.entry?.entriesPerMiner, 0, 1_000_000, defaults.entry.entriesPerMiner),
+      resetPeriodHours: integer(source.entry?.resetPeriodHours, 1, 8_760, defaults.entry.resetPeriodHours),
+      resetUtcHour: integer(source.entry?.resetUtcHour, 0, 23, defaults.entry.resetUtcHour),
+      cooldownSeconds: integer(source.entry?.cooldownSeconds, 0, 604_800, defaults.entry.cooldownSeconds),
+      maximumActiveRunsPerWallet: integer(source.entry?.maximumActiveRunsPerWallet, 1, 100, defaults.entry.maximumActiveRunsPerWallet),
+      minimumMinerLevel: integer(source.entry?.minimumMinerLevel, 1, 1_000, defaults.entry.minimumMinerLevel),
+      abandonedRunsConsumeEntry: source.entry?.abandonedRunsConsumeEntry !== false
     },
     scoring: {
       basePhasePoints: integer(source.scoring?.basePhasePoints, 100, 10_000_000, defaults.scoring.basePhasePoints),
@@ -280,6 +296,13 @@ export function validateEndlessConfig(input, { forActivation = false } = {}) {
   if (input?.entry?.mattPrice !== undefined && (!Number.isFinite(requestedMattPrice) || requestedMattPrice < ENDLESS_ENTRY_PRICE_MIN || requestedMattPrice > ENDLESS_ENTRY_PRICE_MAX)) {
     errors.push(`MATT entry price must be between ${ENDLESS_ENTRY_PRICE_MIN} and ${ENDLESS_ENTRY_PRICE_MAX}.`);
   }
+  validateRequestedInteger(errors, input?.entry, 'entriesPerWallet', 0, 1_000_000, 'Entries per wallet');
+  validateRequestedInteger(errors, input?.entry, 'entriesPerMiner', 0, 1_000_000, 'Entries per Miner');
+  validateRequestedInteger(errors, input?.entry, 'resetPeriodHours', 1, 8_760, 'Entry reset period hours');
+  validateRequestedInteger(errors, input?.entry, 'resetUtcHour', 0, 23, 'Entry reset UTC hour');
+  validateRequestedInteger(errors, input?.entry, 'cooldownSeconds', 0, 604_800, 'Entry cooldown seconds');
+  validateRequestedInteger(errors, input?.entry, 'maximumActiveRunsPerWallet', 1, 100, 'Maximum active runs per wallet');
+  validateRequestedInteger(errors, input?.entry, 'minimumMinerLevel', 1, 1_000, 'Minimum Miner level');
   if (config.scoring.completionShareBps + config.scoring.bossShareBps > 9_000) {
     errors.push('Completion and Guardian point shares must leave at least 10% for the natural map.');
   }
@@ -355,6 +378,14 @@ export function validateEndlessConfig(input, { forActivation = false } = {}) {
     errors.push('A positive Miner NFT daily XP ceiling is required before XP rewards can be activated.');
   }
   return { ok: errors.length === 0, errors, config };
+}
+
+function validateRequestedInteger(errors, source, key, minimum, maximum, label) {
+  if (source?.[key] === undefined) return;
+  const value = Number(source[key]);
+  if (!Number.isSafeInteger(value) || value < minimum || value > maximum) {
+    errors.push(`${label} must be an integer between ${minimum} and ${maximum}.`);
+  }
 }
 
 function rationalGreaterThan(leftNumerator, leftDenominator, rightNumerator, rightDenominator) {

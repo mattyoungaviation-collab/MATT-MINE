@@ -106,6 +106,40 @@ test('activation validation fails closed instead of guessing an economy', () => 
     ...configured,
     entry: { paidEnabled: true, mattPrice: 10_000_001 }
   }).errors.join(' '), /between 0 and 10000000/i);
+  assert.match(validateEndlessConfig({
+    ...configured,
+    entry: { ...configured.entry, resetUtcHour: 24 }
+  }).errors.join(' '), /reset UTC hour.*between 0 and 23/i);
+});
+
+test('entry limits normalize as explicit adjustable Admin rules', () => {
+  const config = normalizeEndlessConfig({
+    ...defaultEndlessConfig(),
+    entry: {
+      paidEnabled: false,
+      mattPrice: 0,
+      entriesPerWallet: 5,
+      entriesPerMiner: 2,
+      resetPeriodHours: 168,
+      resetUtcHour: 17,
+      cooldownSeconds: 3_600,
+      maximumActiveRunsPerWallet: 3,
+      minimumMinerLevel: 9,
+      abandonedRunsConsumeEntry: false
+    }
+  });
+  assert.deepEqual(config.entry, {
+    paidEnabled: false,
+    mattPrice: 0,
+    entriesPerWallet: 5,
+    entriesPerMiner: 2,
+    resetPeriodHours: 168,
+    resetUtcHour: 17,
+    cooldownSeconds: 3_600,
+    maximumActiveRunsPerWallet: 3,
+    minimumMinerLevel: 9,
+    abandonedRunsConsumeEntry: false
+  });
 });
 
 test('the conservative economy preset is exact, bounded, and remains Admin-adjustable', () => {

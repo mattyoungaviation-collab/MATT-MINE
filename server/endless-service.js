@@ -32,6 +32,7 @@ export const endlessServiceMethods = {
       nftRequired: true,
       paidEntryEnabled,
       entryPriceMatt: published.config.entry.mattPrice,
+      entryRules: publicEndlessEntryRules(published.config.entry),
       paymentReady,
       payment: paidEntryEnabled ? payment : null,
       entryTransaction: paidEntryEnabled && paymentReady
@@ -44,6 +45,41 @@ export const endlessServiceMethods = {
       configVersion: version,
       generatorVersion: published.config.generatorVersion,
       leaderboardScopes: ['daily', 'weekly', 'season', 'all-time']
+    };
+  },
+
+  async prepareEndlessEntry(token, input = {}) {
+    const session = await this.authenticate(token);
+    assertApi(this.nftGameplayService, 503, 'nft_gameplay_required', 'Endless requires live Miner NFT ownership verification.');
+    const minerId = Number(input.minerId);
+    assertApi(Number.isSafeInteger(minerId) && minerId >= 1 && minerId <= 1_000_000, 422, 'miner_selection_required', 'Select one of this wallet’s Miner NFTs before entering Endless.');
+    const minerProfile = await this.nftGameplayService.playerMiner(session.address, minerId);
+    assertApi(minerProfile, 403, 'miner_nft_required', 'Endless requires a Miner NFT owned by this wallet.');
+    const state = await this.database.read();
+    const store = state.endlessCompetition;
+    const configVersion = store.activeConfigVersion;
+    const published = store.configVersions[configVersion];
+    assertApi(published?.config?.enabled === true, 503, 'endless_mode_disabled', 'Endless is temporarily paused.');
+    const config = normalizeEndlessConfig(published.config);
+    const activation = validateEndlessConfig(config, { forActivation: config.rewards.enabled });
+    assertApi(activation.ok, 503, 'endless_economy_not_ready', activation.errors.join(' '));
+    const eligibility = assertEndlessEntryEligible(state, session.address, minerId, minerProfile, config, this.now());
+    const payment = this.endlessPaymentVerifier?.publicStatus?.() || null;
+    if (config.entry.paidEnabled) {
+      assertApi(payment?.configured === true, 503, 'endless_payment_verifier_required', 'Paid Endless entry remains closed until transaction verification is available. No payment was requested.');
+    }
+    return {
+      eligible: true,
+      configVersion,
+      paidEntryEnabled: config.entry.paidEnabled,
+      entryPriceMatt: config.entry.mattPrice,
+      entryRules: publicEndlessEntryRules(config.entry),
+      usage: eligibility,
+      payment: config.entry.paidEnabled ? payment : null,
+      entryTransaction: config.entry.paidEnabled
+        ? this.endlessPaymentVerifier.transactionForPayment(config.entry.mattPrice)
+        : null,
+      runApprovalRequired: config.rewards.enabled === true && Boolean(this.endlessRewardSettler)
     };
   },
 
@@ -80,6 +116,11 @@ export const endlessServiceMethods = {
     const preflightPublished = preflightStore.configVersions[preflightVersion];
     assertApi(preflightPublished?.config?.enabled === true, 503, 'endless_mode_disabled', 'Endless is temporarily paused.');
     const preflightConfig = normalizeEndlessConfig(preflightPublished.config);
+    const submittedPaymentHash = String(input.entryTransactionHash || '').toLowerCase();
+    if (TRANSACTION_HASH_PATTERN.test(submittedPaymentHash)) {
+      assertApi(!preflightStore.paymentTransactions[submittedPaymentHash], 409, 'payment_already_consumed', 'This MATT entry payment has already started an Endless run.');
+    }
+    assertEndlessEntryEligible(preflightState, session.address, minerId, minerProfile, preflightConfig, this.now());
     let payment = null;
     if (preflightConfig.entry.paidEnabled) {
       assertApi(this.endlessPaymentVerifier, 503, 'endless_payment_verifier_required', 'Paid Endless entry remains closed until transaction verification is available.');
@@ -123,18 +164,7 @@ export const endlessServiceMethods = {
           assertApi(payment.payer === session.address, 403, 'payment_wallet_mismatch', 'This MATT payment was sent by another wallet.');
           assertApi(!store.paymentTransactions[payment.transactionHash], 409, 'payment_already_consumed', 'This MATT entry payment has already started an Endless run.');
         }
-        const active = Object.values(store.runs).find((run) =>
-          run.address === session.address && run.status === 'active'
-        );
-        assertApi(!active, 409, 'endless_run_active', 'Reconnect to or finish the current Endless run first.');
-        const activeRanked = Object.values(state.runs).find((run) =>
-          run.address === session.address && run.status === 'active' && !['practice', 'beta'].includes(run.mode)
-        );
-        assertApi(!activeRanked, 409, 'ranked_run_active', 'Finish or reconnect to the current ranked run before starting Endless.');
-        const minerBusy = Object.values(state.runs).find((run) =>
-          activeRunMinerId(run) === minerId && ['active', 'settlement_pending'].includes(run.status)
-        );
-        assertApi(!minerBusy, 409, 'nft_miner_in_run', `Miner #${minerId} is already active in Endless.`);
+        assertEndlessEntryEligible(state, session.address, minerId, minerProfile, config, timestamp);
         if (config.rewards.enabled) {
           chainStart = await this.endlessRewardSettler.beginRun({
             address: session.address,
@@ -558,6 +588,82 @@ function publicEndlessPayment(payment) {
     confirmations: Number(payment.confirmations || 0),
     recipient: String(payment.recipient || '')
   };
+}
+
+function publicEndlessEntryRules(entry = {}) {
+  return {
+    entriesPerWallet: Number(entry.entriesPerWallet || 0),
+    entriesPerMiner: Number(entry.entriesPerMiner || 0),
+    resetPeriodHours: Number(entry.resetPeriodHours || 24),
+    resetUtcHour: Number(entry.resetUtcHour || 0),
+    cooldownSeconds: Number(entry.cooldownSeconds || 0),
+    maximumActiveRunsPerWallet: Number(entry.maximumActiveRunsPerWallet || 1),
+    maximumActiveRunsPerMiner: 1,
+    minimumMinerLevel: Number(entry.minimumMinerLevel || 1),
+    abandonedRunsConsumeEntry: entry.abandonedRunsConsumeEntry !== false
+  };
+}
+
+function assertEndlessEntryEligible(state, address, minerId, minerProfile, config, timestamp) {
+  assertApi(!state.operations.maintenanceMode, 503, 'maintenance_mode', state.operations.announcement || 'MATT Mine is temporarily under maintenance.');
+  const wallet = state.wallets[address];
+  assertApi(wallet && !wallet.suspended, 403, 'wallet_suspended', 'This wallet cannot enter ranked play.');
+  const entry = config.entry;
+  const minerLevel = Math.max(0, Number(minerProfile?.progression?.level ?? minerProfile?.traits?.level ?? 0));
+  assertApi(minerLevel >= entry.minimumMinerLevel, 403, 'endless_miner_level_required', `Endless currently requires Miner level ${entry.minimumMinerLevel} or higher.`);
+
+  const endlessRuns = Object.values(state.endlessCompetition.runs);
+  const activeStatuses = new Set(['active', 'settlement_pending']);
+  const walletActive = endlessRuns.filter((run) => run.address === address && activeStatuses.has(run.status));
+  assertApi(walletActive.length < entry.maximumActiveRunsPerWallet, 409, 'endless_wallet_active_limit', `This wallet already has ${walletActive.length} active Endless run${walletActive.length === 1 ? '' : 's'}; the current limit is ${entry.maximumActiveRunsPerWallet}.`);
+  const activeRanked = Object.values(state.runs).find((run) =>
+    run.address === address && activeStatuses.has(run.status) && !['practice', 'beta', 'endless'].includes(run.mode)
+  );
+  assertApi(!activeRanked, 409, 'ranked_run_active', 'Finish or reconnect to the current ranked run before starting Endless.');
+  const minerBusy = Object.values(state.runs).find((run) =>
+    activeRunMinerId(run) === minerId && activeStatuses.has(run.status)
+  );
+  assertApi(!minerBusy, 409, 'nft_miner_in_run', `Miner #${minerId} is already active in a run. Each Miner can have only one active run.`);
+
+  const window = endlessEntryWindow(timestamp, entry.resetPeriodHours, entry.resetUtcHour);
+  const consumingRuns = endlessRuns.filter((run) => {
+    if (run.address !== address || Number(run.startedAt || 0) < window.startedAt) return false;
+    return run.status !== 'abandoned' || entry.abandonedRunsConsumeEntry;
+  });
+  const walletUsed = consumingRuns.length;
+  const minerUsed = consumingRuns.filter((run) => Number(run.minerId) === minerId).length;
+  if (entry.entriesPerWallet > 0) {
+    assertApi(walletUsed < entry.entriesPerWallet, 429, 'endless_wallet_entry_limit', `This wallet used all ${entry.entriesPerWallet} Endless entries for the current reset period.`);
+  }
+  if (entry.entriesPerMiner > 0) {
+    assertApi(minerUsed < entry.entriesPerMiner, 429, 'endless_miner_entry_limit', `Miner #${minerId} used all ${entry.entriesPerMiner} Endless entries for the current reset period.`);
+  }
+  const latestEntryAt = consumingRuns.reduce(
+    (latest, run) => Math.max(latest, Number(run.startedAt || 0)),
+    0
+  );
+  const cooldownEndsAt = latestEntryAt + entry.cooldownSeconds * 1_000;
+  assertApi(entry.cooldownSeconds === 0 || cooldownEndsAt <= timestamp, 429, 'endless_entry_cooldown', `This wallet can enter Endless again after ${new Date(cooldownEndsAt).toISOString()}.`);
+
+  return {
+    resetStartedAt: window.startedAt,
+    resetAt: window.endsAt,
+    walletEntriesUsed: walletUsed,
+    walletEntriesRemaining: entry.entriesPerWallet > 0 ? entry.entriesPerWallet - walletUsed : null,
+    minerEntriesUsed: minerUsed,
+    minerEntriesRemaining: entry.entriesPerMiner > 0 ? entry.entriesPerMiner - minerUsed : null,
+    activeRunsForWallet: walletActive.length,
+    activeRunsRemainingForWallet: entry.maximumActiveRunsPerWallet - walletActive.length,
+    cooldownEndsAt: entry.cooldownSeconds > 0 && latestEntryAt > 0 ? cooldownEndsAt : 0,
+    minerLevel
+  };
+}
+
+function endlessEntryWindow(timestamp, periodHours, resetUtcHour) {
+  const periodMs = Number(periodHours) * 60 * 60 * 1_000;
+  const anchorMs = Number(resetUtcHour) * 60 * 60 * 1_000;
+  const startedAt = Math.floor((timestamp - anchorMs) / periodMs) * periodMs + anchorMs;
+  return { startedAt, endsAt: startedAt + periodMs };
 }
 
 function cleanRunId(value) {

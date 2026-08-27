@@ -132,6 +132,7 @@ let minerSelectionBusy = false;
 let pendingMineDestination = restoredPendingMineDestination();
 let paymentStatus = null;
 let publicPaymentStatus = null;
+let endlessPublicStatus = null;
 let walletBusy = false;
 let paymentBusy = false;
 let activeServerClaim = null;
@@ -246,9 +247,11 @@ async function refreshVisibleDashboard(screenId) {
   if (liveDashboardBusy || !serverPlayer || !apiClient.hasSession()) return;
   liveDashboardBusy = true;
   try {
-    const requests = [apiClient.me()];
-    if (serverConfig?.realPaymentsEnabled === true) requests.push(apiClient.paymentStatus());
-    const [playerResult, paymentResult] = await Promise.allSettled(requests);
+    const [playerResult, paymentResult, endlessResult] = await Promise.allSettled([
+      apiClient.me(),
+      serverConfig?.realPaymentsEnabled === true ? apiClient.paymentStatus() : Promise.resolve(null),
+      apiClient.endlessStatus()
+    ]);
     if (playerResult.status === 'fulfilled') {
       serverPlayer = playerResult.value;
       profile = serverPlayer.profile;
@@ -256,9 +259,12 @@ async function refreshVisibleDashboard(screenId) {
       game.setProfile(profile);
     }
     if (paymentResult?.status === 'fulfilled') {
-      paymentStatus = paymentResult.value;
-      applyPassInventory(paymentStatus.passInventory);
+      if (paymentResult.value) {
+        paymentStatus = paymentResult.value;
+        applyPassInventory(paymentStatus.passInventory);
+      }
     }
+    if (endlessResult.status === 'fulfilled') endlessPublicStatus = endlessResult.value;
     updateMenu();
     if (screenId === 'daily-arena') await refreshArena(true);
     if (screenId === 'leaderboards') await renderServerLeaderboard(activeBoard);
@@ -432,6 +438,7 @@ function updateMenu() {
       ? paidCredits > 0 ? paidAccess.reason.toUpperCase() : 'BUY RUN CREDIT'
       : 'GET MINE PASS';
   $('#paid-run-button').classList.toggle('ready', paidAccess.allowed);
+  renderEndlessMenuStatus();
   const passPrice = livePayments
     ? paymentStatus
       ? weiToRon(paymentStatus.pass.priceRonWei)
@@ -2056,6 +2063,30 @@ function renderGarageChests(snapshot) {
     button.addEventListener('click', () => showGarageChestPreview(product));
     container.append(button);
   }
+}
+
+function renderEndlessMenuStatus() {
+  const status = endlessPublicStatus;
+  if (!status) return;
+  const rules = status.entryRules || {};
+  const paid = status.paidEntryEnabled === true;
+  const walletLimit = Number(rules.entriesPerWallet || 0);
+  const minerLimit = Number(rules.entriesPerMiner || 0);
+  $('#endless-menu-copy').textContent = paid
+    ? `Selected Miner NFT required. Exact ${formatNumber(status.entryPriceMatt)} MATT entry; bank or descend forever.`
+    : 'Selected Miner NFT required. Free entry; bank or descend forever.';
+  $('#endless-menu-entry').textContent = paid
+    ? `${formatNumber(status.entryPriceMatt)} MATT ENTRY`
+    : 'FREE NFT ENTRY';
+  $('#endless-menu-limits').textContent = [
+    walletLimit > 0 ? `${walletLimit}/wallet` : 'Unlimited wallet entries',
+    minerLimit > 0 ? `${minerLimit}/Miner` : 'Unlimited Miner entries',
+    `Reset ${Number(rules.resetPeriodHours || 24)}h @ ${String(Number(rules.resetUtcHour || 0)).padStart(2, '0')}:00 UTC`
+  ].join(' · ');
+  $('#endless-menu-action').textContent = status.enabled
+    ? paid && status.paymentReady !== true ? 'ENTRY VERIFIER OFFLINE' : 'ENTER ENDLESS'
+    : 'ENDLESS PAUSED';
+  $('#endless-run-button').disabled = status.enabled !== true;
 }
 
 function showGarageChestPreview(product) {
@@ -4120,13 +4151,13 @@ async function approveNftRun(mode, minerId) {
 
 async function startApprovedNftServerRun(mode, minerId) {
   if (mode === RUN_MODES.ENDLESS) {
-    const status = await apiClient.endlessStatus();
-    const approval = status.runApprovalRequired ? await approveNftRun(mode, minerId) : null;
-    if (status.paidEntryEnabled && (!status.paymentReady || !status.entryTransaction)) {
+    const entry = await apiClient.prepareEndlessEntry(minerId);
+    const approval = entry.runApprovalRequired ? await approveNftRun(mode, minerId) : null;
+    if (entry.paidEntryEnabled && !entry.entryTransaction) {
       throw new Error('Paid Endless entry is temporarily closed while its MATT verifier is unavailable. No payment was requested.');
     }
-    const entryTransactionHash = status.paidEntryEnabled
-      ? await wallet.purchaseEndlessEntry(status.entryTransaction)
+    const entryTransactionHash = entry.paidEntryEnabled
+      ? await wallet.purchaseEndlessEntry(entry.entryTransaction)
       : '';
     return apiClient.startRun(mode, minerId, approval, entryTransactionHash ? { entryTransactionHash } : null);
   }
@@ -4685,8 +4716,11 @@ window.addEventListener('beforeunload', (event) => {
 
 async function bootstrapServer() {
   try {
-    serverConfig = await apiClient.config();
-    publicPaymentStatus = await apiClient.publicPaymentStatus();
+    [serverConfig, publicPaymentStatus, endlessPublicStatus] = await Promise.all([
+      apiClient.config(),
+      apiClient.publicPaymentStatus(),
+      apiClient.endlessStatus()
+    ]);
     const restored = await wallet.restore();
     if (restored) {
       serverPlayer = restored;

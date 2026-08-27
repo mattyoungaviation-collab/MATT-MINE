@@ -42,6 +42,15 @@ export class MattMineApiClient {
     return response.endless;
   }
 
+  async prepareEndlessEntry(minerId) {
+    const response = await this.request('/api/endless/entry/prepare', {
+      method: 'POST',
+      authenticated: true,
+      body: { minerId }
+    });
+    return response.entry;
+  }
+
   async checkpointEndlessPhase(runId, runToken, previousCheckpoint, events, action) {
     return this.request('/api/endless/checkpoint', {
       method: 'POST',

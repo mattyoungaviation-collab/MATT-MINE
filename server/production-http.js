@@ -25,6 +25,7 @@ const PRODUCTION_PATHS = new Set([
   '/api/competitions/endless/leaderboard',
   '/api/runs/competitive/events',
   '/api/endless/status',
+  '/api/endless/entry/prepare',
   '/api/endless/checkpoint',
   '/api/endless/heartbeat',
   '/api/endless/reconnect',
@@ -73,6 +74,11 @@ export function createProductionMattMineHttpServer({ root, service, maxRequestBy
       }
       if (method === 'GET' && path === '/api/endless/status') {
         sendJson(response, 200, { ok: true, endless: await service.endlessStatus() });
+        return;
+      }
+      if (method === 'POST' && path === '/api/endless/entry/prepare') {
+        const body = await readJson(request, maxRequestBytes);
+        sendJson(response, 200, { ok: true, entry: await service.prepareEndlessEntry(bearerToken(request), body) });
         return;
       }
       if (method === 'POST' && path === '/api/endless/checkpoint') {
