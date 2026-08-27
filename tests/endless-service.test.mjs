@@ -115,6 +115,33 @@ test('Endless service enforces NFT ownership and starts with free fail-closed re
   assert.equal(run.manifest.configVersion, run.configVersion);
 });
 
+test('starting Endless automatically clears a wallet ghost row when Ronin has no active run', async () => {
+  const active = harness({
+    endlessRewardSettler: {
+      async activeRun() { return null; }
+    }
+  });
+  const token = await login(active.service);
+  const ghost = await active.service.startRun(token, 'endless', { minerId: 7 });
+  await active.database.transact((state) => {
+    const run = state.endlessCompetition.runs[ghost.runId];
+    run.chainRun = { runId: `0x${'ab'.repeat(32)}` };
+    run.config.rewards.enabled = true;
+    state.runs[ghost.runId] = run;
+  });
+
+  const prepared = await active.service.prepareEndlessEntry(token, { minerId: 7 });
+  assert.equal(prepared.eligible, true);
+  let state = await active.database.read();
+  assert.equal(state.endlessCompetition.runs[ghost.runId].status, 'expired');
+  assert.equal(state.endlessCompetition.runs[ghost.runId].finishReason, 'chain_unlocked');
+
+  const replacement = await active.service.startRun(token, 'endless', { minerId: 7 });
+  state = await active.database.read();
+  assert.notEqual(replacement.runId, ghost.runId);
+  assert.equal(state.endlessCompetition.runs[replacement.runId].status, 'active');
+});
+
 test('paid Endless entry prepares, verifies, stores, and consumes one exact MATT transfer', async () => {
   const paymentHash = `0x${'cd'.repeat(32)}`;
   let verifiedInput;

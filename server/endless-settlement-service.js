@@ -378,6 +378,11 @@ export class EndlessSettlementService {
     });
   }
 
+  async activeRun(minerId) {
+    const active = await this.#activeRun(minerId);
+    return active.runId === ZERO_BYTES32 ? null : publicChainRun(active);
+  }
+
   async cancelRun({ address, minerId }) {
     return this.#serialize(async () => {
       const active = await this.#activeRun(minerId);
@@ -729,6 +734,10 @@ function publicChainRun(active) {
     versionId: String(active.versionId),
     loadoutHash: String(active.loadoutHash),
     checkpointDigest: String(active.checkpointDigest),
+    player: String(active.player),
+    startedAt: Number(active.startedAt),
+    lastCheckpointAt: Number(active.lastCheckpointAt),
+    checkpointTimeout: Number(active.checkpointTimeout),
     nonce: BigInt(active.nonce).toString(),
     completedPhases: Number(active.completedPhases),
     minedCrystalUnits: Number(active.minedCrystalUnits)

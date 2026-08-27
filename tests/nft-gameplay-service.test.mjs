@@ -311,6 +311,50 @@ function authorization(minerId) {
   };
 }
 
+test('NFT cancellation treats a delayed successful settlement as unlocked after a fresh Ronin read', async () => {
+  const operator = privateKeyToAccount(OPERATOR_KEY);
+  const signer = privateKeyToAccount(SIGNER_KEY);
+  let activeReads = 0;
+  const publicClient = fakePublicClient();
+  const originalRead = publicClient.readContract.bind(publicClient);
+  publicClient.readContract = async (call) => {
+    if (call.functionName !== 'activeRun') return originalRead(call);
+    activeReads += 1;
+    if (activeReads === 1) return originalRead(call);
+    return [
+      `0x${'0'.repeat(64)}`, MAP_VERSION, LOADOUT_HASH, PLAYER, 0n, 0n,
+      0n, 0, 0, 0, 0, 0n
+    ];
+  };
+  const service = new NftGameplayService({
+    enabled: true,
+    chainId: 2020,
+    rpcUrl: 'https://example.invalid',
+    settlementAddress: SETTLEMENT,
+    loadoutAddress: LOADOUT,
+    operatorAddress: operator.address,
+    signerAddress: signer.address,
+    operatorPrivateKey: OPERATOR_KEY,
+    signerPrivateKey: SIGNER_KEY,
+    mapVersions: { arena: MAP_VERSION, paid: MAP_VERSION },
+    metadataService: { async minerProfile() { return profile(); } },
+    publicClient,
+    operatorClient: {},
+    cancelReconciliationAttempts: 2,
+    cancelReconciliationDelayMs: 0,
+    wait: async () => {}
+  });
+  service.settleRun = async () => {
+    throw new Error('receipt response was lost');
+  };
+
+  const cancelled = await service.cancelRun({ address: PLAYER, minerId: 1, runId: RUN_ID });
+  assert.equal(cancelled.cancelled, true);
+  assert.equal(cancelled.recovered, true);
+  assert.equal(cancelled.settlement.alreadySettled, true);
+  assert.equal(cancelled.profile.gameplay.runLocked, false);
+});
+
 test('NFT gameplay locks the owned Miner and pins armor health plus doubled crystal capacity', async () => {
   const calls = [];
   const operator = privateKeyToAccount(OPERATOR_KEY);

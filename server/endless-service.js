@@ -77,6 +77,7 @@ export const endlessServiceMethods = {
     assertApi(Number.isSafeInteger(minerId) && minerId >= 1 && minerId <= 1_000_000, 422, 'miner_selection_required', 'Select one of this wallet’s Miner NFTs before entering Endless.');
     const minerProfile = await this.nftGameplayService.playerMiner(session.address, minerId);
     assertApi(minerProfile, 403, 'miner_nft_required', 'Endless requires a Miner NFT owned by this wallet.');
+    await this.reconcileUnlockedEndlessRuns(session.address);
     const state = await this.database.read();
     const store = state.endlessCompetition;
     const configVersion = store.activeConfigVersion;
@@ -134,6 +135,7 @@ export const endlessServiceMethods = {
     assertApi(Number.isSafeInteger(minerId) && minerId >= 1 && minerId <= 1_000_000, 422, 'miner_selection_required', 'Select one of this wallet’s Miner NFTs before entering Endless.');
     const minerProfile = await this.nftGameplayService.playerMiner(session.address, minerId);
     assertApi(minerProfile, 403, 'miner_nft_required', 'Endless requires a Miner NFT owned by this wallet.');
+    await this.reconcileUnlockedEndlessRuns(session.address);
     const preflightState = await this.database.read();
     const preflightStore = preflightState.endlessCompetition;
     const preflightVersion = preflightStore.activeConfigVersion;
@@ -252,6 +254,71 @@ export const endlessServiceMethods = {
       throw error;
     }
     return publicEndlessRun(created, runToken, inputCheckpoint);
+  },
+
+  async reconcileUnlockedEndlessRuns(address) {
+    const normalizedAddress = String(address || '').toLowerCase();
+    // Only the Endless settlement's activeRun read can distinguish a real
+    // resumable run from a stale server row. If that read is unavailable, keep
+    // the saved run and let the request continue through the normal checks.
+    if (typeof this.endlessRewardSettler?.activeRun !== 'function') {
+      return { reconciledRunIds: [] };
+    }
+    const snapshot = await this.database.read();
+    const candidates = Object.values(snapshot.endlessCompetition?.runs || {}).filter((run) =>
+      run.address === normalizedAddress &&
+      ['active', 'settlement_pending'].includes(run.status) &&
+      (run.chainRun?.runId || run.config?.rewards?.enabled === true) &&
+      Number.isSafeInteger(Number(run.minerId))
+    );
+    if (!candidates.length) return { reconciledRunIds: [] };
+
+    const chainByMiner = new Map();
+    for (const minerId of new Set(candidates.map((run) => Number(run.minerId)))) {
+      try {
+        chainByMiner.set(minerId, await this.endlessRewardSettler.activeRun(minerId));
+      } catch {
+        // A temporary Ronin read failure must not destroy a resumable run or
+        // become a new entry blocker. Unknown rows remain untouched.
+        chainByMiner.set(minerId, 'unknown');
+      }
+    }
+    const staleIds = new Set(candidates
+      .filter((run) => {
+        const chainRun = chainByMiner.get(Number(run.minerId));
+        // Null is the authoritative contract answer: the Miner has no active
+        // Endless run. Any matching active database row is therefore a ghost.
+        // A non-null or unknown result stays resumable and is never discarded.
+        return chainRun === null;
+      })
+      .map((run) => run.id));
+    if (!staleIds.size) return { reconciledRunIds: [] };
+
+    const timestamp = this.now();
+    const reconciledRunIds = await this.database.transact(async (state, transaction) => {
+      const runIds = [];
+      for (const runId of staleIds) {
+        const run = state.endlessCompetition?.runs?.[runId];
+        if (!run || run.address !== normalizedAddress || !['active', 'settlement_pending'].includes(run.status)) continue;
+        run.status = 'expired';
+        run.finishReason = 'chain_unlocked';
+        run.finishedAt = timestamp;
+        run.updatedAt = timestamp;
+        run.expiresAt = Math.min(Number(run.expiresAt || timestamp), timestamp);
+        run.result = null;
+        run.orphanRecoveryAt = timestamp;
+        delete run.adminTerminationPending;
+        run.checkpointSignature = signEndlessCheckpoint(run, this.endlessCheckpointSecret);
+        state.runs[run.id] = run;
+        await transaction?.upsertEndlessRun?.(run);
+        runIds.push(run.id);
+      }
+      return runIds;
+    });
+    await Promise.all(reconciledRunIds.map((runId) =>
+      this.competitiveReplayValidator?.finalize?.(runId, 'expired').catch(() => undefined)
+    ));
+    return { reconciledRunIds };
   },
 
   async checkpointEndlessPhase(token, input = {}) {
@@ -469,22 +536,70 @@ export const endlessServiceMethods = {
     assertApi(Number.isSafeInteger(minerId) && minerId >= 1 && minerId <= 1_000_000, 422, 'miner_selection_required', 'Select the locked Miner whose Endless run you want to resume.');
     const timestamp = this.now();
     const runToken = this.randomHex(24);
+    const snapshot = await this.database.read();
+    const candidates = Object.values(snapshot.endlessCompetition.runs)
+      .filter((candidate) =>
+        candidate.address === session.address &&
+        Number(candidate.minerId) === minerId &&
+        ['active', 'expired', 'settlement_pending'].includes(candidate.status)
+      )
+      .sort((left, right) => Number(right.updatedAt || right.startedAt || 0) - Number(left.updatedAt || left.startedAt || 0));
+    let chainRun = null;
+    let chainInspected = false;
+    if (typeof this.endlessRewardSettler?.activeRun === 'function') {
+      try {
+        chainRun = await this.endlessRewardSettler.activeRun(minerId);
+        chainInspected = true;
+      } catch {
+        // The stored signed checkpoint can still be resumed during a temporary
+        // read-RPC outage. The next checkpoint remains chain-authoritative.
+      }
+    }
+    if (chainInspected) {
+      assertApi(chainRun, 409, 'endless_chain_run_missing', `Miner #${minerId} is already unlocked on Ronin. Refresh the Miner screen.`);
+      assertApi(
+        String(chainRun.player || '').toLowerCase() === session.address,
+        403,
+        'endless_chain_player_mismatch',
+        `Miner #${minerId}'s active Endless run belongs to another wallet.`
+      );
+    }
+    const selected = chainRun
+      ? candidates.find((candidate) => String(candidate.chainRun?.runId || '').toLowerCase() === String(chainRun.runId || '').toLowerCase())
+      : candidates.find((candidate) => candidate.status === 'active') || candidates[0];
+    assertApi(selected, 404, 'endless_active_run_missing', `Miner #${minerId} has no saved Endless session to resume. The Miner can still be forfeited and unlocked from the Miner screen.`);
+    if (chainRun) {
+      const completedPhases = Number(chainRun.completedPhases);
+      assertApi(
+        completedPhases === Number(selected.completedPhases) &&
+          (completedPhases === 0 || String(chainRun.checkpointDigest || '').toLowerCase() === String(selected.rollingDigest || '').toLowerCase()),
+        409,
+        'endless_resume_checkpoint_missing',
+        `Miner #${minerId}'s Ronin checkpoint is newer than the saved gameplay session. Forfeit the run to unlock the Miner.`
+      );
+    }
     let inputCheckpoint = null;
     let previousReplayIdentity = null;
     const run = await this.database.transact(async (state, transaction) => {
-      const matches = Object.values(state.endlessCompetition.runs).filter((candidate) =>
-        candidate.address === session.address &&
-        Number(candidate.minerId) === minerId &&
-        candidate.status === 'active'
+      const current = state.endlessCompetition.runs[selected.id];
+      assertApi(
+        current && current.address === session.address && Number(current.minerId) === minerId,
+        409,
+        'endless_resume_changed',
+        'The saved Endless session changed while it was being resumed. Try again.'
       );
-      assertApi(matches.length === 1, 404, 'endless_active_run_missing', `Miner #${minerId} does not have one active Endless run to resume.`);
-      const current = matches[0];
-      assertApi(!current.adminTerminationPending, 409, 'run_admin_termination_pending', 'An administrator is ending this run. Wait for that operation to finish.');
-      assertApi(current.expiresAt > timestamp, 410, 'endless_reconnect_expired', 'This Endless run is outside its published reconnect window and must be forfeited.');
+      assertApi(current.config && current.manifest, 409, 'endless_resume_data_missing', 'This saved run no longer has enough gameplay data to resume. Forfeit it to unlock the Miner.');
+      if (chainRun) {
+        assertApi(
+          String(current.chainRun?.runId || '').toLowerCase() === String(chainRun.runId || '').toLowerCase(),
+          409,
+          'endless_resume_changed',
+          'The active Ronin run changed while it was being resumed. Try again.'
+        );
+      }
       const integrity = current.config.integrity;
-      assertApi(Number(current.reconnectCount || 0) < integrity.maximumReconnectsPerRun, 429, 'endless_reconnect_limit', 'This run reached its reconnect limit and must be forfeited.');
-      assertApi(Number(current.phaseReconnectCount || 0) < integrity.maximumReconnectsPerPhase, 429, 'endless_phase_reconnect_limit', 'This phase reached its reconnect limit and must be forfeited.');
       previousReplayIdentity = { id: current.id, currentPhase: current.currentPhase, phaseAttempt: current.phaseAttempt };
+      current.status = 'active';
       current.tokenHash = endlessTokenHash(runToken);
       current.reconnectCount = Number(current.reconnectCount || 0) + 1;
       current.phaseReconnectCount = Number(current.phaseReconnectCount || 0) + 1;
@@ -492,6 +607,7 @@ export const endlessServiceMethods = {
       current.lastHeartbeatAt = timestamp;
       current.updatedAt = timestamp;
       current.expiresAt = timestamp + integrity.reconnectWindowSeconds * 1_000;
+      delete current.adminTerminationPending;
       assertApi(this.competitiveReplayValidator?.registerEndlessPhase, 503, 'endless_input_replay_required', 'Authoritative Endless phase replay is unavailable.');
       inputCheckpoint = await this.competitiveReplayValidator.registerEndlessPhase(current, runToken);
       state.runs[current.id] = current;

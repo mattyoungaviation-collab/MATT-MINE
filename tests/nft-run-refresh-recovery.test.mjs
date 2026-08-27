@@ -208,13 +208,43 @@ test('a progressed Endless Miner stays recoverable after Admin already ended its
   assert.equal((await harness.database.read()).runs[runId].status, 'expired');
 });
 
+test('owner recovery clears an active Endless server row after Ronin already unlocked the Miner', async () => {
+  const harness = createHarness({ initialLocked: false });
+  const session = await signIn(harness.service);
+  const runId = `run_${'8'.repeat(24)}`;
+  await harness.database.transact((state) => {
+    const run = {
+      id: runId,
+      address: session.address,
+      mode: 'endless',
+      status: 'active',
+      minerId: 1,
+      chainRun: { runId: `0x${'8'.repeat(64)}` },
+      startedAt: START - 60_000,
+      expiresAt: START + 60_000,
+      result: null
+    };
+    state.endlessCompetition.runs[runId] = run;
+  });
+
+  const result = await harness.service.recoverLockedMinerRun(session.token, { minerId: 1 });
+  const state = await harness.database.read();
+  assert.equal(result.recovered, true);
+  assert.equal(result.alreadyUnlocked, true);
+  assert.deepEqual(result.reconciledRunIds, [runId]);
+  assert.deepEqual(harness.cancellations, []);
+  assert.deepEqual(harness.endlessCancellations, []);
+  assert.equal(state.endlessCompetition.runs[runId].status, 'expired');
+  assert.equal(state.runs[runId].status, 'expired');
+});
+
 test('locked-run recovery never reports success while Ronin still reports the Miner locked', async () => {
   const harness = createHarness({ initialLocked: true, lockContract: 'unknown' });
   const session = await signIn(harness.service);
 
   await assert.rejects(
     () => harness.service.recoverLockedMinerRun(session.token, { minerId: 1 }),
-    (error) => error.code === 'nft_run_recovery_incomplete'
+    (error) => error.code === 'nft_run_release_failed'
   );
 
   assert.deepEqual(harness.cancellations, [1]);
@@ -349,7 +379,7 @@ test('orphan recovery reconciles a pending Pass reservation even after the Miner
   assert.deepEqual(harness.cancellations, []);
 });
 
-test('orphan recovery uses the lifecycle mutation barrier and cannot overtake Admin termination', async () => {
+test('orphan recovery clears a stale Admin termination marker inside the lifecycle barrier', async () => {
   const harness = createHarness({ initialLocked: true });
   const session = await signIn(harness.service);
   const runId = `run_${'d'.repeat(24)}`;
@@ -379,19 +409,18 @@ test('orphan recovery uses the lifecycle mutation barrier and cannot overtake Ad
     };
   });
 
-  await assert.rejects(
-    () => harness.service.recoverLockedMinerRun(session.token, { minerId: 1 }),
-    (error) => error.code === 'run_admin_termination_pending'
-  );
+  const recovered = await harness.service.recoverLockedMinerRun(session.token, { minerId: 1 });
 
   const run = (await harness.database.read()).runs[runId];
   assert.equal(mutationEntries, 1);
-  assert.equal(run.status, 'awaiting-revive');
-  assert.equal(run.pendingRevive.status, 'pending');
-  assert.deepEqual(harness.cancellations, []);
+  assert.equal(recovered.recovered, true);
+  assert.equal(run.status, 'expired');
+  assert.equal(run.pendingRevive.status, 'cancelled');
+  assert.equal(run.adminTerminationPending, undefined);
+  assert.deepEqual(harness.cancellations, [1]);
 });
 
-test('orphan recovery refuses to clear a reservation that changed during cancellation', async () => {
+test('orphan recovery clears a same-Miner reservation even if its stale run ID changed', async () => {
   const harness = createHarness({ initialLocked: true });
   const session = await signIn(harness.service);
   const runId = `run_${'e'.repeat(24)}`;
@@ -416,14 +445,12 @@ test('orphan recovery refuses to clear a reservation that changed during cancell
     return { cancelled: true, minerId: 1 };
   };
 
-  await assert.rejects(
-    () => harness.service.recoverLockedMinerRun(session.token, { minerId: 1 }),
-    (error) => error.code === 'nft_run_recovery_reservation_changed'
-  );
+  const recovered = await harness.service.recoverLockedMinerRun(session.token, { minerId: 1 });
 
   const run = (await harness.database.read()).runs[runId];
-  assert.equal(run.status, 'active');
-  assert.equal(run.nftRun.runId, `0x${'5'.repeat(64)}`);
+  assert.equal(recovered.recovered, true);
+  assert.equal(run.status, 'expired');
+  assert.equal(run.nftSettlement.runId, `0x${'5'.repeat(64)}`);
 });
 
 test('post-begin attachment only succeeds for the exact active pending reservation', async () => {

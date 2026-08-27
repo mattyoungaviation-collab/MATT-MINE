@@ -68,6 +68,8 @@ const RUN_RESULT_TYPES = Object.freeze({
 const DEFAULT_PHASE_XP = Object.freeze([10, 15, 20, 25, 30]);
 const REQUIRED_GAMEPLAY_MODES = Object.freeze(['arena', 'paid']);
 const DEFAULT_OPERATOR_MINIMUM_BALANCE_WEI = 20_000_000_000_000_000n;
+const DEFAULT_CANCEL_RECONCILIATION_ATTEMPTS = 6;
+const DEFAULT_CANCEL_RECONCILIATION_DELAY_MS = 1_500;
 
 export class NftGameplayService {
   constructor(options = {}) {
@@ -86,6 +88,15 @@ export class NftGameplayService {
       options.operatorMinimumBalanceWei ?? DEFAULT_OPERATOR_MINIMUM_BALANCE_WEI,
       'NFT Game Operator minimum RON balance'
     );
+    this.cancelReconciliationAttempts = positiveInteger(
+      options.cancelReconciliationAttempts ?? DEFAULT_CANCEL_RECONCILIATION_ATTEMPTS,
+      'NFT cancellation reconciliation attempts'
+    );
+    this.cancelReconciliationDelayMs = nonnegativeInteger(
+      options.cancelReconciliationDelayMs ?? DEFAULT_CANCEL_RECONCILIATION_DELAY_MS,
+      'NFT cancellation reconciliation delay'
+    );
+    this.wait = options.wait || ((delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)));
     assertApi(this.metadataService, 500, 'nft_gameplay_metadata_missing', 'NFT gameplay requires the V2 metadata chain reader.');
     const chain = defineChain({
       id: this.chainId,
@@ -529,14 +540,49 @@ export class NftGameplayService {
     if (active.runId === zeroBytes32()) return { cancelled: false, minerId };
     // Abandonment is an on-chain death: no XP or Crystals are fabricated, and
     // the contract applies the approved Armor/Backpack death consequences.
-    const settlement = await this.settleRun({
-      address,
-      minerId,
-      runId,
-      result: { extracted: false, crystalsCarried: 0 },
-      completedPhases: 0
-    });
-    return { cancelled: true, minerId, transactionHash: settlement.transactionHash, settlement };
+    try {
+      const settlement = await this.settleRun({
+        address,
+        minerId,
+        runId,
+        result: { extracted: false, crystalsCarried: 0 },
+        completedPhases: 0
+      });
+      return { cancelled: true, minerId, transactionHash: settlement.transactionHash, settlement };
+    } catch (error) {
+      for (let attempt = 0; attempt < this.cancelReconciliationAttempts; attempt += 1) {
+        const current = await this.#activeRun(minerId).catch(() => null);
+        if (current?.runId === zeroBytes32()) {
+          const profile = await this.playerMiner(address, minerId);
+          return {
+            cancelled: true,
+            recovered: true,
+            minerId,
+            transactionHash: null,
+            settlement: await this.#alreadySettled(getAddress(address), minerId, { extracted: false }),
+            profile
+          };
+        }
+        if (attempt + 1 < this.cancelReconciliationAttempts) {
+          await this.wait(this.cancelReconciliationDelayMs);
+        }
+      }
+      throw error;
+    }
+  }
+
+  async activeRun(minerId) {
+    const active = await this.#activeRun(minerId);
+    if (active.runId === zeroBytes32()) return null;
+    return {
+      runId: active.runId,
+      mapVersion: active.mapVersion,
+      loadoutHash: active.loadoutHash,
+      player: active.player,
+      startedAt: Number(active.startedAt),
+      runTimeout: Number(active.runTimeout),
+      nonce: BigInt(active.nonce).toString()
+    };
   }
 
   async #alreadySettled(player, minerId, result) {
@@ -644,6 +690,10 @@ export function createNftGameplayServiceFromEnvironment(metadataService, environ
       || environment.MATT_MINE_NFT_GAME_SIGNER_PRIVATE_KEY,
     operatorMinimumBalanceWei: environment.MATT_MINE_NFT_OPERATOR_MINIMUM_BALANCE_WEI
       || DEFAULT_OPERATOR_MINIMUM_BALANCE_WEI,
+    cancelReconciliationAttempts: environment.MATT_MINE_NFT_CANCEL_RECONCILIATION_ATTEMPTS
+      || DEFAULT_CANCEL_RECONCILIATION_ATTEMPTS,
+    cancelReconciliationDelayMs: environment.MATT_MINE_NFT_CANCEL_RECONCILIATION_DELAY_MS
+      || DEFAULT_CANCEL_RECONCILIATION_DELAY_MS,
     mapVersions: parseMapVersions(environment.MATT_MINE_NFT_MAP_VERSIONS_JSON),
     metadataService,
     ...options
@@ -767,6 +817,12 @@ function requiredUrl(value, label) {
 function positiveInteger(value, label) {
   const number = Number(value);
   if (!Number.isSafeInteger(number) || number <= 0) throw new Error(`${label} must be a positive integer.`);
+  return number;
+}
+
+function nonnegativeInteger(value, label) {
+  const number = Number(value);
+  if (!Number.isSafeInteger(number) || number < 0) throw new Error(`${label} must be a non-negative integer.`);
   return number;
 }
 

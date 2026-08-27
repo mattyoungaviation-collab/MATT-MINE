@@ -138,6 +138,47 @@ test('wallet run termination routes an Endless Miner through the Endless settlem
   assert.equal(state.endlessCompetition.runs[runId].status, 'expired');
 });
 
+test('wallet run termination clears an Endless ghost stored only in the Endless table', async () => {
+  const endlessCalls = [];
+  const { database, service } = harness(
+    async () => ({ cancelled: false, minerId: 1000 }),
+    async (input) => {
+      endlessCalls.push(input);
+      return { cancelled: false, minerId: input.minerId };
+    }
+  );
+  const session = await signIn(service);
+  const runId = `run_${'e'.repeat(24)}`;
+  const chainRunId = `0x${'9'.repeat(64)}`;
+  await database.transact((state) => {
+    state.endlessCompetition.runs[runId] = {
+      id: runId,
+      address: session.address,
+      mode: 'endless',
+      status: 'active',
+      minerId: 1000,
+      chainRun: { runId: chainRunId },
+      startedAt: START,
+      expiresAt: START + 60_000
+    };
+  });
+
+  const before = await service.adminWallet('admin-secret', session.address);
+  assert.equal(before.wallet.activeRuns, 1);
+  const result = await service.adminWalletAction(
+    'admin-secret',
+    session.address,
+    'expire_active_runs',
+    'Clear ghost Endless server row'
+  );
+
+  const state = await database.read();
+  assert.equal(result.affected, 1);
+  assert.deepEqual(endlessCalls, [{ address: session.address, minerId: 1000, runId: chainRunId }]);
+  assert.equal(state.endlessCompetition.runs[runId].status, 'expired');
+  assert.equal(state.runs[runId].status, 'expired');
+});
+
 test('wallet run termination also releases a Miner waiting on a paid revive', async () => {
   const calls = [];
   const { database, service } = harness(async (input) => {

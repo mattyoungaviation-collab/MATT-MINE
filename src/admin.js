@@ -180,10 +180,16 @@ async function loadWallets() {
 async function loadWallet(address) {
   const data = await api(`/api/admin/wallets/${address}`);
   const wallet = data.wallet;
+  const liveEndless = (data.runs || []).filter((run) =>
+    run.mode === 'endless' && ['active', 'settlement_pending'].includes(run.status)
+  );
+  const liveEndlessLabel = liveEndless.length
+    ? liveEndless.map((run) => `${run.id}${run.minerId ? ` (Miner #${run.minerId})` : ''}`).join(', ')
+    : 'None';
   const panel = $('#wallet-detail');
   panel.hidden = false;
   panel.innerHTML = `<h2>${escapeHtml(wallet.address)}</h2>
-    <div class="grid two">${row('Status', wallet.suspended ? 'Suspended' : 'Active')}${row('Free run used today', wallet.freeRunUsedToday ? 'Yes' : 'No')}${row('Active sessions', wallet.activeSessions)}${row('Active runs', wallet.activeRuns)}</div>
+    <div class="grid two">${row('Status', wallet.suspended ? 'Suspended' : 'Active')}${row('Free run used today', wallet.freeRunUsedToday ? 'Yes' : 'No')}${row('Active sessions', wallet.activeSessions)}${row('Active runs', wallet.activeRuns)}${row('Live Endless server rows', liveEndlessLabel)}</div>
     <label>Required action reason<input id="wallet-reason" maxlength="240" placeholder="Document why this action is needed"></label>
     <div class="action-row">
       <button data-wallet-action="suspension">${wallet.suspended ? 'Restore wallet' : 'Suspend wallet'}</button>

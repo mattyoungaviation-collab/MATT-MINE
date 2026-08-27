@@ -1061,23 +1061,17 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     for (const run of Object.values(reservationSnapshot.endlessCompetition?.runs || {})) {
       recoveryRuns.set(run.id, run);
     }
+    const recoverableStatuses = new Set(['active', 'awaiting-revive', 'expired', 'settlement_pending']);
     const reservations = [...recoveryRuns.values()]
       .filter((run) =>
         run.address === session.address &&
-        ['active', 'awaiting-revive', 'expired'].includes(run.status) &&
+        recoverableStatuses.has(run.status) &&
         (
           Number(run.pendingNftRun?.minerId) === minerId ||
-          (
-            before.gameplay?.runLocked === true &&
-            Number(recoveryAttachedRun(run)?.minerId) === minerId
-          )
+          Number(recoveryAttachedRun(run)?.minerId) === minerId
         )
       )
       .map((run) => {
-        assertRunNotAdminTerminating(
-          run,
-          'An administrator is ending this run. Wait for that operation to finish before recovering its Miner.'
-        );
         const attached = recoveryAttachedRun(run);
         return {
           runId: run.id,
@@ -1088,37 +1082,22 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
           reservedAt: Number(run.pendingNftRun?.reservedAt || 0)
         };
       });
-    const pendingRunIds = reservations
-      .filter((reservation) => reservation.kind === 'pending')
-      .map((reservation) => reservation.runId);
-    if (before.gameplay?.runLocked !== true && pendingRunIds.length === 0) {
+    if (before.gameplay?.runLocked !== true && reservations.length === 0) {
       return { recovered: false, minerId, profile: before };
     }
 
-    let cancellation = { cancelled: false, minerId, transactionHash: null };
-    let settlementRoute = '';
-    if (before.gameplay?.runLocked === true) {
-      cancellation = await this.nftGameplayService.cancelRun({
-        address: session.address,
-        minerId
-      });
-      if (cancellation.cancelled === true) settlementRoute = 'standard';
-      if (cancellation.cancelled !== true && this.endlessRewardSettler?.cancelRun) {
-        cancellation = await this.endlessRewardSettler.cancelRun({
-          address: session.address,
-          minerId
-        });
-        if (cancellation.cancelled === true) settlementRoute = 'endless';
-      }
-      const unlocked = cancellation.settlement?.profile ||
-        await this.nftGameplayService.playerMiner(session.address, minerId);
-      assertApi(
-        unlocked?.gameplay?.runLocked !== true,
-        409,
-        'nft_run_recovery_incomplete',
-        `Miner #${minerId} is still locked by an on-chain game contract. No server record was changed; contact support with this Miner number.`
-      );
-    }
+    const release = before.gameplay?.runLocked === true
+      ? await this.releaseNftMinerRun(session.address, minerId)
+      : {
+          released: false,
+          alreadyUnlocked: true,
+          minerId,
+          settlementRoute: '',
+          transactionHash: null,
+          profile: before,
+          attempts: []
+        };
+    const settlementRoute = release.settlementRoute;
     const timestamp = this.now();
     const reconciled = await this.database.transact(async (state, transaction) => {
       const runIds = [];
@@ -1127,30 +1106,12 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
         const run = reservation.mode === 'endless'
           ? state.endlessCompetition?.runs?.[reservation.runId] || state.runs?.[reservation.runId]
           : state.runs?.[reservation.runId];
-        assertApi(run, 409, 'nft_run_recovery_reservation_changed', 'The reserved Miner run changed before recovery completed. Refresh and try again.');
-        assertApi(
-          run.address === session.address && ['active', 'awaiting-revive', 'expired'].includes(run.status),
-          409,
-          'nft_run_recovery_reservation_changed',
-          'The reserved Miner run changed before recovery completed. Refresh and try again.'
-        );
-        assertRunNotAdminTerminating(
-          run,
-          'An administrator is ending this run. Wait for that operation to finish before recovering its Miner.'
-        );
+        if (!run || run.address !== session.address || !recoverableStatuses.has(run.status)) continue;
         const attached = recoveryAttachedRun(run);
         const reservationMatches = reservation.kind === 'pending'
-          ? !attached &&
-            Number(run.pendingNftRun?.minerId) === reservation.minerId &&
-            Number(run.pendingNftRun?.reservedAt || 0) === reservation.reservedAt
-          : Number(attached?.minerId) === reservation.minerId &&
-            (!reservation.chainRunId || String(attached?.runId || '') === reservation.chainRunId);
-        assertApi(
-          reservationMatches,
-          409,
-          'nft_run_recovery_reservation_changed',
-          'The reserved Miner run changed before recovery completed. Refresh and try again.'
-        );
+          ? !attached && Number(run.pendingNftRun?.minerId) === reservation.minerId
+          : Number(attached?.minerId) === reservation.minerId;
+        if (!reservationMatches) continue;
         if (reservation.kind === 'pending') {
           const entitlement = Object.values(state.paidEntitlements || {})
             .find((entry) => entry.address === session.address && entry.usedRunId === run.id);
@@ -1169,6 +1130,7 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
         run.finishedAt = timestamp;
         run.result = null;
         run.orphanRecoveryAt = timestamp;
+        delete run.adminTerminationPending;
         state.runs[run.id] = run;
         if (reservation.mode === 'endless') {
           state.endlessCompetition.runs[run.id] = run;
@@ -1181,7 +1143,7 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
       appendAudit(
         state,
         'NFT_V2_ORPHAN_RUN_RECOVERED',
-        `${session.address}; Miner #${minerId}; ${settlementRoute || 'reservation-only'}; ${cancellation.transactionHash || 'already unlocked'}`,
+        `${session.address}; Miner #${minerId}; ${settlementRoute || 'reservation-only'}; ${release.transactionHash || 'already unlocked'}`,
         timestamp,
         session.address
       );
@@ -1190,16 +1152,17 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     await Promise.all(reconciled.runIds.map((runId) =>
       this.competitiveReplayValidator?.finalize?.(runId, 'expired').catch(() => undefined)
     ));
-    const profile = cancellation.settlement?.profile ||
-      await this.nftGameplayService.playerMiner(session.address, minerId);
+    const profile = release.profile || await this.nftGameplayService.playerMiner(session.address, minerId);
     return {
-      recovered: cancellation.cancelled === true || reconciled.runIds.length > 0,
+      recovered: release.released === true || reconciled.runIds.length > 0,
+      alreadyUnlocked: release.alreadyUnlocked === true,
       minerId,
-      transactionHash: cancellation.transactionHash || null,
+      transactionHash: release.transactionHash || null,
       settlementRoute,
       profile,
       reconciledRunIds: reconciled.runIds,
-      restoredPassCredits: reconciled.restoredPassCredits
+      restoredPassCredits: reconciled.restoredPassCredits,
+      attempts: release.attempts
     };
   }
 

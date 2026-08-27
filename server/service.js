@@ -121,6 +121,102 @@ export class MattMineService {
     );
   }
 
+  async lockedMinerProfiles(address) {
+    const normalizedAddress = normalizeAddress(address);
+    if (!this.nftMetadataService) return [];
+    if (
+      typeof this.nftMetadataService.playerMinerIds === 'function' &&
+      typeof this.nftMetadataService.minerProfiles === 'function'
+    ) {
+      const minerIds = await this.nftMetadataService.playerMinerIds(normalizedAddress);
+      const profiles = await this.nftMetadataService.minerProfiles(minerIds);
+      return profiles.filter((profile) => profile?.gameplay?.runLocked === true);
+    }
+    if (typeof this.nftMetadataService.playerMiners === 'function') {
+      const profiles = await this.nftMetadataService.playerMiners(normalizedAddress, { limit: 1_000 });
+      return profiles.filter((profile) => profile?.gameplay?.runLocked === true);
+    }
+    const profile = await this.nftMetadataService.playerMiner?.(normalizedAddress);
+    return profile?.gameplay?.runLocked === true ? [profile] : [];
+  }
+
+  async releaseNftMinerRun(address, minerIdInput) {
+    const normalizedAddress = normalizeAddress(address);
+    const minerId = Number(minerIdInput);
+    assertApi(
+      Number.isSafeInteger(minerId) && minerId >= 1 && minerId <= 1_000,
+      422,
+      'nft_miner_id_invalid',
+      'Choose a valid Miner number.'
+    );
+    const readOwnedMiner = async () => {
+      if (typeof this.nftMetadataService?.playerMinerById === 'function') {
+        return this.nftMetadataService.playerMinerById(normalizedAddress, minerId);
+      }
+      assertApi(this.nftGameplayService?.playerMiner, 503, 'nft_gameplay_disabled', 'NFT gameplay is not enabled.');
+      return this.nftGameplayService.playerMiner(normalizedAddress, minerId);
+    };
+    const before = await readOwnedMiner();
+    assertApi(before, 403, 'miner_nft_required', 'A Miner NFT owned by this wallet is required.');
+    if (before.gameplay?.runLocked !== true) {
+      return {
+        released: false,
+        alreadyUnlocked: true,
+        minerId,
+        settlementRoute: '',
+        transactionHash: null,
+        profile: before,
+        attempts: []
+      };
+    }
+
+    const routes = [
+      ['standard', this.nftGameplayService],
+      ['endless', this.endlessRewardSettler]
+    ];
+    const attempts = [];
+    let cancellation = null;
+    let settlementRoute = '';
+    for (const [route, service] of routes) {
+      if (typeof service?.cancelRun !== 'function') continue;
+      try {
+        const result = await service.cancelRun({ address: normalizedAddress, minerId });
+        attempts.push({ route, cancelled: result?.cancelled === true });
+        if (result?.cancelled === true) {
+          cancellation = result;
+          settlementRoute = route;
+          break;
+        }
+      } catch (error) {
+        attempts.push({
+          route,
+          cancelled: false,
+          code: String(error?.code || 'release_failed').slice(0, 100),
+          message: String(error?.message || 'Run release failed.').slice(0, 300)
+        });
+      }
+    }
+
+    const profile = await readOwnedMiner();
+    if (profile?.gameplay?.runLocked === true) {
+      throw new ApiError(
+        503,
+        'nft_run_release_failed',
+        `Miner #${minerId} is still locked on Ronin. The release can be retried without the missing server run.`,
+        { minerId, retryable: true, attempts }
+      );
+    }
+    return {
+      released: true,
+      alreadyUnlocked: false,
+      minerId,
+      settlementRoute,
+      transactionHash: cancellation?.transactionHash || null,
+      profile,
+      attempts
+    };
+  }
+
   async withAdministrativeNftLifecycleMutation(operation) {
     const execute = () => operation((runs, context, reason) =>
       this.#cancelAdministrativeNftRuns(runs, context, reason)
@@ -248,14 +344,20 @@ export class MattMineService {
     const selected = new Set(runIds);
     return this.database.transact(async (state, transaction) => {
       const reserved = [];
-      for (const run of Object.values(state.runs || {})) {
+      for (const run of allServerRuns(state)) {
         if (!isAdministrativelyLiveRun(run) || !selected.has(run.id)) continue;
         run.adminTerminationPending = {
           id: terminationId,
           requestedAt: timestamp,
           context: String(context || '').slice(0, 500)
         };
-        await transaction?.upsertRun(run);
+        state.runs[run.id] = run;
+        if (run.mode === 'endless') {
+          state.endlessCompetition.runs[run.id] = run;
+          await transaction?.upsertEndlessRun?.(run);
+        } else {
+          await transaction?.upsertRun(run);
+        }
         reserved.push(structuredClone(run));
       }
       return reserved;
@@ -284,7 +386,8 @@ export class MattMineService {
       return;
     }
     await this.database.transact(async (state, transaction) => {
-      const run = state.runs?.[candidate.localRunId];
+      const run = state.endlessCompetition?.runs?.[candidate.localRunId] ||
+        state.runs?.[candidate.localRunId];
       assertApi(run, 404, 'run_not_found', 'The reserved server run was not found.');
       assertApi(isAdministrativelyLiveRun(run), 409, 'run_not_active', 'The reserved server run is no longer active.');
       assertApi(
@@ -303,18 +406,12 @@ export class MattMineService {
         run.pendingRevive.cancelledAt = timestamp;
       }
       delete run.adminTerminationPending;
-      await transaction?.upsertRun(run);
       if (run.mode === 'endless') {
-        const endlessRun = state.endlessCompetition?.runs?.[run.id];
-        if (endlessRun && endlessRun !== run) {
-          endlessRun.status = run.status;
-          endlessRun.expiresAt = run.expiresAt;
-          endlessRun.finishedAt = run.finishedAt;
-          endlessRun.adminTerminatedAt = run.adminTerminatedAt;
-          endlessRun.adminTerminationReason = run.adminTerminationReason;
-          delete endlessRun.adminTerminationPending;
-          await transaction?.upsertEndlessRun?.(endlessRun);
-        }
+        state.endlessCompetition.runs[run.id] = run;
+        state.runs[run.id] = run;
+        await transaction?.upsertEndlessRun?.(run);
+      } else {
+        await transaction?.upsertRun(run);
       }
       addAudit(
         state,
@@ -331,10 +428,16 @@ export class MattMineService {
     const arenaIds = candidates.filter(({ kind }) => kind === 'arena').map(({ localRunId }) => localRunId);
     if (serverIds.size) {
       await this.database.transact(async (state, transaction) => {
-        for (const run of Object.values(state.runs || {})) {
+        for (const run of allServerRuns(state)) {
           if (!isAdministrativelyLiveRun(run) || !serverIds.has(run.id)) continue;
           delete run.adminTerminationPending;
-          await transaction?.upsertRun(run);
+          state.runs[run.id] = run;
+          if (run.mode === 'endless') {
+            state.endlessCompetition.runs[run.id] = run;
+            await transaction?.upsertEndlessRun?.(run);
+          } else {
+            await transaction?.upsertRun(run);
+          }
         }
       });
     }
@@ -1756,7 +1859,7 @@ export class MattMineService {
     const wallet = requireWallet(state, normalizedAddress);
     return {
       wallet: adminWalletSnapshot(state, wallet, this.now()),
-      runs: Object.values(state.runs)
+      runs: allServerRuns(state)
         .filter((run) => run.address === normalizedAddress)
         .sort((left, right) => right.startedAt - left.startedAt)
         .slice(0, 100)
@@ -1988,7 +2091,7 @@ export class MattMineService {
             })
           : Promise.resolve([])
       ]);
-      const serverActiveRuns = Object.values(serverSnapshot.runs || {}).filter((run) =>
+      const serverActiveRuns = allServerRuns(serverSnapshot).filter((run) =>
         mineForRunMode(run.mode) === normalizedMine && isAdministrativelyLiveRun(run)
       );
       const result = await cancelRuns(
@@ -2041,14 +2144,26 @@ export class MattMineService {
               })
             : Promise.resolve([])
         ]);
-        const serverActiveRuns = Object.values(serverSnapshot?.runs || {}).filter((run) =>
+        const serverActiveRuns = allServerRuns(serverSnapshot).filter((run) =>
           run.address === normalizedAddress && isAdministrativelyLiveRun(run)
         );
-        return cancelRuns(
+        const result = await cancelRuns(
           [...serverActiveRuns, ...(arenaActiveRuns || [])],
           'wallet active-run termination',
           normalizedReason
         );
+        const lockedProfiles = await this.lockedMinerProfiles(normalizedAddress);
+        const orphanReleases = [];
+        for (const profile of lockedProfiles) {
+          const release = await this.releaseNftMinerRun(normalizedAddress, profile.minerId);
+          if (release.released) orphanReleases.push(release);
+        }
+        return {
+          ...result,
+          affected: result.affected + orphanReleases.length,
+          orphanMinerIds: orphanReleases.map(({ minerId }) => minerId),
+          cancellations: [...result.cancellations, ...orphanReleases]
+        };
       });
     }
     const result = await this.database.transact((state) => {
@@ -2070,7 +2185,14 @@ export class MattMineService {
         }
       }
       addAudit(state, 'SERVER_ADMIN', `WALLET_${normalizedAction.toUpperCase()}`, `${normalizedAddress}: ${normalizedReason}; affected ${affected}`, timestamp);
-      return { address: normalizedAddress, action: normalizedAction, affected, runIds, reason: normalizedReason };
+      return {
+        address: normalizedAddress,
+        action: normalizedAction,
+        affected,
+        runIds,
+        orphanMinerIds: normalizedAction === 'expire_active_runs' ? [...(termination.orphanMinerIds || [])] : [],
+        reason: normalizedReason
+      };
     });
     for (const runId of result.runIds) {
       await this.competitiveReplayValidator?.finalize?.(runId, 'admin_terminated').catch(() => undefined);
@@ -3100,10 +3222,14 @@ function finalizationLeaderboardFallback(completed) {
 }
 
 function publicAdminRun(run) {
+  const nftRun = run?.nftRun || run?.nftSettlement || run?.tuning?._nftRun || run?.pendingNftRun;
   return {
     ...publicRun(run),
     expiresAt: run.expiresAt,
-    address: run.address
+    address: run.address,
+    minerId: Number(run.minerId || nftRun?.minerId || 0),
+    chainRunId: String(run.chainRun?.runId || nftRun?.runId || ''),
+    finishReason: String(run.finishReason || '')
   };
 }
 
@@ -3134,7 +3260,7 @@ function adminRunSearchAddresses(state, query) {
   const addresses = new Set();
   const minerId = adminMinerSearchId(query);
   if (!minerId && !adminRunSearchQuery(query)) return addresses;
-  for (const run of Object.values(state.runs || {})) {
+  for (const run of allServerRuns(state)) {
     if (adminRunMatchesQuery(run, query, minerId)) {
       addresses.add(String(run.address || '').toLowerCase());
     }
@@ -3146,7 +3272,7 @@ function adminWalletSnapshot(state, wallet, timestamp) {
   const sessions = Object.values(state.sessions).filter((session) =>
     session.address === wallet.address && session.expiresAt > timestamp
   );
-  const runs = Object.values(state.runs).filter((run) => run.address === wallet.address);
+  const runs = allServerRuns(state).filter((run) => run.address === wallet.address);
   const entitlements = Object.values(state.paidEntitlements).filter((entry) => entry.address === wallet.address);
   const today = wallet.daily[utcDayKey(timestamp)] || { freeRunUsed: false };
   return {
@@ -3158,7 +3284,7 @@ function adminWalletSnapshot(state, wallet, timestamp) {
     passInventory: publicPassInventory(wallet),
     freeRunUsedToday: today.freeRunUsed === true,
     activeSessions: sessions.length,
-    activeRuns: runs.filter((run) => run.status === 'active' && run.expiresAt > timestamp).length,
+    activeRuns: runs.filter((run) => isAdministrativelyLiveRun(run)).length,
     finishedRuns: runs.filter((run) => run.status === 'finished').length,
     unusedPaidCredits: entitlements.filter((entry) => !entry.consumedAt && !entry.usedRunId).length,
     createdAt: wallet.createdAt,
@@ -3313,8 +3439,16 @@ function normalizePendingNftRun(value, mode, timestamp) {
   };
 }
 
+function allServerRuns(state) {
+  const runs = new Map(Object.values(state?.runs || {}).map((run) => [run.id, run]));
+  for (const run of Object.values(state?.endlessCompetition?.runs || {})) {
+    runs.set(run.id, run);
+  }
+  return [...runs.values()];
+}
+
 function isAdministrativelyLiveRun(run) {
-  return run?.status === 'active' || run?.status === 'awaiting-revive';
+  return ['active', 'awaiting-revive', 'settlement_pending'].includes(run?.status);
 }
 
 function administrativeTerminationCandidate(kind, run) {

@@ -1569,6 +1569,11 @@ async function openMinerSelect() {
     const connected = await connectWallet();
     if (!connected) return;
   }
+  if (selectedNftMinerId) {
+    try {
+      cacheOwnedMiner(await apiClient.ownedMiner(selectedNftMinerId));
+    } catch {}
+  }
   const miners = ownedNftMiners();
   if (!miners.some((miner) => miner.minerId === selectedNftMinerId)) {
     rememberSelectedMiner(miners[0]?.minerId || 0);
@@ -1835,8 +1840,12 @@ async function recoverLockedMinerRun(minerId) {
     if (recovery.profile) cacheOwnedMiner(recovery.profile);
     else cacheOwnedMiner(await apiClient.ownedMiner(minerId));
     renderMinerSelect();
-    setMinerNumberStatus(`Miner #${minerId}'s prior run was forfeited. The Miner is unlocked and ready.`, 'success');
-    toast(`Miner #${minerId} run forfeited and unlocked`);
+    const staleServerRunCleared = recovery.alreadyUnlocked === true && recovery.reconciledRunIds?.length > 0;
+    const message = staleServerRunCleared
+      ? `Miner #${minerId}'s stale server run was cleared. The Miner is ready.`
+      : `Miner #${minerId}'s prior run was forfeited. The Miner is unlocked and ready.`;
+    setMinerNumberStatus(message, 'success');
+    toast(staleServerRunCleared ? `Miner #${minerId} stale run cleared` : `Miner #${minerId} run forfeited and unlocked`);
   } catch (error) {
     toast(error?.message || `Miner #${minerId} could not be unlocked.`);
   } finally {
