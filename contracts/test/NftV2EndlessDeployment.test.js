@@ -9,6 +9,7 @@ import {
 } from "../scripts/lib/nft-v2-endless-mainnet.js";
 
 const examplePath = resolve("config", "ronin-nft-v2-endless.example.json");
+const preflightPath = resolve("scripts", "check-nft-v2-endless-deployer.js");
 const example = () => JSON.parse(readFileSync(examplePath, "utf8"));
 
 describe("NFT V2 Endless deployment configuration", () => {
@@ -53,5 +54,13 @@ describe("NFT V2 Endless deployment configuration", () => {
     const badDaily = example();
     badDaily.versions["endless-conservative-v1"].maximumDailyPayoutWei = "1";
     assert.throws(() => normalizeEndlessMainnetConfig(badDaily, examplePath), /daily payout cannot be lower/i);
+  });
+
+  it("uses the supported Hardhat 3 runtime surfaces in the read-only preflight", () => {
+    const source = readFileSync(preflightPath, "utf8");
+    assert.match(source, /import \{ getAddress, getCreateAddress, parseEther \} from "ethers"/);
+    assert.match(source, /import hre, \{ network \} from "hardhat"/);
+    assert.match(source, /hre\.artifacts\.readArtifact\("MattV2EndlessSettlement"\)/);
+    assert.doesNotMatch(source, /ethers\.artifacts/);
   });
 });

@@ -1,5 +1,5 @@
 import { getAddress, getCreateAddress, parseEther } from "ethers";
-import { network } from "hardhat";
+import hre, { network } from "hardhat";
 import {
   ENDLESS_MAINNET_CHAIN_ID,
   loadActivatedNftV2Base,
@@ -31,7 +31,7 @@ for (const [artifact, address] of [
   if (getAddress(await contract.defaultAdmin()) !== config.roles.rootAdmin) throw new Error(`${artifact} Root admin mismatch.`);
 }
 
-const artifact = await ethers.artifacts.readArtifact("MattV2EndlessSettlement");
+const artifact = await hre.artifacts.readArtifact("MattV2EndlessSettlement");
 const runtimeBytes = (artifact.deployedBytecode.length - 2) / 2;
 if (runtimeBytes > 24_576) throw new Error(`Endless runtime is ${runtimeBytes} bytes and cannot deploy on Ronin.`);
 const implementation = getCreateAddress({ from: deployerAddress, nonce: BigInt(pending) });
