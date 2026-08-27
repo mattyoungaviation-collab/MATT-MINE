@@ -413,6 +413,7 @@ test('claim preparation simulates the exact proof on Ronin before opening the wa
   const player = plan.entries[0];
   let simulation = null;
   const chain = new RoninRewardChain({
+    now: () => NOW,
     client: {
       async readContract(request) {
         if (request.functionName === 'getEpoch') {

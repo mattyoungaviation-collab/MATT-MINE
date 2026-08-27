@@ -1802,7 +1802,7 @@ async function resumeInterruptedNftPractice() {
 async function recoverLockedMinerRun(minerId) {
   if (lockedMinerRecoveryBusy || !minerId) return;
   const approved = window.confirm(
-    `Forfeit Miner #${minerId}'s locked run? This does not resume the run. The contract will record a death with no XP or Crystals. Any active Backpack will be burned and equipped Armor will be damaged.`
+    `Forfeit Miner #${minerId}'s locked run? This does not resume the run. The correct on-chain game contract will record a death at its last verified checkpoint. Published death-retention rules apply; any active Backpack will be burned and equipped Armor will be damaged.`
   );
   if (!approved) return;
   lockedMinerRecoveryBusy = true;

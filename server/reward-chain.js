@@ -132,6 +132,7 @@ export class RoninRewardChain {
       chain: ronin,
       transport: http(options.rpcUrl || 'https://api.roninchain.com/rpc')
     });
+    this.now = typeof options.now === 'function' ? options.now : Date.now;
   }
 
   publicConfig() {
@@ -343,7 +344,7 @@ export class RoninRewardChain {
     assertApi(!status.paused, 503, 'reward_claims_paused', 'MATT reward claims are currently paused.');
     assertApi(!status.closed, 410, 'reward_epoch_closed', 'This reward epoch is closed.');
     assertApi(!status.claimed, 409, 'reward_already_claimed', 'This wallet already claimed this reward.');
-    assertApi(status.claimDeadline >= Math.floor(Date.now() / 1000), 410, 'reward_claim_expired', 'This reward claim expired.');
+    assertApi(status.claimDeadline >= Math.floor(this.now() / 1000), 410, 'reward_claim_expired', 'This reward claim expired.');
     try {
       await this.client.simulateContract({
         account: getAddress(playerAddress),

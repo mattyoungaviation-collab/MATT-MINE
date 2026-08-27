@@ -81,6 +81,7 @@ export class MattMineService {
     this.arenaService = options.arenaService || null;
     this.nftMetadataService = options.nftMetadataService || null;
     this.nftGameplayService = options.nftGameplayService || null;
+    this.endlessRewardSettler = options.endlessRewardSettler || null;
     this.arenaLeaderboardRequests = new Map();
     this.mainnetTransactionsEnabled =
       options.mainnetTransactionsEnabled === true && Boolean(this.paymentVerifier);
@@ -187,8 +188,11 @@ export class MattMineService {
       const candidate = candidates[index];
       try {
         if (candidate.minerId > 0) {
+          const settlementService = candidate.settlement === 'endless'
+            ? this.endlessRewardSettler
+            : this.nftGameplayService;
           assertApi(
-            this.nftGameplayService,
+            settlementService,
             503,
             'admin_nft_gameplay_unavailable',
             'The NFT settlement operator is unavailable, so the server did not end the run. Restore it and try again.'
@@ -199,7 +203,7 @@ export class MattMineService {
             'admin_nft_run_owner_invalid',
             `Miner #${candidate.minerId} has no valid owner in the reserved run record.`
           );
-          const cancellation = await this.nftGameplayService.cancelRun({
+          const cancellation = await settlementService.cancelRun({
             address: candidate.address,
             minerId: candidate.minerId,
             runId: candidate.chainRunId
@@ -300,6 +304,18 @@ export class MattMineService {
       }
       delete run.adminTerminationPending;
       await transaction?.upsertRun(run);
+      if (run.mode === 'endless') {
+        const endlessRun = state.endlessCompetition?.runs?.[run.id];
+        if (endlessRun && endlessRun !== run) {
+          endlessRun.status = run.status;
+          endlessRun.expiresAt = run.expiresAt;
+          endlessRun.finishedAt = run.finishedAt;
+          endlessRun.adminTerminatedAt = run.adminTerminatedAt;
+          endlessRun.adminTerminationReason = run.adminTerminationReason;
+          delete endlessRun.adminTerminationPending;
+          await transaction?.upsertEndlessRun?.(endlessRun);
+        }
+      }
       addAudit(
         state,
         'SERVER_ADMIN',
@@ -3302,7 +3318,10 @@ function isAdministrativelyLiveRun(run) {
 }
 
 function administrativeTerminationCandidate(kind, run) {
-  const nftRun = run?.nftRun || run?.tuning?._nftRun || run?.pendingNftRun || null;
+  const endlessRun = run?.mode === 'endless' && run?.chainRun
+    ? { minerId: run.minerId, runId: run.chainRun.runId }
+    : null;
+  const nftRun = run?.nftRun || run?.tuning?._nftRun || run?.pendingNftRun || endlessRun;
   const minerId = Number(nftRun?.minerId || 0);
   const rawChainRunId = String(nftRun?.runId || '').toLowerCase();
   const chainRunId = /^0x[a-f0-9]{64}$/.test(rawChainRunId) ? rawChainRunId : '';
@@ -3312,7 +3331,8 @@ function administrativeTerminationCandidate(kind, run) {
     address: String(run?.address || nftRun?.profile?.owner || '').toLowerCase(),
     minerId: Number.isSafeInteger(minerId) && minerId > 0 ? minerId : 0,
     chainRunId,
-    pending: Number.isSafeInteger(minerId) && minerId > 0 && !chainRunId
+    pending: Number.isSafeInteger(minerId) && minerId > 0 && !chainRunId,
+    settlement: endlessRun ? 'endless' : 'standard'
   };
 }
 

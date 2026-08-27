@@ -78,6 +78,8 @@ test('the Miner selector exposes an explicit on-chain orphan forfeit action', as
 
   assert.match(source, /FORFEIT LOCKED RUN/);
   assert.match(source, /This does not resume the run/);
+  assert.match(source, /correct on-chain game contract/);
+  assert.match(source, /last verified checkpoint/);
   assert.match(source, /recoverLockedMinerRun\(selectedNftMinerId\)/);
   assert.match(apiSource, /\/api\/nft\/v2\/runs\/recover/);
   assert.match(httpSource, /service\.recoverLockedMinerRun\(bearerToken\(request\), body\)/);

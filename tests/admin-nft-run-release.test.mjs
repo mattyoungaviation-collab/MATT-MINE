@@ -22,7 +22,7 @@ function nextTurn() {
   return new Promise((resolve) => setImmediate(resolve));
 }
 
-function harness(cancelRun) {
+function harness(cancelRun, endlessCancelRun = null) {
   let counter = 0;
   const database = new MemoryDatabase();
   const service = new AdminMattMineService(database, {
@@ -31,6 +31,7 @@ function harness(cancelRun) {
     adminKey: 'admin-secret',
     chainId: RONIN_CHAINS.MAINNET,
     nftGameplayService: { cancelRun },
+    endlessRewardSettler: endlessCancelRun ? { cancelRun: endlessCancelRun } : null,
     randomHex(bytes) {
       counter += 1;
       return counter.toString(16).padStart(bytes * 2, '0').slice(-bytes * 2);
@@ -85,6 +86,56 @@ test('wallet run termination releases the Miner on-chain before expiring the ser
   }]);
   assert.equal(result.affected, 1);
   assert.equal((await database.read()).runs[started.runId].status, 'expired');
+});
+
+test('wallet run termination routes an Endless Miner through the Endless settlement', async () => {
+  const standardCalls = [];
+  const endlessCalls = [];
+  const { database, service } = harness(
+    async (input) => {
+      standardCalls.push(input);
+      return { cancelled: false, minerId: input.minerId };
+    },
+    async (input) => {
+      endlessCalls.push(input);
+      return { cancelled: true, minerId: input.minerId, transactionHash: `0x${'7'.repeat(64)}` };
+    }
+  );
+  const session = await signIn(service);
+  const runId = `run_${'f'.repeat(24)}`;
+  const chainRunId = `0x${'6'.repeat(64)}`;
+  await database.transact((state) => {
+    const run = {
+      id: runId,
+      address: session.address,
+      mode: 'endless',
+      status: 'active',
+      minerId: 1000,
+      chainRun: { runId: chainRunId },
+      startedAt: START,
+      expiresAt: START + 60_000
+    };
+    state.runs[runId] = structuredClone(run);
+    state.endlessCompetition.runs[runId] = structuredClone(run);
+  });
+
+  const result = await service.adminWalletAction(
+    'admin-secret',
+    session.address,
+    'expire_active_runs',
+    'Recover stuck Endless Miner'
+  );
+
+  const state = await database.read();
+  assert.equal(result.affected, 1);
+  assert.deepEqual(standardCalls, []);
+  assert.deepEqual(endlessCalls, [{
+    address: session.address,
+    minerId: 1000,
+    runId: chainRunId
+  }]);
+  assert.equal(state.runs[runId].status, 'expired');
+  assert.equal(state.endlessCompetition.runs[runId].status, 'expired');
 });
 
 test('wallet run termination also releases a Miner waiting on a paid revive', async () => {

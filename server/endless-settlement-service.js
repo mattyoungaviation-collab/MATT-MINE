@@ -316,12 +316,39 @@ export class EndlessSettlementService {
         nonce: BigInt(active.nonce),
         deadline: BigInt(Math.floor(Date.now() / 1_000) + 10 * 60)
       };
-      const rewardSignature = await this.signerAccount.signTypedData({ domain: this.#domain(), types: RESULT_TYPES, primaryType: 'EndlessResult', message: result });
-      const transactionHash = await this.operatorClient.writeContract({ address: this.settlementAddress, abi: ENDLESS_ABI, functionName: 'settle', args: [result, rewardSignature] });
-      await this.#confirmed(transactionHash, 'Endless settlement');
-      const event = await this.#settledEvent(active.runId);
-      assertApi(event, 502, 'endless_chain_settlement_event_missing', 'The confirmed Endless settlement event was not found.');
-      return this.#settlementReceipt(event, transactionHash, false);
+      return this.#submitSettlement(active, result, 'Endless settlement');
+    });
+  }
+
+  async cancelRun({ address, minerId }) {
+    return this.#serialize(async () => {
+      const active = await this.#activeRun(minerId);
+      if (active.runId === ZERO_BYTES32) return { cancelled: false, minerId };
+      assertApi(
+        isAddressEqual(active.player, getAddress(address)),
+        409,
+        'endless_chain_player_mismatch',
+        'The active Endless chain run belongs to another wallet.'
+      );
+      const result = {
+        player: active.player,
+        minerId: BigInt(minerId),
+        runId: active.runId,
+        versionId: active.versionId,
+        checkpointDigest: active.checkpointDigest,
+        outcome: 1,
+        completedPhases: boundedUint32(active.completedPhases, 'completed phases'),
+        minedCrystalUnits: boundedUint32(active.minedCrystalUnits, 'mined Crystal units'),
+        nonce: BigInt(active.nonce),
+        deadline: BigInt(Math.floor(Date.now() / 1_000) + 10 * 60)
+      };
+      const settlement = await this.#submitSettlement(active, result, 'Endless run cancellation');
+      return {
+        cancelled: true,
+        minerId,
+        transactionHash: settlement.transactionHash,
+        settlement
+      };
     });
   }
 
@@ -364,6 +391,15 @@ export class EndlessSettlementService {
     if (!runId) return null;
     const logs = await this.publicClient.getLogs({ address: this.settlementAddress, event: SETTLED_EVENT, args: { runId: bytes32(runId, 'Endless chain run ID') }, fromBlock: this.deploymentBlock, toBlock: 'latest' });
     return logs.at(-1) || null;
+  }
+
+  async #submitSettlement(active, result, label) {
+    const rewardSignature = await this.signerAccount.signTypedData({ domain: this.#domain(), types: RESULT_TYPES, primaryType: 'EndlessResult', message: result });
+    const transactionHash = await this.operatorClient.writeContract({ address: this.settlementAddress, abi: ENDLESS_ABI, functionName: 'settle', args: [result, rewardSignature] });
+    await this.#confirmed(transactionHash, label);
+    const event = await this.#settledEvent(active.runId);
+    assertApi(event, 502, 'endless_chain_settlement_event_missing', 'The confirmed Endless settlement event was not found.');
+    return this.#settlementReceipt(event, transactionHash, false);
   }
 
   #settlementReceipt(event, transactionHash, recovered) {

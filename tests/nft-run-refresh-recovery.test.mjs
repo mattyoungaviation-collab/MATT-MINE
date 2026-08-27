@@ -30,10 +30,13 @@ function minerProfile(runLocked = false, minerId = 1) {
   };
 }
 
-function createHarness({ ownsMiner = true, initialLocked = false } = {}) {
+function createHarness({ ownsMiner = true, initialLocked = false, lockContract = 'standard' } = {}) {
   let randomCounter = 0;
-  let locked = initialLocked;
+  let standardLocked = initialLocked && lockContract === 'standard';
+  let endlessLocked = initialLocked && lockContract === 'endless';
+  let unknownLocked = initialLocked && lockContract === 'unknown';
   const cancellations = [];
+  const endlessCancellations = [];
   const finalized = [];
   const database = new MemoryDatabase();
   const nftGameplayService = {
@@ -56,10 +59,10 @@ function createHarness({ ownsMiner = true, initialLocked = false } = {}) {
     },
     async playerMiner(_address, requestedMinerId = 0) {
       if (!ownsMiner) return null;
-      return minerProfile(locked, requestedMinerId || 1);
+      return minerProfile(standardLocked || endlessLocked || unknownLocked, requestedMinerId || 1);
     },
     async beginRun({ serverRunId }) {
-      locked = true;
+      standardLocked = true;
       return {
         minerId: 1,
         profile: minerProfile(true),
@@ -70,8 +73,16 @@ function createHarness({ ownsMiner = true, initialLocked = false } = {}) {
     },
     async cancelRun({ minerId }) {
       cancellations.push(minerId);
-      const cancelled = locked;
-      locked = false;
+      const cancelled = standardLocked;
+      standardLocked = false;
+      return { cancelled, minerId };
+    }
+  };
+  const endlessRewardSettler = {
+    async cancelRun({ minerId }) {
+      endlessCancellations.push(minerId);
+      const cancelled = endlessLocked;
+      endlessLocked = false;
       return { cancelled, minerId };
     }
   };
@@ -90,13 +101,21 @@ function createHarness({ ownsMiner = true, initialLocked = false } = {}) {
     publicOrigin: ORIGIN,
     adminKey: 'test-admin-key',
     nftGameplayService,
+    endlessRewardSettler,
     competitiveReplayValidator,
     randomHex(bytes) {
       randomCounter += 1;
       return randomCounter.toString(16).padStart(bytes * 2, '0').slice(-bytes * 2);
     }
   });
-  return { database, service, cancellations, finalized };
+  return {
+    database,
+    service,
+    cancellations,
+    endlessCancellations,
+    finalized,
+    unlockStandard() { standardLocked = false; }
+  };
 }
 
 async function signIn(service) {
@@ -155,6 +174,52 @@ test('an owned Miner with an orphaned on-chain run can be explicitly unlocked', 
   assert.deepEqual(harness.cancellations, [1]);
   const state = await harness.database.read();
   assert.equal(state.audit.at(-1).action, 'NFT_V2_ORPHAN_RUN_RECOVERED');
+});
+
+test('a progressed Endless Miner stays recoverable after Admin already ended its server run', async () => {
+  const harness = createHarness({ initialLocked: true, lockContract: 'endless' });
+  const session = await signIn(harness.service);
+  const runId = `run_${'6'.repeat(24)}`;
+  await harness.database.transact((state) => {
+    const run = {
+      id: runId,
+      address: session.address,
+      mode: 'endless',
+      status: 'expired',
+      minerId: 1,
+      chainRun: { runId: `0x${'7'.repeat(64)}` },
+      startedAt: START - 60_000,
+      expiresAt: START,
+      finishedAt: START,
+      result: null
+    };
+    state.runs[runId] = structuredClone(run);
+    state.endlessCompetition.runs[runId] = structuredClone(run);
+  });
+
+  const result = await harness.service.recoverLockedMinerRun(session.token, { minerId: 1 });
+
+  assert.equal(result.recovered, true);
+  assert.equal(result.settlementRoute, 'endless');
+  assert.equal(result.profile.gameplay.runLocked, false);
+  assert.deepEqual(result.reconciledRunIds, [runId]);
+  assert.deepEqual(harness.cancellations, [1]);
+  assert.deepEqual(harness.endlessCancellations, [1]);
+  assert.equal((await harness.database.read()).runs[runId].status, 'expired');
+});
+
+test('locked-run recovery never reports success while Ronin still reports the Miner locked', async () => {
+  const harness = createHarness({ initialLocked: true, lockContract: 'unknown' });
+  const session = await signIn(harness.service);
+
+  await assert.rejects(
+    () => harness.service.recoverLockedMinerRun(session.token, { minerId: 1 }),
+    (error) => error.code === 'nft_run_recovery_incomplete'
+  );
+
+  assert.deepEqual(harness.cancellations, [1]);
+  assert.deepEqual(harness.endlessCancellations, [1]);
+  assert.equal((await harness.database.read()).audit.some((entry) => entry.action === 'NFT_V2_ORPHAN_RUN_RECOVERED'), false);
 });
 
 test('orphan recovery rejects a Miner that the signed-in wallet does not own', async () => {
@@ -344,6 +409,7 @@ test('orphan recovery refuses to clear a reservation that changed during cancell
     };
   });
   harness.service.nftGameplayService.cancelRun = async () => {
+    harness.unlockStandard();
     await harness.database.transact((state) => {
       state.runs[runId].nftRun.runId = `0x${'5'.repeat(64)}`;
     });

@@ -193,6 +193,41 @@ test('Endless chain adapter releases a failed start through signed zero-phase se
   assert.equal(activeRun().runId, ZERO);
 });
 
+test('Endless chain adapter death-settles a progressed orphan from live chain state', async () => {
+  const { service, activeRun } = harness();
+  await service.init();
+  const prepared = await service.prepareRunAuthorization({
+    address: PLAYER,
+    minerId: 7,
+    economyVersion: 'endless-conservative-v1',
+    economyConfig: ECONOMY
+  });
+  const started = await service.beginRun({
+    address: PLAYER,
+    minerId: 7,
+    economyVersion: 'endless-conservative-v1',
+    economyConfig: ECONOMY,
+    authorization: prepared.authorization,
+    playerSignature: `0x${'12'.repeat(65)}`
+  });
+  await service.checkpoint({
+    address: PLAYER,
+    minerId: 7,
+    chainRun: started.chainRun,
+    completedPhases: 1,
+    minedCrystalUnits: 3,
+    rollingDigest: 'ab'.repeat(32)
+  });
+
+  const cancelled = await service.cancelRun({ address: PLAYER, minerId: 7 });
+
+  assert.equal(cancelled.cancelled, true);
+  assert.equal(cancelled.settlement.completedPhases, 1);
+  assert.equal(cancelled.settlement.minedCrystalUnits, 3);
+  assert.notEqual(cancelled.transactionHash, '');
+  assert.equal(activeRun().runId, ZERO);
+});
+
 test('Endless chain adapter fails closed when Admin economy values do not match the mapped version', async () => {
   const { service } = harness();
   await service.init();
