@@ -102,6 +102,11 @@ export class PostgresCompetitiveReplayStore {
       );
       CREATE INDEX IF NOT EXISTS competitive_runs_address_status
         ON matt_mine_competitive.runs(address,status);
+      CREATE INDEX IF NOT EXISTS competitive_runs_mode_status_expiry
+        ON matt_mine_competitive.runs(mode,status,expires_at_ms);
+      CREATE INDEX IF NOT EXISTS competitive_endless_parent_status
+        ON matt_mine_competitive.runs((run_snapshot->>'parentRunId'),status)
+        WHERE mode='endless-phase';
       CREATE TABLE IF NOT EXISTS matt_mine_competitive.events (
         run_id TEXT NOT NULL REFERENCES matt_mine_competitive.runs(run_id) ON DELETE CASCADE,
         seq INTEGER NOT NULL,
@@ -111,6 +116,10 @@ export class PostgresCompetitiveReplayStore {
         received_at_ms BIGINT NOT NULL,
         PRIMARY KEY(run_id,seq)
       );
+      CREATE INDEX IF NOT EXISTS competitive_events_run_tick
+        ON matt_mine_competitive.events(run_id,tick);
+      CREATE INDEX IF NOT EXISTS competitive_events_received
+        ON matt_mine_competitive.events(received_at_ms);
     `);
     await this.pool.query(`
       ALTER TABLE matt_mine_competitive.runs ADD COLUMN IF NOT EXISTS run_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb;

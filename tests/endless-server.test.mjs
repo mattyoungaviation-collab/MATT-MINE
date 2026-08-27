@@ -98,7 +98,7 @@ test('bank closes a run and bounded history keeps only recent phase audit data',
   const next = applyEndlessPhaseCheckpoint(active, verification, 'bank', 40_000);
   assert.equal(next, null);
   assert.equal(active.status, 'banked');
-  assert.equal(active.phaseHistory.length, 500);
+  assert.equal(active.phaseHistory.length, 25);
   assert.equal(active.phaseHistory.at(-1).phase, 1);
 });
 

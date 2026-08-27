@@ -12,6 +12,16 @@ import {
   runNormalizedMigrations,
   validateNormalizedState
 } from './normalized-persistence.js';
+import {
+  backfillEndlessState,
+  backfillEndlessStateOnce,
+  persistEndlessCheckpoint,
+  persistEndlessConfig,
+  persistEndlessLeaderboardEntry,
+  persistEndlessPayment,
+  persistEndlessRun,
+  validateEndlessState
+} from './endless-persistence.js';
 
 const { Pool } = pg;
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -204,7 +214,9 @@ export class PostgresDatabase {
       const selected = await client.query('SELECT data FROM matt_mine_state WHERE id = 1 FOR UPDATE');
       const rawState = parseJsonValue(selected.rows[0]?.data);
       const state = normalizeServerState(rawState);
-      const transaction = new PostgresLeaderboardTransaction(client);
+      const transaction = new PostgresLeaderboardTransaction(client, {
+        endlessPersistenceEnabled: this.normalizedMigrationsEnabled
+      });
       let stateChanged = rawState?.version !== state.version;
 
       for (const run of Object.values(state.runs)) {
@@ -230,6 +242,9 @@ export class PostgresDatabase {
            WHERE id = 1`,
           [JSON.stringify(state)]
         );
+      }
+      if (this.normalizedMigrationsEnabled) {
+        await backfillEndlessStateOnce(client, state.endlessCompetition);
       }
       // Staged migration: the legacy row remains authoritative. The durable
       // cutover switch controls whether normalized projections are also
@@ -383,7 +398,9 @@ export class PostgresDatabase {
       await client.query('BEGIN');
       const selected = await client.query('SELECT data FROM matt_mine_state WHERE id = 1 FOR UPDATE');
       const draft = normalizeServerState(parseJsonValue(selected.rows[0]?.data));
-      const transaction = new PostgresLeaderboardTransaction(client);
+      const transaction = new PostgresLeaderboardTransaction(client, {
+        endlessPersistenceEnabled: this.normalizedMigrationsEnabled
+      });
       const result = await mutator(draft, transaction);
       await transaction.syncLeaderboardOverrides(draft.leaderboardOverrides);
       const currentWeek = utcWeekKey(this.now());
@@ -444,8 +461,15 @@ export class PostgresDatabase {
       const selected = await client.query('SELECT data FROM matt_mine_state WHERE id=1 FOR SHARE');
       const state = normalizeServerState(parseJsonValue(selected.rows[0]?.data));
       await backfillNormalizedState(client, state, { timestamp: this.now() });
+      await backfillEndlessState(client, state.endlessCompetition);
+      const normalizedValidation = await validateNormalizedState(client, state);
+      const endlessValidation = await validateEndlessState(client, state.endlessCompetition);
       await client.query('COMMIT');
-      return validateNormalizedState(this.pool, state);
+      return {
+        ...normalizedValidation,
+        ok: normalizedValidation.ok && endlessValidation.ok,
+        endless: endlessValidation
+      };
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);
       throw error;
@@ -457,7 +481,11 @@ export class PostgresDatabase {
   async validateNormalized() {
     await this.init();
     const state = await this.read();
-    return validateNormalizedState(this.pool, state);
+    const [normalized, endless] = await Promise.all([
+      validateNormalizedState(this.pool, state),
+      validateEndlessState(this.pool, state.endlessCompetition)
+    ]);
+    return { ...normalized, ok: normalized.ok && endless.ok, endless };
   }
 
   async beginPaymentOperation(operation) {
@@ -653,9 +681,35 @@ export class PostgresDatabase {
 }
 
 class PostgresLeaderboardTransaction {
-  constructor(client) {
+  constructor(client, options = {}) {
     this.client = client;
     this.normalizedLeaderboards = true;
+    this.endlessPersistenceEnabled = options.endlessPersistenceEnabled === true;
+  }
+
+  async upsertEndlessConfig(record, active = false) {
+    if (!this.endlessPersistenceEnabled) return false;
+    return persistEndlessConfig(this.client, record, active);
+  }
+
+  async upsertEndlessRun(run) {
+    if (!this.endlessPersistenceEnabled) return false;
+    return persistEndlessRun(this.client, run);
+  }
+
+  async insertEndlessCheckpoint(run, verification) {
+    if (!this.endlessPersistenceEnabled) return false;
+    return persistEndlessCheckpoint(this.client, run, verification);
+  }
+
+  async upsertEndlessPayment(run, paymentRecord = null) {
+    if (!this.endlessPersistenceEnabled) return false;
+    return persistEndlessPayment(this.client, run, paymentRecord);
+  }
+
+  async upsertEndlessLeaderboard(entry, run = null) {
+    if (!this.endlessPersistenceEnabled) return false;
+    return persistEndlessLeaderboardEntry(this.client, entry, run);
   }
 
   async upsertRun(run) {

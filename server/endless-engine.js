@@ -220,7 +220,10 @@ export function applyEndlessPhaseCheckpoint(run, verification, action, now = Dat
   run.bossKills += verification.bossKills;
   run.oreBroken += verification.oreBroken;
   run.phaseHistory.push({ ...verification, action });
-  if (run.phaseHistory.length > 500) run.phaseHistory = run.phaseHistory.slice(-500);
+  // PostgreSQL stores every verified phase durably. Keep only a small hot tail
+  // in the legacy compatibility row so a deep run never rewrites hours of
+  // checkpoint history on each heartbeat.
+  if (run.phaseHistory.length > 25) run.phaseHistory = run.phaseHistory.slice(-25);
   run.rollingDigest = verification.digest;
   run.checkpointSequence += 1;
   run.updatedAt = now;

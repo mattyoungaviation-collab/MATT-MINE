@@ -208,7 +208,12 @@ export const endlessServiceMethods = {
           };
         }
         state.runs[runId] = record;
-        await transaction?.upsertRun(record);
+        await transaction?.upsertEndlessConfig?.(published, true);
+        await transaction?.upsertEndlessRun?.(record);
+        await transaction?.upsertEndlessPayment?.(
+          record,
+          payment ? store.paymentTransactions[payment.transactionHash] : null
+        );
         return structuredClone(record);
       });
     } catch (error) {
@@ -259,6 +264,7 @@ export const endlessServiceMethods = {
       verification.runId = run.id;
       verification.phaseSeed = run.manifest.seed;
       verification.configVersion = run.configVersion;
+      verification.checkpointSequence = Number(run.checkpointSequence || 0) + 1;
       verification.phaseStartedAt = run.phaseStartedAt;
       verification.phaseCompletedAt = timestamp;
       verification.previousCheckpoint = run.rollingDigest;
@@ -287,7 +293,7 @@ export const endlessServiceMethods = {
         run.chainRun = chainCheckpoint.chainRun;
         if (chainCheckpoint.transactionHash) {
           run.chainTransactions.push({ type: 'checkpoint', phase: run.completedPhases, hash: chainCheckpoint.transactionHash, recordedAt: timestamp });
-          run.chainTransactions = run.chainTransactions.slice(-500);
+          run.chainTransactions = run.chainTransactions.slice(-50);
         }
       }
       run.checkpointSignature = signEndlessCheckpoint(run, this.endlessCheckpointSecret);
@@ -295,9 +301,14 @@ export const endlessServiceMethods = {
         nextInputCheckpoint = await this.competitiveReplayValidator.registerEndlessPhase(run, runToken);
       }
       state.runs[runId] = run;
-      await transaction?.upsertRun(run);
       if (run.status === 'banked') {
         finalizeLeaderboardEntry(state.endlessCompetition, run);
+      }
+      await transaction?.upsertEndlessRun?.(run);
+      await transaction?.insertEndlessCheckpoint?.(run, verification);
+      if (run.status === 'banked') {
+        const leaderboard = state.endlessCompetition.leaderboardEntries.find((entry) => entry.runId === run.id);
+        await transaction?.upsertEndlessLeaderboard?.(leaderboard, run);
       }
       return {
         run: structuredClone(run),
@@ -356,7 +367,7 @@ export const endlessServiceMethods = {
       run.heartbeatCount = Number(run.heartbeatCount || 0) + 1;
       run.expiresAt = timestamp + run.config.integrity.reconnectWindowSeconds * 1_000;
       state.runs[runId] = run;
-      await transaction?.upsertRun(run);
+      await transaction?.upsertEndlessRun?.(run);
       return { acknowledgedAt: timestamp, expiresAt: run.expiresAt, checkpoint: publicEndlessCheckpoint(run) };
     });
   },
@@ -402,7 +413,7 @@ export const endlessServiceMethods = {
       assertApi(this.competitiveReplayValidator?.registerEndlessPhase, 503, 'endless_input_replay_required', 'Authoritative Endless phase replay is unavailable.');
       inputCheckpoint = await this.competitiveReplayValidator.registerEndlessPhase(run, runToken);
       state.runs[runId] = run;
-      await transaction?.upsertRun(run);
+      await transaction?.upsertEndlessRun?.(run);
       return structuredClone(run);
     });
     await this.competitiveReplayValidator?.finalizeEndlessPhase?.(previousReplayIdentity, 'disconnected').catch(() => undefined);
@@ -434,7 +445,10 @@ export const endlessServiceMethods = {
         current.rewardSettlement = current.completedPhases > 0 ? { settled: true, ...structuredClone(receipt), settledAt: timestamp } : null;
         current.crystalsBanked = Math.max(0, Number(receipt.crystalsBanked || 0));
         current.minerXpBanked = Math.max(0, Number(receipt.minerXpBanked || 0));
-        if (receipt.transactionHash) current.chainTransactions.push({ type: current.completedPhases > 0 ? 'death-settlement' : 'start-cancel', hash: receipt.transactionHash, recordedAt: timestamp });
+        if (receipt.transactionHash) {
+          current.chainTransactions.push({ type: current.completedPhases > 0 ? 'death-settlement' : 'start-cancel', hash: receipt.transactionHash, recordedAt: timestamp });
+          current.chainTransactions = current.chainTransactions.slice(-50);
+        }
       }
       current.status = knockout ? 'knocked_out' : 'abandoned';
       current.finishReason = knockout ? 'knockout' : 'abandoned';
@@ -442,8 +456,12 @@ export const endlessServiceMethods = {
       current.updatedAt = timestamp;
       current.checkpointSignature = signEndlessCheckpoint(current, this.endlessCheckpointSecret);
       state.runs[runId] = current;
-      await transaction?.upsertRun(current);
       if (knockout && current.completedPhases > 0) finalizeLeaderboardEntry(state.endlessCompetition, current);
+      await transaction?.upsertEndlessRun?.(current);
+      if (knockout && current.completedPhases > 0) {
+        const leaderboard = state.endlessCompetition.leaderboardEntries.find((entry) => entry.runId === current.id);
+        await transaction?.upsertEndlessLeaderboard?.(leaderboard, current);
+      }
       return structuredClone(current);
     });
     await this.competitiveReplayValidator?.finalizeEndlessPhase?.(run, 'abandoned').catch(() => undefined);
@@ -487,7 +505,7 @@ export const endlessServiceMethods = {
     assertApi(validation.ok, 422, 'endless_config_invalid', 'The Endless configuration is invalid.', validation.errors);
     const config = validation.config;
     const timestamp = this.now();
-    return this.database.transact((state) => {
+    return this.database.transact(async (state, transaction) => {
       const store = state.endlessCompetition;
       const version = Math.max(0, ...Object.keys(store.configVersions).map(Number)) + 1;
       const record = { version, config, publishedAt: timestamp, publishedBy: 'SERVER_ADMIN', reason };
@@ -495,6 +513,7 @@ export const endlessServiceMethods = {
       store.activeConfigVersion = version;
       state.audit.push({ action: 'ENDLESS_CONFIG_PUBLISHED', details: `v${version}; ${reason}`, timestamp, address: 'SERVER_ADMIN' });
       state.audit = state.audit.slice(-2_000);
+      await transaction?.upsertEndlessConfig?.(record, true);
       return structuredClone(record);
     });
   },
@@ -557,7 +576,8 @@ export const endlessServiceMethods = {
       const leaderboard = state.endlessCompetition.leaderboardEntries.find((entry) => entry.runId === run.id);
       if (leaderboard) leaderboard.crystalsBanked = stored.crystalsBanked;
       state.runs[run.id] = stored;
-      await transaction?.upsertRun(stored);
+      await transaction?.upsertEndlessRun?.(stored);
+      if (leaderboard) await transaction?.upsertEndlessLeaderboard?.(leaderboard, stored);
     });
     return receipt;
   }
@@ -806,7 +826,7 @@ function recordHeartbeatIntegrity(run, timestamp) {
   };
   run.integrityFlags ||= [];
   run.integrityFlags.push(flag);
-  run.integrityFlags = run.integrityFlags.slice(-500);
+  run.integrityFlags = run.integrityFlags.slice(-50);
   run.integrityScore = Math.max(0, Number(run.integrityScore ?? 100) - Math.min(25, missed));
 }
 
@@ -821,6 +841,6 @@ async function markEndlessSettlementPending(service, runId, error) {
       lastError: String(error?.code || 'settlement_temporarily_unavailable').slice(0, 120)
     };
     state.runs[runId] = run;
-    await transaction?.upsertRun(run);
+    await transaction?.upsertEndlessRun?.(run);
   });
 }
