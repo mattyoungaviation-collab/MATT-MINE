@@ -1,4 +1,4 @@
-import { getAddress, getCreateAddress, parseEther } from "ethers";
+import { getCreateAddress, parseEther } from "ethers";
 import { network } from "hardhat";
 import {
   ENDLESS_MAINNET_CHAIN_ID,
@@ -10,10 +10,7 @@ const { ethers } = await network.create();
 if ((await ethers.provider.getNetwork()).chainId !== ENDLESS_MAINNET_CHAIN_ID) throw new Error("Endless preflight requires Ronin Mainnet chain 2020.");
 const config = loadEndlessMainnetConfig();
 const base = loadActivatedNftV2Base(config);
-const [deployer, ...extra] = await ethers.getSigners();
-if (!deployer || extra.length) throw new Error("Configure exactly one encrypted Endless deployment signer.");
-const deployerAddress = getAddress(await deployer.getAddress());
-if (deployerAddress !== config.roles.rootAdmin) throw new Error(`Endless deployer is ${deployerAddress}; expected ${config.roles.rootAdmin}.`);
+const deployerAddress = config.roles.rootAdmin;
 const latest = await ethers.provider.getTransactionCount(deployerAddress, "latest");
 const pending = await ethers.provider.getTransactionCount(deployerAddress, "pending");
 if (latest !== pending) throw new Error("The Endless deployment wallet has pending transactions.");
@@ -44,7 +41,7 @@ for (const [label, address] of [["implementation", implementation], ["proxy", pr
 }
 
 console.log("Endless Ronin deployment preflight passed. No transaction was broadcast.");
-console.log(`Deployer: ${deployerAddress}`);
+console.log(`Required deployer: ${deployerAddress}`);
 console.log(`Balance: ${ethers.formatEther(balance)} RON`);
 console.log(`Starting nonce: ${pending}`);
 console.log(`Runtime bytecode: ${runtimeBytes} / 24576 bytes`);
