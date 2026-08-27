@@ -1660,9 +1660,17 @@ const ENDLESS_ADMIN_FIELDS = Object.freeze([
   ['Rewards', 'rewards.crystalsEnabled', 'CRYSTALS enabled', 'boolean', 0, 1],
   ['Rewards', 'rewards.minerXpEnabled', 'Miner XP enabled', 'boolean', 0, 1],
   ['Rewards', 'rewards.economyVersion', 'Published economy version', 'text', 0, 80],
-  ['Rewards', 'rewards.crystalConversionNumerator', 'CRYSTALS conversion numerator', 'integer', 0, 1_000_000_000],
-  ['Rewards', 'rewards.crystalConversionDenominator', 'CRYSTALS conversion denominator', 'integer', 1, 1_000_000_000],
+  ['Rewards', 'rewards.crystalConversion', 'CRYSTALS per mined unit', 'rational', 0, 100_000, 'rewards.crystalConversionNumerator', 'rewards.crystalConversionDenominator'],
+  ['Rewards', 'rewards.mineableCrystalUnits', 'Maximum mined Crystal units per run', 'integer', 0, 1_000_000_000],
+  ['Rewards', 'rewards.maximumPayout', 'Maximum CRYSTALS per run', 'rational', 0, 100_000, 'rewards.maximumPayoutNumerator', 'rewards.maximumPayoutDenominator'],
+  ['Rewards', 'rewards.maximumDailyPayout', 'Daily Endless CRYSTALS ceiling', 'rational', 0, 10_000_000, 'rewards.maximumDailyPayoutNumerator', 'rewards.maximumDailyPayoutDenominator'],
+  ['Rewards', 'rewards.maximumPhases', 'Maximum rewarded phases', 'integer', 1, 1_000_000],
   ['Rewards', 'rewards.phaseXp', 'Miner XP per verified phase', 'integer', 0, 1_000_000],
+  ['Rewards', 'rewards.maximumRunXp', 'Maximum Miner XP per run', 'integer', 0, 1_000_000],
+  ['Rewards', 'rewards.maximumWalletXpPerDay', 'Maximum Miner XP per wallet/day', 'integer', 0, 1_000_000],
+  ['Rewards', 'rewards.maximumMinerXpPerDay', 'Maximum XP per Miner NFT/day', 'integer', 0, 1_000_000],
+  ['Rewards', 'rewards.checkpointTimeoutSeconds', 'On-chain checkpoint timeout seconds', 'integer', 300, 604_800],
+  ['Rewards', 'rewards.failedRunsRetainXp', 'Death/abandon retains Miner XP', 'boolean', 0, 1],
   ['Integrity', 'integrity.heartbeatSeconds', 'Heartbeat seconds', 'integer', 10, 300],
   ['Integrity', 'integrity.missedHeartbeatTolerance', 'Missed heartbeat tolerance', 'integer', 0, 1_000],
   ['Integrity', 'integrity.reconnectWindowSeconds', 'Reconnect window seconds', 'integer', 60, 604_800],
@@ -1698,11 +1706,16 @@ function renderEndlessAdmin() {
   const categories = [...new Set(ENDLESS_ADMIN_FIELDS.map(([category]) => category))];
   $('#endless-config-groups').innerHTML = categories.map((category) => `<details class="panel" open>
     <summary><strong>${escapeHtml(category)}</strong><span>${ENDLESS_ADMIN_FIELDS.filter(([value]) => value === category).length} controls</span></summary>
-    <div class="tuning-grid">${ENDLESS_ADMIN_FIELDS.filter(([value]) => value === category).map(([, path, label, type, minimum, maximum]) => {
-      const value = endlessPath(config, path);
+    <div class="tuning-grid">${ENDLESS_ADMIN_FIELDS.filter(([value]) => value === category).map(([, path, label, type, minimum, maximum, numeratorPath, denominatorPath]) => {
+      const numerator = type === 'rational' ? endlessPath(config, numeratorPath) : 0;
+      const denominator = type === 'rational' ? endlessPath(config, denominatorPath) : 1;
+      const value = type === 'rational'
+        ? rationalDecimal(numerator, denominator)
+        : endlessPath(config, path);
+      const rationalMetadata = type === 'rational' ? `data-endless-rational-original="${numerator}/${denominator}"` : '';
       return type === 'boolean'
         ? `<label class="toggle">${escapeHtml(label)}<input type="checkbox" data-endless-path="${path}" ${value === true ? 'checked' : ''}></label>`
-        : `<label>${escapeHtml(label)}<input data-endless-path="${path}" type="${type === 'text' ? 'text' : 'number'}" ${type === 'text' ? `maxlength="${maximum}"` : `min="${minimum}" max="${maximum}" step="${type === 'integer' ? 1 : 'any'}"`} value="${escapeHtml(value)}"></label>`;
+        : `<label>${escapeHtml(label)}<input data-endless-path="${path}" ${rationalMetadata} type="${type === 'text' ? 'text' : 'number'}" ${type === 'text' ? `maxlength="${maximum}"` : `min="${minimum}" max="${maximum}" step="${type === 'integer' ? 1 : type === 'rational' ? '0.000000001' : 'any'}"`} value="${escapeHtml(value)}"></label>`;
     }).join('')}</div>
   </details>`).join('');
   const runs = endless.recentRuns || [];
@@ -1718,11 +1731,30 @@ $('#refresh-endless-admin')?.addEventListener('click', () => void loadEndlessAdm
 $('#endless-config-form')?.addEventListener('submit', async (event) => {
   event.preventDefault();
   const config = structuredClone(state.endless?.activeConfig?.config || {});
+  let invalidEconomy = '';
   document.querySelectorAll('[data-endless-path]').forEach((input) => {
     const definition = ENDLESS_ADMIN_FIELDS.find(([, path]) => path === input.dataset.endlessPath);
     const type = definition?.[3];
+    if (type === 'rational') {
+      const [originalNumerator, originalDenominator] = String(input.dataset.endlessRationalOriginal || '').split('/').map(Number);
+      if (Number.isSafeInteger(originalNumerator) && Number.isSafeInteger(originalDenominator) &&
+          input.value.trim() === rationalDecimal(originalNumerator, originalDenominator)) {
+        setEndlessPath(config, definition[6], originalNumerator);
+        setEndlessPath(config, definition[7], originalDenominator);
+        return;
+      }
+      const rational = decimalRational(input.value);
+      if (!rational) {
+        invalidEconomy = `${definition[2]} must use no more than nine decimal places.`;
+        return;
+      }
+      setEndlessPath(config, definition[6], rational.numerator);
+      setEndlessPath(config, definition[7], rational.denominator);
+      return;
+    }
     setEndlessPath(config, input.dataset.endlessPath, type === 'boolean' ? input.checked : type === 'text' ? input.value : Number(input.value));
   });
+  if (invalidEconomy) return showAlert(invalidEconomy, true);
   if (!await confirmAction('Publish this Endless config version?', 'Active runs keep their frozen version. New runs receive this version immediately.')) return;
   await api('/api/admin/endless/config', { method: 'PUT', body: { config, reason: $('#endless-config-reason').value } });
   $('#endless-config-reason').value = '';
@@ -1744,6 +1776,29 @@ function setEndlessPath(object, path, value) {
   const leaf = keys.pop();
   const target = keys.reduce((record, key) => record[key] ||= {}, object);
   target[leaf] = value;
+}
+
+function rationalDecimal(numerator, denominator) {
+  const value = Number(numerator || 0) / Math.max(1, Number(denominator || 1));
+  return Number.isFinite(value) ? String(Number(value.toFixed(9))) : '0';
+}
+
+function decimalRational(raw) {
+  const match = String(raw ?? '').trim().match(/^(\d+)(?:\.(\d{1,9}))?$/);
+  if (!match) return null;
+  const fraction = match[2] || '';
+  const denominator = 10 ** fraction.length;
+  const unscaled = Number(`${match[1]}${fraction}`);
+  if (!Number.isSafeInteger(unscaled)) return null;
+  const divisor = greatestCommonDivisor(unscaled, denominator);
+  return { numerator: unscaled / divisor, denominator: denominator / divisor };
+}
+
+function greatestCommonDivisor(left, right) {
+  let a = Math.abs(left);
+  let b = Math.abs(right);
+  while (b) [a, b] = [b, a % b];
+  return a || 1;
 }
 
 async function api(path, options = {}) {

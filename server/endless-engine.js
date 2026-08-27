@@ -169,7 +169,9 @@ export function verifyEndlessPhaseEvents(run, rawEvents, now = Date.now()) {
     run.minerProfile?.traits?.crystalCarryCapacity ??
     run.minerProfile?.crystalCarryCapacity ?? 0
   ) || 0);
-  const remainingCapacity = Math.max(0, capacity - Number(run.crystalsCarried || 0));
+  const configuredUnitCeiling = Math.max(0, Number(run.config?.rewards?.mineableCrystalUnits || 0));
+  const rewardUnitCapacity = configuredUnitCeiling > 0 ? Math.min(capacity, configuredUnitCeiling) : capacity;
+  const remainingCapacity = Math.max(0, rewardUnitCapacity - Number(run.crystalsCarried || 0));
   const crystalsAdded = Math.min(remainingCapacity, collectedCrystals.size);
   const conversionNumerator = Math.max(0, Number(run.config?.rewards?.crystalConversionNumerator || 0));
   const conversionDenominator = Math.max(1, Number(run.config?.rewards?.crystalConversionDenominator || 1));
@@ -225,7 +227,8 @@ export function applyEndlessPhaseCheckpoint(run, verification, action, now = Dat
     run.finishReason = 'banked';
     return null;
   }
-  assertApi(run.currentPhase < ENDLESS_MAX_PHASE, 422, 'endless_phase_limit', 'This run reached the supported phase ceiling.');
+  const configuredMaximumPhase = Math.min(ENDLESS_MAX_PHASE, Math.max(1, Number(run.config?.rewards?.maximumPhases || ENDLESS_MAX_PHASE)));
+  assertApi(run.currentPhase < configuredMaximumPhase, 422, 'endless_phase_limit', 'This run reached its versioned phase ceiling.');
   run.currentPhase += 1;
   run.phaseStartedAt = now;
   run.phaseReconnectCount = 0;

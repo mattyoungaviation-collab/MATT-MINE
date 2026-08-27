@@ -143,10 +143,12 @@ test('Endless cannot reuse a Miner or wallet already active in another ranked ru
 
 test('a temporary reward failure keeps the banked run idempotently retryable', async () => {
   let attempts = 0;
+  let settlementPayload;
   const active = harness({
     endlessRewardSettler: {
-      async settle() {
+      async settle(input) {
         attempts += 1;
+        settlementPayload = input;
         if (attempts === 1) throw new Error('temporary chain outage');
         return { transactionHash: `0x${'ab'.repeat(32)}`, crystalsBanked: 3, minerXpBanked: 10 };
       }
@@ -159,7 +161,18 @@ test('a temporary reward failure keeps the banked run idempotently retryable', a
     economyVersion: 'endless-test-v1',
     crystalConversionNumerator: 1,
     crystalConversionDenominator: 1,
-    phaseXp: 10
+    mineableCrystalUnits: 3_750,
+    maximumPayoutNumerator: 10,
+    maximumPayoutDenominator: 1,
+    maximumDailyPayoutNumerator: 500,
+    maximumDailyPayoutDenominator: 1,
+    maximumPhases: 1_000_000,
+    phaseXp: 10,
+    maximumRunXp: 500,
+    maximumWalletXpPerDay: 2_500,
+    maximumMinerXpPerDay: 2_500,
+    checkpointTimeoutSeconds: 86_400,
+    failedRunsRetainXp: false
   };
   await active.service.publishEndlessConfig('endless-admin-key', {
     config,
@@ -181,6 +194,10 @@ test('a temporary reward failure keeps the banked run idempotently retryable', a
   });
   assert.equal(retried.settled, true);
   assert.equal(attempts, 2);
+  assert.equal(settlementPayload.maximumPayoutNumerator, 10);
+  assert.equal(settlementPayload.maximumDailyPayoutNumerator, 500);
+  assert.equal(settlementPayload.maximumRunXp, 500);
+  assert.equal(settlementPayload.failedRunsRetainXp, false);
   const state = await active.database.read();
   assert.equal(state.endlessCompetition.runs[run.runId].rewardSettlement.settled, true);
   assert.equal(state.endlessCompetition.leaderboardEntries[0].crystalsBanked, 3);

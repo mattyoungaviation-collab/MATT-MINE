@@ -303,7 +303,18 @@ export const endlessServiceMethods = {
       economyVersion: run.config.rewards.economyVersion,
       phaseXp: run.config.rewards.phaseXp,
       crystalConversionNumerator: run.config.rewards.crystalConversionNumerator,
-      crystalConversionDenominator: run.config.rewards.crystalConversionDenominator
+      crystalConversionDenominator: run.config.rewards.crystalConversionDenominator,
+      mineableCrystalUnits: run.config.rewards.mineableCrystalUnits,
+      maximumPayoutNumerator: run.config.rewards.maximumPayoutNumerator,
+      maximumPayoutDenominator: run.config.rewards.maximumPayoutDenominator,
+      maximumDailyPayoutNumerator: run.config.rewards.maximumDailyPayoutNumerator,
+      maximumDailyPayoutDenominator: run.config.rewards.maximumDailyPayoutDenominator,
+      maximumPhases: run.config.rewards.maximumPhases,
+      maximumRunXp: run.config.rewards.maximumRunXp,
+      maximumWalletXpPerDay: run.config.rewards.maximumWalletXpPerDay,
+      maximumMinerXpPerDay: run.config.rewards.maximumMinerXpPerDay,
+      checkpointTimeoutSeconds: run.config.rewards.checkpointTimeoutSeconds,
+      failedRunsRetainXp: run.config.rewards.failedRunsRetainXp
     });
     await this.database.transact(async (state, transaction) => {
       const stored = state.endlessCompetition.runs[run.id];

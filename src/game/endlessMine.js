@@ -116,7 +116,18 @@ export function defaultEndlessConfig() {
       economyVersion: '',
       crystalConversionNumerator: 0,
       crystalConversionDenominator: 1,
-      phaseXp: 0
+      mineableCrystalUnits: 0,
+      maximumPayoutNumerator: 0,
+      maximumPayoutDenominator: 1,
+      maximumDailyPayoutNumerator: 0,
+      maximumDailyPayoutDenominator: 1,
+      maximumPhases: ENDLESS_MAX_PHASE,
+      phaseXp: 0,
+      maximumRunXp: 0,
+      maximumWalletXpPerDay: 0,
+      maximumMinerXpPerDay: 0,
+      checkpointTimeoutSeconds: 86_400,
+      failedRunsRetainXp: false
     },
     integrity: {
       checkpointEveryPhases: 1,
@@ -193,9 +204,20 @@ export function normalizeEndlessConfig(input = {}) {
       crystalsEnabled: source.rewards?.crystalsEnabled !== false,
       minerXpEnabled: source.rewards?.minerXpEnabled !== false,
       economyVersion: cleanVersion(source.rewards?.economyVersion || ''),
-      crystalConversionNumerator: integer(source.rewards?.crystalConversionNumerator, 0, 1_000_000_000, 0),
+      crystalConversionNumerator: integer(source.rewards?.crystalConversionNumerator, 0, Number.MAX_SAFE_INTEGER, 0),
       crystalConversionDenominator: integer(source.rewards?.crystalConversionDenominator, 1, 1_000_000_000, 1),
-      phaseXp: integer(source.rewards?.phaseXp, 0, 1_000_000, 0)
+      mineableCrystalUnits: integer(source.rewards?.mineableCrystalUnits, 0, 1_000_000_000, 0),
+      maximumPayoutNumerator: integer(source.rewards?.maximumPayoutNumerator, 0, Number.MAX_SAFE_INTEGER, 0),
+      maximumPayoutDenominator: integer(source.rewards?.maximumPayoutDenominator, 1, 1_000_000_000, 1),
+      maximumDailyPayoutNumerator: integer(source.rewards?.maximumDailyPayoutNumerator, 0, Number.MAX_SAFE_INTEGER, 0),
+      maximumDailyPayoutDenominator: integer(source.rewards?.maximumDailyPayoutDenominator, 1, 1_000_000_000, 1),
+      maximumPhases: integer(source.rewards?.maximumPhases, 1, ENDLESS_MAX_PHASE, ENDLESS_MAX_PHASE),
+      phaseXp: integer(source.rewards?.phaseXp, 0, 1_000_000, 0),
+      maximumRunXp: integer(source.rewards?.maximumRunXp, 0, 1_000_000, 0),
+      maximumWalletXpPerDay: integer(source.rewards?.maximumWalletXpPerDay, 0, 1_000_000, 0),
+      maximumMinerXpPerDay: integer(source.rewards?.maximumMinerXpPerDay, 0, 1_000_000, 0),
+      checkpointTimeoutSeconds: integer(source.rewards?.checkpointTimeoutSeconds, 300, 604_800, 86_400),
+      failedRunsRetainXp: source.rewards?.failedRunsRetainXp === true
     },
     integrity: {
       checkpointEveryPhases: 1,
@@ -258,10 +280,64 @@ export function validateEndlessConfig(input, { forActivation = false } = {}) {
   if (forActivation && config.rewards.crystalsEnabled && config.rewards.crystalConversionNumerator <= 0) {
     errors.push('A positive CRYSTALS conversion is required before crystal rewards can be activated.');
   }
+  if (forActivation && config.rewards.crystalsEnabled && rationalGreaterThan(
+    config.rewards.crystalConversionNumerator,
+    config.rewards.crystalConversionDenominator,
+    100_000,
+    1
+  )) {
+    errors.push('CRYSTALS conversion cannot exceed the permanent 100,000-token contract ceiling.');
+  }
+  if (forActivation && config.rewards.crystalsEnabled && config.rewards.mineableCrystalUnits <= 0) {
+    errors.push('A positive run Crystal-unit ceiling is required before crystal rewards can be activated.');
+  }
+  if (forActivation && config.rewards.crystalsEnabled && config.rewards.maximumPayoutNumerator <= 0) {
+    errors.push('A positive per-run CRYSTALS payout ceiling is required before crystal rewards can be activated.');
+  }
+  if (forActivation && config.rewards.crystalsEnabled && rationalGreaterThan(
+    config.rewards.maximumPayoutNumerator,
+    config.rewards.maximumPayoutDenominator,
+    100_000,
+    1
+  )) {
+    errors.push('Per-run CRYSTALS payout cannot exceed the permanent 100,000-token contract ceiling.');
+  }
+  if (forActivation && config.rewards.crystalsEnabled && config.rewards.maximumDailyPayoutNumerator <= 0) {
+    errors.push('A positive daily Endless CRYSTALS ceiling is required before crystal rewards can be activated.');
+  }
+  if (forActivation && config.rewards.crystalsEnabled && rationalGreaterThan(
+    config.rewards.maximumDailyPayoutNumerator,
+    config.rewards.maximumDailyPayoutDenominator,
+    10_000_000,
+    1
+  )) {
+    errors.push('Daily Endless CRYSTALS cannot exceed the permanent 10,000,000-token contract ceiling.');
+  }
+  if (forActivation && config.rewards.crystalsEnabled && rationalGreaterThan(
+    config.rewards.maximumPayoutNumerator,
+    config.rewards.maximumPayoutDenominator,
+    config.rewards.maximumDailyPayoutNumerator,
+    config.rewards.maximumDailyPayoutDenominator
+  )) {
+    errors.push('The daily Endless CRYSTALS ceiling cannot be lower than the per-run payout ceiling.');
+  }
   if (forActivation && config.rewards.minerXpEnabled && config.rewards.phaseXp <= 0) {
     errors.push('A positive Miner XP award is required before XP rewards can be activated.');
   }
+  if (forActivation && config.rewards.minerXpEnabled && config.rewards.maximumRunXp < config.rewards.phaseXp) {
+    errors.push('Maximum Miner XP per run must be at least one phase award.');
+  }
+  if (forActivation && config.rewards.minerXpEnabled && config.rewards.maximumWalletXpPerDay <= 0) {
+    errors.push('A positive wallet daily Miner XP ceiling is required before XP rewards can be activated.');
+  }
+  if (forActivation && config.rewards.minerXpEnabled && config.rewards.maximumMinerXpPerDay <= 0) {
+    errors.push('A positive Miner NFT daily XP ceiling is required before XP rewards can be activated.');
+  }
   return { ok: errors.length === 0, errors, config };
+}
+
+function rationalGreaterThan(leftNumerator, leftDenominator, rightNumerator, rightDenominator) {
+  return BigInt(leftNumerator) * BigInt(rightDenominator) > BigInt(rightNumerator) * BigInt(leftDenominator);
 }
 
 export function endlessPhaseSeed({ runId, runSeed, phase, configVersion }) {

@@ -28,4 +28,6 @@ The contract must be deployed, granted the existing progression/lock/game/credit
 
 Admin publishes immutable versions rather than mutating active runs. Controls are grouped into launch, entry, exact scoring, difficulty, generation, rewards, integrity, leaderboards, and Smart Engine sections. Run review exposes phase depth, score, heartbeat, checkpoint digest, and integrity flags.
 
+Reward configuration exposes ordinary decimal Admin fields for CRYSTALS conversion, per-run payout, and daily payout. The browser converts those values into an exact reduced numerator/denominator pair, preserves an unchanged pair without rounding drift, and publishes all Crystal-unit, XP, phase, timeout, daily, and failed-run limits in the immutable version. The settlement adapter receives that complete frozen snapshot; none of these values require a source-code change.
+
 Smart Engine reads verified runs and emits bounded recommendations. It never applies a recommendation or changes live configuration automatically.

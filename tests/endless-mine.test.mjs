@@ -83,10 +83,24 @@ test('activation validation fails closed instead of guessing an economy', () => 
       economyVersion: 'ronin-endless-v1',
       crystalConversionNumerator: 1,
       crystalConversionDenominator: 1,
-      phaseXp: 10
+      mineableCrystalUnits: 3_750,
+      maximumPayoutNumerator: 10,
+      maximumPayoutDenominator: 1,
+      maximumDailyPayoutNumerator: 500,
+      maximumDailyPayoutDenominator: 1,
+      maximumPhases: 1_000_000,
+      phaseXp: 10,
+      maximumRunXp: 500,
+      maximumWalletXpPerDay: 2_500,
+      maximumMinerXpPerDay: 2_500,
+      checkpointTimeoutSeconds: 86_400,
+      failedRunsRetainXp: false
     }
   });
   assert.deepEqual(validateEndlessConfig(configured, { forActivation: true }).errors, []);
+  const unsafeDaily = structuredClone(configured);
+  unsafeDaily.rewards.maximumDailyPayoutNumerator = 9;
+  assert.match(validateEndlessConfig(unsafeDaily, { forActivation: true }).errors.join(' '), /daily.*lower/i);
   assert.match(validateEndlessConfig({
     ...configured,
     entry: { paidEnabled: true, mattPrice: 10_000_001 }
