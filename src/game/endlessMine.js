@@ -13,6 +13,24 @@ export const ENDLESS_ENTRY_PRICE_MIN = 0;
 export const ENDLESS_ENTRY_PRICE_MAX = 10_000_000;
 export const ENDLESS_MAX_PHASE = 1_000_000;
 
+export const ENDLESS_CONSERVATIVE_ECONOMY_PRESET = Object.freeze({
+  economyVersion: 'endless-conservative-v1',
+  crystalConversionNumerator: 1,
+  crystalConversionDenominator: 400,
+  mineableCrystalUnits: 3_750,
+  maximumPayoutNumerator: 10,
+  maximumPayoutDenominator: 1,
+  maximumDailyPayoutNumerator: 500,
+  maximumDailyPayoutDenominator: 1,
+  maximumPhases: ENDLESS_MAX_PHASE,
+  phaseXp: 10,
+  maximumRunXp: 500,
+  maximumWalletXpPerDay: 2_500,
+  maximumMinerXpPerDay: 2_500,
+  checkpointTimeoutSeconds: 86_400,
+  failedRunsRetainXp: false
+});
+
 export const ENDLESS_ENEMY_TYPES = Object.freeze([
   'slime', 'bat', 'crawler', 'beetle', 'exploder', 'spitter'
 ]);

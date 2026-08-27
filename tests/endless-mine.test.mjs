@@ -5,6 +5,7 @@ import { defaultProfile } from '../src/game/storage.js';
 import {
   calculateDangerRating,
   calculateMinerCapability,
+  ENDLESS_CONSERVATIVE_ECONOMY_PRESET,
   defaultEndlessConfig,
   endlessDifficultyBudget,
   endlessPhasePointBudget,
@@ -105,6 +106,17 @@ test('activation validation fails closed instead of guessing an economy', () => 
     ...configured,
     entry: { paidEnabled: true, mattPrice: 10_000_001 }
   }).errors.join(' '), /between 0 and 10000000/i);
+});
+
+test('the conservative economy preset is exact, bounded, and remains Admin-adjustable', () => {
+  const draft = defaultEndlessConfig();
+  draft.rewards = { ...draft.rewards, ...ENDLESS_CONSERVATIVE_ECONOMY_PRESET };
+  const validation = validateEndlessConfig(draft, { forActivation: true });
+  assert.deepEqual(validation.errors, []);
+  assert.equal(validation.config.rewards.crystalConversionNumerator, 1);
+  assert.equal(validation.config.rewards.crystalConversionDenominator, 400);
+  assert.equal(validation.config.rewards.maximumPayoutNumerator, 10);
+  assert.equal(validation.config.rewards.maximumDailyPayoutNumerator, 500);
 });
 
 test('map validator rejects unreachable rooms, point drift, and a forged boss gate', () => {

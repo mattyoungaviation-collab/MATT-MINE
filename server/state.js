@@ -19,7 +19,11 @@ import {
   defaultCompetitionStudio,
   normalizeCompetitionStudio
 } from '../src/game/competitionStudio.js';
-import { defaultEndlessConfig, normalizeEndlessConfig } from '../src/game/endlessMine.js';
+import {
+  ENDLESS_CONSERVATIVE_ECONOMY_PRESET,
+  defaultEndlessConfig,
+  normalizeEndlessConfig
+} from '../src/game/endlessMine.js';
 
 export function defaultServerState() {
   return {
@@ -340,6 +344,7 @@ export function defaultEndlessCompetition(timestamp = 0) {
   // until Admin publishes explicit conversion and XP values.
   config.rewards = {
     ...config.rewards,
+    ...ENDLESS_CONSERVATIVE_ECONOMY_PRESET,
     enabled: false,
     crystalsEnabled: false,
     minerXpEnabled: false

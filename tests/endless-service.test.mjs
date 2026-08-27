@@ -87,6 +87,12 @@ test('Endless service enforces NFT ownership and starts with free fail-closed re
   assert.equal(status.paidEntryEnabled, false);
   assert.equal(status.entryPriceMatt, 0);
   assert.equal(status.rewardsEnabled, false);
+  const state = await active.database.read();
+  const bootstrap = state.endlessCompetition.configVersions[state.endlessCompetition.activeConfigVersion].config;
+  assert.equal(bootstrap.rewards.economyVersion, 'endless-conservative-v1');
+  assert.equal(bootstrap.rewards.crystalConversionNumerator, 1);
+  assert.equal(bootstrap.rewards.crystalConversionDenominator, 400);
+  assert.equal(bootstrap.rewards.enabled, false);
   assert.equal(run.currentPhase, 1);
   assert.equal(run.manifest.configVersion, run.configVersion);
 });

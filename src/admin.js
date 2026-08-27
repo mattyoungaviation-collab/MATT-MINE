@@ -6,6 +6,7 @@ import {
   linkedControlForTuning,
   searchAdminControls
 } from './adminControlRegistry.js';
+import { ENDLESS_CONSERVATIVE_ECONOMY_PRESET } from './game/endlessMine.js';
 
 const state = {
   csrfToken: '',
@@ -1717,6 +1718,7 @@ function renderEndlessAdmin() {
         ? `<label class="toggle">${escapeHtml(label)}<input type="checkbox" data-endless-path="${path}" ${value === true ? 'checked' : ''}></label>`
         : `<label>${escapeHtml(label)}<input data-endless-path="${path}" ${rationalMetadata} type="${type === 'text' ? 'text' : 'number'}" ${type === 'text' ? `maxlength="${maximum}"` : `min="${minimum}" max="${maximum}" step="${type === 'integer' ? 1 : type === 'rational' ? '0.000000001' : 'any'}"`} value="${escapeHtml(value)}"></label>`;
     }).join('')}</div>
+    ${category === 'Rewards' ? '<div class="button-row"><button type="button" class="ghost" data-endless-preset="conservative-v1">LOAD CONSERVATIVE V1</button><small>Loads editable launch values; nothing changes until you publish the new version.</small></div>' : ''}
   </details>`).join('');
   const runs = endless.recentRuns || [];
   $('#endless-admin-runs').innerHTML = `<table><thead><tr><th>Run</th><th>Miner</th><th>Status</th><th>Phase</th><th>Score</th><th>Heartbeat</th></tr></thead><tbody>${runs.map((run) => `<tr>
@@ -1728,6 +1730,20 @@ function renderEndlessAdmin() {
 }
 
 $('#refresh-endless-admin')?.addEventListener('click', () => void loadEndlessAdmin());
+$('#endless-config-groups')?.addEventListener('click', (event) => {
+  if (!event.target.closest('[data-endless-preset="conservative-v1"]')) return;
+  const config = state.endless?.activeConfig?.config;
+  if (!config) return;
+  config.rewards = {
+    ...config.rewards,
+    ...ENDLESS_CONSERVATIVE_ECONOMY_PRESET,
+    enabled: false,
+    crystalsEnabled: false,
+    minerXpEnabled: false
+  };
+  renderEndlessAdmin();
+  showAlert('Conservative V1 loaded as an editable draft. Enable rewards only after settlement readiness is green.');
+});
 $('#endless-config-form')?.addEventListener('submit', async (event) => {
   event.preventDefault();
   const config = structuredClone(state.endless?.activeConfig?.config || {});
