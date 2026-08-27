@@ -154,6 +154,12 @@ export class MattMineGame extends V3MattMineGame {
       tuning.enemyHealthMultiplier = (tuning.enemyHealthMultiplier || 1) * manifest.difficulty.statScale.health;
       tuning.enemyDamageMultiplier = (tuning.enemyDamageMultiplier || 1) * manifest.difficulty.statScale.damage;
       tuning.enemySpeedMultiplier = (tuning.enemySpeedMultiplier || 1) * manifest.difficulty.statScale.speed;
+      // Historical manifests did not record an Endless-only Guardian scale.
+      // Preserve those exact replays while all newly generated phases carry
+      // their explicit, Admin-adjustable boss balance in the fingerprint.
+      const guardianStatScale = manifest.difficulty.guardianStatScale || { health: 1, damage: 1 };
+      tuning.bossHealthMultiplier = (tuning.bossHealthMultiplier || 1) * guardianStatScale.health;
+      tuning.bossDamageMultiplier = (tuning.bossDamageMultiplier ?? 1) * guardianStatScale.damage;
       tuning.safeStartSeconds = manifest.rules.safeStartSeconds;
       tuning.usePerDepthRoomSpawns = false;
       tuning._endlessManifest = manifest;

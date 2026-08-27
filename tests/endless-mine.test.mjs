@@ -132,6 +132,51 @@ test('difficulty is separate from points and danger compares trusted Miner capab
   assert.match(calculateDangerRating(endlessDifficultyBudget(100, config), capability).tier, /LOW|GUARDED|HIGH|SEVERE|EXTREME/);
 });
 
+test('Endless Guardian balance is lower at phase one and independently Admin-adjustable', () => {
+  const reducedConfig = defaultEndlessConfig();
+  const baselineConfig = defaultEndlessConfig();
+  baselineConfig.difficulty.guardianHealthScale = 1;
+  baselineConfig.difficulty.guardianDamageScale = 1;
+
+  const reducedManifest = generateEndlessPhase({
+    runId: 'guardian-balance', runSeed: 'guardian-balance-seed', phase: 1,
+    configVersion: 4, config: reducedConfig
+  });
+  const baselineManifest = generateEndlessPhase({
+    runId: 'guardian-balance', runSeed: 'guardian-balance-seed', phase: 1,
+    configVersion: 4, config: baselineConfig
+  });
+  assert.deepEqual(reducedManifest.difficulty.guardianStatScale, { health: 0.6, damage: 0.75 });
+  assert.deepEqual(baselineManifest.difficulty.guardianStatScale, { health: 1, damage: 1 });
+
+  const start = (config, manifest) => {
+    const game = new MattMineGame(null, defaultProfile(), { headless: true, audio: NOOP_AUDIO });
+    game.startRun({
+      mode: 'endless', runId: 'guardian-balance', seed: 'guardian-balance-seed',
+      endlessRunId: 'guardian-balance', endlessConfigVersion: 4,
+      endlessSnapshot: { config }, endlessManifest: manifest,
+      nftRun: { profile: { traits: { level: 1, crystalCarryCapacity: 50 } } },
+      tuning: {}
+    });
+    return game;
+  };
+  const reduced = start(reducedConfig, reducedManifest);
+  const baseline = start(baselineConfig, baselineManifest);
+  assert.deepEqual(
+    reduced.enemies.filter((enemy) => !enemy.isBoss).map((enemy) => [enemy.type, enemy.maxHp, enemy.damage]),
+    baseline.enemies.filter((enemy) => !enemy.isBoss).map((enemy) => [enemy.type, enemy.maxHp, enemy.damage])
+  );
+
+  reduced.run.bossReady = true;
+  baseline.run.bossReady = true;
+  const reducedGuardian = reduced.awakenGuardian(reduced.layout.guardianRoom);
+  const baselineGuardian = baseline.awakenGuardian(baseline.layout.guardianRoom);
+  assert.equal(reducedGuardian.maxHp, 492);
+  assert.equal(reducedGuardian.damage, 18.75);
+  assert.equal(reducedGuardian.maxHp, baselineGuardian.maxHp * 0.6);
+  assert.equal(reducedGuardian.damage, baselineGuardian.damage * 0.75);
+});
+
 test('activation validation fails closed instead of guessing an economy', () => {
   const draft = defaultEndlessConfig();
   const inactive = validateEndlessConfig(draft, { forActivation: true });

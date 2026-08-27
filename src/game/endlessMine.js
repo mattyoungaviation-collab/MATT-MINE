@@ -161,6 +161,8 @@ export function defaultEndlessConfig() {
       growthPerPhase: 7,
       growthCurve: 0.72,
       maximumBudget: 10_000,
+      guardianHealthScale: 0.6,
+      guardianDamageScale: 0.75,
       healthScalePerTier: 0.08,
       damageScalePerTier: 0.055,
       speedScalePerTier: 0.018,
@@ -267,6 +269,8 @@ export function normalizeEndlessConfig(input = {}) {
       growthPerPhase: number(source.difficulty?.growthPerPhase, 0, 100_000, defaults.difficulty.growthPerPhase),
       growthCurve: number(source.difficulty?.growthCurve, 0.1, 2, defaults.difficulty.growthCurve),
       maximumBudget: number(source.difficulty?.maximumBudget, 1, 100_000_000, defaults.difficulty.maximumBudget),
+      guardianHealthScale: number(source.difficulty?.guardianHealthScale, 0.1, 3, defaults.difficulty.guardianHealthScale),
+      guardianDamageScale: number(source.difficulty?.guardianDamageScale, 0.1, 3, defaults.difficulty.guardianDamageScale),
       healthScalePerTier: number(source.difficulty?.healthScalePerTier, 0, 1, defaults.difficulty.healthScalePerTier),
       damageScalePerTier: number(source.difficulty?.damageScalePerTier, 0, 1, defaults.difficulty.damageScalePerTier),
       speedScalePerTier: number(source.difficulty?.speedScalePerTier, 0, 0.25, defaults.difficulty.speedScalePerTier),
@@ -649,6 +653,10 @@ export function generateEndlessPhase(options = {}) {
     damage: round(Math.min(config.difficulty.maximumStatScale, 1 + tier * config.difficulty.damageScalePerTier), 4),
     speed: round(Math.min(config.difficulty.maximumStatScale, 1 + tier * config.difficulty.speedScalePerTier), 4)
   };
+  const guardianStatScale = {
+    health: config.difficulty.guardianHealthScale,
+    damage: config.difficulty.guardianDamageScale
+  };
   const capability = calculateMinerCapability(options.minerProfile);
   const danger = calculateDangerRating(difficultyBudget, capability);
   const modifier = phase > 1 && phase % config.difficulty.modifierEvery === 0
@@ -681,6 +689,7 @@ export function generateEndlessPhase(options = {}) {
       budget: difficultyBudget,
       tier,
       statScale,
+      guardianStatScale,
       modifier,
       milestone
     },

@@ -1652,6 +1652,8 @@ const ENDLESS_ADMIN_FIELDS = Object.freeze([
   ['Difficulty', 'difficulty.growthPerPhase', 'Growth per phase', 'number', 0, 100_000],
   ['Difficulty', 'difficulty.growthCurve', 'Growth curve', 'number', .1, 2],
   ['Difficulty', 'difficulty.maximumBudget', 'Maximum difficulty budget', 'number', 1, 100_000_000],
+  ['Difficulty', 'difficulty.guardianHealthScale', 'Guardian base health scale', 'number', .1, 3],
+  ['Difficulty', 'difficulty.guardianDamageScale', 'Guardian base damage scale', 'number', .1, 3],
   ['Difficulty', 'difficulty.healthScalePerTier', 'Health scale per tier', 'number', 0, 1],
   ['Difficulty', 'difficulty.damageScalePerTier', 'Damage scale per tier', 'number', 0, 1],
   ['Difficulty', 'difficulty.speedScalePerTier', 'Speed scale per tier', 'number', 0, .25],
