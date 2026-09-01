@@ -2732,6 +2732,10 @@ for (const button of document.querySelectorAll('[data-launch-action]')) {
       openMines();
       return;
     }
+    if (action === 'loadout') {
+      void openMinerSelect();
+      return;
+    }
     if (action === 'pass-mine' || action === 'arena' || action === 'endless') {
       openMineRoute(action);
       return;

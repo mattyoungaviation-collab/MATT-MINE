@@ -285,6 +285,7 @@
 
 .launch-hero-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: stretch;
   gap: 11px;
 }

@@ -104,6 +104,26 @@ async function openMineFromHub(page, slotId, expectedName) {
   await page.locator('#mine-detail [data-mine-enter]').click();
 }
 
+test('home links directly to the NFT loadout and keeps armor service above the selected Miner', async ({ page }) => {
+  await installSignedInMiner(page);
+  await page.setViewportSize({ width: 1228, height: 768 });
+  await page.goto('/');
+
+  const chooseMine = page.locator('[data-launch-action="mines"].launch-secondary-cta');
+  const loadout = page.locator('[data-launch-action="loadout"].launch-loadout-cta');
+  await expect(loadout).toContainText('SELECT NFT MINER');
+  await expect(loadout).toContainText('MANAGE LOADOUT');
+  const [chooseMineBox, loadoutBox] = await Promise.all([chooseMine.boundingBox(), loadout.boundingBox()]);
+  expect(loadoutBox.x).toBeGreaterThan(chooseMineBox.x);
+
+  await loadout.click();
+  await expect(page.locator('#miner-select')).toHaveClass(/active/);
+  await expect(page.locator('#selected-miner-name')).toHaveText('MATT MINE MINER #1');
+  const armorBox = await page.locator('.selected-miner-armor-service').boundingBox();
+  const minerImageBox = await page.locator('.selected-miner-render').boundingBox();
+  expect(armorBox.y + armorBox.height).toBeLessThanOrEqual(minerImageBox.y);
+});
+
 test('desktop player navigation opens every redesigned public surface', async ({ page }) => {
   const runtimeErrors = [];
   page.on('pageerror', (error) => runtimeErrors.push(error.message));

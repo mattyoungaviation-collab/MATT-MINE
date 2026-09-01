@@ -1539,6 +1539,7 @@ button,
 .miner-select-empty { padding: 30px; border: 1px dashed #48525a; color: #fff; }
 .miner-select-empty span { display: block; margin-top: 10px; color: #9caab2; }
 .selected-miner-card { display: grid; align-content: start; gap: 14px; padding: 16px; border: 1px solid #574c23; background: #0d1113; }
+.selected-miner-armor-service { border-color: #2aa69f; background: linear-gradient(135deg, rgba(71,238,227,.08), #090e12 55%); }
 .selected-miner-render { position: relative; aspect-ratio: 1; display: grid; place-items: center; overflow: hidden; border: 1px solid #2e3f49; background: #10243f; color: #597287; text-align: center; font: 1000 15px/1.4 monospace; }
 .selected-miner-render::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(transparent 50%, rgba(0,0,0,.1) 50%); background-size: 100% 4px; }
 .selected-miner-render img { width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; }
@@ -1567,7 +1568,7 @@ button,
 .garage-balance-strip span { color: #81919a; font: 900 8px Inter, sans-serif; letter-spacing: .12em; }
 .garage-balance-strip strong { color: #fff; font: 1000 18px Inter, sans-serif; }
 .crystal-balance-card strong { color: #47eee3; }
-.miner-command-center-layout { display: grid; grid-template-columns: minmax(250px, .75fr) minmax(360px, 1.35fr) minmax(250px, .75fr); gap: 12px; align-items: start; }
+.miner-command-center-layout { display: grid; grid-template-columns: minmax(250px, .75fr) minmax(360px, 1.35fr); gap: 12px; align-items: start; }
 .garage-panel { border: 1px solid #2f3a42; background: #090e12; }
 .garage-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-bottom: 1px solid #2f3a42; }
 .garage-panel-heading span { color: #fff; font: 1000 12px Inter, sans-serif; }

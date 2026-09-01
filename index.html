@@ -89,6 +89,10 @@
                   <span>CHOOSE A MINE</span>
                   <small>I ALREADY KNOW THE RULES</small>
                 </button>
+                <button class="launch-secondary-cta launch-loadout-cta" type="button" data-launch-action="loadout">
+                  <span>SELECT NFT MINER</span>
+                  <small>&amp; MANAGE LOADOUT</small>
+                </button>
               </div>
               <div class="launch-chain-note">
                 <span class="ronin-lockup">
@@ -405,6 +409,11 @@
               <div id="miner-select-grid" class="miner-select-grid" aria-label="Loaded Miner NFTs"></div>
             </div>
             <aside id="selected-miner-card" class="selected-miner-card">
+              <section class="garage-panel garage-service-card selected-miner-armor-service" aria-labelledby="garage-armor-title">
+                <div class="garage-panel-heading"><span id="garage-armor-title">ARMOR SERVICE</span><small>PAID IN MATT</small></div>
+                <p id="garage-armor-copy">Select a Miner to inspect its armor.</p>
+                <button id="garage-repair-button" class="primary-button" type="button" disabled>REPAIR ARMOR</button>
+              </section>
               <div class="selected-miner-render">
                 <img id="selected-miner-image" alt="Selected MATT Mine Miner" hidden />
                 <span id="selected-miner-empty">CONNECT RONIN<br />TO LOAD MINERS</span>
@@ -476,13 +485,6 @@
                 <div id="garage-equipment-list" class="garage-equipment-list"></div>
                 <button id="garage-equipment-load-more" class="garage-equipment-load-more" type="button" hidden>LOAD MORE EQUIPMENT</button>
               </section>
-              <aside class="garage-service-column">
-                <section class="garage-panel garage-service-card">
-                  <div class="garage-panel-heading"><span>ARMOR SERVICE</span><small>PAID IN MATT</small></div>
-                  <p id="garage-armor-copy">Select a Miner to inspect its armor.</p>
-                  <button id="garage-repair-button" class="primary-button" type="button" disabled>REPAIR ARMOR</button>
-                </section>
-              </aside>
             </div>
             <section class="garage-panel garage-chest-store">
               <div class="garage-panel-heading"><span>EQUIPMENT CHESTS</span><small>MINTED ON RONIN</small></div>
