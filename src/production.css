@@ -1617,11 +1617,18 @@ button,
 .garage-chest-dialog-card > header button { min-height: 36px; padding: 0 12px; color: #c8d1d6; border: 1px solid #45515a; background: #0a1014; font: 900 8px Inter, sans-serif; letter-spacing: .1em; }
 .garage-chest-dialog-intro { margin: 16px 0; color: #aab5bb; font: 700 11px/1.55 Inter, sans-serif; }
 .garage-chest-dialog-intro b { color: #ffcf37; }
-.garage-chest-dialog-costs { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-bottom: 14px; }
+.garage-chest-dialog-costs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; margin-bottom: 14px; }
 .garage-chest-dialog-costs article { display: grid; gap: 7px; padding: 13px; border: 1px solid #3b4141; background: #080d10; }
-.garage-chest-dialog-costs span, .garage-chest-dialog-table-heading { color: #87959c; font: 900 8px Inter, sans-serif; letter-spacing: .12em; }
+.garage-chest-dialog-costs span, .garage-chest-dialog-costs label, .garage-chest-dialog-table-heading { color: #87959c; font: 900 8px Inter, sans-serif; letter-spacing: .12em; }
 .garage-chest-dialog-costs strong { color: #fff; font: 1000 18px Inter, sans-serif; }
-.garage-chest-dialog-costs article:first-child strong { color: #ffcf37; }
+.garage-chest-dialog-costs article:first-child strong, .garage-chest-dialog-total-card strong { color: #ffcf37; }
+.garage-chest-dialog-quantity-control { display: grid; grid-template-columns: 32px minmax(46px, 1fr) 32px; gap: 5px; }
+.garage-chest-dialog-quantity-control button, .garage-chest-dialog-quantity-control input { min-width: 0; height: 34px; border: 1px solid #4a555b; background: #05090c; color: #fff; text-align: center; font: 1000 14px Inter, sans-serif; }
+.garage-chest-dialog-quantity-control button { padding: 0; color: #ffcf37; cursor: pointer; }
+.garage-chest-dialog-quantity-control button:hover { border-color: #ffcf37; background: #171508; }
+.garage-chest-dialog-quantity-control button:focus-visible, .garage-chest-dialog-quantity-control input:focus-visible { outline: 2px solid #47eee3; outline-offset: 2px; }
+.garage-chest-dialog-quantity-control input { width: 100%; appearance: textfield; }
+.garage-chest-dialog-quantity-control input::-webkit-inner-spin-button, .garage-chest-dialog-quantity-control input::-webkit-outer-spin-button { margin: 0; appearance: none; }
 .garage-chest-dialog-table-heading { display: grid; grid-template-columns: 110px 1fr; padding: 0 12px 7px; }
 .garage-chest-dialog-outcomes { display: grid; gap: 6px; }
 .garage-chest-dialog-outcomes article { display: grid; grid-template-columns: 96px 1fr; align-items: center; gap: 14px; min-height: 62px; padding: 10px 12px; border: 1px solid #303a40; background: #0a1014; }
@@ -1658,6 +1665,7 @@ button,
   .garage-balance-strip { grid-template-columns: repeat(2, 1fr); }
   .miner-command-center-layout { grid-template-columns: 1fr; }
   .garage-chest-list { grid-template-columns: repeat(2, 1fr); }
+  .garage-chest-dialog-costs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 520px) {

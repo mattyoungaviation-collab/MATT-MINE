@@ -58,6 +58,7 @@ import { RoninWalletAdapter } from './game/walletAdapter.js';
 import {
   NftGarageClient,
   NFT_GARAGE_CHESTS,
+  NFT_GARAGE_MAX_CHESTS_PER_PURCHASE,
   NFT_GARAGE_RARITIES,
   NFT_GARAGE_SLOTS,
   crystalWithdrawalAvailability,
@@ -2224,11 +2225,14 @@ function showGarageChestPreview(product) {
   pendingGarageChestProduct = product;
   const dialog = $('#garage-chest-dialog');
   const priceRaw = BigInt(product.priceRaw);
-  const canAfford = BigInt(snapshot.mattBalanceRaw || 0) >= priceRaw;
   $('#garage-chest-dialog-label').textContent = product.label;
   $('#garage-chest-dialog-title').textContent = `${product.label} ODDS & STATS`;
-  $('#garage-chest-dialog-price').textContent = `${formatGarageTokenUnits(priceRaw)} MATT`;
+  $('#garage-chest-dialog-unit-price').textContent = `${formatGarageTokenUnits(priceRaw)} MATT`;
   $('#garage-chest-dialog-balance').textContent = `${formatGarageTokenUnits(snapshot.mattBalanceRaw)} MATT`;
+  const quantity = $('#garage-chest-dialog-quantity');
+  quantity.min = '1';
+  quantity.max = String(NFT_GARAGE_MAX_CHESTS_PER_PURCHASE);
+  quantity.value = '1';
   const outcomes = $('#garage-chest-dialog-outcomes');
   outcomes.replaceChildren();
   for (const outcome of garageChestOutcomes(product)) {
@@ -2245,16 +2249,55 @@ function showGarageChestPreview(product) {
     row.append(chance, copy);
     outcomes.append(row);
   }
-  const purchase = $('#garage-chest-dialog-purchase');
-  purchase.disabled = !canAfford;
-  purchase.textContent = canAfford
-    ? `OPEN FOR ${formatGarageTokenUnits(priceRaw)} MATT`
-    : `NEED ${formatGarageTokenUnits(priceRaw - BigInt(snapshot.mattBalanceRaw || 0))} MORE MATT`;
-  $('#garage-chest-dialog-affordability').textContent = canAfford
-    ? 'Your balance covers this chest. Ronin Wallet confirmation is still required.'
-    : 'Your wallet does not currently have enough MATT for this chest.';
+  syncGarageChestPurchasePreview();
   if (typeof dialog.showModal === 'function') dialog.showModal();
   else dialog.setAttribute('open', '');
+}
+
+function selectedGarageChestQuantity() {
+  const quantity = Number($('#garage-chest-dialog-quantity').value);
+  return Number.isSafeInteger(quantity) && quantity >= 1 && quantity <= NFT_GARAGE_MAX_CHESTS_PER_PURCHASE
+    ? quantity
+    : null;
+}
+
+function syncGarageChestPurchasePreview() {
+  const snapshot = nftGarageSnapshot?.minerId === selectedNftMinerId ? nftGarageSnapshot : null;
+  const product = pendingGarageChestProduct;
+  if (!snapshot || !product || product.priceRaw === undefined) return;
+  const quantity = selectedGarageChestQuantity();
+  const purchase = $('#garage-chest-dialog-purchase');
+  if (!quantity) {
+    $('#garage-chest-dialog-total').textContent = '--';
+    $('#garage-chest-dialog-affordability').textContent = `Choose a whole number from 1 to ${NFT_GARAGE_MAX_CHESTS_PER_PURCHASE}.`;
+    purchase.textContent = 'CHOOSE 1–10 CHESTS';
+    purchase.disabled = true;
+    return;
+  }
+  const totalPriceRaw = BigInt(product.priceRaw) * BigInt(quantity);
+  const balanceRaw = BigInt(snapshot.mattBalanceRaw || 0);
+  const canAfford = balanceRaw >= totalPriceRaw;
+  const plural = quantity === 1 ? 'CHEST' : 'CHESTS';
+  const batchReady = quantity > 1 && Number(snapshot.chestBatchLimit || 1) >= quantity;
+  $('#garage-chest-dialog-total').textContent = `${formatGarageTokenUnits(totalPriceRaw)} MATT`;
+  purchase.disabled = !canAfford;
+  purchase.textContent = canAfford
+    ? `OPEN ${quantity} ${plural} FOR ${formatGarageTokenUnits(totalPriceRaw)} MATT`
+    : `NEED ${formatGarageTokenUnits(totalPriceRaw - balanceRaw)} MORE MATT`;
+  $('#garage-chest-dialog-affordability').textContent = canAfford
+    ? quantity === 1
+      ? 'Your balance covers this chest. Ronin Wallet confirmation is still required.'
+      : batchReady
+        ? `Your balance covers all ${quantity} chests. One batch purchase creates ${quantity} independent Ronin VRF reveals.`
+        : `Your balance covers all ${quantity} chests. The current contract will request ${quantity} chest confirmations after any MATT approval.`
+    : `Your wallet does not currently have enough MATT for ${quantity} ${plural.toLowerCase()}.`;
+}
+
+function adjustGarageChestQuantity(change) {
+  const input = $('#garage-chest-dialog-quantity');
+  const current = selectedGarageChestQuantity() || 1;
+  input.value = String(Math.max(1, Math.min(NFT_GARAGE_MAX_CHESTS_PER_PURCHASE, current + change)));
+  syncGarageChestPurchasePreview();
 }
 
 function closeGarageChestPreview() {
@@ -2265,9 +2308,10 @@ function closeGarageChestPreview() {
 
 function confirmGarageChestPurchase() {
   const product = pendingGarageChestProduct;
-  if (!product || $('#garage-chest-dialog-purchase').disabled) return;
+  const quantity = selectedGarageChestQuantity();
+  if (!product || !quantity || $('#garage-chest-dialog-purchase').disabled) return;
   closeGarageChestPreview();
-  void openGarageChest(product);
+  void openGarageChest(product, quantity);
 }
 
 function clearMysteryChestTimers() {
@@ -2447,34 +2491,67 @@ async function withdrawGarageCrystals() {
   }
 }
 
-async function openGarageChest(product) {
+async function openGarageChest(product, quantity = 1) {
   const snapshot = nftGarageSnapshot;
   if (nftGarageBusy || !snapshot) return;
   const outcomeNames = garageChestOutcomes(product).map((outcome) => `${outcome.rarity} · ${outcome.name}`);
   const equipmentBefore = new Set(snapshot.equipment.map((item) => item.tokenId));
-  beginMysteryChestExperience({ label: product.label, outcomeNames });
+  const purchaseLabel = quantity === 1 ? product.label : `${quantity} × ${product.label}`;
+  const chestLabel = quantity === 1 ? product.label : `${product.label}S`;
+  const batchReady = quantity > 1 && Number(snapshot.chestBatchLimit || 1) >= quantity;
+  beginMysteryChestExperience({ label: purchaseLabel, outcomeNames });
   nftGarageBusy = true;
   renderNftGarage();
-  setGarageStatus(`Opening ${product.label}. Ronin may first request an exact MATT approval, then the chest transaction.`, 'busy');
+  setGarageStatus(
+    quantity === 1
+      ? `Opening ${product.label}. Ronin may first request an exact MATT approval, then the chest transaction.`
+      : batchReady
+        ? `Opening ${quantity} ${chestLabel}. Ronin may first request an exact MATT approval, then one batch transaction.`
+        : `Opening ${quantity} ${chestLabel}. Ronin may first request an exact MATT approval, then ${quantity} chest confirmations.`,
+    'busy'
+  );
   try {
-    await nftGarage.openChest(snapshot, product);
+    await nftGarage.openChests(snapshot, product, quantity, {
+      onProgress({ completed, quantity: total }) {
+        if (completed > 0 && completed < total) {
+          setGarageStatus(`${completed} of ${total} ${product.label} requests confirmed. Continue in Ronin Wallet.`, 'busy');
+        }
+      }
+    });
     nftGarageBusy = false;
     await refreshNftGarage();
-    const minted = nftGarageSnapshot?.equipment?.find((item) => !equipmentBefore.has(item.tokenId));
-    void revealMysteryChest(minted ? {
-      rewardName: minted.metadata?.name || `EQUIPMENT #${minted.tokenId}`,
-      rarity: NFT_GARAGE_RARITIES[minted.rarity] || 'RONIN VERIFIED',
-      detail: `Equipment NFT #${minted.tokenId} is now in this wallet.`
+    const minted = nftGarageSnapshot?.equipment?.filter((item) => !equipmentBefore.has(item.tokenId)) || [];
+    void revealMysteryChest(minted.length === 1 && quantity === 1 ? {
+      rewardName: minted[0].metadata?.name || `EQUIPMENT #${minted[0].tokenId}`,
+      rarity: NFT_GARAGE_RARITIES[minted[0].rarity] || 'RONIN VERIFIED',
+      detail: `Equipment NFT #${minted[0].tokenId} is now in this wallet.`
+    } : minted.length > 0 ? {
+      rewardName: `${minted.length} OF ${quantity} REWARDS MINTED`,
+      rarity: minted.length >= quantity ? 'BATCH REVEAL COMPLETE' : 'RONIN VRF IN PROGRESS',
+      detail: `${minted.length} Equipment NFT${minted.length === 1 ? '' : 's'} from this purchase ${minted.length === 1 ? 'is' : 'are'} now visible in your wallet.`,
+      pending: minted.length < quantity
     } : {
-      rewardName: 'VRF REVEAL IN PROGRESS',
+      rewardName: quantity === 1 ? 'VRF REVEAL IN PROGRESS' : `${quantity} VRF REVEALS IN PROGRESS`,
       rarity: 'RONIN REQUEST CONFIRMED',
-      detail: 'The chest is open. Ronin VRF is selecting and minting the Equipment NFT; refresh the loadout if it has not appeared yet.',
+      detail: `${quantity === 1 ? 'The chest request is' : `All ${quantity} chest requests are`} confirmed. Ronin VRF is independently selecting and minting each Equipment NFT.`,
       pending: true
     });
-    setGarageStatus(`${product.label} request confirmed. Ronin VRF is minting the reward.`);
+    setGarageStatus(`${quantity} ${product.label} request${quantity === 1 ? '' : 's'} confirmed. Ronin VRF is minting ${quantity === 1 ? 'the reward' : 'each reward'}.`);
   } catch (error) {
-    failMysteryChestExperience(error?.message || `${product.label} could not be opened.`);
-    setGarageStatus(error?.message || `${product.label} could not be opened.`, 'error');
+    const confirmed = Math.max(0, Number(error?.completedChestPurchases || 0));
+    if (confirmed > 0) {
+      const remaining = Math.max(0, quantity - confirmed);
+      void revealMysteryChest({
+        rewardName: `${confirmed} OF ${quantity} REQUESTS CONFIRMED`,
+        rarity: 'PARTIAL PURCHASE COMPLETE',
+        detail: `${confirmed} chest${confirmed === 1 ? '' : 's'} ${confirmed === 1 ? 'was' : 'were'} paid and will still reveal through Ronin VRF. ${remaining} ${remaining === 1 ? 'chest was' : 'chests were'} not purchased.`,
+        pending: true
+      });
+      setGarageStatus(`${confirmed} of ${quantity} ${product.label} requests were confirmed before the wallet sequence stopped. The confirmed rewards remain active.`, 'error');
+    } else {
+      failMysteryChestExperience(error?.message || `${product.label} could not be opened.`);
+      setGarageStatus(error?.message || `${product.label} could not be opened.`, 'error');
+    }
   } finally {
     nftGarageBusy = false;
     renderNftGarage();
@@ -3008,6 +3085,14 @@ $('#garage-close-button').addEventListener('click', closeMinerCommandCenter);
 $('#garage-repair-button').addEventListener('click', () => void repairGarageArmor());
 $('#garage-chest-dialog-close').addEventListener('click', closeGarageChestPreview);
 $('#garage-chest-dialog-cancel').addEventListener('click', closeGarageChestPreview);
+$('#garage-chest-dialog-quantity-minus').addEventListener('click', () => adjustGarageChestQuantity(-1));
+$('#garage-chest-dialog-quantity-plus').addEventListener('click', () => adjustGarageChestQuantity(1));
+$('#garage-chest-dialog-quantity').addEventListener('input', syncGarageChestPurchasePreview);
+$('#garage-chest-dialog-quantity').addEventListener('change', () => {
+  const input = $('#garage-chest-dialog-quantity');
+  if (!selectedGarageChestQuantity()) input.value = '1';
+  syncGarageChestPurchasePreview();
+});
 $('#garage-chest-dialog-purchase').addEventListener('click', confirmGarageChestPurchase);
 $('#garage-chest-dialog').addEventListener('click', (event) => {
   if (event.target === $('#garage-chest-dialog')) closeGarageChestPreview();

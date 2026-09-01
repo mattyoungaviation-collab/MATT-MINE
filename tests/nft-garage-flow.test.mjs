@@ -4,10 +4,12 @@ import assert from 'node:assert/strict';
 import {
   NftGarageClient,
   NFT_GARAGE_CONTRACTS,
+  NFT_GARAGE_MAX_CHESTS_PER_PURCHASE,
   NFT_GARAGE_SELECTORS,
   crystalWithdrawalAvailability,
   formatTokenUnits,
-  parseTokenUnits
+  parseTokenUnits,
+  uintWord
 } from '../src/game/nftGarageClient.js';
 import { validatedNftLabRpcRequest } from '../server/http.js';
 
@@ -156,4 +158,70 @@ test('the Garage refuses equipment changes while the Miner is locked in a run', 
     /locked in a run/
   );
   assert.deepEqual(calls, []);
+});
+
+test('Equipment chest purchases batch up to ten independent chests in one transaction', async () => {
+  const { garage, calls } = garageHarness();
+  const address = '0x1111111111111111111111111111111111111111';
+  let allowance;
+  garage.ensureMattAllowance = async (...args) => { allowance = args; };
+
+  const purchase = await garage.openChests(
+    { address, chestBatchLimit: NFT_GARAGE_MAX_CHESTS_PER_PURCHASE },
+    { slot: 4, priceRaw: 5n },
+    NFT_GARAGE_MAX_CHESTS_PER_PURCHASE
+  );
+
+  assert.equal(allowance[2], 50n);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].to, NFT_GARAGE_CONTRACTS.chest);
+  assert.equal(calls[0].data, `${NFT_GARAGE_SELECTORS.openChests}${uintWord(4)}${uintWord(10)}`);
+  assert.deepEqual(purchase, { quantity: 10, totalPriceRaw: 50n, batched: true, transactionCount: 1 });
+});
+
+test('Equipment chest quantity stays capped at ten and falls back safely before the contract upgrade', async () => {
+  const { garage, calls } = garageHarness();
+  const address = '0x1111111111111111111111111111111111111111';
+  const progress = [];
+  garage.ensureMattAllowance = async () => {};
+
+  await assert.rejects(
+    () => garage.openChests({ address, chestBatchLimit: 10 }, { slot: 1, priceRaw: 2n }, 11),
+    /no more than 10/
+  );
+  const purchase = await garage.openChests(
+    { address, chestBatchLimit: 1 },
+    { slot: 1, priceRaw: 2n },
+    3,
+    { onProgress: (status) => progress.push(status) }
+  );
+
+  assert.equal(calls.length, 3);
+  assert.ok(calls.every((call) => call.data === `${NFT_GARAGE_SELECTORS.openChest}${uintWord(1)}`));
+  assert.deepEqual(progress.at(-1), { completed: 3, quantity: 3 });
+  assert.deepEqual(purchase, { quantity: 3, totalPriceRaw: 6n, batched: false, transactionCount: 3 });
+
+  const partial = garageHarness().garage;
+  let attempts = 0;
+  partial.ensureMattAllowance = async () => {};
+  partial.send = async () => {
+    attempts += 1;
+    if (attempts === 3) throw new Error('wallet sequence stopped');
+  };
+  await assert.rejects(
+    () => partial.openChests({ address, chestBatchLimit: 1 }, { slot: 1, priceRaw: 2n }, 4),
+    (error) => {
+      assert.equal(error.completedChestPurchases, 2);
+      assert.equal(error.requestedChestPurchases, 4);
+      return true;
+    }
+  );
+});
+
+test('the Garage detects the on-chain chest batch limit and defaults legacy contracts to one', async () => {
+  const { garage } = garageHarness();
+  garage.call = async () => `0x${10n.toString(16).padStart(64, '0')}`;
+  assert.equal(await garage.chestBatchLimit(), 10);
+  garage.call = async () => { throw new Error('unknown selector'); };
+  assert.equal(await garage.chestBatchLimit(), 1);
 });

@@ -855,6 +855,39 @@ describe("MATT Mine NFT V2", function () {
     );
   });
 
+  it("opens up to ten Equipment chests atomically with independent VRF requests", async function () {
+    const system = await networkHelpers.loadFixture(deploySystem);
+    const quantity = 10n;
+    const unitPrice = ethers.parseEther("2");
+    const totalPrice = unitPrice * quantity;
+    await (await system.matt.connect(system.player).approve(system.chest.target, totalPrice)).wait();
+    const treasuryBefore = await system.matt.balanceOf(system.treasury.address);
+    const firstRequestId = await system.chestRandomness.nextRequestId();
+
+    await (await system.chest.connect(system.player).openChests(SLOT.Pickaxe, quantity)).wait();
+
+    assert.equal(await system.chestRandomness.nextRequestId(), firstRequestId + quantity);
+    assert.equal(await system.matt.balanceOf(system.chest.target), totalPrice);
+    assert.equal(await system.matt.balanceOf(system.treasury.address), treasuryBefore);
+    for (let offset = 0n; offset < quantity; offset += 1n) {
+      await (await system.chestRandomness.fulfill(firstRequestId + offset, 100n + offset)).wait();
+    }
+    assert.equal(await system.equipment.balanceOf(system.player.address), quantity);
+    assert.equal(await system.matt.balanceOf(system.chest.target), 0n);
+    assert.equal(await system.matt.balanceOf(system.treasury.address), treasuryBefore + totalPrice);
+
+    await expectCustomError(
+      system.chest.connect(system.player).openChests(SLOT.Pickaxe, 0),
+      system.chest,
+      "InvalidQuantity"
+    );
+    await expectCustomError(
+      system.chest.connect(system.player).openChests(SLOT.Pickaxe, 11),
+      system.chest,
+      "InvalidQuantity"
+    );
+  });
+
   it("atomically cancels a refunded VRF request and discards a late coordinator result", async function () {
     const system = await networkHelpers.loadFixture(deploySystem);
     const coordinator = await deploy("MockVRFCoordinatorV25");

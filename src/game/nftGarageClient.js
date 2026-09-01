@@ -23,6 +23,8 @@ export const NFT_GARAGE_SELECTORS = Object.freeze({
   openChest: '0x99ae54a9',
   repairPrice: '0x48d54bba',
   repairArmor: '0x9981f16d',
+  maxChestsPerPurchase: '0xb4085102',
+  openChests: '0x18246f38',
   bankBalance: '0x9839fa4a',
   minimumWithdrawal: '0x738b31b5',
   walletDailyLimit: '0xb4c0f7f7',
@@ -53,6 +55,7 @@ export const NFT_GARAGE_CHESTS = Object.freeze([
 
 export const NFT_GARAGE_RARITIES = Object.freeze(['COMMON', 'UNCOMMON', 'RARE', 'MYTHIC', 'LEGENDARY']);
 export const NFT_GARAGE_EQUIPMENT_PAGE_SIZE = 50;
+export const NFT_GARAGE_MAX_CHESTS_PER_PURCHASE = 10;
 
 const NFT_GARAGE_RARITY_ODDS_BPS = Object.freeze([6_800, 1_800, 800, 500, 100]);
 const NFT_GARAGE_ITEM_NAMES = Object.freeze([
@@ -144,14 +147,17 @@ export class NftGarageClient {
     const equipmentPage = await this.loadEquipment(player, {
       priorityTokenIds: Object.values(loadout).filter((tokenId) => tokenId > 0)
     });
-    const chestPrices = await Promise.all(NFT_GARAGE_CHESTS.map(async (product) => ({
-      ...product,
-      priceRaw: decodeAbiUint(await this.call(
-        NFT_GARAGE_CONTRACTS.chest,
-        encodeCall(NFT_GARAGE_SELECTORS.chestPrice, uintWord(product.slot))
-      ))
-    })));
-    const repairPriceRaw = decodeAbiUint(await this.call(NFT_GARAGE_CONTRACTS.loadout, NFT_GARAGE_SELECTORS.repairPrice));
+    const [chestPrices, repairPriceRaw, chestBatchLimit] = await Promise.all([
+      Promise.all(NFT_GARAGE_CHESTS.map(async (product) => ({
+        ...product,
+        priceRaw: decodeAbiUint(await this.call(
+          NFT_GARAGE_CONTRACTS.chest,
+          encodeCall(NFT_GARAGE_SELECTORS.chestPrice, uintWord(product.slot))
+        ))
+      }))),
+      this.call(NFT_GARAGE_CONTRACTS.loadout, NFT_GARAGE_SELECTORS.repairPrice).then(decodeAbiUint),
+      this.chestBatchLimit()
+    ]);
 
     return {
       address: player,
@@ -165,7 +171,8 @@ export class NftGarageClient {
       ...wallet,
       equipmentOperatorApproved: decodeAbiUint(equipmentApprovalValue) !== 0n,
       repairPriceRaw,
-      chestPrices
+      chestPrices,
+      chestBatchLimit
     };
   }
 
@@ -324,14 +331,63 @@ export class NftGarageClient {
     );
   }
 
+  async chestBatchLimit() {
+    try {
+      const value = Number(decodeAbiUint(await this.call(
+        NFT_GARAGE_CONTRACTS.chest,
+        NFT_GARAGE_SELECTORS.maxChestsPerPurchase
+      )));
+      return Number.isSafeInteger(value) && value > 1
+        ? Math.min(value, NFT_GARAGE_MAX_CHESTS_PER_PURCHASE)
+        : 1;
+    } catch {
+      return 1;
+    }
+  }
+
   async openChest(snapshot, product) {
+    return this.openChests(snapshot, product, 1);
+  }
+
+  async openChests(snapshot, product, quantityInput, options = {}) {
+    const quantity = positiveInteger(quantityInput, 'Equipment chest quantity');
+    if (quantity > NFT_GARAGE_MAX_CHESTS_PER_PURCHASE) {
+      throw new Error(`Choose no more than ${NFT_GARAGE_MAX_CHESTS_PER_PURCHASE} Equipment chests per purchase.`);
+    }
     const priceRaw = BigInt(product.priceRaw);
-    await this.ensureMattAllowance(snapshot.address, NFT_GARAGE_CONTRACTS.chest, priceRaw, 'chest-approval');
-    await this.send(
-      NFT_GARAGE_CONTRACTS.chest,
-      encodeCall(NFT_GARAGE_SELECTORS.openChest, uintWord(product.slot)),
-      'chest-purchase'
-    );
+    const totalPriceRaw = priceRaw * BigInt(quantity);
+    await this.ensureMattAllowance(snapshot.address, NFT_GARAGE_CONTRACTS.chest, totalPriceRaw, 'chest-approval');
+    const batchLimit = Math.max(1, Math.min(
+      NFT_GARAGE_MAX_CHESTS_PER_PURCHASE,
+      Number(snapshot.chestBatchLimit || 1)
+    ));
+    if (quantity > 1 && batchLimit >= quantity) {
+      await this.send(
+        NFT_GARAGE_CONTRACTS.chest,
+        encodeCall(NFT_GARAGE_SELECTORS.openChests, uintWord(product.slot), uintWord(quantity)),
+        'chest-purchase'
+      );
+      return { quantity, totalPriceRaw, batched: true, transactionCount: 1 };
+    }
+    for (let index = 0; index < quantity; index += 1) {
+      options.onProgress?.({ completed: index, quantity });
+      try {
+        await this.send(
+          NFT_GARAGE_CONTRACTS.chest,
+          encodeCall(NFT_GARAGE_SELECTORS.openChest, uintWord(product.slot)),
+          'chest-purchase'
+        );
+      } catch (error) {
+        const purchaseError = error instanceof Error && Object.isExtensible(error)
+          ? error
+          : new Error(error?.message || 'The chest purchase sequence stopped.', { cause: error });
+        purchaseError.completedChestPurchases = index;
+        purchaseError.requestedChestPurchases = quantity;
+        throw purchaseError;
+      }
+      options.onProgress?.({ completed: index + 1, quantity });
+    }
+    return { quantity, totalPriceRaw, batched: false, transactionCount: quantity };
   }
 
   async withdrawCrystals(snapshot, amountRaw, options = {}) {

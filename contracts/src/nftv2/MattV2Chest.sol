@@ -19,6 +19,7 @@ contract MattV2Chest is MattV2UpgradeableModule, IRandomnessConsumer {
 
     bytes32 public constant CONFIG_ROLE = keccak256("CONFIG_ROLE");
     uint256 public constant REQUEST_TIMEOUT = 24 hours;
+    uint8 public constant MAX_CHESTS_PER_PURCHASE = 10;
 
     struct PendingRequest {
         address buyer;
@@ -81,6 +82,7 @@ contract MattV2Chest is MattV2UpgradeableModule, IRandomnessConsumer {
     error IncompleteDefinitionVersion();
     error DefinitionVersionIsFrozen();
     error RandomnessAlreadyFulfilled();
+    error InvalidQuantity();
 
     constructor(address upgradeTimelock) MattV2UpgradeableModule(upgradeTimelock) {}
 
@@ -116,11 +118,37 @@ contract MattV2Chest is MattV2UpgradeableModule, IRandomnessConsumer {
         whenNotPaused
         returns (bytes32 requestKey)
     {
-        uint256 price = chestPrice[slot];
-        uint32 version = activeDefinitionVersion;
+        (uint256 price, uint32 version) = _chestTerms(slot);
+        matt.safeTransferFrom(msg.sender, address(this), price);
+        requestKey = _requestChest(msg.sender, slot, price, version);
+    }
+
+    function openChests(MattV2Types.Slot slot, uint8 quantity)
+        external
+        nonReentrant
+        whenNotPaused
+        returns (bytes32[] memory requestKeys)
+    {
+        if (quantity == 0 || quantity > MAX_CHESTS_PER_PURCHASE) revert InvalidQuantity();
+        (uint256 price, uint32 version) = _chestTerms(slot);
+        matt.safeTransferFrom(msg.sender, address(this), price * quantity);
+        requestKeys = new bytes32[](quantity);
+        for (uint256 index; index < quantity; ++index) {
+            requestKeys[index] = _requestChest(msg.sender, slot, price, version);
+        }
+    }
+
+    function _chestTerms(MattV2Types.Slot slot) private view returns (uint256 price, uint32 version) {
+        price = chestPrice[slot];
+        version = activeDefinitionVersion;
         if (price == 0 || version == 0) revert InvalidConfiguration();
         if (price > type(uint128).max) revert PriceTooLarge();
-        matt.safeTransferFrom(msg.sender, address(this), price);
+    }
+
+    function _requestChest(address buyer, MattV2Types.Slot slot, uint256 price, uint32 version)
+        private
+        returns (bytes32 requestKey)
+    {
         address provider = address(randomnessProvider);
         uint256 providerRequestId = randomnessProvider.requestRandomWord();
         requestKey = keccak256(abi.encode(provider, providerRequestId));
@@ -128,13 +156,13 @@ contract MattV2Chest is MattV2UpgradeableModule, IRandomnessConsumer {
             revert RequestAlreadyExists();
         }
         pendingRequests[requestKey] = PendingRequest({
-            buyer: msg.sender,
+            buyer: buyer,
             price: uint128(price),
             requestedAt: uint40(block.timestamp),
             definitionVersion: version,
             slot: slot
         });
-        emit ChestRequested(requestKey, provider, providerRequestId, msg.sender, slot, version, price);
+        emit ChestRequested(requestKey, provider, providerRequestId, buyer, slot, version, price);
     }
 
     function fulfillRandomness(uint256 providerRequestId, uint256 randomWord)
