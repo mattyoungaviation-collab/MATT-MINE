@@ -125,6 +125,7 @@ let lockedMinerRecoveryBusy = false;
 let nftGarageBusy = false;
 let nftGarageSnapshot = null;
 let pendingGarageChestProduct = null;
+let mysteryChestTimers = [];
 let nftCrystalBankBusy = false;
 let nftWalletSnapshot = null;
 let nftCrystalTransactionHash = '';
@@ -232,6 +233,7 @@ function showScreen(id = null) {
       (action === 'leaderboards' && id === 'leaderboards') ||
       (action === 'pass' && (id === 'mine-pass' || id === 'pass-mine' || id === 'pass-cosmetics')) ||
       (action === 'consumables' && id === 'consumables') ||
+      (action === 'loadout' && id === 'miner-select') ||
       (action === 'account' && (id === 'miner-profile' || id === 'miner-select'));
     button.classList.toggle('active', active);
   }
@@ -2148,14 +2150,25 @@ function renderGarageChests(snapshot) {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'garage-chest-product';
+    button.dataset.chestSlot = String(product.slot);
     button.disabled = nftGarageBusy || !snapshot;
+    const art = document.createElement('span');
+    art.className = 'garage-chest-product-art';
+    const image = document.createElement('img');
+    image.src = './assets/ui/matt-mystery-chest-closed-v1.webp';
+    image.alt = '';
+    image.setAttribute('aria-hidden', 'true');
+    art.append(image);
+    const copy = document.createElement('span');
+    copy.className = 'garage-chest-product-copy';
     const label = document.createElement('span');
     label.textContent = product.label;
     const price = document.createElement('strong');
     price.textContent = product.priceRaw === undefined ? 'LOADING...' : `${formatGarageTokenUnits(product.priceRaw)} MATT`;
     const detail = document.createElement('small');
-    detail.textContent = 'VIEW ODDS & EXACT STATS';
-    button.append(label, price, detail);
+    detail.textContent = 'INSPECT DROP POOL →';
+    copy.append(label, price, detail);
+    button.append(art, copy);
     button.addEventListener('click', () => showGarageChestPreview(product));
     container.append(button);
   }
@@ -2255,6 +2268,86 @@ function confirmGarageChestPurchase() {
   if (!product || $('#garage-chest-dialog-purchase').disabled) return;
   closeGarageChestPreview();
   void openGarageChest(product);
+}
+
+function clearMysteryChestTimers() {
+  for (const timer of mysteryChestTimers) {
+    window.clearTimeout(timer);
+    window.clearInterval(timer);
+  }
+  mysteryChestTimers = [];
+}
+
+function mysteryChestTimer(callback, delay, repeating = false) {
+  const timer = repeating ? window.setInterval(callback, delay) : window.setTimeout(callback, delay);
+  mysteryChestTimers.push(timer);
+  return timer;
+}
+
+function beginMysteryChestExperience({ label, outcomeNames = [], status = 'AUTHORIZE IN RONIN WALLET' }) {
+  clearMysteryChestTimers();
+  const dialog = $('#mystery-chest-dialog');
+  const stage = $('#mystery-chest-stage');
+  const names = outcomeNames.filter(Boolean);
+  stage.dataset.state = 'authorizing';
+  $('#mystery-chest-title').textContent = label || 'MATT MINE CHEST';
+  $('#mystery-chest-status').textContent = status;
+  $('#mystery-chest-rarity').textContent = 'SECURE REWARD CHANNEL';
+  $('#mystery-chest-result-name').textContent = 'CHEST LOCKED';
+  $('#mystery-chest-result-detail').textContent = 'Complete the request to power the Mystery Lift.';
+  $('#mystery-chest-reel-name').textContent = names[0] || 'AWAITING SIGNAL';
+  $('#mystery-chest-done').hidden = true;
+  let index = 0;
+  if (names.length > 1) {
+    mysteryChestTimer(() => {
+      index = (index + 1) % names.length;
+      $('#mystery-chest-reel-name').textContent = names[index];
+    }, 105, true);
+  }
+  if (typeof dialog.showModal === 'function' && !dialog.open) dialog.showModal();
+  else dialog.setAttribute('open', '');
+}
+
+function revealMysteryChest({ rewardName, detail, rarity = 'RONIN VERIFIED', pending = false }) {
+  const stage = $('#mystery-chest-stage');
+  stage.dataset.state = 'charging';
+  $('#mystery-chest-status').textContent = 'CRYSTAL LOCK CHARGING';
+  return new Promise((resolve) => {
+    mysteryChestTimer(() => {
+      stage.dataset.state = 'opening';
+      $('#mystery-chest-status').textContent = 'MYSTERY LIFT OPEN';
+    }, 720);
+    mysteryChestTimer(() => {
+      clearMysteryChestTimers();
+      stage.dataset.state = pending ? 'pending' : 'revealed';
+      $('#mystery-chest-status').textContent = pending ? 'RONIN RANDOMNESS REQUESTED' : 'REWARD SECURED';
+      $('#mystery-chest-rarity').textContent = rarity;
+      $('#mystery-chest-result-name').textContent = rewardName || 'REWARD SIGNAL CONFIRMED';
+      $('#mystery-chest-result-detail').textContent = detail || 'Your reward has been added to this wallet.';
+      $('#mystery-chest-reel-name').textContent = rewardName || 'VRF REVEAL IN PROGRESS';
+      $('#mystery-chest-done').hidden = false;
+      resolve();
+    }, 2_350);
+  });
+}
+
+function failMysteryChestExperience(message) {
+  clearMysteryChestTimers();
+  const stage = $('#mystery-chest-stage');
+  stage.dataset.state = 'error';
+  $('#mystery-chest-status').textContent = 'CHEST SIGNAL INTERRUPTED';
+  $('#mystery-chest-rarity').textContent = 'NO REWARD CONSUMED';
+  $('#mystery-chest-result-name').textContent = 'OPENING CANCELED';
+  $('#mystery-chest-result-detail').textContent = message || 'The chest request did not complete.';
+  $('#mystery-chest-reel-name').textContent = 'SYSTEM SAFE';
+  $('#mystery-chest-done').hidden = false;
+}
+
+function closeMysteryChestExperience() {
+  const dialog = $('#mystery-chest-dialog');
+  clearMysteryChestTimers();
+  if (typeof dialog.close === 'function' && dialog.open) dialog.close('done');
+  else dialog.removeAttribute('open');
 }
 
 function setGarageStatus(message, state = '') {
@@ -2357,6 +2450,9 @@ async function withdrawGarageCrystals() {
 async function openGarageChest(product) {
   const snapshot = nftGarageSnapshot;
   if (nftGarageBusy || !snapshot) return;
+  const outcomeNames = garageChestOutcomes(product).map((outcome) => `${outcome.rarity} · ${outcome.name}`);
+  const equipmentBefore = new Set(snapshot.equipment.map((item) => item.tokenId));
+  beginMysteryChestExperience({ label: product.label, outcomeNames });
   nftGarageBusy = true;
   renderNftGarage();
   setGarageStatus(`Opening ${product.label}. Ronin may first request an exact MATT approval, then the chest transaction.`, 'busy');
@@ -2364,8 +2460,20 @@ async function openGarageChest(product) {
     await nftGarage.openChest(snapshot, product);
     nftGarageBusy = false;
     await refreshNftGarage();
-    setGarageStatus(`${product.label} request confirmed. Randomness may take a moment; use Refresh if the new item is still minting.`);
+    const minted = nftGarageSnapshot?.equipment?.find((item) => !equipmentBefore.has(item.tokenId));
+    void revealMysteryChest(minted ? {
+      rewardName: minted.metadata?.name || `EQUIPMENT #${minted.tokenId}`,
+      rarity: NFT_GARAGE_RARITIES[minted.rarity] || 'RONIN VERIFIED',
+      detail: `Equipment NFT #${minted.tokenId} is now in this wallet.`
+    } : {
+      rewardName: 'VRF REVEAL IN PROGRESS',
+      rarity: 'RONIN REQUEST CONFIRMED',
+      detail: 'The chest is open. Ronin VRF is selecting and minting the Equipment NFT; refresh the loadout if it has not appeared yet.',
+      pending: true
+    });
+    setGarageStatus(`${product.label} request confirmed. Ronin VRF is minting the reward.`);
   } catch (error) {
+    failMysteryChestExperience(error?.message || `${product.label} could not be opened.`);
     setGarageStatus(error?.message || `${product.label} could not be opened.`, 'error');
   } finally {
     nftGarageBusy = false;
@@ -2783,6 +2891,7 @@ for (const button of document.querySelectorAll('[data-site-action]')) {
     if (action === 'leaderboards') return openLeaderboards(ARENA_LEADERBOARD_MODE);
     if (action === 'pass') return openPass();
     if (action === 'consumables') return void openConsumables();
+    if (action === 'loadout') return void openMinerSelect();
     if (action === 'mines') {
       return openMines();
     }
@@ -2884,6 +2993,12 @@ $('#garage-chest-dialog').addEventListener('click', (event) => {
 $('#garage-chest-dialog').addEventListener('close', () => {
   pendingGarageChestProduct = null;
 });
+$('#mystery-chest-close').addEventListener('click', closeMysteryChestExperience);
+$('#mystery-chest-done').addEventListener('click', closeMysteryChestExperience);
+$('#mystery-chest-dialog').addEventListener('click', (event) => {
+  if (event.target === $('#mystery-chest-dialog')) closeMysteryChestExperience();
+});
+$('#mystery-chest-dialog').addEventListener('close', clearMysteryChestTimers);
 $('#garage-withdraw-button').addEventListener('click', () => void withdrawGarageCrystals());
 $('#garage-withdraw-input').addEventListener('input', syncCrystalWithdrawalButton);
 $('#garage-withdraw-all-button').addEventListener('click', () => {
@@ -3904,10 +4019,11 @@ function renderCosmetics() {
 
   const chest = inventory?.chests?.[PASS_CHEST_ID] || { available: 0, opened: 0 };
   $('#pass-chest-card').innerHTML = `
-    <div>
+    <div class="pass-chest-art"><img src="./assets/ui/matt-mystery-chest-closed-v1.webp" alt="" aria-hidden="true"><span>${chest.available || 0}</span></div>
+    <div class="pass-chest-copy">
       <span class="eyebrow">LEVEL 3 REWARD</span>
-      <h3>Pass Chest</h3>
-      <p>Contains a permanent cosmetic reward, including the exclusive Molten Pickaxe.</p>
+      <h3>Mystery Pass Chest</h3>
+      <p>Power the Mystery Lift and reveal one permanent Pass cosmetic for this wallet.</p>
     </div>
     <div class="pass-chest-actions">
       <strong>${chest.available || 0} UNOPENED</strong>
@@ -3961,6 +4077,11 @@ async function toggleCosmetic(slot, cosmeticId) {
 
 async function openPassChest() {
   if (passRewardsBusy || !serverPlayer) return;
+  beginMysteryChestExperience({
+    label: 'MYSTERY PASS CHEST',
+    outcomeNames: Object.values(PASS_COSMETICS).map((cosmetic) => cosmetic.name),
+    status: 'CONTACTING REWARD SERVER'
+  });
   passRewardsBusy = true;
   renderCosmetics();
   try {
@@ -3969,9 +4090,16 @@ async function openPassChest() {
     saveProfile(profile);
     game.setProfile(profile);
     applyPassInventory(result.passInventory);
+    const cosmetic = result.rewards.cosmetic;
+    void revealMysteryChest({
+      rewardName: cosmetic?.name || 'COLLECTION COMPLETE',
+      rarity: cosmetic ? 'PERMANENT COSMETIC' : 'ALL REWARDS OWNED',
+      detail: cosmetic?.description || 'This wallet already owns every available Pass cosmetic.'
+    });
     toast(`Pass Chest opened · ${result.rewards.cosmetic?.name || 'cosmetic collection complete'}`);
     updateMenu();
   } catch (error) {
+    failMysteryChestExperience(error.message);
     toast(error.message);
   } finally {
     passRewardsBusy = false;

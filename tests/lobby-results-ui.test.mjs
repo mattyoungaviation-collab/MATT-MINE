@@ -165,8 +165,12 @@ test('Miner selection, loadout, balances, repair, chests, and mine entry share o
   assert.match(html, /id="garage-chest-list"/);
   assert.match(html, /id="garage-chest-dialog"/);
   assert.match(html, /id="garage-chest-dialog-outcomes"/);
-  assert.match(source, /VIEW ODDS & EXACT STATS/);
+  assert.match(html, /id="mystery-chest-dialog"/);
+  assert.match(html, /matt-mystery-chest-closed-v1\.webp/);
+  assert.match(html, /matt-mystery-chest-open-v1\.webp/);
+  assert.match(source, /INSPECT DROP POOL/);
   assert.match(source, /garageChestOutcomes\(product\)/);
+  assert.match(source, /revealMysteryChest/);
   assert.match(source, /\['BANKED XP'/);
   assert.match(source, /\['NEXT LEVEL'/);
   assert.doesNotMatch(html, /id="select-loadout-button"[^>]*href=/);

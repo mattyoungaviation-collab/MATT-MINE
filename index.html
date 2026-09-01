@@ -26,6 +26,7 @@
     <link rel="stylesheet" href="./src/production.css" />
     <link rel="stylesheet" href="./src/ui-refresh.css" />
     <link rel="stylesheet" href="./src/player-journey.css" />
+    <link rel="stylesheet" href="./src/production-overhaul.css" />
   </head>
   <body>
     <main id="app">
@@ -33,14 +34,16 @@
 
       <header id="site-nav" class="site-nav" aria-label="MATT Mine navigation">
         <button class="site-brand" type="button" data-site-action="home" aria-label="MATT Mine home">
-          <span aria-hidden="true">⛏</span><strong>MATT <b>MINE</b></strong>
+          <img src="./assets/favicon.svg" alt="" aria-hidden="true" />
+          <span class="site-brand-copy"><strong>MATT <b>MINE</b></strong><small>RONIN EXTRACTION PROTOCOL</small></span>
         </button>
         <nav aria-label="Player pages">
-          <button type="button" data-site-action="mines">MINES</button>
-          <button type="button" data-site-action="how-to-play">HOW TO PLAY</button>
-          <button type="button" data-site-action="leaderboards">LEADERBOARDS</button>
-          <button type="button" data-site-action="pass">PASS</button>
+          <button type="button" data-site-action="mines">PLAY</button>
+          <button type="button" data-site-action="how-to-play">BRIEFING</button>
+          <button type="button" data-site-action="loadout">MINER &amp; LOADOUT</button>
           <button type="button" data-site-action="consumables">CONSUMABLES</button>
+          <button type="button" data-site-action="pass">MINE PASS</button>
+          <button type="button" data-site-action="leaderboards">RANKINGS</button>
         </nav>
         <button id="site-account-button" class="site-account-button" type="button" data-site-action="account">
           <span aria-hidden="true">▣</span><strong id="site-account-label">CONNECT WALLET</strong>
@@ -1146,6 +1149,37 @@
           <footer>
             <button id="garage-chest-dialog-cancel" class="secondary-button" type="button">NOT NOW</button>
             <button id="garage-chest-dialog-purchase" class="primary-button" type="button">OPEN CHEST</button>
+          </footer>
+        </div>
+      </dialog>
+
+      <dialog id="mystery-chest-dialog" class="mystery-chest-dialog" aria-labelledby="mystery-chest-title">
+        <div id="mystery-chest-stage" class="mystery-chest-stage" data-state="standby">
+          <button id="mystery-chest-close" class="mystery-chest-close" type="button" aria-label="Close chest reveal">CLOSE</button>
+          <header>
+            <p class="eyebrow">MATT MINE MYSTERY LIFT</p>
+            <h2 id="mystery-chest-title">REWARD CHEST</h2>
+            <p id="mystery-chest-status" role="status" aria-live="polite">STANDBY</p>
+          </header>
+          <div class="mystery-chest-visual" aria-hidden="true">
+            <span class="mystery-chest-beam"></span>
+            <span class="mystery-chest-ring ring-one"></span>
+            <span class="mystery-chest-ring ring-two"></span>
+            <span class="mystery-chest-particles"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+            <img class="mystery-chest-closed-art" src="./assets/ui/matt-mystery-chest-closed-v1.webp" alt="" />
+            <img class="mystery-chest-open-art" src="./assets/ui/matt-mystery-chest-open-v1.webp" alt="" />
+          </div>
+          <div class="mystery-chest-reel" aria-hidden="true">
+            <small>SCANNING REWARD POOL</small>
+            <strong id="mystery-chest-reel-name">AWAITING SIGNAL</strong>
+          </div>
+          <section class="mystery-chest-result" aria-live="polite">
+            <span id="mystery-chest-rarity">RONIN VERIFIED</span>
+            <h3 id="mystery-chest-result-name">CHEST READY</h3>
+            <p id="mystery-chest-result-detail">Approve the request to begin the reveal.</p>
+          </section>
+          <footer>
+            <button id="mystery-chest-done" class="primary-button" type="button">RETURN TO LOADOUT</button>
           </footer>
         </div>
       </dialog>
