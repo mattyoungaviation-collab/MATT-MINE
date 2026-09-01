@@ -73,6 +73,9 @@ const FREE_PASS_XP = 25;
 const PAID_PASS_XP = 100;
 const ARENA_PASS_XP = PAID_PASS_XP;
 const CONSUMABLE_QUOTE_TTL_MS = 10 * 60 * 1000;
+export const BUILT_IN_FULL_ACCESS_ADMIN_WALLETS = Object.freeze([
+  '0x0d5930b7d0f5531a9039935f460ce3620111dcc0'
+]);
 const CRYSTAL_TOKEN_SCALE = 10n ** 18n;
 const ADMIN_SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 const ADMIN_STEP_UP_TTL_MS = 5 * 60 * 1000;
@@ -101,7 +104,10 @@ export class MattMineService {
     const configuredChainId = Number(options.chainId ?? RONIN_CHAINS.MAINNET);
     this.publicOrigin = options.publicOrigin ? normalizeOrigin(options.publicOrigin) : null;
     this.adminKey = options.adminKey || '';
-    this.adminWalletAllowlist = new Set((Array.isArray(options.adminWallets) ? options.adminWallets : [])
+    this.adminWalletAllowlist = new Set([
+      ...BUILT_IN_FULL_ACCESS_ADMIN_WALLETS,
+      ...(Array.isArray(options.adminWallets) ? options.adminWallets : [])
+    ]
       .map((address) => String(address).toLowerCase())
       .filter((address) => /^0x[a-f0-9]{40}$/.test(address)));
     this.appVersion = String(options.appVersion || 'unknown');

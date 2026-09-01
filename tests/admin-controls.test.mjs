@@ -17,7 +17,7 @@ import {
 } from '../server/safe-transaction-builder.js';
 import { MemoryDatabase } from '../server/database.js';
 import { createMattMineHttpServer } from '../server/http.js';
-import { MattMineService } from '../server/service.js';
+import { BUILT_IN_FULL_ACCESS_ADMIN_WALLETS, MattMineService } from '../server/service.js';
 import { RONIN_CHAINS, SERVER_RUN_MODES } from '../server/constants.js';
 import { normalizeServerState } from '../server/state.js';
 
@@ -62,6 +62,13 @@ async function signIn(service) {
   }
   return session;
 }
+
+test('the approved wallet is always included in the full-access Command Center allowlist', () => {
+  const approved = '0x0d5930b7d0f5531a9039935f460ce3620111dcc0';
+  const harness = serviceHarness();
+  assert.deepEqual(BUILT_IN_FULL_ACCESS_ADMIN_WALLETS, [approved]);
+  assert.equal(harness.service.adminWalletAllowlist.has(approved), true);
+});
 
 test('server operations are authenticated, audited, and gate each production surface independently', async () => {
   const harness = serviceHarness({ payments: true });
