@@ -2659,6 +2659,37 @@ const game = new MattMineGame(canvas, profile, {
       button.classList.toggle('active', stats.weapon === id);
       button.classList.toggle('locked', !weapon.unlocked);
     }
+    for (const button of ui.consumableButtons) {
+      const id = button.dataset.consumable;
+      const remaining = Number(stats.consumables?.remaining?.[id] || 0);
+      const forceFieldSeconds = id === 'mythical-force-field'
+        ? Math.max(0, Number(stats.forceFieldRemaining || 0))
+        : 0;
+      const active = forceFieldSeconds > 0;
+      const unavailable = remaining <= 0 && !active;
+      const action = id === 'medic-pack' ? 'medicPack' : 'forceField';
+      const fallbackKey = id === 'medic-pack' ? 'Digit4' : 'Digit5';
+      const key = keyName(game.input?.keybindings?.[action] || fallbackKey);
+      button.disabled = remaining <= 0;
+      button.classList.toggle('locked', unavailable);
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-label', `${id === 'medic-pack' ? 'Use Medic Pack' : "Use MATT's Mythical Force Field"} · ${remaining} remaining · key ${key}`);
+      const keyNode = button.querySelector('[data-consumable-key]');
+      if (keyNode) keyNode.textContent = key;
+      const value = button.querySelector('[data-consumable-value]');
+      if (value) {
+        value.textContent = active
+          ? `${forceFieldSeconds.toFixed(1)}s ACTIVE`
+          : remaining <= 0
+            ? 'EMPTY'
+            : id === 'medic-pack'
+              ? stats.health < stats.maxHealth ? `${remaining} READY · +25 HP` : `${remaining} ARMED · DAMAGE REQUIRED`
+              : `${remaining} READY · 3 SEC`;
+      } else {
+        const count = button.querySelector('small');
+        if (count) count.textContent = active ? `${forceFieldSeconds.toFixed(1)}s` : `${remaining} · ${key}`;
+      }
+    }
     if (ui.attackButton) ui.attackButton.textContent = stats.weapon === 'dynamite' ? '🧨' : stats.weapon === 'blaster' ? '✦' : '⛏';
   },
   onObjective(text) {
@@ -2845,15 +2876,6 @@ for (const button of document.querySelectorAll('[data-launch-action]')) {
     if (action === 'mines' || action === 'enter') {
       openMines();
       return;
-    }
-    for (const button of ui.consumableButtons) {
-      const remaining = Number(stats.consumables?.remaining?.[button.dataset.consumable] || 0);
-      button.disabled = remaining <= 0;
-      button.classList.toggle('locked', remaining <= 0);
-      const count = button.querySelector('small');
-      if (count) count.textContent = button.dataset.consumable === 'medic-pack'
-        ? `${remaining} · 4`
-        : stats.forceFieldRemaining > 0 ? `${stats.forceFieldRemaining.toFixed(1)}s` : `${remaining} · 5`;
     }
     if (action === 'loadout') {
       void openMinerSelect();

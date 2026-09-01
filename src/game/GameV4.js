@@ -204,6 +204,11 @@ export class MattMineGame extends V3MattMineGame {
       this.arenaAccumulator = 0;
       return;
     }
+    // Manual Consumables are replayed as explicit commands, not held control
+    // state. Consume the browser/mobile edge before swapping in the fixed-step
+    // ArenaControlInput so keys 4/5 reach both the live game and server replay.
+    const selectedConsumable = this.input?.consumeConsumable?.();
+    if (selectedConsumable) this.useConsumable(selectedConsumable);
     this.arenaAccumulator += Math.max(0, Math.min(Number(dt) || 0, 0.25));
     const stepSeconds = ARENA_FIXED_STEP_MS / 1_000;
     while (this.arenaAccumulator + Number.EPSILON >= stepSeconds) {

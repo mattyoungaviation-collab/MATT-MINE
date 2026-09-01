@@ -18,8 +18,8 @@ import { defaultWalletState } from '../server/state.js';
 
 const NOOP_AUDIO = { startMusic() {}, stopMusic() {}, resume() {}, play() {}, startBoss() {}, stopBoss() {} };
 
-function gameWithConsumables(loadout) {
-  const game = new MattMineGame(null, defaultProfile(), { headless: true, audio: NOOP_AUDIO });
+function gameWithConsumables(loadout, hooks = {}) {
+  const game = new MattMineGame(null, defaultProfile(), { headless: true, audio: NOOP_AUDIO, ...hooks });
   game.startRun({ mode: 'practice', seed: 'CONSUMABLES', tuning: { _consumables: { loadout } } });
   return game;
 }
@@ -64,6 +64,40 @@ test('Medic Pack requires missing health and Force Field blocks all damage for t
   game.player.forceFieldRemaining = 0;
   game.damagePlayer(10, 0);
   assert.equal(game.player.health, 75);
+});
+
+test('manual Consumable input reaches deterministic mines and records replay-safe commands', () => {
+  const events = [];
+  const queuedConsumables = ['medic-pack', 'mythical-force-field'];
+  const game = gameWithConsumables(
+    { 'medic-pack': 1, 'mythical-force-field': 1, 'heavy-crystal-hauler': 0 },
+    { onArenaInput: (event) => events.push(event) }
+  );
+  game.input = {
+    pointer: { active: false },
+    mobileAttack: false,
+    movement: () => ({ x: 0, y: 0 }),
+    attacking: () => false,
+    consumeDash: () => false,
+    consumeWeaponSelection: () => null,
+    consumeConsumable: () => queuedConsumables.shift() || null
+  };
+  game.player.health = 60;
+
+  game.update(0.02);
+  assert.equal(game.player.health, 85);
+  assert.equal(game.run.consumables.remaining['medic-pack'], 0);
+
+  game.update(0.02);
+  assert.ok(game.player.forceFieldRemaining > 2.9);
+  assert.equal(game.run.consumables.remaining['mythical-force-field'], 0);
+  assert.deepEqual(
+    events.filter((event) => event.type === 'command').map((event) => [event.command, event.value]),
+    [
+      ['consumable', 'medic-pack'],
+      ['consumable', 'mythical-force-field']
+    ]
+  );
 });
 
 test('Heavy Crystal Hauler multiplies carried units without multiplying score', () => {

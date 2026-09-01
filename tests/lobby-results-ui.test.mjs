@@ -194,5 +194,8 @@ test('Practice is visibly public and rewardless, while connected wallets may use
   assert.match(useServer, /RUN_MODES\.PRACTICE && Boolean\(serverPlayer\)/);
   assert.match(source, /apiClient\.gameTuning\(mode\)/);
   assert.match(source, /apiClient\.mineSlot\(slotIdForMode\(mode\)\)/);
+  assert.match(html, /id="consumable-rack"/);
+  assert.match(html, /data-consumable-value/);
+  assert.match(source, /stats\.forceFieldRemaining/);
   assert.match(admin, /Practice is the public no-wallet demo and always awards zero XP and zero Crystals/);
 });
