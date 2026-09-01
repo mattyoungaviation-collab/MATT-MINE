@@ -190,6 +190,96 @@ test('Endless verification accepts the latest signed decision after an earlier o
   assert.equal(verified.outcomeEvents.at(-1)?.type, 'extract');
 });
 
+test('an active legacy Endless replay can verify extraction after Medic Pack and Force Field activations', async () => {
+  const run = endlessRun();
+  run.minerProfile = {
+    progression: { level: 50, bankedXp: 90_000 },
+    gameplay: {
+      maximumHealth: 10_000, armorShield: 0, pickaxeAttack: 1_500,
+      blasterAttack: 1_500, dynamiteAttack: 2_000, healAmount: 500,
+      carryCapacity: 100, deathRetentionBps: 8_000, level: 50
+    },
+    traits: { level: 50, health: 10_000, damage: 1_500, armor: 0, speed: 1, luck: 1, crystalCarryCapacity: 100 },
+    equipped: {}
+  };
+  run.consumables = {
+    loadout: { 'medic-pack': 1, 'mythical-force-field': 1, 'heavy-crystal-hauler': 0 },
+    definitions: {},
+    reservedAt: 1_000_000
+  };
+  run.manifest = generateEndlessPhase({
+    runId: run.id, runSeed: run.runSeed, phase: 1,
+    configVersion: run.configVersion, config: run.config, minerProfile: run.minerProfile
+  });
+
+  const inputEvents = [];
+  const game = new MattMineGame(null, defaultProfile(), {
+    headless: true, audio: NOOP_AUDIO,
+    onArenaInput(event) { inputEvents.push({ ...event }); }
+  });
+  game.startRun({
+    mode: 'endless', seed: run.runSeed, currentPhase: 1,
+    endlessRunId: run.id, endlessConfigVersion: run.configVersion,
+    endlessSnapshot: { config: run.config }, endlessManifest: run.manifest,
+    nftRun: { minerId: run.minerId, profile: run.minerProfile },
+    tuning: { _consumables: structuredClone(run.consumables) }
+  });
+  const damageTarget = game.enemies.find((enemy) => !enemy.isBoss);
+  assert.ok(damageTarget, 'The phase needs a natural enemy for the Medic Pack replay check.');
+  let damageWaypoint = null;
+  for (let step = 0; step < 4_000 && game.player.health >= game.player.maxHealth; step += 1) {
+    if (step % 20 === 0 || !damageWaypoint) damageWaypoint = nextPathWaypoint(game, damageTarget);
+    const destination = damageWaypoint || damageTarget;
+    const dx = destination.x - game.player.x;
+    const dy = destination.y - game.player.y;
+    const distance = Math.hypot(dx, dy) || 1;
+    game.applyArenaControlStep({
+      moveX: dx / distance,
+      moveY: dy / distance,
+      aim: Math.atan2(dy, dx),
+      attack: false,
+      dash: false,
+      weapon: 'pickaxe'
+    }, true);
+  }
+  assert.ok(game.player.health < game.player.maxHealth);
+  const damagedHealth = game.player.health;
+  assert.equal(game.useConsumable('medic-pack'), true);
+  assert.equal(game.player.health, Math.min(game.player.maxHealth, damagedHealth + 25));
+  assert.equal(game.useConsumable('mythical-force-field'), true);
+  driveEndlessPhaseWithControls(game);
+  inputEvents.push({ type: 'command', tick: Math.round(game.run.elapsed * 1_000), command: 'extract' });
+
+  const store = new MemoryCompetitiveReplayStore();
+  const service = await new CompetitiveReplayService({
+    store,
+    secret: 'endless-consumable-recovery-test-secret',
+    now: () => 1_100_000,
+    resolveRun: async () => run
+  }).init();
+  let checkpoint = await service.registerEndlessPhase(run, RUN_TOKEN);
+
+  // Reproduce a replay record created before Consumables were included in the
+  // immutable phase snapshot. Active production runs must remain recoverable.
+  const replayRecord = [...store.runs.values()][0];
+  replayRecord.runSnapshot.challenge.tuning = {};
+  delete replayRecord.runSnapshot.consumables;
+  replayRecord.replaySchemaVersion = 'matt-endless-phase-input-v1';
+
+  const sequenced = inputEvents.map((event, index) => ({ seq: index + 1, ...event }));
+  for (let offset = 0; offset < sequenced.length; offset += 256) {
+    checkpoint = await service.appendEndlessPhase(ADDRESS, {
+      runId: run.id, runToken: RUN_TOKEN, phase: 1,
+      previousCheckpoint: checkpoint,
+      events: sequenced.slice(offset, offset + 256)
+    });
+  }
+
+  const verified = await service.verifyEndlessPhase({ run, checkpoint, action: 'bank' });
+  assert.equal(verified.evidence.state, 'ended');
+  assert.equal(verified.outcomeEvents.at(-1)?.type, 'extract');
+});
+
 test('legitimate Endless controls reproduce the exact browser runtime and outcome events', () => {
   const run = endlessRun();
   const inputEvents = [];
@@ -388,6 +478,9 @@ test('a verified Endless extract command banks without an impossible second fini
 
 test('a verified descent carries exact health, inventory, upgrades, and phase-specific RNG into phase two', () => {
   const run = endlessRun();
+  run.consumables = {
+    loadout: { 'medic-pack': 1, 'mythical-force-field': 1, 'heavy-crystal-hauler': 1 }
+  };
   const browser = createHeadlessEndlessGame(run, run.manifest);
   browser.player.health = 37;
   browser.player.shield = 2;
@@ -400,6 +493,9 @@ test('a verified descent carries exact health, inventory, upgrades, and phase-sp
   browser.run.oreBroken = 9;
   browser.run.crystalsCollected = 3;
   browser.run.attackCounter = 17;
+  browser.run.consumables.remaining['medic-pack'] = 0;
+  browser.run.consumables.medicPacksUsed = 1;
+  browser.player.forceFieldRemaining = 1.4;
   browser.run.elapsed = 83.42;
   browser.state = 'depthchoice';
   browser.descend();
@@ -417,6 +513,9 @@ test('a verified descent carries exact health, inventory, upgrades, and phase-sp
 
   assert.equal(browser.run.elapsed, 0);
   assert.deepEqual(captureEndlessContinuation(server), continuation);
+  assert.equal(server.run.consumables.remaining['medic-pack'], 0);
+  assert.equal(server.run.consumables.medicPacksUsed, 1);
+  assert.equal(server.player.forceFieldRemaining, 1.4);
   assert.deepEqual(phaseEntitySignature(server), phaseEntitySignature(browser));
 });
 
@@ -468,7 +567,7 @@ test('Endless phase replay treats the authenticated terminal choice as the compl
     action: 'descend'
   });
   assert.equal(verified.evidence.state, 'playing');
-  assert.equal(verified.evidence.continuation.version, 1);
+  assert.equal(verified.evidence.continuation.version, 2);
   assert.equal(verified.outcomeEvents.at(-1)?.type, 'phase_completed');
   assert.ok(verified.outcomeEvents.some((event) => event.type === 'guardian_defeated'));
   const phase = verifyEndlessPhaseEvents(run, verified.outcomeEvents, 1_010_000);
@@ -562,7 +661,8 @@ function createHeadlessEndlessGame(run, manifest, phase = 1, endlessContinuation
     endlessSnapshot: { config: run.config },
     endlessManifest: manifest,
     endlessContinuation,
-    nftRun: { minerId: run.minerId, profile: run.minerProfile }
+    nftRun: { minerId: run.minerId, profile: run.minerProfile },
+    tuning: { _consumables: structuredClone(run.consumables || { loadout: {} }) }
   });
   return game;
 }

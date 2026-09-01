@@ -90,6 +90,7 @@ export class CompetitiveReplayService {
     const replayId = endlessPhaseReplayId(run);
     const maximumPhaseMs = Math.max(60_000, Number(run.config?.integrity?.maximumPhaseSeconds || 1_200) * 1_000);
     const configuredMaximumInputs = Math.max(100, Number(run.config?.integrity?.maximumInputEventsPerPhase || 750_000));
+    const consumables = structuredClone(run.consumables || { loadout: {} });
     const challenge = {
       version: ARENA_TRANSCRIPT_VERSION,
       dailySeed: run.runSeed,
@@ -98,10 +99,10 @@ export class CompetitiveReplayService {
       maxEvents: Math.min(1_000_000, configuredMaximumInputs, Math.ceil(maximumPhaseMs / ARENA_TICK_MS) + 1_024),
       maxDepth: run.currentPhase + 1,
       verificationMode: 'deterministic-input-replay',
-      tuning: {}
+      tuning: { _consumables: structuredClone(consumables) }
     };
     const transcriptHash = createHash('sha256')
-      .update(`MATT-ENDLESS-PHASE-V1|${replayId}|${run.runSeed}|${run.manifest?.fingerprint || ''}|${hashObject(run.phaseInitialState || {})}`)
+      .update(`MATT-ENDLESS-PHASE-V2|${replayId}|${run.runSeed}|${run.manifest?.fingerprint || ''}|${hashObject(run.phaseInitialState || {})}|${hashObject(consumables)}`)
       .digest('hex');
     const snapshot = {
       id: replayId,
@@ -115,6 +116,7 @@ export class CompetitiveReplayService {
       manifest: structuredClone(run.manifest),
       minerId: run.minerId,
       minerProfile: structuredClone(run.minerProfile),
+      consumables,
       initialState: run.phaseInitialState ? structuredClone(run.phaseInitialState) : null,
       challenge
     };
@@ -134,10 +136,10 @@ export class CompetitiveReplayService {
       authoritativeState: {},
       buildCommit: run.buildCommit || process.env.RENDER_GIT_COMMIT || 'unknown',
       engineVersion: run.engineVersion || 'game-v4',
-      replaySchemaVersion: 'matt-endless-phase-input-v1',
+      replaySchemaVersion: 'matt-endless-phase-input-v2',
       mapSnapshotId: run.manifest?.fingerprint || '',
       mapHash: hashObject(run.manifest || {}),
-      tuningHash: hashObject(run.config || {})
+      tuningHash: hashObject({ config: run.config || {}, consumables })
     };
     record.checkpointSignature = this.#sign(record);
     const stored = await this.store.createRun(record);
@@ -215,7 +217,7 @@ export class CompetitiveReplayService {
     assertApi(last?.type === 'command' && last.command === expectedCommand, 422, 'endless_replay_action_missing', 'The authoritative input transcript is missing the selected bank or descend action.');
     const snapshot = transcript.runSnapshot;
     assertApi(snapshot?.manifest?.fingerprint === run.manifest?.fingerprint, 409, 'endless_replay_manifest_mismatch', 'The replay manifest does not match the current server phase.');
-    const replayed = replayArenaTranscript(snapshot.challenge, events, {
+    const replayed = replayArenaTranscript(endlessReplayChallenge(snapshot, run), events, {
       mode: 'endless',
       // The authenticated extract command is the Endless phase's terminal
       // barrier. It must remain the last event, so requiring a second finish
@@ -463,6 +465,21 @@ function endlessPhaseReplayId(run) {
   const attempt = Number(run?.phaseAttempt || 1);
   assertApi(/^run_[a-f0-9]{24}$/.test(runId) && Number.isSafeInteger(phase) && phase > 0 && Number.isSafeInteger(attempt) && attempt > 0, 500, 'endless_replay_identity_invalid', 'The Endless phase replay identity is invalid.');
   return `${runId}:phase:${phase}:attempt:${attempt}`;
+}
+
+function endlessReplayChallenge(snapshot = {}, run = {}) {
+  const snapshotConsumables = snapshot?.consumables || snapshot?.challenge?.tuning?._consumables;
+  // Phase transcripts created before manual Consumables shipped did not save
+  // this field. The parent Endless record remains server-authoritative and
+  // immutable for the run, so it safely recovers already-active transcripts.
+  const consumables = snapshotConsumables || run?.consumables || { loadout: {} };
+  return {
+    ...(snapshot.challenge || {}),
+    tuning: {
+      ...(snapshot.challenge?.tuning || {}),
+      _consumables: structuredClone(consumables)
+    }
+  };
 }
 
 function normalizeCheckpoint(input) {

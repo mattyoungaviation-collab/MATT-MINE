@@ -1,3 +1,5 @@
+import { CONSUMABLE_ID_LIST, CONSUMABLE_IDS } from './consumables.js';
+
 const PLAYER_NUMBER_FIELDS = Object.freeze([
   'maxHealth', 'health', 'maxShield', 'shield', 'speed', 'damage',
   'blasterBaseDamage', 'dynamiteBaseDamage', 'healAmount', 'minerLevel',
@@ -6,7 +8,7 @@ const PLAYER_NUMBER_FIELDS = Object.freeze([
   'armor', 'level', 'xp', 'nextXp', 'invulnerable', 'dashCooldown',
   'dashCooldownMax', 'dynamiteEvery', 'droneCount', 'droneTimer',
   'dynamiteAmmo', 'blasterEnergy', 'blasterEnergyMax', 'blasterEnergyRegen',
-  'blasterDamageScale', 'blasterVolley'
+  'blasterDamageScale', 'blasterVolley', 'forceFieldRemaining'
 ]);
 
 const RUN_NUMBER_FIELDS = Object.freeze([
@@ -23,7 +25,7 @@ export function captureEndlessContinuation(game = {}) {
   const player = game.player || {};
   const run = game.run || {};
   return {
-    version: 1,
+    version: 2,
     player: {
       ...copyFiniteFields(player, PLAYER_NUMBER_FIELDS),
       weapon: WEAPONS.has(player.weapon) ? player.weapon : 'pickaxe',
@@ -34,15 +36,23 @@ export function captureEndlessContinuation(game = {}) {
       },
       runUpgradeCounts: normalizeUpgradeCounts(player.runUpgradeCounts)
     },
-    run: copyFiniteFields(run, RUN_NUMBER_FIELDS)
+    run: {
+      ...copyFiniteFields(run, RUN_NUMBER_FIELDS),
+      consumables: normalizeEndlessConsumables(run.consumables)
+    }
   };
 }
 
 export function applyEndlessContinuation(game, input) {
-  if (!game?.player || !game?.run || Number(input?.version) !== 1) return false;
+  const version = Number(input?.version);
+  if (!game?.player || !game?.run || ![1, 2].includes(version)) return false;
   const snapshot = captureEndlessContinuation({ player: input.player, run: input.run });
   Object.assign(game.player, snapshot.player);
-  Object.assign(game.run, snapshot.run);
+  const { consumables, ...runState } = snapshot.run;
+  Object.assign(game.run, runState);
+  if (version >= 2 && input?.run?.consumables && typeof input.run.consumables === 'object') {
+    game.run.consumables = consumables;
+  }
   return true;
 }
 
@@ -58,6 +68,26 @@ function normalizeUpgradeCounts(input) {
       .slice(0, 100)
       .map(([key, value]) => [key, Math.max(0, Math.min(1_000, Number(value)))])
   );
+}
+
+function normalizeEndlessConsumables(input) {
+  const source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+  const remainingSource = source.remaining && typeof source.remaining === 'object' && !Array.isArray(source.remaining)
+    ? source.remaining
+    : {};
+  const remaining = Object.fromEntries(CONSUMABLE_ID_LIST.map((id) => [id, counter(remainingSource[id])]));
+  return {
+    remaining,
+    heavyCrystalHaulerActive:
+      source.heavyCrystalHaulerActive === true ||
+      remaining[CONSUMABLE_IDS.HEAVY_CRYSTAL_HAULER] > 0,
+    medicPacksUsed: counter(source.medicPacksUsed),
+    forceFieldsUsed: counter(source.forceFieldsUsed)
+  };
+}
+
+function counter(value) {
+  return Math.max(0, Math.min(1_000_000, Math.floor(finite(value))));
 }
 
 function finite(value) {
