@@ -1930,3 +1930,134 @@ a:focus-visible {
     display: none;
   }
 }
+
+/* Failed rewarded runs keep the destructive Miner release action beside the error. */
+.failed-run-recovery {
+  display: grid;
+  gap: 12px;
+  margin: 0 0 10px;
+  padding: 14px;
+  border: 1px solid rgba(255, 106, 123, 0.58);
+  background: linear-gradient(145deg, rgba(69, 14, 27, 0.88), rgba(14, 9, 14, 0.96));
+  box-shadow: inset 3px 0 0 #ff6a7b, 0 16px 34px rgba(0, 0, 0, 0.28);
+}
+
+.failed-run-recovery[hidden] {
+  display: none;
+}
+
+.failed-run-recovery > div {
+  display: grid;
+  gap: 5px;
+}
+
+.failed-run-recovery strong {
+  color: #fff;
+  font: 900 0.76rem/1.1 var(--prod-body);
+  letter-spacing: 0.09em;
+}
+
+.failed-run-recovery span {
+  color: #ffc1c8;
+  font: 700 0.68rem/1.45 var(--prod-body);
+}
+
+.failed-run-recovery .secondary-button {
+  min-height: 46px;
+  margin: 0;
+  border-color: rgba(255, 106, 123, 0.8);
+  color: #fff;
+  background: #861f33;
+}
+
+.failed-run-recovery .secondary-button:hover:not(:disabled),
+.failed-run-recovery .secondary-button:focus-visible {
+  border-color: #ff9aaa;
+  background: #a92a43;
+}
+
+/* Collision-free live HUD lanes for desktop and landscape/tablet play. */
+@media (min-width: 761px) and (min-height: 621px) {
+  .hud {
+    --hud-edge: max(16px, env(safe-area-inset-left));
+    --hud-info-bottom: max(16px, env(safe-area-inset-bottom));
+    --hud-action-bottom: max(82px, calc(env(safe-area-inset-bottom) + 82px));
+  }
+
+  .hud-top {
+    width: 100%;
+  }
+
+  .run-mode-hud {
+    top: max(98px, calc(env(safe-area-inset-top) + 98px));
+  }
+
+  .endless-hud {
+    top: max(140px, calc(env(safe-area-inset-top) + 140px));
+    left: max(18px, env(safe-area-inset-left));
+    right: max(170px, calc(env(safe-area-inset-right) + 170px));
+    max-width: min(760px, calc(100vw - 206px));
+  }
+
+  .arena-round-timer {
+    top: max(140px, calc(env(safe-area-inset-top) + 140px));
+  }
+
+  .abandon-run-button {
+    top: max(116px, calc(env(safe-area-inset-top) + 116px));
+  }
+
+  .hud-bottom {
+    position: absolute;
+    right: max(16px, env(safe-area-inset-right));
+    bottom: var(--hud-info-bottom);
+    left: max(16px, env(safe-area-inset-left));
+  }
+
+  .dash-meter {
+    bottom: var(--hud-info-bottom);
+  }
+
+  .weapon-rack,
+  .consumable-rack {
+    bottom: var(--hud-action-bottom);
+  }
+}
+
+@media (min-width: 761px) and (max-width: 980px) and (min-height: 621px) {
+  .hud-bottom {
+    grid-template-columns: minmax(0, 31vw) minmax(0, 31vw);
+  }
+
+  .xp-wrap,
+  .objective {
+    min-width: 0;
+  }
+
+  .dash-meter {
+    width: 120px;
+  }
+
+  .weapon-rack {
+    grid-template-columns: repeat(3, 88px);
+    gap: 6px;
+  }
+
+  .consumable-rack {
+    grid-template-columns: repeat(2, 104px);
+    gap: 6px;
+  }
+
+  .consumable-rack .consumable-button {
+    width: 104px;
+    padding-left: 33px;
+  }
+
+  .consumable-rack .consumable-button strong {
+    font-size: 0.58rem;
+  }
+
+  .consumable-rack .consumable-button small {
+    font-size: 0.47rem;
+  }
+}

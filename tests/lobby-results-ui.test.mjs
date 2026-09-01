@@ -112,6 +112,37 @@ test('a failed Endless death close remains readable and retryable without cleari
   assert.doesNotMatch(finalizer.slice(finalizer.indexOf('} catch (error)')), /clearPersistedEndlessRun\(\)/);
 });
 
+test('a failed NFT run exposes adjacent recovery and returns to Miner selection after unlock', async () => {
+  const html = await readFile(`${root}index.html`, 'utf8');
+  const source = await readFile(`${root}src/main.js`, 'utf8');
+  const outcomeColumn = html.match(/<div class="results-outcome-column">[\s\S]*?<section id="paid-revive-panel"/)?.[0] || '';
+  const recoverStart = source.indexOf('async function recoverLockedMinerRun(minerId)');
+  const recoverEnd = source.indexOf('\nasync function openMinerCommandCenter', recoverStart);
+  const recoverFlow = source.slice(recoverStart, recoverEnd);
+  const finalizer = source.match(/async function finalizeEndlessKnockout\(run\) \{[\s\S]*?\n\}/)?.[0] || '';
+
+  assert.match(outcomeColumn, /id="economy-result"[\s\S]*id="failed-run-recovery"[\s\S]*id="failed-run-recovery-button"/);
+  assert.match(outcomeColumn, /REMOVE NFT FROM LOCKED RUN/);
+  assert.match(source, /function showFailedRunRecovery\(run\)/);
+  assert.match(finalizer, /showFailedRunRecovery\(run\)/);
+  assert.match(recoverFlow, /clearPersistedEndlessRun\(\)/);
+  assert.match(recoverFlow, /clearFailedRunRecovery\(\)/);
+  assert.match(recoverFlow, /rememberSelectedMiner\(minerId\);\s*await openMinerSelect\(\);/);
+});
+
+test('the live HUD reserves separate status, action, and information lanes', async () => {
+  const css = await readFile(`${root}src/production-overhaul.css`, 'utf8');
+  const layout = css.slice(css.indexOf('/* Collision-free live HUD lanes'));
+
+  assert.match(layout, /\.run-mode-hud\s*\{[\s\S]*top:\s*max\(98px/);
+  assert.match(layout, /\.endless-hud\s*\{[\s\S]*top:\s*max\(140px/);
+  assert.match(layout, /\.arena-round-timer\s*\{[\s\S]*top:\s*max\(140px/);
+  assert.match(layout, /\.abandon-run-button\s*\{[\s\S]*top:\s*max\(116px/);
+  assert.match(layout, /\.hud-bottom\s*\{[\s\S]*bottom:\s*var\(--hud-info-bottom\)/);
+  assert.match(layout, /\.weapon-rack,\s*\.consumable-rack\s*\{[\s\S]*bottom:\s*var\(--hud-action-bottom\)/);
+  assert.match(layout, /--hud-action-bottom:\s*max\(82px/);
+});
+
 test('a rejected Endless checkpoint clears its pending choice and allows either decision next', async () => {
   const source = await readFile(`${root}src/main.js`, 'utf8');
   const checkpointChoice = source.match(/async function checkpointEndlessChoice\(action\) \{[\s\S]*?\n\}/)?.[0] || '';

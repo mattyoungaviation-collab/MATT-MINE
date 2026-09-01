@@ -158,6 +158,7 @@ let endlessResumeBusy = false;
 let activePracticeClaim = null;
 let resultScreenMode = null;
 let returnToMinerAfterRun = false;
+let failedRunRecoveryMinerId = 0;
 let activeBetaTools = null;
 let paidRevivePending = false;
 let paidReviveBusy = false;
@@ -1093,6 +1094,7 @@ async function submitServerRun(serverRun, result) {
     if (activeServerRun === serverRun) activeServerRun = null;
     if (activeArenaTranscript === transcript) activeArenaTranscript = null;
     clearPendingFinalization();
+    clearFailedRunRecovery();
     profile = accepted.profile;
     saveProfile(profile);
     game.setProfile(profile);
@@ -1164,6 +1166,7 @@ async function submitServerRun(serverRun, result) {
         ? 'Your run is still held on this screen. Press RETRY SCORE SAVE when PostgreSQL reconnects.'
         : 'No leaderboard score was recorded. The server profile remains authoritative.'}</small>
     `;
+    showFailedRunRecovery(serverRun);
     if (serverRun.mode === RUN_MODES.PRACTICE) clearPracticeClaimPanel();
     toast(error.message);
     await refreshServerPlayer();
@@ -1192,6 +1195,7 @@ async function submitArenaRun(run) {
       if (activeArenaRun === run) activeArenaRun = null;
       if (activeArenaTranscript === transcript) activeArenaTranscript = null;
       clearPendingFinalization();
+      clearFailedRunRecovery();
       $('#economy-result').innerHTML = `
         <strong>ARENA ATTEMPT RESTORED</strong>
         <span>${escapeHtml(accepted.message)}</span>
@@ -1204,6 +1208,7 @@ async function submitArenaRun(run) {
     if (activeArenaRun === run) activeArenaRun = null;
     if (activeArenaTranscript === transcript) activeArenaTranscript = null;
     clearPendingFinalization();
+    clearFailedRunRecovery();
     const result = accepted.result || {};
     const leaderboard = accepted.leaderboard || {};
     arenaPlayer = normalizeArenaPlayer({
@@ -1256,6 +1261,7 @@ async function submitArenaRun(run) {
         ? 'Your paid entry and finished run are still held here. Press RETRY SCORE SAVE after PostgreSQL reconnects.'
         : 'The deterministic replay rejected this run and no Arena score was recorded.'}</small>
     `;
+    showFailedRunRecovery(run);
     toast(error.message || 'Arena verification failed.');
     await refreshArena(true);
   } finally {
@@ -1265,6 +1271,7 @@ async function submitArenaRun(run) {
 
 function showFinalizationBusy(label) {
   pendingRunFinalization = null;
+  clearFailedRunRecovery();
   const retryButton = $('#play-again-button');
   const menuButton = $('#menu-button');
   retryButton.hidden = false;
@@ -1272,6 +1279,54 @@ function showFinalizationBusy(label) {
   retryButton.textContent = `${label}...`;
   menuButton.hidden = false;
   menuButton.disabled = true;
+}
+
+function minerIdForRun(run = {}) {
+  const candidates = [
+    run.minerId,
+    run.nftRun?.minerId,
+    run.nftRun?.profile?.minerId,
+    run.nftSettlement?.minerId
+  ];
+  const minerId = candidates.map(Number).find((value) => Number.isSafeInteger(value) && value > 0);
+  return minerId || 0;
+}
+
+function syncFailedRunRecovery() {
+  const panel = $('#failed-run-recovery');
+  const button = $('#failed-run-recovery-button');
+  if (!panel || !button || !failedRunRecoveryMinerId) return;
+  button.dataset.minerId = String(failedRunRecoveryMinerId);
+  button.disabled = lockedMinerRecoveryBusy;
+  button.textContent = lockedMinerRecoveryBusy
+    ? 'REMOVING NFT FROM LOCKED RUN...'
+    : 'REMOVE NFT FROM LOCKED RUN';
+}
+
+function showFailedRunRecovery(run) {
+  const minerId = minerIdForRun(run);
+  if (!minerId) {
+    clearFailedRunRecovery();
+    return;
+  }
+  failedRunRecoveryMinerId = minerId;
+  const panel = $('#failed-run-recovery');
+  const status = $('#failed-run-recovery-status');
+  panel.hidden = false;
+  status.textContent = `Miner #${minerId} is still attached to this failed run. Removing it records a death at the last verified checkpoint, damages equipped Armor, and burns the active Backpack.`;
+  syncFailedRunRecovery();
+}
+
+function clearFailedRunRecovery() {
+  failedRunRecoveryMinerId = 0;
+  const panel = $('#failed-run-recovery');
+  const button = $('#failed-run-recovery-button');
+  if (panel) panel.hidden = true;
+  if (button) {
+    button.disabled = false;
+    button.textContent = 'REMOVE NFT FROM LOCKED RUN';
+    delete button.dataset.minerId;
+  }
 }
 
 function showDatabaseReconnect(_error, retry) {
@@ -1462,6 +1517,7 @@ async function startRunMode(mode, options = {}) {
   activePracticeClaim = null;
   resultScreenMode = null;
   clearPracticeClaimPanel();
+  clearFailedRunRecovery();
   if (useServer) {
     if (!serverPlayer) {
       const connected = await connectWallet();
@@ -1844,6 +1900,8 @@ async function recoverLockedMinerRun(minerId) {
   if (!approved) return;
   lockedMinerRecoveryBusy = true;
   renderMinerSelect();
+  syncFailedRunRecovery();
+  let recovered = false;
   try {
     const recovery = await apiClient.recoverLockedMinerRun(minerId);
     if (recovery.profile) cacheOwnedMiner(recovery.profile);
@@ -1855,12 +1913,32 @@ async function recoverLockedMinerRun(minerId) {
       : `Miner #${minerId}'s prior run was forfeited. The Miner is unlocked and ready.`;
     setMinerNumberStatus(message, 'success');
     toast(staleServerRunCleared ? `Miner #${minerId} stale run cleared` : `Miner #${minerId} run forfeited and unlocked`);
+    recovered = true;
   } catch (error) {
+    const status = $('#failed-run-recovery-status');
+    if (status && failedRunRecoveryMinerId === Number(minerId)) {
+      status.textContent = error?.message || `Miner #${minerId} could not be unlocked. Try again without leaving this page.`;
+    }
     toast(error?.message || `Miner #${minerId} could not be unlocked.`);
   } finally {
     lockedMinerRecoveryBusy = false;
     renderMinerSelect();
+    syncFailedRunRecovery();
   }
+  if (recovered) {
+    if (minerIdForRun(activeServerRun) === Number(minerId)) activeServerRun = null;
+    if (minerIdForRun(activeArenaRun) === Number(minerId)) activeArenaRun = null;
+    activeArenaTranscript = null;
+    activeEndlessTranscript = null;
+    clearPersistedEndlessRun();
+    clearPendingFinalization();
+    clearFailedRunRecovery();
+    resultScreenMode = null;
+    returnToMinerAfterRun = false;
+    rememberSelectedMiner(minerId);
+    await openMinerSelect();
+  }
+  return recovered;
 }
 
 async function openMinerCommandCenter() {
@@ -2809,6 +2887,7 @@ const game = new MattMineGame(canvas, profile, {
   },
   onRunEnd(result) {
     leaveGameplayFullscreen();
+    clearFailedRunRecovery();
     paidRevivePending = false;
     paidReviveBusy = false;
     paidReviveContext = null;
@@ -2859,6 +2938,7 @@ const game = new MattMineGame(canvas, profile, {
     } else if (serverRun) void submitServerRun(serverRun, result);
   },
   onPaidReviveOffered(data) {
+    clearFailedRunRecovery();
     paidRevivePending = true;
     paidReviveBusy = false;
     paidReviveContext = createPaidReviveContext();
@@ -2910,6 +2990,7 @@ const game = new MattMineGame(canvas, profile, {
     paidReviveBusy = false;
     paidReviveContext = null;
     clearPracticeClaimPanel();
+    clearFailedRunRecovery();
     setGameplayUi(false);
     if (openMinerAfterCleanup && serverPlayer) {
       void openMinerSelect();
@@ -3076,6 +3157,10 @@ $('#enter-mines-button').addEventListener('click', () => {
     return;
   }
   openMines();
+});
+$('#failed-run-recovery-button').addEventListener('click', () => {
+  const minerId = Number($('#failed-run-recovery-button').dataset.minerId || failedRunRecoveryMinerId);
+  void recoverLockedMinerRun(minerId);
 });
 $('#select-loadout-button').addEventListener('click', () => void openMinerCommandCenter());
 $('#garage-refresh-button').addEventListener('click', () => void refreshNftGarage());
@@ -4906,6 +4991,7 @@ async function finalizeEndlessKnockout(run) {
     if (activeServerRun === run) activeServerRun = null;
     clearPersistedEndlessRun();
     clearPendingFinalization();
+    clearFailedRunRecovery();
     await refreshServerPlayer();
   } catch (error) {
     const errorCode = String(error?.code || 'request_failed').toUpperCase();
@@ -4916,6 +5002,7 @@ async function finalizeEndlessKnockout(run) {
       <small>ERROR ${escapeHtml(errorCode)}${roninReason ? ` · RONIN ${escapeHtml(roninReason)}` : ''} · This exact message will remain here. Your run and signed checkpoints are still saved. Press RETRY ENDLESS CLOSE; do not start another run.</small>
     `;
     queueFinalizationRetry(() => finalizeEndlessKnockout(run), 'RETRY ENDLESS CLOSE');
+    showFailedRunRecovery(run);
     toast(error.message);
   } finally {
     activeEndlessTranscript = null;
