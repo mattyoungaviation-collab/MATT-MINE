@@ -28,7 +28,8 @@ export const ARENA_COMMANDS = Object.freeze([
   'death',
   'revive',
   'decline',
-  'time_limit'
+  'time_limit',
+  'consumable'
 ]);
 export const COMPETITIVE_REPLAY_MODES = Object.freeze(['practice', 'free', 'paid', 'weekly', 'endless']);
 
@@ -317,6 +318,9 @@ export function normalizeArenaEvent(input, expectedSequence, limits = {}) {
     if (event.command === 'upgrade') {
       assertApi(typeof input.value === 'string' && /^[a-z]{3,20}$/.test(input.value), 400, 'arena_upgrade_invalid', 'The Arena upgrade choice is invalid.');
       event.value = input.value;
+    } else if (event.command === 'consumable') {
+      assertApi(['medic-pack', 'mythical-force-field'].includes(input.value), 400, 'arena_consumable_invalid', 'The Consumable choice is invalid.');
+      event.value = input.value;
     } else {
       assertApi(input.value === undefined, 400, 'arena_event_fields_invalid', 'This Arena command does not accept a value.');
     }
@@ -358,6 +362,15 @@ export function canonicalJson(value) {
 }
 
 export function applyReplayCommand(game, event, options = {}) {
+  if (event.command === 'consumable') {
+    assertApi(
+      ['medic-pack', 'mythical-force-field'].includes(event.value) && game.useConsumable(event.value, { record: false }),
+      422,
+      'consumable_command_rejected',
+      'The replayed Consumable activation was rejected.'
+    );
+    return;
+  }
   if (event.command === 'upgrade') {
     if (options.mode === 'endless') {
       // Endless phase checkpoints are authenticated, but the browser and

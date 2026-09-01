@@ -367,6 +367,29 @@ async function handleApiRequest({
     sendJson(response, 200, { ok: true, status });
     return;
   }
+  if (method === 'GET' && path === '/api/consumables') {
+    const result = await service.publicConsumables(optionalBearerToken(request));
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
+  if (method === 'PUT' && path === '/api/consumables/loadout') {
+    const body = await readJson(request, maxRequestBytes);
+    const result = await service.updateConsumableLoadout(bearerToken(request), body);
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
+  if (method === 'POST' && path === '/api/consumables/purchases/quote') {
+    const body = await readJson(request, maxRequestBytes);
+    const result = await service.quoteConsumablePurchase(bearerToken(request), body);
+    sendJson(response, 201, { ok: true, ...result });
+    return;
+  }
+  if (method === 'POST' && path === '/api/consumables/purchases/confirm') {
+    const body = await readJson(request, maxRequestBytes);
+    const result = await service.confirmConsumablePurchase(bearerToken(request), body);
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
   if (method === 'GET' && path === '/api/arena/config') {
     const arena = await service.arenaConfig(requestUrl.searchParams.get('day') || '');
     sendJson(response, 200, { ok: true, arena });
@@ -497,7 +520,8 @@ async function handleApiRequest({
       minerId: body.minerId,
       authorization: body.authorization,
       playerSignature: body.playerSignature,
-      entryTransactionHash: body.entryTransactionHash
+      entryTransactionHash: body.entryTransactionHash,
+      consumables: body.consumables
     });
     sendJson(response, 201, { ok: true, run });
     return;
@@ -688,6 +712,17 @@ async function handleApiRequest({
   }
   if (method === 'GET' && path === '/api/admin/game-tuning') {
     const result = await service.adminGameTuning(request.headers['x-matt-admin-key']);
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
+  if (method === 'GET' && path === '/api/admin/consumables-economy') {
+    const result = await service.adminConsumablesEconomy(request.headers['x-matt-admin-key']);
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
+  if (method === 'PUT' && path === '/api/admin/consumables-economy') {
+    const body = await readJson(request, maxRequestBytes);
+    const result = await service.updateAdminConsumablesEconomy(request.headers['x-matt-admin-key'], body, body.reason);
     sendJson(response, 200, { ok: true, ...result });
     return;
   }
@@ -1035,13 +1070,20 @@ function clearAdminCookie(response) {
 }
 
 function requiresAdminStepUp(path) {
-  return /\/suspension$|\/awards$|\/contracts\/prepare$|\/nft-v2\/(economy|phase-xp|maps\/(approve|retire))$|\/rewards\/drafts\/[^/]+\/approve$|\/competition-studio\/[^/]+\/(publish|versions\/[^/]+\/activate)$/.test(path);
+  return /\/suspension$|\/awards$|\/contracts\/prepare$|\/consumables-economy$|\/nft-v2\/(economy|phase-xp|maps\/(approve|retire))$|\/rewards\/drafts\/[^/]+\/approve$|\/competition-studio\/[^/]+\/(publish|versions\/[^/]+\/activate)$/.test(path);
 }
 
 function bearerToken(request) {
   const authorization = request.headers.authorization;
   assertApi(typeof authorization === 'string' && authorization.startsWith('Bearer '), 401, 'authorization_required', 'A wallet session is required.');
   return authorization.slice('Bearer '.length);
+}
+
+function optionalBearerToken(request) {
+  const authorization = request.headers.authorization;
+  return typeof authorization === 'string' && authorization.startsWith('Bearer ')
+    ? authorization.slice('Bearer '.length)
+    : '';
 }
 
 function nftService(service) {

@@ -125,6 +125,20 @@ function renderPlayerEditor(address, data) {
       </article>
 
       <article class="editor-section">
+        <h4>Consumables inventory</h4>
+        <p class="notice">Available wallet inventory only. Positive amounts grant free items; negative amounts remove items. Every adjustment requires a reason and is audit logged.</p>
+        <div class="compact-grid">
+          ${[
+            ['medic-pack', 'MEDIC PACK'],
+            ['mythical-force-field', "MATT'S MYTHICAL FORCE FIELD"],
+            ['heavy-crystal-hauler', 'HEAVY CRYSTAL HAULER']
+          ].map(([id, name]) => `<label>${escapeHtml(name)} · owned ${Number(wallet.consumables?.inventory?.[id] || 0).toLocaleString()}<input data-consumable-adjustment="${escapeHtml(id)}" type="number" min="-1000000" max="1000000" step="1" value="0"><button type="button" data-adjust-consumable="${escapeHtml(id)}">ADD / REMOVE</button></label>`).join('')}
+        </div>
+        <label>Required adjustment reason<input data-consumable-reason maxlength="240" placeholder="Event grant, failed transaction correction, support case…"></label>
+        <p class="consumable-adjustment-status" aria-live="polite"></p>
+      </article>
+
+      <article class="editor-section">
         <h4>Gameplay keybindings</h4>
         <div class="compact-grid">
           ${Object.entries(keybindings).map(([action, key]) => `
@@ -220,6 +234,26 @@ function renderPlayerEditor(address, data) {
         status,
         `${button.textContent.trim()} for ${short(address)}?`
       );
+    });
+  });
+
+  section.querySelectorAll('[data-adjust-consumable]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const consumableId = button.dataset.adjustConsumable;
+      const amount = numericValue(section.querySelector(`[data-consumable-adjustment="${consumableId}"]`));
+      const reason = section.querySelector('[data-consumable-reason]').value;
+      const status = section.querySelector('.consumable-adjustment-status');
+      if (!Number.isSafeInteger(amount) || amount === 0) return void (status.textContent = 'Enter a non-zero whole-number adjustment.');
+      if (String(reason || '').trim().length < 5) return void (status.textContent = 'Enter a reason of at least five characters.');
+      if (!globalThis.confirm(`${amount > 0 ? 'Add' : 'Remove'} ${Math.abs(amount)} Consumable charge(s) for ${short(address)}?`)) return;
+      status.textContent = 'Applying audited inventory adjustment…';
+      try {
+        await adminApi(`/api/admin/wallets/${address}/awards`, { method: 'POST', body: { type: 'consumable', consumableId, amount, reason } });
+        status.textContent = 'Consumables inventory updated and audit logged.';
+        refreshBasePlayerPanel(address);
+      } catch (error) {
+        status.textContent = error.message;
+      }
     });
   });
 

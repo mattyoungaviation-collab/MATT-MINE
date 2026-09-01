@@ -176,7 +176,7 @@ test('Miner selection, loadout, balances, repair, chests, and mine entry share o
   assert.match(source, /void openMinerSelect\(\)/);
 });
 
-test('Practice is visibly public, rewardless, and starts without the authenticated NFT path', async () => {
+test('Practice is visibly public and rewardless, while connected wallets may use the server consumables path', async () => {
   const html = await readFile(`${root}index.html`, 'utf8');
   const source = await readFile(`${root}src/main.js`, 'utf8');
   const admin = await readFile(`${root}admin.html`, 'utf8');
@@ -187,7 +187,7 @@ test('Practice is visibly public, rewardless, and starts without the authenticat
   assert.match(source, /PRACTICE · NO XP · NO CRYSTALS/);
   assert.match(source, /No XP, no MATT Crystals, and no leaderboard score/);
   const useServer = source.match(/const useServer\s*=([\s\S]*?);\s*activePracticeClaim/)?.[1] || '';
-  assert.doesNotMatch(useServer, /RUN_MODES\.PRACTICE/);
+  assert.match(useServer, /RUN_MODES\.PRACTICE && Boolean\(serverPlayer\)/);
   assert.match(source, /apiClient\.gameTuning\(mode\)/);
   assert.match(source, /apiClient\.mineSlot\(slotIdForMode\(mode\)\)/);
   assert.match(admin, /Practice is the public no-wallet demo and always awards zero XP and zero Crystals/);

@@ -201,6 +201,35 @@ export class MattMineApiClient {
     });
   }
 
+  async consumablesCatalog() {
+    const response = await this.request('/api/consumables', { authenticated: this.hasSession() });
+    return response;
+  }
+
+  async updateConsumableLoadout(items) {
+    return this.request('/api/consumables/loadout', {
+      method: 'PUT',
+      authenticated: true,
+      body: { items }
+    });
+  }
+
+  async consumablePurchaseQuote(items) {
+    return this.request('/api/consumables/purchases/quote', {
+      method: 'POST',
+      authenticated: true,
+      body: { items }
+    });
+  }
+
+  async confirmConsumablePurchase(quoteId, transactionHash) {
+    return this.request('/api/consumables/purchases/confirm', {
+      method: 'POST',
+      authenticated: true,
+      body: { quoteId, transactionHash }
+    });
+  }
+
   async passRewards() {
     return this.request('/api/pass/rewards', { authenticated: true });
   }

@@ -12,6 +12,7 @@ export class InputController {
     this.mobileAttack = false;
     this.mobileDashQueued = false;
     this.mobileWeaponQueued = null;
+    this.mobileConsumableQueued = null;
     this.joystickPointerId = null;
     this.mobileAttackPointerId = null;
     this.mobileKnob = null;
@@ -215,6 +216,14 @@ export class InputController {
       });
     }
 
+    for (const button of document.querySelectorAll('.consumable-button')) {
+      button.addEventListener('pointerdown', (event) => {
+        if (button.disabled || button.classList.contains('locked')) return;
+        this.mobileConsumableQueued = button.dataset.consumable || null;
+        event.preventDefault();
+      });
+    }
+
     if (dash) {
       dash.addEventListener('pointerdown', (event) => {
         this.mobileDashQueued = true;
@@ -258,6 +267,7 @@ export class InputController {
     this.mobileAttack = false;
     this.mobileDashQueued = false;
     this.mobileWeaponQueued = null;
+    this.mobileConsumableQueued = null;
     this.joystickPointerId = null;
     this.mobileAttackPointerId = null;
     if (this.mobileKnob?.style) this.mobileKnob.style.transform = 'translate(0, 0)';
@@ -290,6 +300,21 @@ export class InputController {
     const result = keyboardDash || this.mobileDashQueued || this.consumeController('dash');
     this.mobileDashQueued = false;
     return result;
+  }
+
+  consumeConsumable() {
+    this.pollGamepad();
+    let selected = this.mobileConsumableQueued;
+    this.mobileConsumableQueued = null;
+    for (const [action, id] of [['medicPack', 'medic-pack'], ['forceField', 'mythical-force-field']]) {
+      const code = this.keybindings[action];
+      if (this.pressed.has(code)) {
+        selected = id;
+        this.pressed.delete(code);
+      }
+      if (this.consumeController(action)) selected = id;
+    }
+    return selected;
   }
 
   setKeybindings(bindings) {

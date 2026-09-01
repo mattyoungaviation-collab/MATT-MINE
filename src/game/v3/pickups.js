@@ -22,7 +22,8 @@ export const pickupMethods = {
         let crystalAccepted = true;
         if (pickup.type === 'crystal') {
           const carryLimit = nftCarryCapacity(this.runContext);
-          if (Number(this.run.crystalsCollected || 0) >= carryLimit) {
+          const multiplier = this.run.consumables?.heavyCrystalHaulerActive ? 5 : 1;
+          if (Number(this.run.crystalsCollected || 0) + multiplier > carryLimit) {
             this.addFloater(this.player.x, this.player.y - 52, 'CRYSTAL PACK FULL', '#ffcf73');
             crystalAccepted = false;
           }
@@ -40,8 +41,9 @@ export const pickupMethods = {
           this.run.rawScore += pickup.value;
         }
         if (pickup.type === 'crystal' && crystalAccepted) {
-          this.run.crystals += 1;
-          this.run.crystalsCollected = Math.max(0, Number(this.run.crystalsCollected || 0)) + 1;
+          const multiplier = this.run.consumables?.heavyCrystalHaulerActive ? 5 : 1;
+          this.run.crystals += multiplier;
+          this.run.crystalsCollected = Math.max(0, Number(this.run.crystalsCollected || 0)) + multiplier;
           this.hooks.onArenaEvent?.({
             type: 'crystal_collected',
             tick: Math.round(this.run.elapsed * 1_000),
@@ -49,7 +51,7 @@ export const pickupMethods = {
             totalCarried: this.run.crystalsCollected
           });
           this.audio.play('crystal');
-          this.addFloater(this.player.x, this.player.y - 52, 'MATT CRYSTAL', CONFIG.colors.crystal);
+          this.addFloater(this.player.x, this.player.y - 52, multiplier > 1 ? 'MATT CRYSTAL ×5' : 'MATT CRYSTAL', CONFIG.colors.crystal);
         }
         pickup.collected = true;
       }

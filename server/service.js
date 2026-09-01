@@ -10,6 +10,16 @@ import { normalizeKeybindings } from '../src/game/keybindings.js';
 import { normalizeControllerProfile } from '../src/game/expansionConfig.js';
 import { passLevel, utcDayKey, utcWeekKey } from '../src/game/economy.js';
 import {
+  CONSUMABLE_DEFINITIONS,
+  CONSUMABLE_ID_LIST,
+  consumableCountTotal,
+  consumablesCatalog,
+  normalizeConsumableCounts,
+  normalizeConsumablesEconomy,
+  normalizeWalletConsumables,
+  validateConsumableLoadout
+} from '../src/game/consumables.js';
+import {
   COSMETIC_SLOTS,
   PASS_CHEST_ID,
   PASS_COSMETICS,
@@ -62,6 +72,8 @@ import { generateEndlessPhase } from '../src/game/endlessMine.js';
 const FREE_PASS_XP = 25;
 const PAID_PASS_XP = 100;
 const ARENA_PASS_XP = PAID_PASS_XP;
+const CONSUMABLE_QUOTE_TTL_MS = 10 * 60 * 1000;
+const CRYSTAL_TOKEN_SCALE = 10n ** 18n;
 const ADMIN_SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 const ADMIN_STEP_UP_TTL_MS = 5 * 60 * 1000;
 const ENDLESS_PUBLIC_SLOT = Object.freeze({
@@ -77,6 +89,7 @@ export class MattMineService {
     this.randomHex = options.randomHex || ((bytes) => randomBytes(bytes).toString('hex'));
     this.verifySignature = options.verifySignature || verifyMessage;
     this.paymentVerifier = options.paymentVerifier || null;
+    this.consumablePaymentVerifier = options.consumablePaymentVerifier || null;
     this.rewardManager = options.rewardManager || null;
     this.arenaService = options.arenaService || null;
     this.nftMetadataService = options.nftMetadataService || null;
@@ -658,6 +671,215 @@ export class MattMineService {
     return hydrated;
   }
 
+  async publicConsumables(token = '') {
+    let wallet = null;
+    if (token) {
+      const { session, state } = await this.authenticateWithState(token);
+      wallet = requireWallet(state, session.address).consumables;
+      return {
+        catalog: consumablesCatalog(state.consumablesEconomy, wallet),
+        payment: this.consumablePaymentVerifier?.publicStatus?.() || {
+          configured: false,
+          chainId: this.chainId,
+          routing: '100% of every Consumables purchase is transferred directly to the MATT Mine Treasury.'
+        }
+      };
+    }
+    const state = await this.database.read();
+    return {
+      catalog: consumablesCatalog(state.consumablesEconomy, wallet),
+      payment: this.consumablePaymentVerifier?.publicStatus?.() || {
+        configured: false,
+        chainId: this.chainId,
+        routing: '100% of every Consumables purchase is transferred directly to the MATT Mine Treasury.'
+      }
+    };
+  }
+
+  async updateConsumableLoadout(token, input = {}) {
+    const session = await this.authenticate(token);
+    const timestamp = this.now();
+    return this.database.transact((state) => {
+      const wallet = requireWallet(state, session.address);
+      let selected;
+      try {
+        selected = validateConsumableLoadout(input.items || input, state.consumablesEconomy, wallet.consumables);
+      } catch (error) {
+        throw new ApiError(422, 'consumable_loadout_invalid', error.message);
+      }
+      wallet.consumables.selected = selected;
+      wallet.consumables.updatedAt = timestamp;
+      wallet.updatedAt = timestamp;
+      addPlayerActivity(wallet, 'CONSUMABLE_LOADOUT_UPDATED', JSON.stringify(selected), timestamp);
+      return { catalog: consumablesCatalog(state.consumablesEconomy, wallet.consumables) };
+    });
+  }
+
+  async reserveConsumables(address, input, reservationId) {
+    const timestamp = this.now();
+    return this.database.transact((state) => {
+      const existing = state.consumableReservations[reservationId];
+      if (existing) return structuredClone(existing);
+      const wallet = requireWallet(state, address);
+      let selected;
+      try {
+        selected = validateConsumableLoadout(input ?? wallet.consumables?.selected ?? {}, state.consumablesEconomy, wallet.consumables);
+      } catch (error) {
+        throw new ApiError(422, 'consumable_loadout_invalid', error.message);
+      }
+      wallet.consumables = normalizeWalletConsumables(wallet.consumables);
+      for (const id of CONSUMABLE_ID_LIST) {
+        wallet.consumables.inventory[id] -= selected[id];
+        wallet.consumables.lifetimeConsumed[id] += selected[id];
+      }
+      wallet.consumables.updatedAt = timestamp;
+      wallet.updatedAt = timestamp;
+      const reservation = {
+        id: reservationId,
+        address,
+        loadout: selected,
+        definitions: Object.fromEntries(CONSUMABLE_ID_LIST.map((id) => [id, structuredClone(CONSUMABLE_DEFINITIONS[id].effect)])),
+        reservedAt: timestamp,
+        committedAt: 0
+      };
+      state.consumableReservations[reservationId] = reservation;
+      addAudit(state, address, 'CONSUMABLES_RESERVED', `${reservationId}: ${JSON.stringify(selected)}`, timestamp);
+      return structuredClone(reservation);
+    });
+  }
+
+  async commitConsumableReservation(reservationId) {
+    const timestamp = this.now();
+    return this.database.transact((state) => {
+      const reservation = state.consumableReservations[reservationId];
+      if (!reservation || reservation.committedAt) return reservation ? structuredClone(reservation) : null;
+      reservation.committedAt = timestamp;
+      return structuredClone(reservation);
+    });
+  }
+
+  async restoreConsumableReservation(reservationId) {
+    const timestamp = this.now();
+    return this.database.transact((state) => {
+      const reservation = state.consumableReservations[reservationId];
+      if (!reservation || reservation.committedAt) return { restored: false };
+      const wallet = requireWallet(state, reservation.address);
+      wallet.consumables = normalizeWalletConsumables(wallet.consumables);
+      for (const id of CONSUMABLE_ID_LIST) {
+        wallet.consumables.inventory[id] += Number(reservation.loadout?.[id] || 0);
+        wallet.consumables.lifetimeConsumed[id] = Math.max(0, wallet.consumables.lifetimeConsumed[id] - Number(reservation.loadout?.[id] || 0));
+      }
+      wallet.consumables.updatedAt = timestamp;
+      wallet.updatedAt = timestamp;
+      delete state.consumableReservations[reservationId];
+      addAudit(state, reservation.address, 'CONSUMABLES_RESERVATION_RESTORED', reservationId, timestamp);
+      return { restored: true };
+    });
+  }
+
+  async quoteConsumablePurchase(token, input = {}) {
+    const session = await this.authenticate(token);
+    assertApi(this.consumablePaymentVerifier?.ready === true, 503, 'consumable_payments_disabled', 'Consumable purchases are closed until the Crystal verifier is ready.');
+    const timestamp = this.now();
+    const quoteId = `cq_${this.randomHex(12)}`;
+    return this.database.transact((state) => {
+      const wallet = requireWallet(state, session.address);
+      assertApi(!wallet.suspended, 403, 'wallet_suspended', 'This wallet is suspended from purchases.');
+      const economy = normalizeConsumablesEconomy(state.consumablesEconomy);
+      assertApi(!economy.purchasesPaused, 503, 'consumable_purchases_paused', 'Consumable purchases are temporarily paused.');
+      const requestedItems = input.items || input;
+      for (const id of CONSUMABLE_ID_LIST) {
+        const quantity = Number(requestedItems?.[id] ?? 0);
+        assertApi(Number.isSafeInteger(quantity) && quantity >= 0 && quantity <= economy.maximumPurchaseQuantity, 422, 'consumable_quantity_too_large', `Choose from 0 to ${economy.maximumPurchaseQuantity} of each Consumable per purchase.`);
+      }
+      const items = normalizeConsumableCounts(requestedItems, economy.maximumPurchaseQuantity);
+      const totalQuantity = consumableCountTotal(items);
+      assertApi(totalQuantity > 0, 422, 'consumable_purchase_empty', 'Choose at least one Consumable.');
+      let totalPriceCrystals = 0;
+      for (const id of CONSUMABLE_ID_LIST) {
+        assertApi(items[id] <= economy.maximumPurchaseQuantity, 422, 'consumable_quantity_too_large', `Choose no more than ${economy.maximumPurchaseQuantity} of each Consumable per purchase.`);
+        if (items[id] > 0) {
+          assertApi(economy.items[id].enabled, 409, 'consumable_unavailable', `${CONSUMABLE_DEFINITIONS[id].name} is currently unavailable.`);
+          totalPriceCrystals += items[id] * economy.items[id].priceCrystals;
+        }
+      }
+      assertApi(Number.isSafeInteger(totalPriceCrystals) && totalPriceCrystals > 0, 500, 'consumable_price_invalid', 'The active Consumables price is invalid.');
+      const totalPriceRaw = (BigInt(totalPriceCrystals) * CRYSTAL_TOKEN_SCALE).toString();
+      const quote = {
+        id: quoteId,
+        address: session.address,
+        items,
+        totalQuantity,
+        totalPriceCrystals,
+        totalPriceRaw,
+        economyVersion: economy.version,
+        createdAt: timestamp,
+        expiresAt: timestamp + CONSUMABLE_QUOTE_TTL_MS,
+        confirmedAt: 0,
+        transactionHash: ''
+      };
+      state.consumablePurchaseQuotes[quoteId] = quote;
+      addAudit(state, session.address, 'CONSUMABLE_PURCHASE_QUOTED', `${quoteId}: ${totalPriceCrystals} CRYSTALS`, timestamp);
+      return { quote: structuredClone(quote), transaction: this.consumablePaymentVerifier.transactionForPayment(totalPriceRaw) };
+    });
+  }
+
+  async confirmConsumablePurchase(token, input = {}) {
+    const session = await this.authenticate(token);
+    assertApi(this.consumablePaymentVerifier?.ready === true, 503, 'consumable_payments_disabled', 'Consumable purchases are closed until the Crystal verifier is ready.');
+    const quoteId = String(input.quoteId || '');
+    const transactionHash = String(input.transactionHash || '').toLowerCase();
+    const snapshot = await this.database.read();
+    const quote = snapshot.consumablePurchaseQuotes[quoteId];
+    assertApi(quote && quote.address === session.address, 404, 'consumable_quote_not_found', 'The Consumables quote was not found for this wallet.');
+    if (quote.confirmedAt && quote.transactionHash) {
+      return { alreadyConfirmed: true, purchase: structuredClone(snapshot.consumablePurchases[quote.transactionHash]), catalog: consumablesCatalog(snapshot.consumablesEconomy, requireWallet(snapshot, session.address).consumables) };
+    }
+    assertApi(quote.expiresAt > this.now(), 410, 'consumable_quote_expired', 'The Consumables quote expired. Create a new quote.');
+    const verified = await this.consumablePaymentVerifier.verifyPayment({ transactionHash, address: session.address, amountRaw: quote.totalPriceRaw });
+    const timestamp = this.now();
+    return this.database.transact((state) => {
+      const current = state.consumablePurchaseQuotes[quoteId];
+      assertApi(current && current.address === session.address, 404, 'consumable_quote_not_found', 'The Consumables quote was not found.');
+      const existing = state.consumablePurchases[verified.transactionHash];
+      if (existing) {
+        assertApi(existing.address === session.address && existing.quoteId === quoteId, 409, 'consumable_payment_already_used', 'This Crystal payment has already been used.');
+        return { alreadyConfirmed: true, purchase: structuredClone(existing), catalog: consumablesCatalog(state.consumablesEconomy, requireWallet(state, session.address).consumables) };
+      }
+      assertApi(!current.confirmedAt, 409, 'consumable_quote_already_confirmed', 'This quote has already been confirmed.');
+      assertApi(current.expiresAt > timestamp, 410, 'consumable_quote_expired', 'The Consumables quote expired before confirmation.');
+      const wallet = requireWallet(state, session.address);
+      wallet.consumables = normalizeWalletConsumables(wallet.consumables);
+      for (const id of CONSUMABLE_ID_LIST) {
+        wallet.consumables.inventory[id] += current.items[id];
+        wallet.consumables.lifetimePurchased[id] += current.items[id];
+      }
+      wallet.consumables.updatedAt = timestamp;
+      wallet.updatedAt = timestamp;
+      current.confirmedAt = timestamp;
+      current.transactionHash = verified.transactionHash;
+      const purchase = {
+        key: verified.transactionHash,
+        transactionHash: verified.transactionHash,
+        quoteId,
+        address: session.address,
+        items: structuredClone(current.items),
+        totalQuantity: current.totalQuantity,
+        totalPriceCrystals: current.totalPriceCrystals,
+        totalPriceRaw: current.totalPriceRaw,
+        token: verified.token,
+        recipient: verified.recipient,
+        blockNumber: verified.blockNumber,
+        logIndex: verified.logIndex,
+        confirmedAt: timestamp
+      };
+      state.consumablePurchases[verified.transactionHash] = purchase;
+      addPlayerActivity(wallet, 'CONSUMABLES_PURCHASED', `${current.totalQuantity} items for ${current.totalPriceCrystals} CRYSTALS`, timestamp);
+      addAudit(state, session.address, 'CONSUMABLE_PURCHASE_CONFIRMED', `${verified.transactionHash}: ${JSON.stringify(current.items)}`, timestamp);
+      return { alreadyConfirmed: false, purchase: structuredClone(purchase), catalog: consumablesCatalog(state.consumablesEconomy, wallet.consumables) };
+    });
+  }
+
   async ownedMiner(token, minerIdInput) {
     const session = await this.authenticate(token);
     assertApi(this.nftMetadataService, 503, 'nft_metadata_disabled', 'NFT metadata is not enabled on this server.');
@@ -1170,6 +1392,27 @@ export class MattMineService {
         }
       }
       applyMinePassGameplayBenefits(baseTuning, passActiveAtStart);
+      let consumables;
+      try {
+        consumables = validateConsumableLoadout(
+          input?.consumables ?? wallet.consumables?.selected ?? {},
+          state.consumablesEconomy,
+          wallet.consumables
+        );
+      } catch (error) {
+        throw new ApiError(422, 'consumable_loadout_invalid', error.message);
+      }
+      wallet.consumables = normalizeWalletConsumables(wallet.consumables);
+      for (const id of CONSUMABLE_ID_LIST) {
+        wallet.consumables.inventory[id] -= consumables[id];
+        wallet.consumables.lifetimeConsumed[id] += consumables[id];
+      }
+      wallet.consumables.updatedAt = timestamp;
+      baseTuning._consumables = {
+        loadout: structuredClone(consumables),
+        definitions: Object.fromEntries(CONSUMABLE_ID_LIST.map((id) => [id, structuredClone(CONSUMABLE_DEFINITIONS[id].effect)])),
+        reservedAt: timestamp
+      };
       const pendingNftRun = normalizePendingNftRun(input?.pendingNftRun, normalizedMode, timestamp);
       let immutableEndlessSnapshot = null;
       if (normalizedMode === SERVER_RUN_MODES.ENDLESS) {
@@ -1228,6 +1471,7 @@ export class MattMineService {
             : 0,
         expiresAt: serverRun.expiresAt,
         tuning: structuredClone(serverRun.tuning),
+        consumables: structuredClone(consumables),
         characterId: lockedCharacterId,
         character: structuredClone(selectedCharacter),
         competitionSlotId,
@@ -1889,6 +2133,45 @@ export class MattMineService {
     };
   }
 
+  async adminConsumablesEconomy(adminKey) {
+    this.assertAdminKey(adminKey);
+    const state = await this.database.read();
+    return {
+      catalog: consumablesCatalog(state.consumablesEconomy),
+      purchases: Object.values(state.consumablePurchases)
+        .sort((left, right) => right.confirmedAt - left.confirmedAt)
+        .slice(0, 250)
+    };
+  }
+
+  async updateAdminConsumablesEconomy(adminKey, input = {}, reason) {
+    this.assertAdminKey(adminKey);
+    const normalizedReason = normalizeAdminReason(reason || input.reason);
+    assertApi(input && typeof input === 'object' && !Array.isArray(input), 400, 'consumables_economy_invalid', 'Consumables Economy changes must be an object.');
+    if (Object.hasOwn(input, 'treasuryBps')) {
+      assertApi(Number(input.treasuryBps) === 10_000, 422, 'consumables_routing_locked', 'Consumables payments must total 100% to the Treasury.');
+    }
+    const timestamp = this.now();
+    return this.database.transact((state) => {
+      const current = normalizeConsumablesEconomy(state.consumablesEconomy);
+      const itemPatch = input.items && typeof input.items === 'object' && !Array.isArray(input.items)
+        ? input.items
+        : {};
+      state.consumablesEconomy = normalizeConsumablesEconomy({
+        ...current,
+        ...(Object.hasOwn(input, 'purchasesPaused') ? { purchasesPaused: input.purchasesPaused === true } : {}),
+        ...(Object.hasOwn(input, 'maximumPurchaseQuantity') ? { maximumPurchaseQuantity: input.maximumPurchaseQuantity } : {}),
+        ...(Object.hasOwn(input, 'maximumLoadoutSize') ? { maximumLoadoutSize: input.maximumLoadoutSize } : {}),
+        items: Object.fromEntries(CONSUMABLE_ID_LIST.map((id) => [id, { ...current.items[id], ...(itemPatch[id] || {}) }])),
+        version: current.version + 1,
+        updatedAt: timestamp,
+        updatedBy: 'SERVER_ADMIN'
+      });
+      addAudit(state, 'SERVER_ADMIN', 'CONSUMABLES_ECONOMY_UPDATED', `${normalizedReason}: version ${state.consumablesEconomy.version}`, timestamp);
+      return { catalog: consumablesCatalog(state.consumablesEconomy), reason: normalizedReason };
+    });
+  }
+
   async adminGameTuning(adminKey) {
     this.assertAdminKey(adminKey);
     const state = await this.database.read();
@@ -1976,8 +2259,20 @@ export class MattMineService {
         const amount = strictInteger(Number(input.amount), 'award_amount', 1, 25);
         wallet.passInventory.chests[PASS_CHEST_ID].available += amount;
         details = `${amount} Pass chest${amount === 1 ? '' : 's'}`;
+      } else if (type === 'consumable') {
+        const consumableId = String(input.consumableId || '');
+        assertApi(CONSUMABLE_DEFINITIONS[consumableId], 422, 'consumable_unknown', 'Choose a valid Consumable.');
+        const amount = strictInteger(Number(input.amount), 'award_amount', -1_000_000, 1_000_000);
+        assertApi(amount !== 0, 422, 'award_amount', 'Choose a non-zero Consumable adjustment.');
+        wallet.consumables = normalizeWalletConsumables(wallet.consumables);
+        const next = wallet.consumables.inventory[consumableId] + amount;
+        assertApi(next >= 0 && Number.isSafeInteger(next), 422, 'consumable_inventory_insufficient', 'This adjustment would make the wallet inventory negative.');
+        wallet.consumables.inventory[consumableId] = next;
+        if (amount > 0) wallet.consumables.lifetimeGranted[consumableId] += amount;
+        wallet.consumables.updatedAt = timestamp;
+        details = `${amount > 0 ? '+' : ''}${amount} ${CONSUMABLE_DEFINITIONS[consumableId].name}`;
       } else {
-        throw new ApiError(422, 'award_type_unknown', 'Choose Pass XP, a cosmetic, or a chest.');
+        throw new ApiError(422, 'award_type_unknown', 'Choose Pass XP, a cosmetic, a chest, or a Consumable adjustment.');
       }
       wallet.updatedAt = timestamp;
       addPlayerActivity(wallet, 'ADMIN_AWARD', `${details}; ${normalizedReason}`, timestamp);
@@ -2912,6 +3207,7 @@ function publicWalletSnapshot(state, address, timestamp) {
     },
     passProgress: publicPassProgress(wallet),
     passInventory: publicPassInventory(wallet),
+    consumables: normalizeWalletConsumables(wallet.consumables),
     keybindings: structuredClone(wallet.keybindings),
     paidCompetitionEligibility: publicPaidCompetitionEligibility(wallet),
     suspended: wallet.suspended,
@@ -3282,6 +3578,7 @@ function adminWalletSnapshot(state, wallet, timestamp) {
     profile: structuredClone(wallet.profile),
     passProgress: publicPassProgress(wallet),
     passInventory: publicPassInventory(wallet),
+    consumables: normalizeWalletConsumables(wallet.consumables),
     freeRunUsedToday: today.freeRunUsed === true,
     activeSessions: sessions.length,
     activeRuns: runs.filter((run) => isAdministrativelyLiveRun(run)).length,

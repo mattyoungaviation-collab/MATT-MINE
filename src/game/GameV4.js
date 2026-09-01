@@ -377,6 +377,35 @@ export class MattMineGame extends V3MattMineGame {
     return super.extract();
   }
 
+  useConsumable(id, options = {}) {
+    if (this.state !== 'playing' || !this.run?.consumables || !this.player || this.player.health <= 0) return false;
+    const remaining = this.run.consumables.remaining || {};
+    if (Number(remaining[id] || 0) <= 0) return false;
+    if (id === 'medic-pack') {
+      if (this.player.health >= this.player.maxHealth) {
+        this.hooks.onToast?.('MEDIC PACK READY AFTER HEALTH DAMAGE');
+        return false;
+      }
+      remaining[id] -= 1;
+      this.run.consumables.medicPacksUsed += 1;
+      this.player.health = Math.min(this.player.maxHealth, this.player.health + 25);
+      this.addFloater(this.player.x, this.player.y - 52, '+25 HEALTH · MEDIC PACK', '#73ffb2');
+      this.hooks.onToast?.('MEDIC PACK ACTIVATED');
+    } else if (id === 'mythical-force-field') {
+      remaining[id] -= 1;
+      this.run.consumables.forceFieldsUsed += 1;
+      this.player.forceFieldRemaining = 3;
+      this.hooks.onToast?.("MATT'S MYTHICAL FORCE FIELD · 3");
+    } else {
+      return false;
+    }
+    if (options.record !== false && DETERMINISTIC_SERVER_MODES.has(this.runContext?.mode)) {
+      this.recordArenaCommand('consumable', id);
+    }
+    this.hooks.onConsumableUsed?.({ id, remaining: Number(remaining[id] || 0) });
+    return true;
+  }
+
   recordArenaCommand(command, value = '') {
     this.hooks.onArenaInput?.({
       type: 'command',

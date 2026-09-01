@@ -21,6 +21,7 @@ const state = {
   mineOperations: null,
   nftV2: null,
   endless: null,
+  consumables: null,
   controlIndex: [],
   activeTab: 'overview',
   overviewTimer: null
@@ -75,6 +76,7 @@ async function activateTab(name) {
   if (name === 'tuning') await loadTuning();
   if (name === 'expansion') await loadExpansion();
   if (name === 'nft-v2') await loadNftV2Protocol();
+  if (name === 'consumables') await loadConsumablesEconomy();
   if (name === 'endless') await loadEndlessAdmin();
   if (name === 'operations') await loadMineOperations();
   if (name === 'arena') await loadArenaAdmin();
@@ -1634,6 +1636,42 @@ function setLinkedInput(selector, value) {
 function objectDiff(original = {}, next = {}) {
   return Object.fromEntries(Object.entries(next).filter(([key, value]) => original[key] !== value));
 }
+
+async function loadConsumablesEconomy() {
+  const data = await api('/api/admin/consumables-economy');
+  state.consumables = data;
+  const catalog = data.catalog;
+  $('#consumables-purchases-paused').checked = catalog.economy.purchasesPaused;
+  $('#consumables-max-purchase').value = catalog.economy.maximumPurchaseQuantity;
+  $('#consumables-max-loadout').value = catalog.economy.maximumLoadoutSize;
+  setReviewedEndlessAdminHtml($('#consumables-economy-items'), catalog.items.map((item) => `<article class="panel" data-consumables-admin-item="${escapeHtml(item.id)}"><h3>${escapeHtml(item.name)}</h3><label class="toggle">Available for purchase<input data-item-enabled type="checkbox" ${item.enabled ? 'checked' : ''}></label><label>Price in MATT CRYSTALS<input data-item-price type="number" min="1" max="1000000000" step="1" value="${Number(item.priceCrystals)}"></label><label>Maximum charges per run<input data-item-run-limit type="number" min="0" max="3" step="1" value="${Number(item.maximumPerRun)}"></label></article>`).join(''));
+  setReviewedEndlessAdminHtml($('#consumables-purchases'), data.purchases.length ? data.purchases.map((purchase) => `<tr><td>${escapeHtml(short(purchase.address))}</td><td>${escapeHtml(Object.entries(purchase.items || {}).filter(([, quantity]) => quantity > 0).map(([id, quantity]) => `${id} ×${quantity}`).join(', '))}</td><td>${Number(purchase.totalPriceCrystals || 0).toLocaleString()}</td><td>${escapeHtml(short(purchase.transactionHash))}</td></tr>`).join('') : '<tr><td colspan="4">No confirmed Consumables purchases yet.</td></tr>');
+}
+
+$('#consumables-economy-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const statusNode = $('#consumables-economy-status');
+  const items = Object.fromEntries([...document.querySelectorAll('[data-consumables-admin-item]')].map((card) => [card.dataset.consumablesAdminItem, {
+    enabled: card.querySelector('[data-item-enabled]').checked,
+    priceCrystals: Number(card.querySelector('[data-item-price]').value),
+    maximumPerRun: Number(card.querySelector('[data-item-run-limit]').value)
+  }]));
+  statusNode.textContent = 'Saving…';
+  try {
+    await api('/api/admin/consumables-economy', { method: 'PUT', body: {
+      purchasesPaused: $('#consumables-purchases-paused').checked,
+      maximumPurchaseQuantity: Number($('#consumables-max-purchase').value),
+      maximumLoadoutSize: Number($('#consumables-max-loadout').value),
+      treasuryBps: 10000,
+      items,
+      reason: $('#consumables-economy-reason').value
+    }});
+    statusNode.textContent = 'Consumables Economy updated and audit logged.';
+    await loadConsumablesEconomy();
+  } catch (error) {
+    statusNode.textContent = error.message;
+  }
+});
 
 const ENDLESS_ADMIN_FIELDS = Object.freeze([
   ['Launch', 'enabled', 'Endless enabled', 'boolean', 0, 1],

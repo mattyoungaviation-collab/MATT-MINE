@@ -172,6 +172,24 @@ export const renderPlayerMethods = {
     ctx.translate(player.x, player.y);
     ctx.globalAlpha = player.invulnerable > 0 && Math.floor(player.invulnerable * 18) % 2 ? 0.45 : 1;
 
+    if (player.forceFieldRemaining > 0) {
+      const pulse = 1 + Math.sin(this.run.elapsed * 9) * 0.04;
+      ctx.save();
+      ctx.scale(pulse, pulse);
+      ctx.fillStyle = 'rgba(55, 226, 255, 0.13)';
+      ctx.strokeStyle = 'rgba(99, 245, 255, 0.95)';
+      ctx.shadowColor = '#35e8ff';
+      ctx.shadowBlur = 26;
+      ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.arc(0, 0, 46, 0, TAU); ctx.fill(); ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#e9feff';
+      ctx.font = '800 15px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(player.forceFieldRemaining.toFixed(1), 0, -55);
+      ctx.restore();
+    }
+
     if (cosmetics.aura === 'guardian_aura') {
       const pulse = 1 + Math.sin(this.run.elapsed * 4) * 0.08;
       ctx.save();

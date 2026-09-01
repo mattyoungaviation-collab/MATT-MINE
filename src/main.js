@@ -98,7 +98,8 @@ const ENDLESS_LEADERBOARD_MODE = 'endless';
 const ENDLESS_CRYSTAL_DISPLAY_DECIMALS = 6;
 const CONTROLLER_ACTION_LABELS = Object.freeze({
   attack: 'Attack', dash: 'Dash', pickaxe: 'Pickaxe', dynamite: 'Dynamite',
-  blaster: 'Blaster', interact: 'Interact', pause: 'Pause', confirm: 'Confirm',
+  blaster: 'Blaster', medicPack: 'Medic Pack', forceField: "MATT's Mythical Force Field",
+  interact: 'Interact', pause: 'Pause', confirm: 'Confirm',
   cancel: 'Back', menuUp: 'Menu Up', menuDown: 'Menu Down',
   menuLeft: 'Menu Left', menuRight: 'Menu Right'
 });
@@ -138,6 +139,8 @@ let publicPaymentStatus = null;
 let endlessPublicStatus = null;
 let walletBusy = false;
 let paymentBusy = false;
+let consumablesData = null;
+let consumablesBusy = false;
 let activeServerClaim = null;
 let passRewardsBusy = false;
 let arenaConfig = normalizeArenaConfig();
@@ -214,6 +217,7 @@ const ui = {
   arenaRoundTime: $('#arena-round-time'),
   weaponSlots: [...document.querySelectorAll('.weapon-slot')],
   weaponButtons: [...document.querySelectorAll('.weapon-button')],
+  consumableButtons: [...document.querySelectorAll('.consumable-button')],
   attackButton: $('#attack-button')
 };
 
@@ -227,6 +231,7 @@ function showScreen(id = null) {
       (action === 'how-to-play' && id === 'how-to-play') ||
       (action === 'leaderboards' && id === 'leaderboards') ||
       (action === 'pass' && (id === 'mine-pass' || id === 'pass-mine' || id === 'pass-cosmetics')) ||
+      (action === 'consumables' && id === 'consumables') ||
       (action === 'account' && (id === 'miner-profile' || id === 'miner-select'));
     button.classList.toggle('active', active);
   }
@@ -1447,6 +1452,7 @@ async function declinePracticeRewards() {
 async function startRunMode(mode, options = {}) {
   const useServer =
     options.restartInterruptedNftPractice === true ||
+    (mode === RUN_MODES.PRACTICE && Boolean(serverPlayer)) ||
     (mode === RUN_MODES.PAID && serverConfig?.paidRunsEnabled === true) ||
     mode === RUN_MODES.ENDLESS ||
     mode === RUN_MODES.BETA;
@@ -2732,6 +2738,15 @@ for (const button of document.querySelectorAll('[data-launch-action]')) {
       openMines();
       return;
     }
+    for (const button of ui.consumableButtons) {
+      const remaining = Number(stats.consumables?.remaining?.[button.dataset.consumable] || 0);
+      button.disabled = remaining <= 0;
+      button.classList.toggle('locked', remaining <= 0);
+      const count = button.querySelector('small');
+      if (count) count.textContent = button.dataset.consumable === 'medic-pack'
+        ? `${remaining} · 4`
+        : stats.forceFieldRemaining > 0 ? `${stats.forceFieldRemaining.toFixed(1)}s` : `${remaining} · 5`;
+    }
     if (action === 'loadout') {
       void openMinerSelect();
       return;
@@ -2752,6 +2767,10 @@ for (const button of document.querySelectorAll('[data-launch-action]')) {
       openLeaderboards(ARENA_LEADERBOARD_MODE);
       return;
     }
+    if (action === 'consumables') {
+      void openConsumables();
+      return;
+    }
     void openMinerSelect();
   });
 }
@@ -2763,6 +2782,7 @@ for (const button of document.querySelectorAll('[data-site-action]')) {
     if (action === 'how-to-play') return showScreen('how-to-play');
     if (action === 'leaderboards') return openLeaderboards(ARENA_LEADERBOARD_MODE);
     if (action === 'pass') return openPass();
+    if (action === 'consumables') return void openConsumables();
     if (action === 'mines') {
       return openMines();
     }
@@ -3077,6 +3097,7 @@ $('#effects-volume').addEventListener('input', (event) => {
 });
 $('#pass-button').addEventListener('click', openPass);
 $('#manage-cosmetics-button').addEventListener('click', () => void openCosmetics());
+$('#save-consumables-loadout').addEventListener('click', () => void saveConsumableLoadout());
 $('#leaderboards-button').addEventListener('click', () => openLeaderboards(ARENA_LEADERBOARD_MODE));
 $('#arena-button').addEventListener('click', () => openMineRoute('arena'));
 $('#admin-button').addEventListener('click', openAdmin);
@@ -4302,6 +4323,92 @@ async function startApprovedNftServerRun(mode, minerId) {
   return apiClient.startRun(mode, minerId, approval);
 }
 
+async function openConsumables() {
+  setGameplayUi(false);
+  showScreen('consumables');
+  $('#consumables-status').textContent = 'Loading the server-authoritative Consumables Economy…';
+  try {
+    consumablesData = await apiClient.consumablesCatalog();
+    renderConsumables();
+  } catch (error) {
+    $('#consumables-status').textContent = error.message || 'Consumables are temporarily unavailable.';
+  }
+}
+
+function renderConsumables() {
+  const catalog = consumablesData?.catalog;
+  if (!catalog) return;
+  const connected = Boolean(serverPlayer && catalog.wallet);
+  $('#consumables-status').textContent = catalog.economy.purchasesPaused
+    ? 'Purchases are paused by Admin. Your wallet inventory remains available.'
+    : connected
+      ? `Connected to ${abbreviateAddress(serverPlayer.address)} · prices and inventory are server authoritative.`
+      : 'Browse the live catalog. Connect Ronin Wallet when you are ready to purchase or select a loadout.';
+  replaceProfileMarkup($('#consumables-grid'), catalog.items.map((item) => {
+    const icon = item.id === 'medic-pack' ? '✚' : item.id === 'mythical-force-field' ? '◉' : '×5';
+    return `<article class="consumable-card" data-consumable-card="${escapeHtml(item.id)}">
+      <div class="consumable-icon">${icon}</div>
+      <p class="eyebrow">${escapeHtml(item.activation === 'run-start' ? 'ACTIVATES AT RUN START' : `DEFAULT KEY ${item.defaultKey.replace('Digit', '')}`)}</p>
+      <h3>${escapeHtml(item.name)}</h3>
+      <p>${escapeHtml(item.description)}</p>
+      <div class="consumable-stats"><span>PRICE <b>${formatNumber(item.priceCrystals)} CRYSTALS</b></span><span>OWNED <b>${connected ? formatNumber(item.owned) : '—'}</b></span></div>
+      <label class="consumable-loadout-choice"><input type="checkbox" data-consumable-loadout="${escapeHtml(item.id)}" ${item.selected > 0 ? 'checked' : ''} ${!connected || item.owned < 1 || item.maximumPerRun < 1 ? 'disabled' : ''}> BRING INTO NEXT RUN</label>
+      <div class="consumable-buy-row"><input type="number" min="1" max="${catalog.economy.maximumPurchaseQuantity}" value="1" data-consumable-quantity="${escapeHtml(item.id)}" aria-label="${escapeHtml(item.name)} quantity"><button type="button" data-consumable-buy="${escapeHtml(item.id)}" ${consumablesBusy || catalog.economy.purchasesPaused || !item.enabled ? 'disabled' : ''}>${connected ? 'BUY WITH CRYSTALS' : 'CONNECT TO BUY'}</button></div>
+    </article>`;
+  }).join(''));
+  $('#consumables-loadout-summary').textContent = connected
+    ? `Selected ${Object.values(catalog.wallet.selected || {}).reduce((sum, value) => sum + Number(value || 0), 0)} of ${catalog.economy.maximumLoadoutSize} allowed charges.`
+    : `Connect a wallet to choose up to ${catalog.economy.maximumLoadoutSize} charges.`;
+  $('#save-consumables-loadout').disabled = !connected || consumablesBusy;
+  document.querySelectorAll('[data-consumable-buy]').forEach((button) => button.addEventListener('click', () => void purchaseConsumable(button.dataset.consumableBuy)));
+}
+
+async function purchaseConsumable(id) {
+  if (consumablesBusy) return;
+  if (!serverPlayer) {
+    const connected = await connectWallet();
+    if (!connected) return;
+    return openConsumables();
+  }
+  const quantity = Math.max(1, Math.floor(Number(document.querySelector(`[data-consumable-quantity="${id}"]`)?.value || 1)));
+  const item = consumablesData?.catalog?.items?.find((entry) => entry.id === id);
+  const total = quantity * Number(item?.priceCrystals || 0);
+  if (!window.confirm(`Buy ${quantity} ${item?.name || 'Consumable'} for ${formatNumber(total)} MATT CRYSTALS? 100% goes to the MATT Mine Treasury.`)) return;
+  consumablesBusy = true;
+  renderConsumables();
+  try {
+    const quoted = await apiClient.consumablePurchaseQuote({ [id]: quantity });
+    const transactionHash = await wallet.purchaseConsumables(quoted.transaction);
+    const confirmed = await apiClient.confirmConsumablePurchase(quoted.quote.id, transactionHash);
+    consumablesData.catalog = confirmed.catalog;
+    serverPlayer.consumables = confirmed.catalog.wallet;
+    toast(`${quantity} ${item.name} added · ${abbreviateHash(transactionHash)}`);
+  } catch (error) {
+    toast(error.message || 'Consumables purchase failed.');
+  } finally {
+    consumablesBusy = false;
+    renderConsumables();
+  }
+}
+
+async function saveConsumableLoadout() {
+  if (!serverPlayer || consumablesBusy) return;
+  const items = Object.fromEntries([...document.querySelectorAll('[data-consumable-loadout]')]
+    .map((input) => [input.dataset.consumableLoadout, input.checked ? 1 : 0]));
+  consumablesBusy = true;
+  try {
+    const result = await apiClient.updateConsumableLoadout(items);
+    consumablesData.catalog = result.catalog;
+    serverPlayer.consumables = result.catalog.wallet;
+    toast('Consumables loadout saved for the next mine');
+  } catch (error) {
+    toast(error.message || 'Consumables loadout could not be saved.');
+  } finally {
+    consumablesBusy = false;
+    renderConsumables();
+  }
+}
+
 function selectedEndlessLeaderboard() {
   const [board = 'score', scope = 'all-time'] = String($('#endless-leaderboard-filter')?.value || 'score:all-time').split(':');
   return { board, scope };
@@ -4510,7 +4617,7 @@ async function activateReconnectedEndlessRun(run) {
     endlessContinuation: run.phaseInitialState,
     currentPhase: run.currentPhase,
     nftRun: run.nftRun,
-    tuning: {}
+    tuning: run.tuning || {}
   });
   toast(`Reconnected to Endless Phase ${run.currentPhase}`);
 }

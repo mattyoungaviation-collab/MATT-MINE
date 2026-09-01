@@ -211,10 +211,12 @@ export function verifyEndlessPhaseEvents(run, rawEvents, now = Date.now()) {
   const configuredUnitCeiling = Math.max(0, Number(run.config?.rewards?.mineableCrystalUnits || 0));
   const rewardUnitCapacity = configuredUnitCeiling > 0 ? Math.min(capacity, configuredUnitCeiling) : capacity;
   const remainingCapacity = Math.max(0, rewardUnitCapacity - Number(run.crystalsCarried || 0));
-  const crystalsAdded = Math.min(remainingCapacity, collectedCrystals.size);
+  const crystalMultiplier = Number(run.consumables?.loadout?.['heavy-crystal-hauler'] || 0) > 0 ? 5 : 1;
+  const multipliedCrystalUnits = collectedCrystals.size * crystalMultiplier;
+  const crystalsAdded = Math.min(remainingCapacity, multipliedCrystalUnits);
   const conversionNumerator = Math.max(0, Number(run.config?.rewards?.crystalConversionNumerator || 0));
   const conversionDenominator = Math.max(1, Number(run.config?.rewards?.crystalConversionDenominator || 1));
-  const grossCrystalsEarned = collectedCrystals.size * conversionNumerator / conversionDenominator;
+  const grossCrystalsEarned = multipliedCrystalUnits * conversionNumerator / conversionDenominator;
   const enemyBreakdown = countObjectTypes([...killedEnemies], byId);
   const oreBreakdown = countObjectTypes([...brokenOres], byId);
   const digest = hashEndlessCheckpoint(run.rollingDigest, manifest, events);
@@ -242,7 +244,7 @@ export function verifyEndlessPhaseEvents(run, rawEvents, now = Date.now()) {
     oreBroken: brokenOres.size,
     crystalsAdded,
     grossCrystalsEarned,
-    crystalsUnableToCarry: Math.max(0, collectedCrystals.size - crystalsAdded),
+    crystalsUnableToCarry: Math.max(0, multipliedCrystalUnits - crystalsAdded),
     damageTaken: Math.round(damageTaken * 1_000) / 1_000,
     elapsedMs: previousTick,
     eventCount: events.length,

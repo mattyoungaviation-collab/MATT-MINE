@@ -39,6 +39,12 @@ export const stateMethods = {
       startedAt: Date.now(),
       attackCounter: 0,
       safeStartUntil: 0,
+      consumables: {
+        remaining: { ...(tuning._consumables?.loadout || {}) },
+        heavyCrystalHaulerActive: Number(tuning._consumables?.loadout?.['heavy-crystal-hauler'] || 0) > 0,
+        medicPacksUsed: 0,
+        forceFieldsUsed: 0
+      },
       bossTelemetry: {
         encounterStartedAt: 0,
         encounterEndedAt: 0,
@@ -85,6 +91,7 @@ export const stateMethods = {
       walkCycle: 0,
       hitFlash: 0,
       invulnerable: 0,
+      forceFieldRemaining: 0,
       swingTimer: 0,
       dashCooldown: 0,
       dashCooldownMax: (tuning.dashCooldown || CONFIG.baseDashCooldown) * Number(nftTraits ? 1 : character.dashCooldown || 1),
@@ -367,6 +374,7 @@ export const stateMethods = {
     this.player.droneCount = clamp(Math.floor(Number(this.player.droneCount) || 0), 0, maximumDrones);
     this.player.attackTimer -= dt;
     this.player.invulnerable -= dt;
+    this.player.forceFieldRemaining = Math.max(0, Number(this.player.forceFieldRemaining || 0) - dt);
     this.player.hitFlash -= dt;
     this.player.swingTimer -= dt;
     this.player.dashCooldown = Math.max(0, this.player.dashCooldown - dt);
@@ -382,6 +390,8 @@ export const stateMethods = {
 
     const selectedWeapon = this.input.consumeWeaponSelection();
     if (selectedWeapon) this.switchWeapon(selectedWeapon);
+    const selectedConsumable = this.input.consumeConsumable?.();
+    if (selectedConsumable) this.useConsumable?.(selectedConsumable);
 
     this.updatePlayerMovement(dt);
     this.updateAim();
@@ -552,6 +562,7 @@ export const stateMethods = {
     telemetry.encounterEndedAt = Math.max(telemetry.encounterEndedAt, this.run.elapsed);
   },
   damagePlayer(amount, sourceAngle, source = {}) {
+    if (this.player.forceFieldRemaining > 0) return;
     if (this.player.invulnerable > 0) return;
     const finalDamage = Math.max(1, amount * (1 - this.player.armor));
     const shieldDamage = Math.min(Math.max(0, this.player.shield || 0), finalDamage);
@@ -735,6 +746,8 @@ export const stateMethods = {
       dashReady: 1 - clamp(this.player.dashCooldown / this.player.dashCooldownMax, 0, 1),
       room: room?.name || 'Mine Tunnel',
       weapon: this.player.weapon,
+      consumables: structuredClone(this.run.consumables || {}),
+      forceFieldRemaining: Math.max(0, Number(this.player.forceFieldRemaining || 0)),
       weapons: {
         pickaxe: { unlocked: true, value: 'READY' },
         dynamite: { unlocked: this.player.unlockedWeapons.dynamite, value: `${this.player.dynamiteAmmo}` },

@@ -41,6 +41,7 @@
         <button data-tab="tuning"><span>Game Balance</span><small>Per-lobby tuning</small></button>
         <button data-tab="expansion"><span>Features &amp; Practice</span><small>Gates, controllers &amp; roster</small></button>
         <span class="nav-label">Economy</span>
+        <button data-tab="consumables"><span>Consumables Economy</span><small>Prices, limits &amp; sales</small></button>
         <button data-tab="nft-v2"><span>NFT V2 Protocol</span><small>On-chain maps &amp; economy</small></button>
         <button data-tab="arena"><span>MATT Arena</span><small>Pool &amp; settlement</small></button>
         <span class="nav-label">System</span>
@@ -433,6 +434,23 @@
           <article class="panel"><h2>Config history and Smart Engine</h2><div id="endless-admin-history"></div></article>
         </div>
         <article id="endless-run-review" class="panel" hidden></article>
+      </section>
+
+      <section id="tab-consumables" class="tab">
+        <div class="section-heading"><div><p class="eyebrow">OFF-CHAIN INVENTORY · CRYSTAL PAYMENTS</p><h2>Consumables Economy</h2><p>Adjust live prices, availability, checkout limits, and per-run loadouts. Payment routing is locked to 100% Treasury.</p></div></div>
+        <div class="notice"><strong>Payment route:</strong> 100% of MATT CRYSTALS goes to <code>0xF79913cB83Cc9CABD95D0ba9250103fbb939f984</code>. No burn and no split.</div>
+        <form id="consumables-economy-form">
+          <article class="panel">
+            <div class="compact-grid">
+              <label class="toggle">Pause all purchases<input id="consumables-purchases-paused" type="checkbox"></label>
+              <label>Max quantity of each item per checkout<input id="consumables-max-purchase" type="number" min="1" max="10" step="1"></label>
+              <label>Total charges allowed per run<input id="consumables-max-loadout" type="number" min="1" max="3" step="1"></label>
+            </div>
+          </article>
+          <div id="consumables-economy-items" class="grid three"></div>
+          <article class="panel"><label>Required reason<input id="consumables-economy-reason" maxlength="240" required placeholder="Why is the Consumables Economy changing?"></label><button type="submit">Save Consumables Economy</button><p id="consumables-economy-status" class="muted"></p></article>
+        </form>
+        <article class="panel table-wrap"><h2>Latest confirmed purchases</h2><table><thead><tr><th>Wallet</th><th>Items</th><th>CRYSTALS</th><th>Transaction</th></tr></thead><tbody id="consumables-purchases"></tbody></table></article>
       </section>
 
       <section id="tab-contracts" class="tab">

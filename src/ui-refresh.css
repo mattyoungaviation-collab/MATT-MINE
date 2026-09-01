@@ -899,6 +899,41 @@ button:disabled {
   border-bottom: 1px solid rgba(196, 159, 68, 0.26);
 }
 
+/* Consumables economy and run loadout */
+.consumables-panel { max-width: 1180px; }
+.consumables-hero { display: flex; justify-content: space-between; gap: 28px; align-items: end; margin-bottom: 24px; }
+.consumables-hero h2 span { color: var(--gold, #f5c63c); }
+.consumables-hero aside { max-width: 300px; padding: 16px 18px; border: 1px solid rgba(245,198,60,.42); background: rgba(245,198,60,.07); }
+.consumables-hero aside strong, .consumables-hero aside small { display: block; }
+.consumables-hero aside small { margin-top: 6px; color: #abb3be; }
+.consumables-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 22px 0; }
+.consumable-card { position: relative; min-height: 360px; padding: 24px; border: 1px solid rgba(75,231,239,.22); background: linear-gradient(155deg, rgba(14,23,29,.98), rgba(6,10,14,.98)); }
+.consumable-card h3 { min-height: 50px; margin: 8px 0; color: #fff; }
+.consumable-card > p:not(.eyebrow) { min-height: 70px; color: #aeb7c1; }
+.consumable-icon { display: grid; place-items: center; width: 66px; height: 66px; margin-bottom: 18px; border: 1px solid #37e1ea; border-radius: 50%; color: #62f5fa; font: 900 24px/1 sans-serif; box-shadow: 0 0 25px rgba(55,225,234,.18); }
+.consumable-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 18px 0; }
+.consumable-stats span { padding: 10px; background: rgba(255,255,255,.035); color: #8e9aa5; font-size: 11px; }
+.consumable-stats b { display: block; margin-top: 4px; color: #f5c63c; }
+.consumable-loadout-choice { display: flex; gap: 8px; align-items: center; min-height: 40px; color: #d8e0e6; font-size: 12px; font-weight: 800; }
+.consumable-buy-row { display: grid; grid-template-columns: 70px 1fr; gap: 8px; margin-top: 12px; }
+.consumable-buy-row input, .consumable-buy-row button { min-height: 44px; }
+.consumable-buy-row input { width: 100%; text-align: center; color: white; background: #080d11; border: 1px solid #34414a; }
+.consumable-buy-row button { border: 0; background: #f5c63c; color: #0a0d10; font-weight: 900; }
+.consumables-loadout-bar { display: flex; justify-content: space-between; align-items: center; gap: 18px; padding: 18px 20px; border: 1px solid rgba(245,198,60,.3); background: #0b1116; }
+.consumables-loadout-bar strong, .consumables-loadout-bar small { display: block; }
+.consumables-loadout-bar small { margin-top: 4px; color: #9fa9b3; }
+.mobile-consumable-buttons { display: flex; gap: 7px; }
+.consumable-button { position: relative; width: 48px; height: 48px; border: 1px solid #54eff5; border-radius: 50%; background: rgba(7,22,28,.9); color: #71f5fa; font-size: 20px; }
+.consumable-button small { position: absolute; right: -5px; bottom: -5px; min-width: 24px; padding: 2px 4px; border-radius: 10px; background: #111820; color: #fff; font-size: 9px; }
+.consumable-button.locked { opacity: .35; }
+
+@media (max-width: 900px) {
+  .consumables-grid { grid-template-columns: 1fr; }
+  .consumable-card { min-height: 0; }
+  .consumable-card h3, .consumable-card > p:not(.eyebrow) { min-height: 0; }
+  .consumables-hero, .consumables-loadout-bar { align-items: stretch; flex-direction: column; }
+}
+
 .endless-leaderboard-filter {
   margin-left: auto;
   display: flex;

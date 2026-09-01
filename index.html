@@ -40,7 +40,7 @@
           <button type="button" data-site-action="how-to-play">HOW TO PLAY</button>
           <button type="button" data-site-action="leaderboards">LEADERBOARDS</button>
           <button type="button" data-site-action="pass">PASS</button>
-          <button type="button" data-site-action="store">STORE</button>
+          <button type="button" data-site-action="consumables">CONSUMABLES</button>
         </nav>
         <button id="site-account-button" class="site-account-button" type="button" data-site-action="account">
           <span aria-hidden="true">▣</span><strong id="site-account-label">CONNECT WALLET</strong>
@@ -57,6 +57,7 @@
             <button type="button" data-launch-action="how-to-play">HOW IT WORKS</button>
             <button type="button" data-launch-action="mines">CHOOSE A MINE</button>
             <button type="button" data-launch-action="leaderboards">LEADERBOARDS</button>
+            <button type="button" data-launch-action="consumables">CONSUMABLES</button>
           </nav>
           <div class="launch-nav-actions">
             <button id="launch-wallet-button" class="launch-wallet-button" type="button">
@@ -426,6 +427,7 @@
               <div class="miner-select-actions">
                 <button id="enter-mines-button" class="primary-button gold-button" type="button" disabled>ENTER MINES</button>
                 <button id="select-loadout-button" class="primary-button miner-garage-link" type="button" disabled>MANAGE LOADOUT</button>
+                <button class="secondary-button" type="button" data-site-action="consumables">CONSUMABLES</button>
               </div>
               <small>Select, equip, repair, check balances, and enter a mine without leaving this page.</small>
             </aside>
@@ -587,6 +589,7 @@
           <div class="mine-route-help">
             <button id="mines-how-to-button" class="secondary-button" type="button">&larr; HOW TO PLAY</button>
             <button id="mines-miner-button" class="secondary-button" type="button">SELECT / MANAGE MINER</button>
+            <button class="secondary-button" type="button" data-site-action="consumables">CHOOSE CONSUMABLES</button>
           </div>
 
           <div class="menu-bottom-deck">
@@ -598,6 +601,7 @@
             <div class="menu-nav-grid" aria-label="Player menu">
               <button id="leaderboards-button" class="secondary-button">LEADERBOARDS</button>
               <button id="pass-button" class="secondary-button">MINE PASS</button>
+              <button class="secondary-button" data-site-action="consumables">CONSUMABLES</button>
               <button id="profile-button" class="secondary-button">PROFILE</button>
               <button id="crystal-bank-button" class="secondary-button">CRYSTAL BANK</button>
               <button id="controls-button" class="secondary-button controls-nav-button">CONTROLS</button>
@@ -790,6 +794,19 @@
             </div>
             <button id="buy-paid-run-button" class="primary-button">PASS REQUIRED</button>
           </div>
+        </div>
+      </section>
+
+      <section id="consumables" class="screen" aria-labelledby="consumables-title">
+        <div class="panel wide-panel economy-panel consumables-panel">
+          <button class="close-button" data-close="consumables" aria-label="Close">×</button>
+          <header class="consumables-hero">
+            <div><p class="eyebrow">OFF-CHAIN · WALLET-OWNED · IN-GAME</p><h2 id="consumables-title">MATT MINE <span>CONSUMABLES</span></h2><p>Buy with MATT CRYSTALS, choose your run loadout, and make every charge count.</p></div>
+            <aside><strong>100% TREASURY</strong><small>Every purchase goes directly to the approved MATT Mine Treasury.</small></aside>
+          </header>
+          <p id="consumables-status" class="preview-note">Loading Consumables Economy…</p>
+          <div id="consumables-grid" class="consumables-grid"></div>
+          <div class="consumables-loadout-bar"><div><strong>RUN LOADOUT</strong><small id="consumables-loadout-summary">Choose up to 3 charges.</small></div><button id="save-consumables-loadout" class="secondary-button" type="button">SAVE RUN LOADOUT</button></div>
         </div>
       </section>
 
@@ -1202,6 +1219,10 @@
           <button class="weapon-button active" type="button" data-weapon="pickaxe" aria-label="Pickaxe">⛏</button>
           <button class="weapon-button locked" type="button" data-weapon="dynamite" aria-label="Dynamite">🧨</button>
           <button class="weapon-button locked" type="button" data-weapon="blaster" aria-label="Crystal Blaster">✦</button>
+        </div>
+        <div class="mobile-consumable-buttons" aria-label="Use consumable">
+          <button class="consumable-button" type="button" data-consumable="medic-pack" aria-label="Use Medic Pack">✚<small>4</small></button>
+          <button class="consumable-button" type="button" data-consumable="mythical-force-field" aria-label="Use MATT's Mythical Force Field">◉<small>5</small></button>
         </div>
         <button id="attack-button" class="attack-button" type="button" aria-label="Mine or attack">⛏</button>
       </div>

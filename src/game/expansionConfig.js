@@ -159,17 +159,19 @@ export function normalizePlayerExpansion(input = {}) {
 }
 
 export const CONTROLLER_ACTIONS = Object.freeze([
-  'attack', 'dash', 'pickaxe', 'dynamite', 'blaster', 'interact', 'pause',
+  'attack', 'dash', 'pickaxe', 'dynamite', 'blaster', 'medicPack', 'forceField', 'interact', 'pause',
   'confirm', 'cancel', 'menuUp', 'menuDown', 'menuLeft', 'menuRight'
 ]);
 
 const LEGACY_CONTROLLER_MAPPING = Object.freeze({
   attack: 0, dash: 1, pickaxe: 4, dynamite: 2, blaster: 5, interact: 3,
+  medicPack: 6, forceField: 11,
   pause: 9, confirm: 0, cancel: 1, menuUp: 12, menuDown: 13, menuLeft: 14, menuRight: 15
 });
 
 const DEFAULT_CONTROLLER_MAPPING = Object.freeze({
   attack: 7, dash: 10, pickaxe: 4, dynamite: 2, blaster: 5, interact: 3,
+  medicPack: 6, forceField: 11,
   pause: 9, confirm: 0, cancel: 1, menuUp: 12, menuDown: 13, menuLeft: 14, menuRight: 15
 });
 
@@ -197,7 +199,7 @@ export function normalizeControllerProfile(input = {}) {
   const used = new Set();
   for (const action of CONTROLLER_ACTIONS) {
     const button = integer(mappingSource[action], 0, 31, defaults.mapping[action]);
-    if (['attack', 'dash', 'pickaxe', 'dynamite', 'blaster', 'interact', 'pause'].includes(action)) {
+    if (['attack', 'dash', 'pickaxe', 'dynamite', 'blaster', 'medicPack', 'forceField', 'interact', 'pause'].includes(action)) {
       if (used.has(button)) throw new Error(`Controller button ${button} is assigned more than once.`);
       used.add(button);
     }

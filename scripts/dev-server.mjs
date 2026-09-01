@@ -31,6 +31,7 @@ import { createNftGameplayServiceFromEnvironment } from '../server/nft-gameplay-
 import { createNftV2AdminServiceFromEnvironment } from '../server/nft-v2-admin-service.js';
 import { createEndlessSettlementServiceFromEnvironment } from '../server/endless-settlement-service.js';
 import { EndlessMattPaymentVerifier } from '../server/endless-payment-verifier.js';
+import { ConsumableCrystalPaymentVerifier } from '../server/consumable-payment-verifier.js';
 import { nftRpcUrlFromEnvironment } from '../server/nft-rpc-url.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -228,6 +229,13 @@ const endlessPaymentVerifier = mainnetTransactionsEnabled && endlessPaymentsRequ
       confirmations: Number(process.env.MATT_MINE_ENDLESS_PAYMENT_CONFIRMATIONS || process.env.MATT_MINE_PAYMENT_CONFIRMATIONS || 3)
     }).init()
   : null;
+const consumablePaymentVerifier = mainnetTransactionsEnabled && process.env.MATT_MINE_CONSUMABLES_ENABLED !== 'false'
+  ? await new ConsumableCrystalPaymentVerifier({
+      rpcUrls: roninRpcUrls,
+      rpcTimeoutMs: Number(process.env.MATT_MINE_RPC_TIMEOUT_MS || 10_000),
+      confirmations: Number(process.env.MATT_MINE_CONSUMABLE_PAYMENT_CONFIRMATIONS || process.env.MATT_MINE_PAYMENT_CONFIRMATIONS || 3)
+    }).init()
+  : null;
 const saigonChestKeeper = createSaigonChestKeeperFromEnvironment();
 if (saigonChestKeeper) await saigonChestKeeper.init();
 const service = new CompleteProductionMattMineService(database, {
@@ -248,6 +256,7 @@ const service = new CompleteProductionMattMineService(database, {
   }),
   mainnetTransactionsEnabled,
   paymentVerifier,
+  consumablePaymentVerifier,
   rewardManager,
   arenaService,
   competitiveReplayValidator,

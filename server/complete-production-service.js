@@ -764,21 +764,30 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
     const reviveInfrastructureReady =
       this.revivePaymentVerifier?.publicStatus?.().configured === true &&
       typeof this.arenaService?.validatePaidReviveDeath === 'function';
-    const started = await super.startArenaRun(token, {
-      ...input,
-      nftRun: {
-        minerId,
-        profile: minerProfile
-      },
-      paidRevivesEnabled: arenaStudioAllowsPaidRevives(
-        arenaSnapshot,
-        settings,
-        reviveInfrastructureReady
-      ),
-      reviveLimitPerRun: settings.reviveLimitPerRun,
-      reviveInvulnerabilitySeconds: settings.reviveInvulnerabilitySeconds,
-      expectedCompetitionFingerprint: mapParity.studioMap.fingerprint
-    });
+    const consumableReservationId = `cons_arena_${this.randomHex(12)}`;
+    const consumableReservation = await this.reserveConsumables(session.address, input.consumables, consumableReservationId);
+    let started;
+    try {
+      started = await super.startArenaRun(token, {
+        ...input,
+        nftRun: {
+          minerId,
+          profile: minerProfile
+        },
+        consumablesSnapshot: consumableReservation,
+        paidRevivesEnabled: arenaStudioAllowsPaidRevives(
+          arenaSnapshot,
+          settings,
+          reviveInfrastructureReady
+        ),
+        reviveLimitPerRun: settings.reviveLimitPerRun,
+        reviveInvulnerabilitySeconds: settings.reviveInvulnerabilitySeconds,
+        expectedCompetitionFingerprint: mapParity.studioMap.fingerprint
+      });
+    } catch (error) {
+      await this.restoreConsumableReservation(consumableReservationId).catch(() => undefined);
+      throw error;
+    }
     let nftRun = null;
     let beginAttempted = false;
     try {
@@ -798,6 +807,7 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
       );
       started.run.nftRun = nftRun;
       started.run.challenge.tuning._nftRun = structuredClone(nftRun);
+      await this.commitConsumableReservation(consumableReservationId);
       return started;
     } catch (error) {
       if (nftRun) {
@@ -813,6 +823,7 @@ export class CompleteProductionMattMineService extends ProductionMattMineService
           session.address,
           this.now()
         ).catch(() => undefined);
+        await this.restoreConsumableReservation(consumableReservationId).catch(() => undefined);
       }
       if (error?.nftRunDefinitelyNotStarted === true) {
         await this.arenaService.store.rollbackUnstartedNftRun(

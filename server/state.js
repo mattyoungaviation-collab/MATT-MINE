@@ -24,6 +24,13 @@ import {
   defaultEndlessConfig,
   normalizeEndlessConfig
 } from '../src/game/endlessMine.js';
+import {
+  defaultConsumablesEconomy,
+  defaultWalletConsumables,
+  normalizeConsumableCounts,
+  normalizeConsumablesEconomy,
+  normalizeWalletConsumables
+} from '../src/game/consumables.js';
 
 export function defaultServerState() {
   return {
@@ -35,6 +42,9 @@ export function defaultServerState() {
     arenaReviveRuns: {},
     revivePayments: {},
     passPurchases: {},
+    consumablePurchaseQuotes: {},
+    consumablePurchases: {},
+    consumableReservations: {},
     paidEntitlements: {},
     leaderboardOverrides: {},
     arenaPassXpAwards: {},
@@ -44,6 +54,7 @@ export function defaultServerState() {
     endlessCompetition: defaultEndlessCompetition(),
     competitionStudio: defaultCompetitionStudio(),
     nftV2Protocol: defaultNftV2Protocol(),
+    consumablesEconomy: defaultConsumablesEconomy(),
     operations: defaultOperations(),
     audit: []
   };
@@ -58,6 +69,7 @@ export function defaultWalletState(address, timestamp = Date.now()) {
     nftCrystalLedger: [],
     passProgress: defaultPassProgress(),
     passInventory: defaultPassInventory(),
+    consumables: defaultWalletConsumables(),
     keybindings: defaultKeybindings(),
     expansion: defaultPlayerExpansion(),
     activity: [],
@@ -80,6 +92,9 @@ export function normalizeServerState(input = {}) {
     arenaReviveRuns: normalizeRecords(source.arenaReviveRuns, 25_000),
     revivePayments: normalizeRecords(source.revivePayments, 25_000),
     passPurchases: normalizePassPurchases(source.passPurchases),
+    consumablePurchaseQuotes: normalizeConsumablePurchaseQuotes(source.consumablePurchaseQuotes),
+    consumablePurchases: normalizeConsumablePurchases(source.consumablePurchases),
+    consumableReservations: normalizeRecords(source.consumableReservations, 50_000),
     paidEntitlements: normalizePaidEntitlements(source.paidEntitlements),
     leaderboardOverrides: normalizeLeaderboardOverrides(source.leaderboardOverrides),
     arenaPassXpAwards: normalizeArenaPassXpAwards(source.arenaPassXpAwards),
@@ -89,6 +104,7 @@ export function normalizeServerState(input = {}) {
     endlessCompetition: normalizeEndlessCompetition(source.endlessCompetition),
     competitionStudio: normalizeCompetitionStudio(source.competitionStudio),
     nftV2Protocol: normalizeNftV2Protocol(source.nftV2Protocol),
+    consumablesEconomy: normalizeConsumablesEconomy(source.consumablesEconomy),
     operations: normalizeOperations(source.operations),
     audit: Array.isArray(source.audit)
       ? source.audit.filter(isRecord).slice(-2_000).map((entry) => ({ ...entry }))
@@ -260,6 +276,7 @@ function normalizeWallets(input) {
         nftCrystalLedger: normalizeNftCrystalLedger(wallet.nftCrystalLedger, normalizedAddress),
         passProgress: normalizePassProgress(wallet.passProgress),
         passInventory: normalizePassInventory(wallet.passInventory),
+        consumables: normalizeWalletConsumables(wallet.consumables),
         keybindings: safeKeybindings(wallet.keybindings),
         expansion: safePlayerExpansion(wallet.expansion),
         activity: normalizeActivity(wallet.activity),
@@ -336,6 +353,58 @@ function normalizeCompetitionStore(input, bucket) {
       .slice(-250)
       .map(([key, value]) => [key, structuredClone(value)]))
   };
+}
+
+function normalizeConsumablePurchaseQuotes(input) {
+  if (!isRecord(input)) return {};
+  return Object.fromEntries(Object.entries(input)
+    .filter(([key, value]) =>
+      /^cq_[a-f0-9]{24}$/.test(key) &&
+      isRecord(value) &&
+      isHexAddress(value.address)
+    )
+    .slice(-25_000)
+    .map(([key, value]) => [key, {
+      id: key,
+      address: value.address.toLowerCase(),
+      items: normalizeConsumableCounts(value.items, 10),
+      totalQuantity: safeBoundedInteger(value.totalQuantity, 30),
+      totalPriceCrystals: safeBoundedInteger(value.totalPriceCrystals, 30_000_000_000),
+      totalPriceRaw: safeUnsignedString(value.totalPriceRaw),
+      economyVersion: safeBoundedInteger(value.economyVersion, 1_000_000_000),
+      createdAt: safeTimestamp(value.createdAt),
+      expiresAt: safeTimestamp(value.expiresAt),
+      confirmedAt: safeTimestamp(value.confirmedAt),
+      transactionHash: /^0x[a-fA-F0-9]{64}$/.test(value.transactionHash || '')
+        ? value.transactionHash.toLowerCase()
+        : ''
+    }]));
+}
+
+function normalizeConsumablePurchases(input) {
+  if (!isRecord(input)) return {};
+  return Object.fromEntries(Object.entries(input)
+    .filter(([key, value]) =>
+      /^0x[a-fA-F0-9]{64}$/.test(key) &&
+      isRecord(value) &&
+      isHexAddress(value.address)
+    )
+    .slice(-50_000)
+    .map(([key, value]) => [key.toLowerCase(), {
+      key: key.toLowerCase(),
+      transactionHash: key.toLowerCase(),
+      quoteId: typeof value.quoteId === 'string' ? value.quoteId.slice(0, 80) : '',
+      address: value.address.toLowerCase(),
+      items: normalizeConsumableCounts(value.items, 10),
+      totalQuantity: safeBoundedInteger(value.totalQuantity, 30),
+      totalPriceCrystals: safeBoundedInteger(value.totalPriceCrystals, 30_000_000_000),
+      totalPriceRaw: safeUnsignedString(value.totalPriceRaw),
+      token: isHexAddress(value.token) ? value.token.toLowerCase() : '',
+      recipient: isHexAddress(value.recipient) ? value.recipient.toLowerCase() : '',
+      blockNumber: safeUnsignedString(value.blockNumber),
+      logIndex: safeBoundedInteger(value.logIndex, Number.MAX_SAFE_INTEGER),
+      confirmedAt: safeTimestamp(value.confirmedAt)
+    }]));
 }
 
 export function defaultEndlessCompetition(timestamp = 0) {

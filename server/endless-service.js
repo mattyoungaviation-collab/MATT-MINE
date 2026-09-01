@@ -13,6 +13,12 @@ import {
   verifyEndlessPhaseEvents
 } from './endless-engine.js';
 import { normalizeEndlessConfig, validateEndlessConfig } from '../src/game/endlessMine.js';
+import {
+  CONSUMABLE_DEFINITIONS,
+  CONSUMABLE_ID_LIST,
+  normalizeWalletConsumables,
+  validateConsumableLoadout
+} from '../src/game/consumables.js';
 
 const TRANSACTION_HASH_PATTERN = /^0x[a-fA-F0-9]{64}$/;
 
@@ -196,6 +202,23 @@ export const endlessServiceMethods = {
           assertApi(!store.paymentTransactions[payment.transactionHash], 409, 'payment_already_consumed', 'This MATT entry payment has already started an Endless run.');
         }
         assertEndlessEntryEligible(state, session.address, minerId, minerProfile, config, timestamp);
+        let consumableLoadout;
+        try {
+          consumableLoadout = validateConsumableLoadout(
+            input.consumables ?? wallet.consumables?.selected ?? {},
+            state.consumablesEconomy,
+            wallet.consumables
+          );
+        } catch (error) {
+          throw new ApiError(422, 'consumable_loadout_invalid', error.message);
+        }
+        wallet.consumables = normalizeWalletConsumables(wallet.consumables);
+        for (const id of CONSUMABLE_ID_LIST) {
+          wallet.consumables.inventory[id] -= consumableLoadout[id];
+          wallet.consumables.lifetimeConsumed[id] += consumableLoadout[id];
+        }
+        wallet.consumables.updatedAt = timestamp;
+        wallet.updatedAt = timestamp;
         if (config.rewards.enabled) {
           chainStart = await this.endlessRewardSettler.beginRun({
             address: session.address,
@@ -220,6 +243,11 @@ export const endlessServiceMethods = {
           payment,
           chainRun: chainStart?.chainRun || null
         });
+        record.consumables = {
+          loadout: structuredClone(consumableLoadout),
+          definitions: Object.fromEntries(CONSUMABLE_ID_LIST.map((id) => [id, structuredClone(CONSUMABLE_DEFINITIONS[id].effect)])),
+          reservedAt: timestamp
+        };
         if (chainStart?.transactionHash) record.chainTransactions.push({ type: 'start', hash: chainStart.transactionHash, recordedAt: timestamp });
         record.checkpointSignature = signEndlessCheckpoint(record, this.endlessCheckpointSecret);
         inputCheckpoint = await this.competitiveReplayValidator.registerEndlessPhase(record, runToken);
@@ -1117,7 +1145,8 @@ function publicEndlessRun(run, runToken = '', inputCheckpoint = null) {
     startedAt: run.startedAt,
     payment: publicEndlessPayment(run.payment),
     minerProfile: structuredClone(run.minerProfile),
-    nftRun: { minerId: run.minerId, profile: structuredClone(run.minerProfile) }
+    nftRun: { minerId: run.minerId, profile: structuredClone(run.minerProfile) },
+    tuning: { _consumables: structuredClone(run.consumables || { loadout: {} }) }
   };
 }
 

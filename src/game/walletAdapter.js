@@ -94,6 +94,10 @@ export class RoninWalletAdapter {
     return this.sendPreparedTransaction(transaction);
   }
 
+  async purchaseConsumables(transaction) {
+    return this.sendPreparedTransaction(transaction, { allowZeroValue: true, verifyBroadcast: true });
+  }
+
   async purchaseEndlessEntry(transaction) {
     return this.sendPreparedTransaction(transaction, {
       allowZeroValue: true,

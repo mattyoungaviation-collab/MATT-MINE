@@ -272,6 +272,8 @@ test('controller profiles normalize remaps and dead zones without duplicate game
     dynamite: 2,
     blaster: 5,
     interact: 3,
+    medicPack: 6,
+    forceField: 11,
     pause: 9,
     confirm: 0,
     cancel: 1,

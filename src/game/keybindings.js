@@ -7,7 +7,9 @@ export const KEYBIND_ACTIONS = Object.freeze([
   { id: 'dash', label: 'Dash', default: 'ShiftLeft' },
   { id: 'pickaxe', label: 'Pickaxe', default: 'Digit1' },
   { id: 'dynamite', label: 'Dynamite', default: 'Digit2' },
-  { id: 'blaster', label: 'Blaster', default: 'Digit3' }
+  { id: 'blaster', label: 'Blaster', default: 'Digit3' },
+  { id: 'medicPack', label: 'Medic Pack', default: 'Digit4' },
+  { id: 'forceField', label: "MATT's Mythical Force Field", default: 'Digit5' }
 ]);
 
 export function defaultKeybindings() {
