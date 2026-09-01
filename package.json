@@ -52,6 +52,8 @@
     "contracts:check-nft-v2-activation:ronin": "npm --workspace contracts run check-nft-v2-activation:ronin",
     "contracts:activate-nft-v2:ronin": "npm --workspace contracts run activate-nft-v2:ronin",
     "contracts:check-nft-v2-live:ronin": "npm --workspace contracts run check-nft-v2-live:ronin",
+    "contracts:schedule-nft-v2-chest-batch-upgrade:ronin": "npm --workspace contracts run schedule-nft-v2-chest-batch-upgrade:ronin",
+    "contracts:execute-nft-v2-chest-batch-upgrade:ronin": "npm --workspace contracts run execute-nft-v2-chest-batch-upgrade:ronin",
     "contracts:schedule-nft-v2-settlement-upgrade:ronin": "npm --workspace contracts run schedule-nft-v2-settlement-upgrade:ronin",
     "contracts:execute-nft-v2-settlement-upgrade:ronin": "npm --workspace contracts run execute-nft-v2-settlement-upgrade:ronin",
     "db:migrate": "node scripts/database-admin.mjs migrate",

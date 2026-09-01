@@ -888,6 +888,59 @@ describe("MATT Mine NFT V2", function () {
     );
   });
 
+  it("preserves live Chest state and pending reveals across the timelocked batch upgrade", async function () {
+    const system = await networkHelpers.loadFixture(deploySystem);
+    const unitPrice = await system.chest.chestPrice(SLOT.Pickaxe);
+    await (await system.matt.connect(system.player).approve(system.chest.target, unitPrice)).wait();
+    const requestId = await system.chestRandomness.nextRequestId();
+    const requestKey = ethers.keccak256(
+      ethers.AbiCoder.defaultAbiCoder().encode(
+        ["address", "uint256"],
+        [system.chestRandomness.target, requestId]
+      )
+    );
+    await (await system.chest.connect(system.player).openChest(SLOT.Pickaxe)).wait();
+
+    const pendingBefore = await system.chest.pendingRequests(requestKey);
+    const pricesBefore = await Promise.all(
+      Array.from({ length: 6 }, (_, slot) => system.chest.chestPrice(slot))
+    );
+    const escrowBefore = await system.matt.balanceOf(system.chest.target);
+    const replacement = await deploy("MattV2Chest", [system.timelock.target]);
+    const operation = [
+      system.chest.target,
+      replacement.target,
+      "0x",
+      ethers.id("chest-batch-upgrade-state-preservation")
+    ];
+    await (await system.timelock.schedule(...operation)).wait();
+    await networkHelpers.time.increase(48 * 60 * 60);
+    await (await system.timelock.execute(...operation)).wait();
+
+    assert.equal(await system.chest.MAX_CHESTS_PER_PURCHASE(), 10n);
+    assert.equal(await system.chest.matt(), system.matt.target);
+    assert.equal(await system.chest.equipment(), system.equipment.target);
+    assert.equal(await system.chest.randomnessProvider(), system.chestRandomness.target);
+    assert.equal(await system.chest.treasury(), system.treasury.address);
+    assert.equal(await system.chest.activeDefinitionVersion(), 1n);
+    assert.equal(await system.chest.paused(), false);
+    assert.deepEqual(
+      await Promise.all(Array.from({ length: 6 }, (_, slot) => system.chest.chestPrice(slot))),
+      pricesBefore
+    );
+    assert.equal(await system.matt.balanceOf(system.chest.target), escrowBefore);
+    const pendingAfter = await system.chest.pendingRequests(requestKey);
+    assert.equal(pendingAfter.buyer, pendingBefore.buyer);
+    assert.equal(pendingAfter.price, pendingBefore.price);
+    assert.equal(pendingAfter.requestedAt, pendingBefore.requestedAt);
+    assert.equal(pendingAfter.definitionVersion, pendingBefore.definitionVersion);
+    assert.equal(pendingAfter.slot, pendingBefore.slot);
+
+    await (await system.chestRandomness.fulfill(requestId, 123_456n)).wait();
+    assert.equal(await system.equipment.balanceOf(system.player.address), 1n);
+    assert.equal(await system.matt.balanceOf(system.chest.target), 0n);
+  });
+
   it("atomically cancels a refunded VRF request and discards a late coordinator result", async function () {
     const system = await networkHelpers.loadFixture(deploySystem);
     const coordinator = await deploy("MockVRFCoordinatorV25");
