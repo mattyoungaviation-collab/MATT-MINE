@@ -364,11 +364,18 @@ export function canonicalJson(value) {
 export function applyReplayCommand(game, event, options = {}) {
   if (event.command === 'consumable') {
     assertApi(
-      ['medic-pack', 'mythical-force-field'].includes(event.value) && game.useConsumable(event.value, { record: false }),
-      422,
-      'consumable_command_rejected',
-      'The replayed Consumable activation was rejected.'
+      ['medic-pack', 'mythical-force-field'].includes(event.value),
+      400,
+      'arena_consumable_invalid',
+      'The Consumable choice is invalid.'
     );
+    // Inventory was already reserved by the server before the run. Apply the
+    // effect when replay state permits it, but never reject the whole phase for
+    // harmless browser/server frame drift (full-health Medic timing, an early
+    // level-up/depth boundary, an already-accounted use, or a legacy snapshot).
+    // A missing/duplicate entitlement remains a no-op, so tolerance cannot
+    // manufacture an extra heal or Force Field.
+    game.useConsumable(event.value, { record: false, replay: true });
     return;
   }
   if (event.command === 'upgrade') {

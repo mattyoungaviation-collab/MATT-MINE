@@ -74,6 +74,64 @@ test('Endless replay accepts the authenticated upgrade even when its random offe
   assert.deepEqual(game.pendingUpgradeIds, []);
 });
 
+test('Consumable replay tolerates harmless health and phase-boundary drift without granting extra uses', () => {
+  const run = endlessRun();
+  run.consumables = {
+    loadout: { 'medic-pack': 1, 'mythical-force-field': 1, 'heavy-crystal-hauler': 0 }
+  };
+  const game = createHeadlessEndlessGame(run, run.manifest);
+
+  assert.equal(game.player.health, game.player.maxHealth);
+  applyReplayCommand(
+    game,
+    { command: 'consumable', value: 'medic-pack' },
+    { mode: 'endless' }
+  );
+  assert.equal(game.player.health, game.player.maxHealth);
+  assert.equal(game.run.consumables.remaining['medic-pack'], 0);
+  assert.equal(game.run.consumables.medicPacksUsed, 1);
+
+  game.state = 'depthchoice';
+  applyReplayCommand(
+    game,
+    { command: 'consumable', value: 'mythical-force-field' },
+    { mode: 'endless' }
+  );
+  assert.equal(game.player.forceFieldRemaining, 3);
+  assert.equal(game.run.consumables.remaining['mythical-force-field'], 0);
+  assert.equal(game.run.consumables.forceFieldsUsed, 1);
+
+  assert.doesNotThrow(() => applyReplayCommand(
+    game,
+    { command: 'consumable', value: 'mythical-force-field' },
+    { mode: 'endless' }
+  ));
+  assert.equal(game.run.consumables.forceFieldsUsed, 1);
+});
+
+test('an unequipped Consumable replay command is a harmless no-op instead of rejecting extraction', () => {
+  const run = endlessRun();
+  run.consumables = { loadout: {} };
+  const game = createHeadlessEndlessGame(run, run.manifest);
+
+  assert.doesNotThrow(() => applyReplayCommand(
+    game,
+    { command: 'consumable', value: 'medic-pack' },
+    { mode: 'endless' }
+  ));
+  assert.equal(game.player.health, game.player.maxHealth);
+  assert.equal(game.run.consumables.medicPacksUsed, 0);
+  assert.equal(Number(game.run.consumables.remaining['medic-pack'] || 0), 0);
+  assert.throws(
+    () => applyReplayCommand(
+      game,
+      { command: 'consumable', value: 'unapproved-consumable' },
+      { mode: 'endless' }
+    ),
+    /Consumable choice is invalid/
+  );
+});
+
 test('Endless retries keep only the latest extract or descend decision', () => {
   const events = latestEndlessDecisionEvents([
     { seq: 1, tick: 0, type: 'input', moveX: 0, moveY: 0, aim: null, attack: false, dash: false, weapon: '' },

@@ -383,22 +383,35 @@ export class MattMineGame extends V3MattMineGame {
   }
 
   useConsumable(id, options = {}) {
-    if (this.state !== 'playing' || !this.run?.consumables || !this.player || this.player.health <= 0) return false;
+    const replayTolerant = options.replay === true;
+    const replayBoundary = replayTolerant && ['levelup', 'depthchoice'].includes(this.state);
+    if (
+      (this.state !== 'playing' && !replayBoundary) ||
+      !this.run?.consumables ||
+      !this.player ||
+      this.player.health <= 0
+    ) return false;
     const remaining = this.run.consumables.remaining || {};
     if (Number(remaining[id] || 0) <= 0) return false;
     if (id === 'medic-pack') {
-      if (this.player.health >= this.player.maxHealth) {
+      if (this.player.health >= this.player.maxHealth && !replayTolerant) {
         this.hooks.onToast?.('MEDIC PACK READY AFTER HEALTH DAMAGE');
         return false;
       }
-      remaining[id] -= 1;
-      this.run.consumables.medicPacksUsed += 1;
+      remaining[id] = Math.max(0, Number(remaining[id] || 0) - 1);
+      this.run.consumables.medicPacksUsed = Math.max(
+        0,
+        Number(this.run.consumables.medicPacksUsed || 0)
+      ) + 1;
       this.player.health = Math.min(this.player.maxHealth, this.player.health + 25);
       this.addFloater(this.player.x, this.player.y - 52, '+25 HEALTH · MEDIC PACK', '#73ffb2');
       this.hooks.onToast?.('MEDIC PACK ACTIVATED');
     } else if (id === 'mythical-force-field') {
-      remaining[id] -= 1;
-      this.run.consumables.forceFieldsUsed += 1;
+      remaining[id] = Math.max(0, Number(remaining[id] || 0) - 1);
+      this.run.consumables.forceFieldsUsed = Math.max(
+        0,
+        Number(this.run.consumables.forceFieldsUsed || 0)
+      ) + 1;
       this.player.forceFieldRemaining = 3;
       this.hooks.onToast?.("MATT'S MYTHICAL FORCE FIELD · 3");
     } else {
