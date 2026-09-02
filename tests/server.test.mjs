@@ -1195,11 +1195,23 @@ test('the HTTP server exposes same-origin APIs, security headers, and authentica
   assert.equal(launchResponse.status, 200);
   assert.equal(launchResponse.headers.get('cache-control'), 'no-cache');
   assert.equal(launchResponse.headers.get('cross-origin-opener-policy'), 'same-origin');
+  assert.equal(launchResponse.headers.get('x-frame-options'), 'DENY');
   assert.match(launchResponse.headers.get('content-security-policy'), /img-src 'self' data: blob:/);
+  assert.match(launchResponse.headers.get('content-security-policy'), /frame-ancestors 'none'/);
   const launchHtml = await launchResponse.text();
   assert.match(launchHtml, /id="launch" class="screen active launch-screen"/);
   assert.match(launchHtml, /0x4B5D10f6DA960436c5E3c23F40C52d36E2225555/);
   assert.match(launchHtml, /MATT Mine — Dig\. Fight\. Extract\./);
+
+  const themePreviewResponse = await fetch(`${baseUrl}/?theme-preview=1&theme-preview-embed=1`);
+  assert.equal(themePreviewResponse.status, 200);
+  assert.equal(themePreviewResponse.headers.get('x-frame-options'), 'SAMEORIGIN');
+  assert.match(themePreviewResponse.headers.get('content-security-policy'), /frame-ancestors 'self'/);
+
+  const incompleteThemePreviewResponse = await fetch(`${baseUrl}/?theme-preview-embed=1`);
+  assert.equal(incompleteThemePreviewResponse.status, 200);
+  assert.equal(incompleteThemePreviewResponse.headers.get('x-frame-options'), 'DENY');
+  assert.match(incompleteThemePreviewResponse.headers.get('content-security-policy'), /frame-ancestors 'none'/);
 
   const heroResponse = await fetch(`${baseUrl}/assets/launch/matt-mine-hero.png`);
   assert.equal(heroResponse.status, 200);

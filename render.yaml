@@ -1,6 +1,7 @@
 services:
   - type: web
     name: matt-mine
+    # Blueprint deployment revision: 2026-09-02-theme-preview-embed
     runtime: node
     # Keep the Blueprint aligned with the approved Pro 2-CPU web-service upgrade.
     # Otherwise a Blueprint sync can silently return the service to a smaller plan.

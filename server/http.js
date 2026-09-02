@@ -55,7 +55,9 @@ export function createMattMineHttpServer({ root, service, maxRequestBytes = MAX_
 
   return http.createServer(async (request, response) => {
     observeHttpRequest(request, response);
-    applySecurityHeaders(response);
+    applySecurityHeaders(response, {
+      allowSameOriginFrame: isThemePreviewEmbedRequest(request.url)
+    });
     try {
       const requestUrl = new URL(request.url || '/', requestOrigin(request, service.publicOrigin));
       if (requestUrl.pathname.startsWith('/api/')) {
@@ -1197,18 +1199,29 @@ function sendError(response, error) {
   });
 }
 
-function applySecurityHeaders(response) {
+function applySecurityHeaders(response, { allowSameOriginFrame = false } = {}) {
   response.setHeader('x-content-type-options', 'nosniff');
   response.setHeader('referrer-policy', 'same-origin');
-  response.setHeader('x-frame-options', 'DENY');
+  response.setHeader('x-frame-options', allowSameOriginFrame ? 'SAMEORIGIN' : 'DENY');
   response.setHeader('cross-origin-opener-policy', 'same-origin');
   response.setHeader('cross-origin-resource-policy', 'same-origin');
   response.setHeader('strict-transport-security', 'max-age=31536000; includeSubDomains');
   response.setHeader('permissions-policy', 'camera=(), microphone=(), geolocation=()');
   response.setHeader(
     'content-security-policy',
-    "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com https://fonts.reown.com; connect-src 'self' https://matt-mine.onrender.com https://saigon-testnet.roninchain.com https://ipfs.io https://rpc.walletconnect.com https://rpc.walletconnect.org https://relay.walletconnect.com https://relay.walletconnect.org wss://relay.walletconnect.com wss://relay.walletconnect.org https://pulse.walletconnect.com https://pulse.walletconnect.org https://api.web3modal.com https://api.web3modal.org https://keys.walletconnect.com https://keys.walletconnect.org https://notify.walletconnect.com https://notify.walletconnect.org https://echo.walletconnect.com https://echo.walletconnect.org https://push.walletconnect.com https://push.walletconnect.org wss://www.walletlink.org https://cca-lite.coinbase.com; frame-src 'self' https://verify.walletconnect.com https://verify.walletconnect.org https://secure.walletconnect.com https://secure.walletconnect.org; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+    `default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com https://fonts.reown.com; connect-src 'self' https://matt-mine.onrender.com https://saigon-testnet.roninchain.com https://ipfs.io https://rpc.walletconnect.com https://rpc.walletconnect.org https://relay.walletconnect.com https://relay.walletconnect.org wss://relay.walletconnect.com wss://relay.walletconnect.org https://pulse.walletconnect.com https://pulse.walletconnect.org https://api.web3modal.com https://api.web3modal.org https://keys.walletconnect.com https://keys.walletconnect.org https://notify.walletconnect.com https://notify.walletconnect.org https://echo.walletconnect.com https://echo.walletconnect.org https://push.walletconnect.com https://push.walletconnect.org wss://www.walletlink.org https://cca-lite.coinbase.com; frame-src 'self' https://verify.walletconnect.com https://verify.walletconnect.org https://secure.walletconnect.com https://secure.walletconnect.org; object-src 'none'; base-uri 'self'; frame-ancestors ${allowSameOriginFrame ? "'self'" : "'none'"}`
   );
+}
+
+function isThemePreviewEmbedRequest(requestUrl = '') {
+  try {
+    const parsed = new URL(requestUrl, 'https://matt-mine.invalid');
+    return (parsed.pathname === '/' || parsed.pathname === '/index.html')
+      && parsed.searchParams.get('theme-preview') === '1'
+      && parsed.searchParams.get('theme-preview-embed') === '1';
+  } catch {
+    return false;
+  }
 }
 
 function createRateLimiter() {
