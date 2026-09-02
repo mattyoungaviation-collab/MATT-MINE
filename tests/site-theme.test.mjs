@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 
 import {
   SITE_THEME_CONTROLS,
@@ -8,6 +9,7 @@ import {
   applySiteTheme,
   changedSiteThemeControls,
   defaultSiteTheme,
+  isSiteThemePreview,
   normalizeSiteTheme,
   siteThemePreset,
   themeCssText,
@@ -37,6 +39,20 @@ test('Theme Studio exposes a complete bounded visual system and curated presets'
   const index = buildAdminControlIndex();
   assert.equal(index.filter((entry) => entry.id.startsWith('theme:')).length, SITE_THEME_CONTROLS.length + 3);
   assert.equal(searchAdminControls(index, 'theme glow intensity')[0].id, 'theme:glowIntensity');
+  assert.equal(isSiteThemePreview('?theme-preview=1&theme-preview-embed=1'), true);
+});
+
+test('Theme Studio previews the real site, synchronizes drafts, and hides preview chrome normally', async () => {
+  const [admin, main, css] = await Promise.all([
+    readFile(new URL('../admin.html', import.meta.url), 'utf8'),
+    readFile(new URL('../src/main.js', import.meta.url), 'utf8'),
+    readFile(new URL('../src/site-theme.css', import.meta.url), 'utf8')
+  ]);
+  assert.match(admin, /<iframe[^>]+id="theme-preview-site"[^>]+theme-preview-embed=1/);
+  assert.match(main, /addEventListener\('storage'/);
+  assert.match(main, /mattmine:theme-preview/);
+  assert.match(main, /event\.origin !== location\.origin/);
+  assert.match(css, /\.theme-preview-banner\[hidden\]\s*\{\s*display:\s*none !important;/);
 });
 
 test('theme normalization repairs stored corruption while strict imports reject unsafe controls', () => {

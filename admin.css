@@ -2774,6 +2774,27 @@ body:has(#tab-theme.active) .shell {
   min-width: 390px;
 }
 
+.theme-preview-site {
+  width: 100%;
+  min-width: 680px;
+  height: 650px;
+  border: 1px solid var(--line-bright);
+  border-radius: 10px;
+  background: #05070b;
+  box-shadow: 0 28px 70px rgb(0 0 0 / 65%);
+  transition: width 220ms ease;
+}
+
+.theme-preview-frame[data-device="tablet"] .theme-preview-site {
+  width: 760px;
+  min-width: 760px;
+}
+
+.theme-preview-frame[data-device="mobile"] .theme-preview-site {
+  width: 390px;
+  min-width: 390px;
+}
+
 .theme-mock-nav {
   position: sticky;
   z-index: 5;

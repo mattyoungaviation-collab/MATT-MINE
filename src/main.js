@@ -79,12 +79,17 @@ import {
   roninWalletPairingUrl
 } from './game/mobileWalletConnect.js';
 import {
+  SITE_THEME_DRAFT_STORAGE_KEY,
   applySiteTheme,
   isSiteThemePreview,
-  readSiteThemeDraft
+  readSiteThemeDraft,
+  validateSiteTheme
 } from './game/siteTheme.js';
 
-const browserThemePreview = isSiteThemePreview() ? readSiteThemeDraft()?.theme || null : null;
+const themePreviewMode = isSiteThemePreview();
+const themePreviewEmbed = new URLSearchParams(globalThis.location?.search || '').get('theme-preview-embed') === '1';
+const browserThemePreview = themePreviewMode ? readSiteThemeDraft()?.theme || null : null;
+let publishedSiteTheme = null;
 if (browserThemePreview) applySiteTheme(browserThemePreview);
 
 const $ = (selector) => document.querySelector(selector);
@@ -5482,16 +5487,14 @@ window.addEventListener('beforeunload', (event) => {
 
 async function bootstrapServer() {
   try {
-    const [configResult, paymentResult, endlessResult, themeResult] = await Promise.all([
+    const [configResult, paymentResult, endlessResult] = await Promise.all([
       apiClient.config(),
       apiClient.publicPaymentStatus(),
-      apiClient.endlessStatus(),
-      apiClient.siteTheme().catch(() => null)
+      apiClient.endlessStatus()
     ]);
     serverConfig = configResult;
     publicPaymentStatus = paymentResult;
     endlessPublicStatus = endlessResult;
-    if (!browserThemePreview && themeResult?.theme) applySiteTheme(themeResult.theme);
     const restored = await wallet.restore();
     if (restored) {
       serverPlayer = restored;
@@ -5535,14 +5538,44 @@ async function bootstrapServer() {
 
 updateMenu();
 showScreen('launch');
-if (browserThemePreview) {
+if (themePreviewMode && !themePreviewEmbed) {
   themePreviewBanner.hidden = false;
   themePreviewExit.addEventListener('click', () => {
     const url = new URL(location.href);
     url.searchParams.delete('theme-preview');
+    url.searchParams.delete('theme-preview-embed');
     location.assign(`${url.pathname}${url.search}${url.hash}`);
   });
 }
+void apiClient.siteTheme().then((siteTheme) => {
+  publishedSiteTheme = siteTheme?.theme ? validateSiteTheme(siteTheme.theme) : null;
+  if (!browserThemePreview && publishedSiteTheme) applySiteTheme(publishedSiteTheme);
+}).catch((error) => console.warn('[MATT Mine] Published theme unavailable.', error));
+
+window.addEventListener('storage', (event) => {
+  if (!themePreviewMode || event.key !== SITE_THEME_DRAFT_STORAGE_KEY) return;
+  const next = readSiteThemeDraft()?.theme;
+  if (next) {
+    applySiteTheme(next);
+    return;
+  }
+  void apiClient.siteTheme().then((siteTheme) => {
+    publishedSiteTheme = siteTheme?.theme ? validateSiteTheme(siteTheme.theme) : publishedSiteTheme;
+    if (publishedSiteTheme) applySiteTheme(publishedSiteTheme);
+  }).catch(() => {
+    if (publishedSiteTheme) applySiteTheme(publishedSiteTheme);
+  });
+});
+
+window.addEventListener('message', (event) => {
+  if (!themePreviewMode || event.origin !== location.origin || event.data?.type !== 'mattmine:theme-preview') return;
+  if (themePreviewEmbed && event.source !== window.parent) return;
+  try {
+    applySiteTheme(validateSiteTheme(event.data.theme));
+  } catch (error) {
+    console.warn('[MATT Mine] Invalid Theme Studio preview message.', error);
+  }
+});
 void bootstrapServer();
 
 setInterval(() => {

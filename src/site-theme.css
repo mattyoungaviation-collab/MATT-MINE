@@ -510,7 +510,7 @@ html[data-mm-reduced-motion='true'] *::after {
 .theme-preview-banner {
   position: fixed;
   z-index: 2147483640;
-  top: 10px;
+  bottom: 10px;
   left: 50%;
   display: flex;
   align-items: center;
@@ -526,6 +526,10 @@ html[data-mm-reduced-motion='true'] *::after {
   letter-spacing: 0.06em;
   transform: translateX(-50%);
   backdrop-filter: blur(var(--mm-blur));
+}
+
+.theme-preview-banner[hidden] {
+  display: none !important;
 }
 
 .theme-preview-banner button {

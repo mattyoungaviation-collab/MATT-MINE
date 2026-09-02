@@ -2,7 +2,6 @@ import {
   SITE_THEME_CONTROLS,
   SITE_THEME_GROUPS,
   SITE_THEME_PRESETS,
-  applySiteTheme,
   changedSiteThemeControls,
   clearSiteThemeDraft,
   defaultSiteTheme,
@@ -32,7 +31,7 @@ if (root) {
     controls: root.querySelector('#theme-controls'),
     previewName: root.querySelector('#theme-preview-name'),
     previewFrame: root.querySelector('#theme-preview-frame'),
-    previewRoot: root.querySelector('#theme-preview-root'),
+    previewSite: root.querySelector('#theme-preview-site'),
     preset: root.querySelector('#theme-preset-select'),
     presetDescription: root.querySelector('#theme-preset-description'),
     applyPreset: root.querySelector('#theme-apply-preset'),
@@ -137,6 +136,7 @@ if (root) {
     ui.importFile.addEventListener('change', importTheme);
     ui.copyCss.addEventListener('click', copyCssVariables);
     ui.openPreview.addEventListener('click', openFullPreview);
+    ui.previewSite.addEventListener('load', () => sendThemeToPreview(normalizedDraft()));
     ui.applyPreset.addEventListener('click', applyPreset);
     ui.preset.addEventListener('change', renderPresetDescription);
     ui.publish.addEventListener('click', publishTheme);
@@ -259,7 +259,7 @@ if (root) {
   function renderDerived() {
     if (!studio.loaded) return;
     const theme = normalizedDraft();
-    applySiteTheme(theme, ui.previewRoot);
+    sendThemeToPreview(theme);
     ui.previewName.textContent = theme.name || 'Untitled theme';
     if (document.activeElement !== ui.themeName) ui.themeName.value = theme.name;
     const changes = changedSiteThemeControls(theme, studio.publishedState.published);
@@ -297,6 +297,10 @@ if (root) {
       swatch.title = `${id}: ${theme.tokens[id]}`;
       return swatch;
     }));
+  }
+
+  function sendThemeToPreview(theme) {
+    ui.previewSite.contentWindow?.postMessage({ type: 'mattmine:theme-preview', theme }, location.origin);
   }
 
   function renderPresetOptions() {
@@ -517,7 +521,8 @@ if (root) {
   function openFullPreview() {
     try {
       writeSiteThemeDraft(normalizedDraft());
-      const preview = window.open('/?theme-preview=1', '_blank', 'noopener');
+      const preview = window.open('/?theme-preview=1', '_blank');
+      if (preview) preview.opener = null;
       if (!preview) setStatus('ALLOW POPUPS TO OPEN PREVIEW', 'error');
       else setStatus('FULL-SITE PREVIEW OPENED', themesDiffer(studio.draft, studio.publishedState.published) ? 'dirty' : 'saved');
     } catch (error) {
