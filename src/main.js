@@ -78,6 +78,14 @@ import {
   rememberRoninWalletChoice,
   roninWalletPairingUrl
 } from './game/mobileWalletConnect.js';
+import {
+  applySiteTheme,
+  isSiteThemePreview,
+  readSiteThemeDraft
+} from './game/siteTheme.js';
+
+const browserThemePreview = isSiteThemePreview() ? readSiteThemeDraft()?.theme || null : null;
+if (browserThemePreview) applySiteTheme(browserThemePreview);
 
 const $ = (selector) => document.querySelector(selector);
 const app = $('#app');
@@ -91,6 +99,8 @@ const mobileWalletConnectCancel = $('#walletconnect-mobile-cancel');
 const mobileTransactionDialog = $('#wallet-transaction-dialog');
 const mobileTransactionTitle = $('#wallet-transaction-title');
 const mobileTransactionCopy = $('#wallet-transaction-copy');
+const themePreviewBanner = $('#theme-preview-banner');
+const themePreviewExit = $('#theme-preview-exit');
 const isLocalPreview = ['localhost', '127.0.0.1', '[::1]'].includes(globalThis.location?.hostname);
 const economy = new LocalEconomyStore();
 const PRACTICE_CLAIM_PLACEHOLDER_PRICE = 5000;
@@ -5472,11 +5482,16 @@ window.addEventListener('beforeunload', (event) => {
 
 async function bootstrapServer() {
   try {
-    [serverConfig, publicPaymentStatus, endlessPublicStatus] = await Promise.all([
+    const [configResult, paymentResult, endlessResult, themeResult] = await Promise.all([
       apiClient.config(),
       apiClient.publicPaymentStatus(),
-      apiClient.endlessStatus()
+      apiClient.endlessStatus(),
+      apiClient.siteTheme().catch(() => null)
     ]);
+    serverConfig = configResult;
+    publicPaymentStatus = paymentResult;
+    endlessPublicStatus = endlessResult;
+    if (!browserThemePreview && themeResult?.theme) applySiteTheme(themeResult.theme);
     const restored = await wallet.restore();
     if (restored) {
       serverPlayer = restored;
@@ -5520,6 +5535,14 @@ async function bootstrapServer() {
 
 updateMenu();
 showScreen('launch');
+if (browserThemePreview) {
+  themePreviewBanner.hidden = false;
+  themePreviewExit.addEventListener('click', () => {
+    const url = new URL(location.href);
+    url.searchParams.delete('theme-preview');
+    location.assign(`${url.pathname}${url.search}${url.hash}`);
+  });
+}
 void bootstrapServer();
 
 setInterval(() => {

@@ -45,6 +45,7 @@
         <button data-tab="nft-v2"><span>NFT V2 Protocol</span><small>On-chain maps &amp; economy</small></button>
         <button data-tab="arena"><span>MATT Arena</span><small>Pool &amp; settlement</small></button>
         <span class="nav-label">System</span>
+        <button data-tab="theme"><span>Theme Studio</span><small>Visual system &amp; live site</small></button>
         <button data-tab="contracts"><span>Onchain Actions</span><small>Safe transaction files</small></button>
         <button data-tab="audit"><span>Audit Log</span><small>Every admin change</small></button>
         <button id="lock-button" class="ghost">Lock</button>
@@ -453,6 +454,123 @@
         <article class="panel table-wrap"><h2>Latest confirmed purchases</h2><table><thead><tr><th>Wallet</th><th>Items</th><th>CRYSTALS</th><th>Transaction</th></tr></thead><tbody id="consumables-purchases"></tbody></table></article>
       </section>
 
+      <section id="tab-theme" class="tab">
+        <div class="theme-studio-heading">
+          <div>
+            <p class="eyebrow">PRODUCTION DESIGN SYSTEM</p>
+            <h2>Theme Studio</h2>
+            <p>Control the complete public-site look from one safe workspace. Drafts stay in this browser until you explicitly publish.</p>
+          </div>
+          <div class="theme-studio-state">
+            <span id="theme-studio-status" data-state="loading">LOADING</span>
+            <strong id="theme-studio-change-count">0 CHANGES</strong>
+          </div>
+        </div>
+
+        <div class="theme-studio-toolbar panel">
+          <div class="theme-history-actions" aria-label="Theme history">
+            <button id="theme-undo" type="button" class="ghost" disabled>↶ Undo</button>
+            <button id="theme-redo" type="button" class="ghost" disabled>↷ Redo</button>
+          </div>
+          <div class="theme-file-actions">
+            <button id="theme-save-draft" type="button" class="ghost">Save browser draft</button>
+            <button id="theme-export" type="button" class="ghost">Export JSON</button>
+            <button id="theme-import-trigger" type="button" class="ghost">Import JSON</button>
+            <button id="theme-copy-css" type="button" class="ghost">Copy CSS variables</button>
+            <input id="theme-import-file" type="file" accept="application/json,.json,.matt-theme" hidden>
+          </div>
+          <button id="theme-open-preview" type="button">Open full-site preview ↗</button>
+        </div>
+
+        <div class="theme-studio-workspace">
+          <aside class="theme-control-column panel">
+            <div class="theme-control-search">
+              <label for="theme-search">Find a control</label>
+              <input id="theme-search" type="search" placeholder="Color, font, spacing, glow…" autocomplete="off">
+            </div>
+            <nav id="theme-group-nav" class="theme-group-nav" aria-label="Theme control groups"></nav>
+            <div id="theme-controls" class="theme-controls"></div>
+          </aside>
+
+          <div class="theme-preview-column">
+            <div class="theme-preview-toolbar panel">
+              <div>
+                <span class="eyebrow">LIVE DRAFT PREVIEW</span>
+                <strong id="theme-preview-name">MATT Mine Original</strong>
+              </div>
+              <div class="theme-device-switcher" role="group" aria-label="Preview size">
+                <button type="button" class="active" data-theme-device="desktop" aria-pressed="true">Desktop</button>
+                <button type="button" data-theme-device="tablet" aria-pressed="false">Tablet</button>
+                <button type="button" data-theme-device="mobile" aria-pressed="false">Mobile</button>
+              </div>
+            </div>
+
+            <div id="theme-preview-frame" class="theme-preview-frame" data-device="desktop">
+              <div id="theme-preview-root" class="theme-preview-root">
+                <header class="theme-mock-nav">
+                  <div class="theme-mock-brand"><span>⛏</span><strong>MATT <b>MINE</b></strong></div>
+                  <nav><span>PLAY</span><span>LOADOUT</span><span>CONSUMABLES</span></nav>
+                  <button type="button">MATT_OFFICIAL</button>
+                </header>
+                <main class="theme-mock-page">
+                  <section class="theme-mock-hero">
+                    <div class="theme-mock-hero-art"></div>
+                    <div class="theme-mock-hero-shade"></div>
+                    <div class="theme-mock-hero-copy">
+                      <span class="theme-mock-live"><i></i> LIVE ON RONIN MAINNET</span>
+                      <small>YOUR RUN STARTS HERE</small>
+                      <h3>MATT MINE</h3>
+                      <h4>MAKE THE CALL. GET OUT ALIVE.</h4>
+                      <p>Choose your route, build your Miner, and decide when the haul is worth the risk.</p>
+                      <div><button type="button" class="theme-mock-primary">START HERE</button><button type="button" class="theme-mock-secondary">CHOOSE A MINE</button></div>
+                    </div>
+                  </section>
+                  <section class="theme-mock-content">
+                    <div class="theme-mock-section-title"><span>CHOOSE YOUR ROUTE</span><h4>THREE WAYS INTO THE MINE</h4></div>
+                    <div class="theme-mock-cards">
+                      <article><span>01</span><h5>PRACTICE MINE</h5><p>Learn the systems with no wallet required.</p><b>READY</b></article>
+                      <article class="featured"><span>02</span><h5>MATT ARENA</h5><p>Compete daily with your selected Miner NFT.</p><b>LIVE</b></article>
+                      <article><span>03</span><h5>PASS MINE</h5><p>Build XP, unlock loot, and climb rankings.</p><b>OPEN</b></article>
+                    </div>
+                  </section>
+                </main>
+              </div>
+            </div>
+          </div>
+
+          <aside class="theme-publish-column">
+            <article class="panel theme-preset-card">
+              <p class="eyebrow">FAST START</p>
+              <h3>Curated presets</h3>
+              <label>Preset<select id="theme-preset-select"></select></label>
+              <p id="theme-preset-description" class="muted"></p>
+              <button id="theme-apply-preset" type="button" class="ghost">Apply to draft</button>
+            </article>
+
+            <article class="panel theme-release-card">
+              <div class="theme-live-heading"><div><p class="eyebrow">LIVE THEME</p><h3>Publish to players</h3></div><span id="theme-live-version">V—</span></div>
+              <dl class="theme-live-meta">
+                <div><dt>Published</dt><dd id="theme-live-name">—</dd></div>
+                <div><dt>Updated</dt><dd id="theme-live-updated">—</dd></div>
+              </dl>
+              <label>Theme name<input id="theme-name" maxlength="64" placeholder="Name this visual system"></label>
+              <label>Required publish reason<textarea id="theme-publish-reason" maxlength="240" rows="3" placeholder="Why is the public design changing?"></textarea></label>
+              <button id="theme-publish" type="button" class="theme-publish-button">Publish live theme</button>
+              <p class="theme-publish-note">Publishing requires a fresh Ronin signature and creates an audit-log entry.</p>
+            </article>
+
+            <article class="panel theme-reset-card">
+              <p class="eyebrow">RECOVERY</p>
+              <h3>Reset tools</h3>
+              <button id="theme-reset-published" type="button" class="ghost">Revert draft to live</button>
+              <button id="theme-reset-default" type="button" class="ghost">Load MATT Mine original</button>
+              <button id="theme-refresh-live" type="button" class="ghost">Refresh from server</button>
+              <div id="theme-palette-strip" class="theme-palette-strip" aria-label="Current theme palette"></div>
+            </article>
+          </aside>
+        </div>
+      </section>
+
       <section id="tab-contracts" class="tab">
         <div class="section-heading"><div><p class="eyebrow">RONIN MAINNET</p><h2>Prepare contract transaction</h2></div></div>
         <div class="notice warning">This page prepares calldata only. It never signs or broadcasts. Use the wallet shown as “Required signer.”</div>
@@ -484,5 +602,6 @@
   <script type="module" src="/src/admin.js"></script>
   <script type="module" src="/src/adminPlayerEditor.js"></script>
   <script type="module" src="/src/adminCompetitionStudio.js"></script>
+  <script type="module" src="/src/adminThemeStudio.js"></script>
 </body>
 </html>

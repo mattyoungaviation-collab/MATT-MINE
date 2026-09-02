@@ -247,6 +247,10 @@ async function handleApiRequest({
     sendJson(response, 200, { ok: true, config: service.config() });
     return;
   }
+  if (method === 'GET' && path === '/api/theme') {
+    sendJson(response, 200, { ok: true, siteTheme: await service.publicSiteTheme() });
+    return;
+  }
   const minerMetadataMatch = path.match(/^\/api\/nft\/(?:v2\/)?miners\/(\d+)\.json$/);
   if (method === 'GET' && minerMetadataMatch) {
     sendPublicJson(response, 200, await nftService(service).minerMetadata(minerMetadataMatch[1]));
@@ -715,6 +719,17 @@ async function handleApiRequest({
     sendJson(response, 200, { ok: true, ...result });
     return;
   }
+  if (method === 'GET' && path === '/api/admin/site-theme') {
+    const result = await service.adminSiteTheme(request.headers['x-matt-admin-key']);
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
+  if (method === 'PUT' && path === '/api/admin/site-theme') {
+    const body = await readJson(request, maxRequestBytes);
+    const result = await service.updateAdminSiteTheme(request.headers['x-matt-admin-key'], body, body.reason);
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
   if (method === 'GET' && path === '/api/admin/consumables-economy') {
     const result = await service.adminConsumablesEconomy(request.headers['x-matt-admin-key']);
     sendJson(response, 200, { ok: true, ...result });
@@ -1070,7 +1085,7 @@ function clearAdminCookie(response) {
 }
 
 function requiresAdminStepUp(path) {
-  return /\/suspension$|\/awards$|\/contracts\/prepare$|\/consumables-economy$|\/nft-v2\/(economy|phase-xp|maps\/(approve|retire))$|\/rewards\/drafts\/[^/]+\/approve$|\/competition-studio\/[^/]+\/(publish|versions\/[^/]+\/activate)$/.test(path);
+  return /\/suspension$|\/awards$|\/contracts\/prepare$|\/consumables-economy$|\/site-theme$|\/nft-v2\/(economy|phase-xp|maps\/(approve|retire))$|\/rewards\/drafts\/[^/]+\/approve$|\/competition-studio\/[^/]+\/(publish|versions\/[^/]+\/activate)$/.test(path);
 }
 
 function bearerToken(request) {

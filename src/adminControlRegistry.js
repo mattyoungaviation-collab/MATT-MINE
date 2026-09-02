@@ -1,3 +1,5 @@
+import { SITE_THEME_CONTROLS, SITE_THEME_GROUPS } from './game/siteTheme.js';
+
 export const RETENTION_CONTROL_LINKS = Object.freeze([
   Object.freeze({
     id: 'knockout-retention-practice',
@@ -66,6 +68,9 @@ const STATIC_CONTROLS = Object.freeze([
   entry('nft-v2', 'nft-v2:phase-xp', 'NFT V2 phase XP', 'Configure the five phase XP awards for the active Arena or Pass Mine map.', 'NFT V2 Protocol'),
   entry('nft-v2', 'nft-v2:routes', 'NFT V2 active map economics', 'Inspect each active map version, content hash, crystal cap, conversion rate, payout cap, and force-abandon delay.', 'NFT V2 Protocol'),
   entry('contracts', 'contracts:transactions', 'Onchain transaction builder', 'Prepare reviewed Ronin contract calldata and Safe JSON.', 'Chain'),
+  entry('theme', 'theme:presets', 'Theme Studio presets', 'Apply a curated MATT Mine visual system to a safe browser draft.', 'Theme Studio'),
+  entry('theme', 'theme:preview', 'Full-site theme preview', 'Open the complete public site with this browser’s unpublished theme draft.', 'Theme Studio'),
+  entry('theme', 'theme:publish', 'Publish live site theme', 'Apply a versioned, audited visual system to every public page.', 'Theme Studio'),
   entry('audit', 'audit:trail', 'Audit trail', 'Search every server-authoritative admin action and reason.', 'Audit')
 ]);
 
@@ -102,7 +107,17 @@ export function buildAdminControlIndex({ tuningSchema = [], expansionSchema = []
       search: character.name || words(characterId)
     }))
   );
-  return [...STATIC_CONTROLS, ...tuning, ...expansion, ...roster]
+  const theme = SITE_THEME_CONTROLS.map((definition) => {
+    const group = SITE_THEME_GROUPS.find((candidate) => candidate.id === definition.group);
+    return entry(
+      'theme',
+      `theme:${definition.id}`,
+      definition.label,
+      definition.description,
+      `Theme Studio · ${group?.label || 'Design system'}`
+    );
+  });
+  return [...STATIC_CONTROLS, ...theme, ...tuning, ...expansion, ...roster]
     .map((item, index) => Object.freeze({
       ...item,
       order: index,

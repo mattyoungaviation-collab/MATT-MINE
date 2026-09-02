@@ -77,6 +77,7 @@ async function activateTab(name) {
   if (name === 'expansion') await loadExpansion();
   if (name === 'nft-v2') await loadNftV2Protocol();
   if (name === 'consumables') await loadConsumablesEconomy();
+  if (name === 'theme') await window.mattMineThemeStudio?.load?.();
   if (name === 'endless') await loadEndlessAdmin();
   if (name === 'operations') await loadMineOperations();
   if (name === 'arena') await loadArenaAdmin();
@@ -1605,6 +1606,9 @@ async function openControlSearchResult(result) {
     };
     await activateTab('nft-v2');
     $(targets[result.id])?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else if (result.id.startsWith('theme:')) {
+    await activateTab('theme');
+    window.mattMineThemeStudio?.openControl?.(result.id.slice('theme:'.length));
   } else {
     await activateTab(result.tab);
   }

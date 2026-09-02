@@ -31,6 +31,7 @@ import {
   normalizeConsumablesEconomy,
   normalizeWalletConsumables
 } from '../src/game/consumables.js';
+import { defaultSiteThemeState, normalizeSiteThemeState } from '../src/game/siteTheme.js';
 
 export function defaultServerState() {
   return {
@@ -55,6 +56,7 @@ export function defaultServerState() {
     competitionStudio: defaultCompetitionStudio(),
     nftV2Protocol: defaultNftV2Protocol(),
     consumablesEconomy: defaultConsumablesEconomy(),
+    siteTheme: defaultSiteThemeState(),
     operations: defaultOperations(),
     audit: []
   };
@@ -105,6 +107,7 @@ export function normalizeServerState(input = {}) {
     competitionStudio: normalizeCompetitionStudio(source.competitionStudio),
     nftV2Protocol: normalizeNftV2Protocol(source.nftV2Protocol),
     consumablesEconomy: normalizeConsumablesEconomy(source.consumablesEconomy),
+    siteTheme: normalizeSiteThemeState(source.siteTheme),
     operations: normalizeOperations(source.operations),
     audit: Array.isArray(source.audit)
       ? source.audit.filter(isRecord).slice(-2_000).map((entry) => ({ ...entry }))

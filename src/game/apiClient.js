@@ -34,6 +34,11 @@ export class MattMineApiClient {
     return response.config;
   }
 
+  async siteTheme() {
+    const response = await this.request('/api/theme');
+    return response.siteTheme;
+  }
+
   async publicPaymentStatus() {
     const response = await this.request('/api/payments/public-status');
     return response.status;

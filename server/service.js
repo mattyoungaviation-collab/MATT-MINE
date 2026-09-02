@@ -68,6 +68,7 @@ import {
 } from '../src/game/competitionStudio.js';
 import { endlessLeaderboard as endlessPhaseLeaderboard } from './endless-engine.js';
 import { generateEndlessPhase } from '../src/game/endlessMine.js';
+import { normalizeSiteThemeState, validateSiteTheme } from '../src/game/siteTheme.js';
 
 const FREE_PASS_XP = 25;
 const PAID_PASS_XP = 100;
@@ -2148,6 +2149,51 @@ export class MattMineService {
         .sort((left, right) => right.confirmedAt - left.confirmedAt)
         .slice(0, 250)
     };
+  }
+
+  async publicSiteTheme() {
+    const state = await this.database.read();
+    const siteTheme = normalizeSiteThemeState(state.siteTheme);
+    return {
+      version: siteTheme.version,
+      theme: structuredClone(siteTheme.published),
+      updatedAt: siteTheme.updatedAt
+    };
+  }
+
+  async adminSiteTheme(adminKey) {
+    this.assertAdminKey(adminKey);
+    const state = await this.database.read();
+    return { siteTheme: structuredClone(normalizeSiteThemeState(state.siteTheme)) };
+  }
+
+  async updateAdminSiteTheme(adminKey, input = {}, reason) {
+    this.assertAdminKey(adminKey);
+    const normalizedReason = normalizeAdminReason(reason || input.reason);
+    let theme;
+    try {
+      theme = validateSiteTheme(input.theme);
+    } catch (error) {
+      throw new ApiError(422, 'site_theme_invalid', error.message);
+    }
+    const timestamp = this.now();
+    return this.database.transact((state) => {
+      const current = normalizeSiteThemeState(state.siteTheme);
+      state.siteTheme = {
+        version: current.version + 1,
+        published: theme,
+        updatedAt: timestamp,
+        updatedBy: 'SERVER_ADMIN'
+      };
+      addAudit(
+        state,
+        'SERVER_ADMIN',
+        'SITE_THEME_PUBLISHED',
+        `${theme.name}: version ${state.siteTheme.version}; ${normalizedReason}`,
+        timestamp
+      );
+      return { siteTheme: structuredClone(state.siteTheme), reason: normalizedReason };
+    });
   }
 
   async updateAdminConsumablesEconomy(adminKey, input = {}, reason) {
